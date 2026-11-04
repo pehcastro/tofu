@@ -45,7 +45,7 @@ type Run struct {
 }
 
 type Known struct {
-	Memory    []memory.Entry
+	Memory    []entries.Entry
 	Decisions []Decision
 	Releases  []Release
 	Settings  map[string]string

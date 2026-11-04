@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"bufio"
@@ -255,7 +255,7 @@ func (c *Typecheckers) watchFor(checker typechecker) *tscWatch {
 		lifetime, cancel := context.WithCancel(context.Background())
 		exited := make(chan struct{})
 		watch := &tscWatch{command: strings.Join(argv, " "), born: time.Now(), stop: func() { cancel(); <-exited }, changed: make(chan struct{})}
-		safe.Go(sys.Crashes(checker.dir), "typecheck watch", func() {
+		recover.Go(sys.Crashes(checker.dir), "typecheck watch", func() {
 			defer close(exited)
 			watch.run(lifetime, checker, argv)
 		})
@@ -324,7 +324,7 @@ func (w *tscWatch) run(lifetime context.Context, checker typechecker, argv []str
 	}
 	cmd := exec.CommandContext(lifetime, argv[0], argv[1:]...)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = checker.dir, input, input
-	tracked, err := shell.StartTracked(cmd)
+	tracked, err := process.StartTracked(cmd)
 	_ = input.Close()
 	if err != nil {
 		_ = output.Close()
@@ -332,7 +332,7 @@ func (w *tscWatch) run(lifetime context.Context, checker typechecker, argv []str
 	}
 	defer tracked.Release()
 	w.process = cmd.Process
-	safe.Go(sys.Crashes(checker.dir), "typecheck watch read", func() {
+	recover.Go(sys.Crashes(checker.dir), "typecheck watch read", func() {
 		defer func() { _ = cmd.Process.Kill() }()
 		w.read(output)
 	})
@@ -474,7 +474,7 @@ func coldTypecheck(ctx context.Context, checker typechecker, relative string) co
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
 	started := time.Now()
-	tracked, err := shell.StartTracked(cmd)
+	tracked, err := process.StartTracked(cmd)
 	if err != nil {
 		return failure(fmt.Sprintf("typecheck skipped: %s did not start: %v", command, err))
 	}

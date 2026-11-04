@@ -22,13 +22,13 @@ import (
 const liveModel = "jev-latest"
 
 type metered struct {
-	jev.Wire
+	core.Wire
 	tokens *int
 }
 
-func (m metered) Post(ctx context.Context, body []byte) (jev.Raw, error) {
+func (m metered) Post(ctx context.Context, body []byte) (core.Raw, error) {
 	raw, err := m.Wire.Post(ctx, body)
-	if response, decoded := jev.Decode(raw.Body); err == nil && decoded == nil {
+	if response, decoded := core.Decode(raw.Body); err == nil && decoded == nil {
 		*m.tokens += response.Usage.InputTokens
 	}
 	return raw, err
@@ -65,7 +65,7 @@ func TestEvalCorpus(t *testing.T) {
 	if err := json.Unmarshal(raw, &eval); err != nil {
 		t.Fatal(err)
 	}
-	key, err := jev.TypeSafeKey(sys.CredentialFileName)
+	key, err := core.TypeSafeKey(sys.CredentialFileName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +79,7 @@ func TestEvalCorpus(t *testing.T) {
 		t.Fatal(err)
 	}
 	tokens := 0
-	client, err := jev.NewClient(jev.Config{Wire: metered{Wire: wire, tokens: &tokens}})
+	client, err := core.NewClient(core.Config{Wire: metered{Wire: wire, tokens: &tokens}})
 	if err != nil {
 		t.Fatal(err)
 	}

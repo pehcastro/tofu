@@ -93,15 +93,15 @@ func ConfigSeen(dir string) ConfigFiles {
 	return seen
 }
 
-func libraryAt(dir string) models.Library {
-	layers, _ := models.Layers(shipped.Files(), dir)
-	loaded, _ := models.Load(layers)
+func libraryAt(dir string) catalog.Library {
+	layers, _ := catalog.Layers(shipped.Files(), dir)
+	loaded, _ := catalog.Load(layers)
 	return loaded
 }
 
 func boundOrchestrator(dir string) Pick {
 	library := libraryAt(dir)
-	model, bound := library.Bound(models.RoleOrchestrator)
+	model, bound := library.Bound(catalog.RoleOrchestrator)
 	if !bound {
 		return Pick{}
 	}
@@ -198,7 +198,7 @@ func (s *server) settingsWriting(writing boardy.Writing) {
 }
 
 func (s *server) watchSettings(quit <-chan struct{}) {
-	safe.Go(s.report, "serve settings told", func() { s.hear(quit, TopicSettings, s.settingsWriting) })
+	recover.Go(s.report, "serve settings told", func() { s.hear(quit, TopicSettings, s.settingsWriting) })
 	files, assigned := ConfigSeen(s.Dir), readAgentModels(s.Dir)
 	every := time.NewTicker(servePoll)
 	defer every.Stop()
@@ -219,7 +219,7 @@ func (s *server) modelsMoved(was ConfigFiles, assigned agentModels) (ConfigFiles
 	if maps.Equal(now, was) {
 		return was, assigned
 	}
-	library := sync.OnceValue(func() models.Library { return libraryAt(s.Dir) })
+	library := sync.OnceValue(func() catalog.Library { return libraryAt(s.Dir) })
 	files, roots := moved(was, now), configRoots(s.Dir)
 	var changes []ModelsChanged
 	for scope, root := range roots {
@@ -232,7 +232,7 @@ func (s *server) modelsMoved(was ConfigFiles, assigned agentModels) (ConfigFiles
 			switch first {
 			case settings.FileName, roster.AssignmentFile:
 			case rolesFolder:
-				role := models.RoleID(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)))
+				role := catalog.RoleID(strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)))
 				model, _ := library().Bound(role)
 				changes = append(changes, ModelsChanged{What: ChangedRole, Name: string(role), Model: model.Slug(), Scope: scope, File: path})
 			default:

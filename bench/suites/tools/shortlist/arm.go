@@ -54,38 +54,38 @@ type JudgedAnswer struct {
 	Attempts int
 }
 
-func buildRequest(task string, shortlist []File) jev.Request {
+func buildRequest(task string, shortlist []File) core.Request {
 	candidates := make([]map[string]any, len(shortlist))
-	options := make([]jev.Option, 0, len(shortlist)+1)
-	questions := make([]jev.Question, 0, len(shortlist)+1)
+	options := make([]core.Option, 0, len(shortlist)+1)
+	questions := make([]core.Question, 0, len(shortlist)+1)
 	for i, f := range shortlist {
 		candidates[i] = map[string]any{
 			"path": f.Path,
 			"head": head(f.Content, headLines),
 		}
-		options = append(options, jev.Option{Name: f.Path, Criteria: map[string]any{"see": fmt.Sprintf("candidates[%d]", i)}})
-		questions = append(questions, jev.Question{
+		options = append(options, core.Option{Name: f.Path, Criteria: map[string]any{"see": fmt.Sprintf("candidates[%d]", i)}})
+		questions = append(questions, core.Question{
 			ID:           candidateID(i),
-			Kind:         jev.QuestionNoul,
+			Kind:         core.QuestionNoul,
 			Instructions: fmt.Sprintf("Is `candidates[%d]` the file that `query` refers to?", i),
 			True:         "this file is what query refers to; its path and head confirm it",
 			False:        "this file is not the target; at most it is related by topic",
 		})
 	}
-	options = append(options, jev.Option{Name: none, Criteria: "none of the candidates is the file referred to"})
-	questions = append(questions, jev.Question{
+	options = append(options, core.Option{Name: none, Criteria: "none of the candidates is the file referred to"})
+	questions = append(questions, core.Question{
 		ID:           "best",
-		Kind:         jev.QuestionChoice,
+		Kind:         core.QuestionChoice,
 		Instructions: "Which candidate is the file that `query` refers to?",
 		Options:      options,
 	})
-	return jev.Request{
+	return core.Request{
 		State:     map[string]any{"query": task, "candidates": candidates},
 		Questions: questions,
 	}
 }
 
-func AskJudged(ctx context.Context, client *jev.Client, task string, shortlist []File) (JudgedAnswer, error) {
+func AskJudged(ctx context.Context, client *core.Client, task string, shortlist []File) (JudgedAnswer, error) {
 	decision, err := client.Ask(ctx, buildRequest(task, shortlist))
 	if err != nil {
 		return JudgedAnswer{}, err

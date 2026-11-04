@@ -1,4 +1,4 @@
-package memory
+package entries
 
 import (
 	"context"
@@ -34,16 +34,16 @@ func episodesLog(project string) (string, error) {
 	return filepath.Join(dir, logFile), os.MkdirAll(dir, 0o755)
 }
 
-func openEpisodes(project string) (*memtree.Store, error) {
+func openEpisodes(project string) (*tree.Store, error) {
 	log, err := episodesLog(project)
 	if err != nil {
 		return nil, err
 	}
-	return memtree.Open(log)
+	return tree.Open(log)
 }
 
-func KeepEpisode(project string, item memtree.Item) error {
-	if item.Kind == memtree.KindWork && regexp.MustCompile(`^sub-agent \S+ is `+subagent.Errored.String()+`: `).MatchString(item.Text) {
+func KeepEpisode(project string, item tree.Item) error {
+	if item.Kind == tree.KindWork && regexp.MustCompile(`^sub-agent \S+ is `+subagents.Errored.String()+`: `).MatchString(item.Text) {
 		return nil
 	}
 	store, err := openEpisodes(project)
@@ -53,10 +53,10 @@ func KeepEpisode(project string, item memtree.Item) error {
 	return errors.Join(store.Append(item), store.Close())
 }
 
-func EpisodeView(project string, budget int, saidElsewhere []string, compact memtree.Compact) (string, memtree.Built, error) {
+func EpisodeView(project string, budget int, saidElsewhere []string, compact tree.Compact) (string, tree.Built, error) {
 	store, err := openEpisodes(project)
 	if err != nil {
-		return "", memtree.Built{}, err
+		return "", tree.Built{}, err
 	}
 	if compact == nil {
 		compact = func(context.Context, string, string, string) (string, error) {

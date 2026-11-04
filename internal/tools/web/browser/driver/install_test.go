@@ -1,6 +1,6 @@
 //go:build windows
 
-package browser
+package driver
 
 import (
 	"crypto/sha256"

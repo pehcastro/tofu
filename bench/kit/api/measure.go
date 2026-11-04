@@ -35,7 +35,7 @@ type Result struct {
 	TotalCalls      int
 }
 
-func Run(ctx context.Context, wire jev.Wire) (Result, error) {
+func Run(ctx context.Context, wire core.Wire) (Result, error) {
 	result := Result{GeneratedAt: time.Now()}
 	var allCalls []typesafe.Call
 
@@ -51,7 +51,7 @@ func Run(ctx context.Context, wire jev.Wire) (Result, error) {
 	gateLatencies := make([]float64, 0, len(cases)*gateRepsPerCase)
 	for _, gateCase := range cases {
 		for rep := 0; rep < gateRepsPerCase; rep++ {
-			call := typesafe.Ask(ctx, wire, jev.Request{State: gateCase.State, Questions: battery})
+			call := typesafe.Ask(ctx, wire, core.Request{State: gateCase.State, Questions: battery})
 			allCalls = append(allCalls, call)
 			if call.Err != nil {
 				return Result{}, fmt.Errorf("gate case %s rep %d: %w", gateCase.Name, rep, call.Err)

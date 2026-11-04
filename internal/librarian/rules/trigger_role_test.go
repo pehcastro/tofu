@@ -1,11 +1,11 @@
-package rule_test
+package rules_test
 
 import (
 	"strings"
 	"testing"
 
 	"tofu/internal/agent/loop"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 )
 
 func TestASubAgentRuleReachesTheSubAgentPromptAndNotTheOrchestrators(t *testing.T) {
@@ -15,7 +15,7 @@ func TestASubAgentRuleReachesTheSubAgentPromptAndNotTheOrchestrators(t *testing.
 	}
 	const boundaries = "[process_discipline, from the rule sub_agent_boundaries]\nyou are a sub-agent"
 	for role, wants := range map[rule.Role]bool{rule.RoleSubAgent: true, rule.RoleOrchestrator: false} {
-		composed, err := turn.Compose(turn.ComposeSpec{Task: "add the users route in src/users.ts", Paths: []string{"src/users.ts"},
+		composed, err := loop.Compose(loop.ComposeSpec{Task: "add the users route in src/users.ts", Paths: []string{"src/users.ts"},
 			Environment: "the working directory is a hono app", ToolGuidance: "read before you edit", Rules: rules, Role: role})
 		if err != nil {
 			t.Fatalf("Compose as %s: %v", role, err)

@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -14,7 +14,7 @@ import (
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/platform/recover"
 	"tofu/internal/project/boardy"
@@ -27,8 +27,8 @@ import (
 
 type askTool struct {
 	orchestrator *SpawnTool
-	asking       subagent.SubAgent
-	conversation []llm.Message
+	asking       subagents.SubAgent
+	conversation []core.Message
 }
 
 type askArgs struct {
@@ -44,9 +44,9 @@ const (
 
 func (askTool) Name() string { return "ask" }
 
-func (askTool) Definition() llm.Tool {
+func (askTool) Definition() core.Tool {
 	text := map[string]any{"type": "string"}
-	return llm.Tool{
+	return core.Tool{
 		Name: "ask",
 		Description: "asks the orchestrator one question and waits for its answer, which comes back as this result. " +
 			"ask before you start a server or a watcher, bind a port, kill a process you did not start, or change a file outside the paths you hold. " +
@@ -71,9 +71,9 @@ func (a askTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 	t, id := a.orchestrator, a.asking.ID
 	asked := boardy.Event{At: t.clock().UTC().Truncate(time.Second), Kind: boardy.Asked, Author: boardy.SubAgentAuthor(t.base.Session, id), Agent: id,
 		Text: args.Question, Why: args.Why, Default: args.Default}
-	t.roster.Reached(id, subagent.WaitingAnswer, "asks: "+args.Question)
+	t.roster.Reached(id, subagents.WaitingAnswer, "asks: "+args.Question)
 	answer, err := t.answer(ctx, a.asking, a.conversation, args)
-	t.roster.Reached(id, subagent.Working, "")
+	t.roster.Reached(id, subagents.Working, "")
 	if err != nil {
 		asked.Unanswered = err.Error()
 		return contract.Result{Content: AskAssumed + args.Default + "\n\nwhy there was no answer: " + err.Error() + a.onThread(asked), Command: "ask assumed: " + args.Question}, nil
@@ -95,7 +95,7 @@ func (a askTool) onThread(asked boardy.Event, answered ...boardy.Event) string {
 	return written
 }
 
-func (t *SpawnTool) answer(ctx context.Context, asking subagent.SubAgent, conversation []llm.Message, args askArgs) (string, error) {
+func (t *SpawnTool) answer(ctx context.Context, asking subagents.SubAgent, conversation []core.Message, args askArgs) (string, error) {
 	model := t.base.Model
 	if t.base.Accounts.Pick != nil {
 		account, err := t.base.Accounts.Pick(ctx)
@@ -113,10 +113,10 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagent.SubAgent, conver
 	}
 	sent := Sendable(WithoutThinking(conversation))
 	if len(sent) == 0 {
-		sent = []llm.Message{{Role: llm.RoleSystem, Content: t.base.System}}
+		sent = []core.Message{{Role: core.RoleSystem, Content: t.base.System}}
 	}
 	var system, unruled string
-	if sent[0].Role == llm.RoleSystem {
+	if sent[0].Role == core.RoleSystem {
 		system = sent[0].Content
 	}
 	for _, loaded := range rules {
@@ -131,11 +131,11 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagent.SubAgent, conver
 			return "", err
 		}
 		for _, held := range shells {
-			if held.State != shell.Running {
+			if held.State != process.Running {
 				continue
 			}
 			line := held.Name + " runs " + held.Command
-			if port := shell.NamedPort(held.Dir, held.Command, nil); port > 0 {
+			if port := process.NamedPort(held.Dir, held.Command, nil); port > 0 {
 				line += " on port " + strconv.Itoa(port)
 			}
 			running = append(running, line)
@@ -147,7 +147,7 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagent.SubAgent, conver
 	question := fmt.Sprintf("%ssub-agent %s, whose brief is %q, asks you: %s\nwhy: %s\nwhat it does with no answer: %s\n\nwhat runs now: %s\n\n"+
 		"answer it in one line of text: that text is the whole answer %s receives, and no tool runs in this reply, so do not reach for message or any other tool.",
 		unruled, asking.ID, asking.Brief, args.Question, args.Why, args.Default, strings.Join(running, "; "), asking.ID)
-	request := llm.Request{Messages: append(sent, llm.Message{Role: llm.RoleUser, Content: question})}
+	request := core.Request{Messages: append(sent, core.Message{Role: core.RoleUser, Content: question})}
 	tools := t.base.Tools.Definitions()
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	if lead, recorded := leadOf(site, asking.ID); recorded && t.base.Sessions != nil {
@@ -158,11 +158,11 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagent.SubAgent, conver
 		tools = held.toolsOr(tools)
 	}
 	if len(tools) > 0 {
-		request.Tools, request.ToolChoice = tools, llm.ToolChoiceNone
+		request.Tools, request.ToolChoice = tools, core.ToolChoiceNone
 	}
 	within, cancel := context.WithTimeout(ctx, konst.SubAgentAskMillis*time.Millisecond)
 	defer cancel()
-	tapped, tap := llm.Tapped(within)
+	tapped, tap := core.Tapped(within)
 	started := time.Now()
 	decision, err := model.Ask(tapped, request)
 	if errors.Is(err, context.DeadlineExceeded) {
@@ -172,7 +172,7 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagent.SubAgent, conver
 	if err != nil {
 		return "", err
 	}
-	if answer := strings.TrimSpace(decision.Content); decision.Outcome == llm.OutcomeMessage && answer != "" {
+	if answer := strings.TrimSpace(decision.Content); decision.Outcome == core.OutcomeMessage && answer != "" {
 		return answer, nil
 	}
 	var called []string
@@ -211,11 +211,11 @@ func (t *SpawnTool) askThePerson(ctx context.Context, agent string, ticket board
 		return note + fmt.Sprintf("\n\nnothing here shows the person a question, so put Q%d to them in this turn with %s, its reason and every option, the recommended one marked", q.ID, AskPersonToolName)
 	}
 	open := t.Inbox.Open(asked.Header + ": " + asked.Question)
-	safe.Go(sys.Crashes(t.Project), "not possible question", func() {
+	recover.Go(sys.Crashes(t.Project), "not possible question", func() {
 		defer open.Close()
 		replies, err := form(context.WithoutCancel(ctx), []PersonQuestion{asked}, 0)
 		said := t.answeredOnBoard(ticket.ID, q, replies, err)
-		open.Answer(said, llm.Origin{Source: llm.SourceAnswer, Name: asked.ID, Shown: said})
+		open.Answer(said, core.Origin{Source: core.SourceAnswer, Name: asked.ID, Shown: said})
 	})
 	return note + fmt.Sprintf("\n\ntofu has put Q%d to the person itself, and their answer reaches you as a message once it is written to %s", q.ID, ticket.ID)
 }
@@ -240,7 +240,7 @@ func (t *SpawnTool) answeredOnBoard(id string, q boardy.Question, replies []Pers
 	return fmt.Sprintf("the person answered %s Q%d %q with %s, and %s is %s again", id, q.ID, q.TLDR, answer, id, ticket.Status)
 }
 
-func (t *SpawnTool) traceAnswer(ctx context.Context, asking string, request llm.Request, started time.Time, attempts []llm.Attempt, decision llm.Decision, failed error) {
+func (t *SpawnTool) traceAnswer(ctx context.Context, asking string, request core.Request, started time.Time, attempts []core.Attempt, decision core.Decision, failed error) {
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	lead, recorded := leadOf(site, asking)
 	if !recorded {

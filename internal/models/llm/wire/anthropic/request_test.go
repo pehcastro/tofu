@@ -12,7 +12,7 @@ import (
 )
 
 func TestASignatureWithNoTextSendsNoThinkingBlock(t *testing.T) {
-	messages := encodedThinkingMessages(t, llm.Thinking{Signature: "sig-only"})
+	messages := encodedThinkingMessages(t, core.Thinking{Signature: "sig-only"})
 	for _, block := range messages[1].Content {
 		if block.Type == "thinking" {
 			t.Fatalf("a signature with no text produced a thinking block: %+v", block)
@@ -21,19 +21,19 @@ func TestASignatureWithNoTextSendsNoThinkingBlock(t *testing.T) {
 }
 
 func TestTextWithNoSignatureSendsAThinkingBlockWithNoSignature(t *testing.T) {
-	block := encodedThinkingMessages(t, llm.Thinking{Text: "reasoning about it"})[1].Content[0]
+	block := encodedThinkingMessages(t, core.Thinking{Text: "reasoning about it"})[1].Content[0]
 	if block.Type != "thinking" || block.Thinking != "reasoning about it" || block.Signature != "" {
 		t.Fatalf("text with no signature encoded as %+v", block)
 	}
 }
 
 func TestAPictureAToolReturnedTravelsInsideItsResult(t *testing.T) {
-	picture := llm.Image{MediaType: "image/png", Data: []byte("made-up png")}
+	picture := core.Image{MediaType: "image/png", Data: []byte("made-up png")}
 	request := minimalRequest()
 	request.Messages = append(request.Messages,
-		llm.Message{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "toolu_1", Name: "read"}, {ID: "toolu_2", Name: "read"}}},
-		llm.Message{Role: llm.RoleTool, ToolCallID: "toolu_1", Content: "a.png is a png", Images: []llm.Image{picture}},
-		llm.Message{Role: llm.RoleTool, ToolCallID: "toolu_2", Content: "b.png is a png", Images: []llm.Image{picture}})
+		core.Message{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "toolu_1", Name: "read"}, {ID: "toolu_2", Name: "read"}}},
+		core.Message{Role: core.RoleTool, ToolCallID: "toolu_1", Content: "a.png is a png", Images: []core.Image{picture}},
+		core.Message{Role: core.RoleTool, ToolCallID: "toolu_2", Content: "b.png is a png", Images: []core.Image{picture}})
 	body, err := request.Encode(false)
 	if err != nil {
 		t.Fatal(err)
@@ -70,13 +70,13 @@ func TestAPictureAToolReturnedTravelsInsideItsResult(t *testing.T) {
 	}
 }
 
-func encodedThinkingMessages(t *testing.T, thinking llm.Thinking) []wireMessage {
+func encodedThinkingMessages(t *testing.T, thinking core.Thinking) []wireMessage {
 	t.Helper()
 	request := minimalRequest()
 	request.Messages = append(request.Messages,
-		llm.Message{Role: llm.RoleAssistant, Thinking: thinking,
-			ToolCalls: []llm.ToolCall{{ID: "toolu_1", Name: "read"}}},
-		llm.Message{Role: llm.RoleTool, ToolCallID: "toolu_1", Content: "a file"})
+		core.Message{Role: core.RoleAssistant, Thinking: thinking,
+			ToolCalls: []core.ToolCall{{ID: "toolu_1", Name: "read"}}},
+		core.Message{Role: core.RoleTool, ToolCallID: "toolu_1", Content: "a file"})
 
 	body, err := request.Encode(true)
 	if err != nil {
@@ -101,7 +101,7 @@ func TestAPastedPicturePastTheLimitsIsSentFittedAndOneInsideThemIsSentAsItIs(t *
 	}
 	huge, small, opaque := encodedPNG(4000, 3000), encodedPNG(300, 200), []byte("made-up png")
 	request := minimalRequest()
-	request.Messages = append(request.Messages, llm.Message{Role: llm.RoleUser, Content: "look", Images: []llm.Image{
+	request.Messages = append(request.Messages, core.Message{Role: core.RoleUser, Content: "look", Images: []core.Image{
 		{MediaType: "image/png", Data: huge}, {MediaType: "image/png", Data: small}, {MediaType: "image/png", Data: opaque}}})
 	body, err := request.Encode(true)
 	if err != nil {
@@ -127,8 +127,8 @@ func TestAPastedPicturePastTheLimitsIsSentFittedAndOneInsideThemIsSentAsItIs(t *
 		t.Fatalf("three pictures went in and %d came out", len(sent))
 	}
 	config, _, err := image.DecodeConfig(bytes.NewReader(sent[0]))
-	if err != nil || max(config.Width, config.Height) > llm.ImageLongEdgePixels || config.Width*config.Height > llm.ImagePixels {
-		t.Errorf("a 4000x3000 paste was sent at %dx%d (%v), past the %d pixel long edge", config.Width, config.Height, err, llm.ImageLongEdgePixels)
+	if err != nil || max(config.Width, config.Height) > core.ImageLongEdgePixels || config.Width*config.Height > core.ImagePixels {
+		t.Errorf("a 4000x3000 paste was sent at %dx%d (%v), past the %d pixel long edge", config.Width, config.Height, err, core.ImageLongEdgePixels)
 	}
 	if !bytes.Equal(sent[1], small) || !bytes.Equal(sent[2], opaque) {
 		t.Errorf("a picture inside the limits, or one that does not decode, was re-encoded: %d and %d bytes sent for %d and %d", len(sent[1]), len(sent[2]), len(small), len(opaque))

@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"cmp"
@@ -24,8 +24,8 @@ import (
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/web"
-	"tofu/internal/tools/web/browser/driver"
-	"tofu/internal/tools/web/browser/loop"
+	browser "tofu/internal/tools/web/browser/driver"
+	jevloop "tofu/internal/tools/web/browser/loop"
 	"tofu/internal/tools/web/browser/motion"
 )
 
@@ -50,7 +50,7 @@ type BrowserSettings struct {
 	Driver   string
 	Steps    int
 	Judge    func() (jevloop.Jev, error)
-	Model    func() (turn.Model, string, error)
+	Model    func() (loop.Model, string, error)
 	Tabs     *BrowserTabs
 }
 
@@ -79,7 +79,7 @@ func (t *BrowserTabs) opens(ctx context.Context, tab int) {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.opened[tab] = turn.SubAgentAsking(ctx)
+	t.opened[tab] = loop.SubAgentAsking(ctx)
 }
 
 func (t *BrowserTabs) Close() {
@@ -223,8 +223,8 @@ type browserTabs struct{ session *browserSession }
 
 func (browserTabs) Name() string { return "browser_tabs" }
 
-func (browserTabs) Definition() llm.Tool {
-	return llm.Tool{
+func (browserTabs) Definition() core.Tool {
+	return core.Tool{
 		Name:        "browser_tabs",
 		Description: "lists the Chrome tabs tofu can reach, one a line: id, title and address. " + whatTofuReaches,
 		Parameters:  map[string]any{"type": "object", "properties": map[string]any{}},
@@ -263,8 +263,8 @@ type browserRead struct{ session *browserSession }
 
 func (browserRead) Name() string { return "browser_read" }
 
-func (browserRead) Definition() llm.Tool {
-	return llm.Tool{
+func (browserRead) Definition() core.Tool {
+	return core.Tool{
 		Name: "browser_read",
 		Description: "reads one Chrome tab: its visible text, then a numbered table of the controls on screen, each with its role, label, value and state. " +
 			"password, file and hidden fields are never listed. a step names a control by its number in the latest read of that tab. " +
@@ -360,8 +360,8 @@ type browserObserve struct{ session *browserSession }
 
 func (browserObserve) Name() string { return "browser_observe" }
 
-func (browserObserve) Definition() llm.Tool {
-	return llm.Tool{
+func (browserObserve) Definition() core.Tool {
+	return core.Tool{
 		Name: "browser_observe",
 		Description: "shows one Chrome tab as an accessibility snapshot: a line a node, indented, as role \"name\" [state, ref=e5], a value after a colon. " +
 			"a ref names one element for browser_act. interactive, the default without from, shows only nodes with a ref; false, the default with from, shows the whole tree with its text. " +
@@ -444,8 +444,8 @@ type browserAct struct{ session *browserSession }
 
 func (browserAct) Name() string { return "browser_act" }
 
-func (browserAct) Definition() llm.Tool {
-	return llm.Tool{
+func (browserAct) Definition() core.Tool {
+	return core.Tool{
 		Name: "browser_act",
 		Description: fmt.Sprintf("runs up to %d actions in one Chrome tab, in order, each on a ref from the latest browser_observe or on a target by role and name. ", konst.BrowserBatchMax) +
 			"plan a predictable stretch as one guarded batch, the way a person does: open the date picker, click day 9, click day 15, apply. " +
@@ -1028,9 +1028,9 @@ type browserMotion struct{ session *browserSession }
 
 func (browserMotion) Name() string { return "browser_motion" }
 
-func (browserMotion) Definition() llm.Tool {
+func (browserMotion) Definition() core.Tool {
 	kind := func(name string) map[string]any { return map[string]any{"type": name} }
-	return llm.Tool{
+	return core.Tool{
 		Name: "browser_motion",
 		Description: "records an animation in tofu's own tab and reads it back frame by frame, to find when something opens, closes, moves or flickers. " +
 			"capture reads a scenario file with url, viewport, ready, setup, trigger, watch, recordBeforeMs and recordAfterMs. it reloads the page, runs the setup, " +
@@ -1252,13 +1252,13 @@ type browserDo struct {
 	session *browserSession
 	steps   int
 	judge   func() (jevloop.Jev, error)
-	model   func() (turn.Model, string, error)
+	model   func() (loop.Model, string, error)
 }
 
 func (browserDo) Name() string { return "browser_do" }
 
-func (t browserDo) Definition() llm.Tool {
-	return llm.Tool{
+func (t browserDo) Definition() core.Tool {
+	return core.Tool{
 		Name: "browser_do",
 		Description: "does a whole browsing goal in one call and answers it. call it once with the whole goal, and again on the tab it named if it comes back blocked. " +
 			"a url without a tab opens it in a background tab of tofu's own, or reuses the tab tofu already has on that site. a tab alone works in that tab as it is; " +
@@ -1437,12 +1437,12 @@ func (s *browserSession) aim(ctx context.Context, client *browser.Client, tab in
 	return tab, true, err
 }
 
-func askFor(ctx context.Context, model turn.Model, prompt string) (string, error) {
-	decision, err := model.Ask(ctx, llm.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: prompt}}})
+func askFor(ctx context.Context, model loop.Model, prompt string) (string, error) {
+	decision, err := model.Ask(ctx, core.Request{Messages: []core.Message{{Role: core.RoleUser, Content: prompt}}})
 	if err != nil {
 		return "", err
 	}
-	if decision.Outcome != llm.OutcomeMessage || strings.TrimSpace(decision.Content) == "" {
+	if decision.Outcome != core.OutcomeMessage || strings.TrimSpace(decision.Content) == "" {
 		return "", fmt.Errorf("the browser model answered %s with no text", decision.Outcome)
 	}
 	return strings.TrimSpace(decision.Content), nil

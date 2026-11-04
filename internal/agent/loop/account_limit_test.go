@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -16,16 +16,16 @@ import (
 
 type answersWithItsLimit struct{ asked int }
 
-func (m *answersWithItsLimit) Ask(context.Context, llm.Request) (llm.Decision, error) {
+func (m *answersWithItsLimit) Ask(context.Context, core.Request) (core.Decision, error) {
 	m.asked++
-	return llm.Decision{}, &transport.Error{Kind: transport.KindRateLimit, Op: "anthropic.Ask", Status: 429, Detail: "rate_limit_error"}
+	return core.Decision{}, &transport.Error{Kind: transport.KindRateLimit, Op: "anthropic.Ask", Status: 429, Detail: "rate_limit_error"}
 }
 
 type answersDone struct{ asked int }
 
-func (m *answersDone) Ask(context.Context, llm.Request) (llm.Decision, error) {
+func (m *answersDone) Ask(context.Context, core.Request) (core.Decision, error) {
 	m.asked++
-	return llm.Decision{Build: "stub", Outcome: llm.OutcomeMessage, Content: "done"}, nil
+	return core.Decision{Build: "stub", Outcome: core.OutcomeMessage, Content: "done"}, nil
 }
 
 func TestRotateAccountsOnARateLimitAndStopWhenEveryAccountIsTried(t *testing.T) {
@@ -92,7 +92,7 @@ func TestRotateAccountsOnARateLimitAndStopWhenEveryAccountIsTried(t *testing.T) 
 
 func TestLimitOnAFixedModelWaitsForItsRetryAfter(t *testing.T) {
 	now := time.Date(2026, 10, 14, 9, 0, 0, 0, time.UTC)
-	limited := Accounts{}.limited(context.Background(), "openrouter", []Account{{}}, []llm.Attempt{{Status: 429, RetryAfter: "30"}}, now, errors.New("429"))
+	limited := Accounts{}.limited(context.Background(), "openrouter", []Account{{}}, []core.Attempt{{Status: 429, RetryAfter: "30"}}, now, errors.New("429"))
 	if !limited.ResetAt.Equal(now.Add(30*time.Second)) || len(limited.Tried) != 0 {
 		t.Fatalf("got %+v, want a reset 30 s out from the Retry-After and no account named", limited)
 	}

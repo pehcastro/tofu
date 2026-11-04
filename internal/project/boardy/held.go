@@ -79,7 +79,7 @@ func (s Store) Held(path string) (Hold, error) {
 				continue
 			}
 			for _, glob := range front.Owns {
-				matched, matchErr := subagent.Matches(target, []string{heldGlob(glob)})
+				matched, matchErr := subagents.Matches(target, []string{heldGlob(glob)})
 				if matched {
 					return Hold{Path: path, Held: true, Ticket: front.ID, Status: front.Status, Glob: glob}, err
 				}

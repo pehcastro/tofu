@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"encoding/json"
@@ -36,10 +36,10 @@ type subAgentBackup struct {
 	Files   map[string]string `json:"files,omitempty"`
 }
 
-func filesWritten(history []llm.Message) []string {
+func filesWritten(history []core.Message) []string {
 	failed := map[string]bool{}
 	for _, message := range history {
-		if message.Role == llm.RoleTool && message.ToolOutcome == llm.ToolOutcomeFailed {
+		if message.Role == core.RoleTool && message.ToolOutcome == core.ToolOutcomeFailed {
 			failed[message.ToolCallID] = true
 		}
 	}
@@ -54,7 +54,7 @@ func filesWritten(history []llm.Message) []string {
 	return wrote
 }
 
-func (t *SpawnTool) conversationSoFar(held *heldSubAgent, running bool) ([]llm.Message, error) {
+func (t *SpawnTool) conversationSoFar(held *heldSubAgent, running bool) ([]core.Message, error) {
 	began, err := held.conversation()
 	t.Inbox.mu.Lock()
 	log := held.log
@@ -138,7 +138,7 @@ func (t *SpawnTool) backup(to string) (contract.Result, error) {
 	return contract.Result{Content: said, Command: "backup " + to, SubAgent: to}, nil
 }
 
-func (t *SpawnTool) restoreBackup(to, from string) ([]llm.Message, error) {
+func (t *SpawnTool) restoreBackup(to, from string) ([]core.Message, error) {
 	if from != filepath.Base(from) || from == "." || from == ".." {
 		return nil, fmt.Errorf("from names a backup the way the backup's result does, such as %s-%s, and %q is a path", to, t.clock().Format(backupStamp), from)
 	}
@@ -160,7 +160,7 @@ func (t *SpawnTool) restoreBackup(to, from string) ([]llm.Message, error) {
 	if _, running := t.Inbox.find(to); running {
 		return nil, fmt.Errorf("%s is running: do stop or do kill before it resumes from a backup", to)
 	}
-	history := make([]llm.Message, 0, len(kept.History))
+	history := make([]core.Message, 0, len(kept.History))
 	for _, row := range kept.History {
 		message, err := messageOf(row)
 		if err != nil {
@@ -168,7 +168,7 @@ func (t *SpawnTool) restoreBackup(to, from string) ([]llm.Message, error) {
 		}
 		history = append(history, message)
 	}
-	agent := subagent.SubAgent{ID: kept.ID, Agent: kept.Agent, Model: kept.Model, Mission: kept.Mission, Brief: kept.Brief, Owns: kept.Owns, Ticket: kept.Ticket, Started: t.clock(), State: subagent.Parked}
+	agent := subagents.SubAgent{ID: kept.ID, Agent: kept.Agent, Model: kept.Model, Mission: kept.Mission, Brief: kept.Brief, Owns: kept.Owns, Ticket: kept.Ticket, Started: t.clock(), State: subagents.Parked}
 	if _, known := t.roster.SubAgent(to); !known {
 		t.roster.Restore(agent)
 	}

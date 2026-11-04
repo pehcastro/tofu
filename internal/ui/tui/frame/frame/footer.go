@@ -113,9 +113,9 @@ func contextAndQuota(status Status, width int, form quotaLabel) (head, tail []sp
 	case status.Context.Budget <= 0:
 		return append(head, panel("unread", look.FaintColor)), nil
 	case status.Fresh:
-		return append(head, panel("0/"+widget.Count(status.Context.Budget), look.Text), panel(footerSeparator+"new session", look.FaintColor)), nil
+		return append(head, panel("0/"+render.Count(status.Context.Budget), look.Text), panel(footerSeparator+"new session", look.FaintColor)), nil
 	}
-	head = append(head, panel(widget.Count(status.Context.Used)+"/"+widget.Count(status.Context.Budget), look.Text))
+	head = append(head, panel(render.Count(status.Context.Used)+"/"+render.Count(status.Context.Budget), look.Text))
 	shown := firstAccountPerSource(status.Quotas, status.InUse)
 	if len(shown) == 0 && form != noQuota {
 		head = append(head, panel(footerSeparator+"quota unread", look.FaintColor))
@@ -134,9 +134,9 @@ func contextAndQuota(status Status, width int, form quotaLabel) (head, tail []sp
 		}
 		head = append(head, panel(footerSeparator+name+" ", look.Text))
 		if quota.Reported {
-			head = append(head, panel(widget.Percent(quota.Fraction), look.Amber))
+			head = append(head, panel(render.Percent(quota.Fraction), look.Amber))
 			if quota.Stale {
-				head = append(head, panel(" read "+widget.Until(status.At.Sub(quota.ReadAt))+" ago", look.FaintColor))
+				head = append(head, panel(" read "+render.Until(status.At.Sub(quota.ReadAt))+" ago", look.FaintColor))
 			}
 		} else {
 			head = append(head, panel("not reported", look.FaintColor))
@@ -146,11 +146,11 @@ func contextAndQuota(status Status, width int, form quotaLabel) (head, tail []sp
 		return head, nil
 	}
 	if reset := nextReset(shown, status.At); reset > 0 {
-		tail = append(tail, panel(footerSeparator+"resets in "+widget.Until(reset), look.Amber))
+		tail = append(tail, panel(footerSeparator+"resets in "+render.Until(reset), look.Amber))
 	}
-	counters := footerSeparator + widget.Count(status.TokensIn) + " read  " + widget.Count(status.TokensOut) + " write"
+	counters := footerSeparator + render.Count(status.TokensIn) + " read  " + render.Count(status.TokensOut) + " write"
 	if status.CacheRead > 0 {
-		counters += "  " + widget.Count(status.CacheRead) + " cached"
+		counters += "  " + render.Count(status.CacheRead) + " cached"
 	}
 	return head, append(tail, panel(counters+footerSeparator+"jev "+strconv.Itoa(status.Decisions), look.Text))
 }

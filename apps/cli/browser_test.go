@@ -14,7 +14,7 @@ import (
 	"github.com/charmbracelet/colorprofile"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
 	"tofu/internal/tools/web/browser/driver"
@@ -44,7 +44,7 @@ func browserHome(t *testing.T) string {
 	return home
 }
 
-func fakeRelay(t *testing.T, home string, tabs []browser.Tab) {
+func fakeRelay(t *testing.T, home string, tabs []driver.Tab) {
 	t.Helper()
 	dir := filepath.Join(home, sys.StateDirName, "browser")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -95,7 +95,7 @@ func stable(document string) string {
 
 func TestBrowserTabsOpenAndCloseMatchTheirTextAndJSON(t *testing.T) {
 	home := browserHome(t)
-	fakeRelay(t, home, []browser.Tab{
+	fakeRelay(t, home, []driver.Tab{
 		{ID: 12, URL: "https://example.com/docs?page=2", Title: "Example Domain"},
 		{ID: 812, URL: "https://lisbon.example.org/stays", Title: "Stays in Lisbon", Opened: true},
 		{ID: 9, URL: "about:blank"},
@@ -218,7 +218,7 @@ func TestBrowserWithNoHostIsOneLineAndAHintAndTheDialErrorOnlyInJSON(t *testing.
 			Problems []cli.Problem `json:"problems"`
 		}
 		if err := json.Unmarshal([]byte(out), &envelope); err != nil || code != output.ExitVerdict || errOut != "" || envelope.OK || len(envelope.Problems) != 1 ||
-			!strings.HasPrefix(envelope.Problems[0].What, browser.ErrNotConnected.Error()+" (") || envelope.Problems[0].Hint != browser.InstallHint {
+			!strings.HasPrefix(envelope.Problems[0].What, driver.ErrNotConnected.Error()+" (") || envelope.Problems[0].Hint != driver.InstallHint {
 			t.Errorf("tofu browser %v --json exited %d, printed\n%s\nand %q", args, code, out, errOut)
 		}
 	}
@@ -231,7 +231,7 @@ func TestBrowserWithNoHostIsOneLineAndAHintAndTheDialErrorOnlyInJSON(t *testing.
 
 func TestBrowserNoColourWritesNoEscape(t *testing.T) {
 	home := browserHome(t)
-	fakeRelay(t, home, []browser.Tab{{ID: 12, URL: "https://example.com/", Title: "Example Domain"}})
+	fakeRelay(t, home, []driver.Tab{{ID: 12, URL: "https://example.com/", Title: "Example Domain"}})
 	for _, noColour := range []string{"", "1"} {
 		t.Setenv("FORCE_COLOR", "1")
 		t.Setenv("NO_COLOR", noColour)
@@ -251,7 +251,7 @@ func TestBrowserInstallUninstallAndBenchPagesMatchTheirTextAndJSON(t *testing.T)
 	page := cli.Page{Profile: colorprofile.NoTTY, Width: konst.ProseWidthChars, Home: "/home/ada"}
 	installed := installedExtension(page.Home, "/home/ada/.local/bin/tofu.exe", "jednanpboiikklhkkkimnmdmjmgjgphh")
 	removed := removedExtension(page.Home)
-	copyName := filepath.Base(browser.CopyPath(page.Home))
+	copyName := filepath.Base(driver.CopyPath(page.Home))
 	report := benchReport{Chooser: "jev", RowsFile: "/home/ada/.tofu/bench/browser-steps-20260929-120000.jsonl", Summary: steps.Summary{
 		Steps: 12, DidNotRun: 1, Failed: 2, Untimed: 3,
 		Phases: []steps.Phase{{Name: "wall ms", P50: 412.5, P90: 1338.25}, {Name: "jev input tokens", P50: 1800, P90: 2310}},
@@ -372,7 +372,7 @@ func TestBrowserMotionCaptureRefusesABadScenarioNamingTheFieldBeforeDialling(t *
 		"viewport.width":      `{"url": "http://localhost:4173/", "viewport": {"width": "wide"}, "trigger": {"action": "press", "key": "Escape"}}`,
 		"trigger.action":      `{"url": "http://localhost:4173/", "trigger": {"action": "tap"}}`,
 		"url must start with": `{"url": "localhost:4173", "trigger": {"action": "press", "key": "Escape"}}`,
-		browser.NotConnected:  `{"url": "http://localhost:4173/", "trigger": {"action": "press", "key": "Escape"}}`,
+		driver.NotConnected:   `{"url": "http://localhost:4173/", "trigger": {"action": "press", "key": "Escape"}}`,
 	} {
 		path := filepath.Join(home, "scenario.json")
 		if err := os.WriteFile(path, []byte(scenario), 0o644); err != nil {
@@ -380,7 +380,7 @@ func TestBrowserMotionCaptureRefusesABadScenarioNamingTheFieldBeforeDialling(t *
 		}
 		code, out, errOut := runBrowser(t, "motion", "capture", path, "--takes", "2", "--label", "before")
 		errOut = strings.Join(strings.Fields(errOut), " ")
-		if code != output.ExitVerdict || out != "" || !strings.Contains(errOut, field) || field != browser.NotConnected && strings.Contains(errOut, browser.NotConnected) {
+		if code != output.ExitVerdict || out != "" || !strings.Contains(errOut, field) || field != driver.NotConnected && strings.Contains(errOut, driver.NotConnected) {
 			t.Errorf("scenario %s exited %d and printed %q and %q; want it refused naming %s", scenario, code, out, errOut, field)
 		}
 	}

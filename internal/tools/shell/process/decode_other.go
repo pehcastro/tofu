@@ -1,5 +1,5 @@
 //go:build !windows
 
-package shell
+package process
 
 func Decode(output []byte) string { return string(output) }

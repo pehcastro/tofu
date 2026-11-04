@@ -15,40 +15,40 @@ import (
 
 const OneCallAtATime = 1
 
-func NewJevClient() (*jev.Client, error) {
-	return JevClientFrom(jev.ReadKeyring(), OneCallAtATime)
+func NewJevClient() (*core.Client, error) {
+	return JevClientFrom(core.ReadKeyring(), OneCallAtATime)
 }
 
-func JevClientFrom(keys jev.Keyring, concurrency int) (*jev.Client, error) {
-	return classifier.Open(".", keys, concurrency)
+func JevClientFrom(keys core.Keyring, concurrency int) (*core.Client, error) {
+	return classifiers.Open(".", keys, concurrency)
 }
 
-func BoundClassifier() (models.Model, error) {
-	return classifier.Bound(".", jev.ReadKeyring())
+func BoundClassifier() (catalog.Model, error) {
+	return classifiers.Bound(".", core.ReadKeyring())
 }
 
-func LocateGateKey(keys jev.Keyring) (jev.Located, error) {
-	bound, err := classifier.Bound(".", keys)
+func LocateGateKey(keys core.Keyring) (core.Located, error) {
+	bound, err := classifiers.Bound(".", keys)
 	if err != nil {
-		return jev.Located{}, err
+		return core.Located{}, err
 	}
-	return keys.LocateFor(sys.CredentialFileName, classifier.KeyName(bound.Provider))
+	return keys.LocateFor(sys.CredentialFileName, classifiers.KeyName(bound.Provider))
 }
 
-func JevClientOn(key string, concurrency int) (*jev.Client, error) {
+func JevClientOn(key string, concurrency int) (*core.Client, error) {
 	model, err := BoundClassifier()
 	if err != nil {
 		return nil, err
 	}
-	return classifier.Route{Model: model, Key: key}.Client(concurrency)
+	return classifiers.Route{Model: model, Key: key}.Client(concurrency)
 }
 
 func GateKey() (string, error) {
-	return GateKeyFrom(jev.ReadKeyring())
+	return GateKeyFrom(core.ReadKeyring())
 }
 
-func GateKeyFrom(keys jev.Keyring) (string, error) {
-	route, err := classifier.Resolve(".", keys)
+func GateKeyFrom(keys core.Keyring) (string, error) {
+	route, err := classifiers.Resolve(".", keys)
 	return route.Key, err
 }
 

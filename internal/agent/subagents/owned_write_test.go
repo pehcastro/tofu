@@ -1,4 +1,4 @@
-package subagent_test
+package subagents_test
 
 import (
 	"context"
@@ -13,11 +13,11 @@ import (
 
 func TestAWriteToolCallOnTmpCreatesNothingInTheProject(t *testing.T) {
 	project := t.TempDir()
-	tool, err := turn.NewWriteTool(project)
+	tool, err := loop.NewWriteTool(project)
 	if err != nil {
 		t.Fatal(err)
 	}
-	boundary := subagent.NewBoundary("ts-dev-1", "", []string{"apps/web/src/routes/components/$slug.tsx"})
+	boundary := subagents.NewBoundary("ts-dev-1", "", []string{"apps/web/src/routes/components/$slug.tsx"})
 	raw, _ := json.Marshal(map[string]string{"path": "/tmp/tofu-959.txt", "content": "x"})
 	refused := boundary.Write("/tmp/tofu-959.txt")
 	if refused == nil {

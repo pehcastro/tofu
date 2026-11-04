@@ -144,8 +144,8 @@ func (a *watcher) endLeadRow() {
 	delete(a.cards.open, "")
 }
 
-func endsTheRow(source llm.Source) bool {
-	return source != llm.SourceEnvironment && source != llm.SourceSpawnLine
+func endsTheRow(source core.Source) bool {
+	return source != core.SourceEnvironment && source != core.SourceSpawnLine
 }
 
 func wireCard(card toolcard.Card) *ToolCard {

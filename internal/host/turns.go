@@ -48,7 +48,7 @@ type TurnDigest struct {
 	Summary     string              `json:"summary,omitempty"`
 	Status      Status              `json:"status,omitempty"`
 	Outcome     TurnOutcome         `json:"outcome,omitempty"`
-	LoopGuard   *turn.LoopGuardStop `json:"loop_guard,omitempty"`
+	LoopGuard   *loop.LoopGuardStop `json:"loop_guard,omitempty"`
 	Error       string              `json:"error,omitempty"`
 	Held        []TurnHold          `json:"held"`
 	Agents      []TurnAgent         `json:"agents"`
@@ -245,7 +245,7 @@ func (d *turnDigests) note(event session.Event) {
 	case session.EventTurnStart:
 		var start session.TurnStart
 		if event.Agent == "" && json.Unmarshal(event.Body, &start) == nil && digest.Asked == "" {
-			typed, _ := turn.TaskIn(start.Task)
+			typed, _ := loop.TaskIn(start.Task)
 			digest.Asked = strings.TrimSpace(typed)
 		}
 	case session.EventMessage:
@@ -254,7 +254,7 @@ func (d *turnDigests) note(event session.Event) {
 			return
 		}
 		if said.Role == session.RoleUser && digest.Origin.Kind == "" {
-			digest.Origin, digest.Prompt = wireOrigin(turn.OriginOf(said)), cmp.Or(digest.Prompt, said.Content)
+			digest.Origin, digest.Prompt = wireOrigin(loop.OriginOf(said)), cmp.Or(digest.Prompt, said.Content)
 		}
 		if text := strings.TrimSpace(said.Content); said.Role == session.RoleAssistant && text != "" {
 			digest.Summary = text
@@ -276,12 +276,12 @@ func (d *turnDigests) note(event session.Event) {
 	case session.EventToolResult:
 		d.result(digest, event)
 	case session.EventTurnEnd:
-		var ended turn.Row
+		var ended loop.Row
 		if event.Agent != "" || json.Unmarshal(event.Body, &ended) != nil {
 			return
 		}
 		_, digest.Status = doneWords(ended.Outcome, ended.Guard)
-		if ended.Error != "" && ended.Outcome != turn.OutcomeCancelled {
+		if ended.Error != "" && ended.Outcome != loop.OutcomeCancelled {
 			digest.Status = StatusFailed
 		}
 		at := event.At
@@ -292,7 +292,7 @@ func (d *turnDigests) note(event session.Event) {
 }
 
 func (d *turnDigests) result(digest *TurnDigest, event session.Event) {
-	var ran turn.ToolCallRow
+	var ran loop.ToolCallRow
 	var said session.ResultBody
 	if json.Unmarshal(event.Body, &ran) != nil || json.Unmarshal(event.Body, &said) != nil {
 		return
@@ -300,14 +300,14 @@ func (d *turnDigests) result(digest *TurnDigest, event session.Event) {
 	called := d.calls[event.Call]
 	if ran.Refused {
 		held := TurnHold{Call: event.Call, Agent: event.Agent, Tool: cmp.Or(ran.Tool, called.tool), By: HeldByGate, Verdict: ran.GateVerdict}
-		if slices.ContainsFunc(ran.Hooks, func(hook turn.HookRun) bool { return hook.Block != "" }) {
+		if slices.ContainsFunc(ran.Hooks, func(hook loop.HookRun) bool { return hook.Block != "" }) {
 			held.By = HeldByHook
 		}
 		digest.Held = append(digest.Held, held)
 		return
 	}
-	edited, body := TurnFile{Path: called.Path, Agent: event.Agent}, turn.WithoutToolRef(said.Content)
-	_, appended, appends := turn.AppendedLines(body)
+	edited, body := TurnFile{Path: called.Path, Agent: event.Agent}, loop.WithoutToolRef(said.Content)
+	_, appended, appends := loop.AppendedLines(body)
 	switch {
 	case edited.Path == "" || said.ToolOutcome == session.ToolOutcomeFailed:
 		return

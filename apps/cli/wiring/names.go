@@ -21,26 +21,26 @@ func OwnerName(owner string) string {
 	return owner[:at]
 }
 
-func FiresVerdict(fired, blocked int) cli.Verdict {
+func FiresVerdict(fired, blocked int) page.Verdict {
 	switch {
 	case fired == 0:
-		return cli.Verdict{Mark: cli.Done, Text: "nothing fired"}
+		return page.Verdict{Mark: page.Done, Text: "nothing fired"}
 	case blocked == 0:
-		return cli.Verdict{Mark: cli.Warn, Text: strconv.Itoa(fired) + " fired"}
+		return page.Verdict{Mark: page.Warn, Text: strconv.Itoa(fired) + " fired"}
 	}
-	return cli.Verdict{Mark: cli.Fail, Text: strconv.Itoa(fired) + " fired · " + strconv.Itoa(blocked) + " blocked"}
+	return page.Verdict{Mark: page.Fail, Text: strconv.Itoa(fired) + " fired · " + strconv.Itoa(blocked) + " blocked"}
 }
 
-func VerdictLook(v ledger.Verdict) cli.Verdict {
+func VerdictLook(v ledger.Verdict) page.Verdict {
 	switch v {
 	case ledger.VerdictAllow:
-		return cli.Verdict{Mark: cli.Done, Text: "ALLOW"}
+		return page.Verdict{Mark: page.Done, Text: "ALLOW"}
 	case ledger.VerdictAsk:
-		return cli.Verdict{Mark: cli.Warn, Text: "ASK"}
+		return page.Verdict{Mark: page.Warn, Text: "ASK"}
 	case ledger.VerdictDeny:
-		return cli.Verdict{Mark: cli.Fail, Text: "DENY"}
+		return page.Verdict{Mark: page.Fail, Text: "DENY"}
 	case ledger.VerdictUnset:
-		return cli.Verdict{Mark: cli.Idle, Text: "no verdict"}
+		return page.Verdict{Mark: page.Idle, Text: "no verdict"}
 	}
 	panic("tofu why: unknown verdict " + string(v))
 }

@@ -89,7 +89,7 @@ func (m Managed) OpenQuestions(key string) (Catchup, error) {
 	c.Stale = append(c.Stale, typed...)
 	bypasses, err := m.Bypasses(key)
 	c.Bypasses = slices.DeleteFunc(bypasses, func(r BypassRequest) bool {
-		return r.State != BypassReview && (r.State != BypassOpen || r.Accept != rule.AcceptPerson)
+		return r.State != BypassReview && (r.State != BypassOpen || r.Accept != rules.AcceptPerson)
 	})
 	if err != nil {
 		return c, err
@@ -163,7 +163,7 @@ func (m Managed) apply(open OpenQuestion, actor string) (Applied, error) {
 	if err != nil {
 		return done, err
 	}
-	s := m.subjectOf(rule.HookQuestionAnswer, board.Key, asked, asked.Status, actor, 0)
+	s := m.subjectOf(rules.HookQuestionAnswer, board.Key, asked, asked.Status, actor, 0)
 	if err := m.gate(&s); err != nil {
 		return done, err
 	}

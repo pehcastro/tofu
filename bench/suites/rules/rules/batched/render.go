@@ -10,7 +10,7 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/stat"
 )

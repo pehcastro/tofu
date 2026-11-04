@@ -14,7 +14,7 @@ import (
 	"unicode"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/librarian/skills"
@@ -111,7 +111,7 @@ func loadDocs() (host.DocsCorpus, error) {
 }
 
 func parseDocsPage(text string) (host.DocsPage, error) {
-	header, body, found := skill.SplitFrontMatter(text)
+	header, body, found := skills.SplitFrontMatter(text)
 	if !found {
 		return host.DocsPage{}, errors.New("a page opens with front matter between two --- lines")
 	}
@@ -233,7 +233,7 @@ func docsBody(page cli.Page, body string) []string {
 		if text == "" {
 			return
 		}
-		for i, line := range widget.Wrap(text, width-len(lead)) {
+		for i, line := range render.Wrap(text, width-len(lead)) {
 			if i > 0 {
 				lead = strings.Repeat(" ", len(lead))
 			}
@@ -311,10 +311,10 @@ func settingsTable(page cli.Page, table []host.SettingDoc) []string {
 		}
 		lines = append(lines, cli.Indent(line)...)
 		under := strings.Repeat(cli.Gap, 3)
-		for _, wrapped := range widget.Wrap(table[i].Takes, page.Width-len(under)) {
+		for _, wrapped := range render.Wrap(table[i].Takes, page.Width-len(under)) {
 			lines = append(lines, under+wrapped)
 		}
-		for _, wrapped := range widget.Wrap(table[i].Description, page.Width-len(under)) {
+		for _, wrapped := range render.Wrap(table[i].Description, page.Width-len(under)) {
 			lines = append(lines, under+page.Label(wrapped))
 		}
 	}

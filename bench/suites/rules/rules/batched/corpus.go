@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode"
 
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 	"tofu/library"
 )
 

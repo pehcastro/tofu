@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -24,24 +24,24 @@ const leadKey, sideKey, usersRoute = "lead", "side", "add the users route"
 
 type crew struct {
 	mu      sync.Mutex
-	scripts map[string][]llm.Decision
-	asked   map[string][]llm.Request
+	scripts map[string][]core.Decision
+	asked   map[string][]core.Request
 	answers map[string]int
 	holds   map[string]chan struct{}
 }
 
-func newCrew(scripts map[string][]llm.Decision) *crew {
-	return &crew{scripts: scripts, asked: map[string][]llm.Request{}, answers: map[string]int{}, holds: map[string]chan struct{}{}}
+func newCrew(scripts map[string][]core.Decision) *crew {
+	return &crew{scripts: scripts, asked: map[string][]core.Request{}, answers: map[string]int{}, holds: map[string]chan struct{}{}}
 }
 
 func holdKey(key string, request int) string { return key + "#" + strconv.Itoa(request) }
 
-func (c *crew) who(request llm.Request) string {
-	if len(request.Tools) == 0 || request.ToolChoice == llm.ToolChoiceNone {
+func (c *crew) who(request core.Request) string {
+	if len(request.Tools) == 0 || request.ToolChoice == core.ToolChoiceNone {
 		return sideKey
 	}
 	for _, message := range request.Messages {
-		if message.Role != llm.RoleUser {
+		if message.Role != core.RoleUser {
 			continue
 		}
 		for key := range c.scripts {
@@ -62,7 +62,7 @@ func (c *crew) hold(key string, request int) func() {
 	return sync.OnceFunc(func() { close(held) })
 }
 
-func (c *crew) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (c *crew) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	key := c.who(request)
 	c.mu.Lock()
 	c.asked[key] = append(c.asked[key], request)
@@ -72,23 +72,23 @@ func (c *crew) Ask(ctx context.Context, request llm.Request) (llm.Decision, erro
 		select {
 		case <-held:
 		case <-ctx.Done():
-			return llm.Decision{}, ctx.Err()
+			return core.Decision{}, ctx.Err()
 		}
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	script := c.scripts[key]
 	if len(script) == 0 {
-		return llm.Decision{}, errors.New("crew: " + key + " has no decision left")
+		return core.Decision{}, errors.New("crew: " + key + " has no decision left")
 	}
 	c.scripts[key], c.answers[key] = script[1:], c.answers[key]+1
 	return script[0], nil
 }
 
-func (c *crew) requests(key string) []llm.Request {
+func (c *crew) requests(key string) []core.Request {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	return append([]llm.Request(nil), c.asked[key]...)
+	return append([]core.Request(nil), c.asked[key]...)
 }
 
 func (c *crew) answered(key string) int {
@@ -115,8 +115,8 @@ func crewLead(t *testing.T, model *crew) Config {
 	}
 	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(read), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
 		ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" }}
-	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
-	spawn.SubAgents.Defined = []subagent.Definition{{Name: "ts-dev", Runs: subagent.RunsModel}}
+	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
+	spawn.SubAgents.Defined = []subagents.Definition{{Name: "ts-dev", Runs: subagents.RunsModel}}
 	lead := base
 	lead.Task, lead.Tools, lead.Inbox = "hand the work to a sub-agent", NewRegistry(read, spawn), spawn.Inbox
 	return lead
@@ -159,9 +159,9 @@ func (l *leading) wait(t *testing.T) []Row {
 	return l.turns()
 }
 
-func lastUser(request llm.Request) string {
+func lastUser(request core.Request) string {
 	for i := len(request.Messages) - 1; i >= 0; i-- {
-		if request.Messages[i].Role == llm.RoleUser {
+		if request.Messages[i].Role == core.RoleUser {
 			return request.Messages[i].Content
 		}
 	}
@@ -170,7 +170,7 @@ func lastUser(request llm.Request) string {
 
 func TestAPersonsMessageReachesTheLeadAtItsNextStepWhileASubAgentRuns(t *testing.T) {
 	classifierSaysAnswered(t)
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey:    {besideARead(spawnCall("call-spawn", usersRoute, "src/users.ts")), claimDecision("noted, sub-1 is on it"), claimDecision("sub-1 is done")},
 		usersRoute: {claimDecision("the users route is added")},
 	})
@@ -211,19 +211,19 @@ func classifierSaysAnswered(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv(classifier.EndpointVariable, server.URL)
+	t.Setenv(classifiers.EndpointVariable, server.URL)
 	t.Setenv(sys.TypeSafeKeyName, "stub-key-not-a-real-credential")
 	dir, err := sys.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := models.BindRole(dir, models.RoleClassifier, "typesafe/jev-latest"); err != nil {
+	if err := catalog.BindRole(dir, catalog.RoleClassifier, "typesafe/jev-latest"); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestAPersonsMessageStartsALeadTurnWhenTheLeadIsIdleAndASubAgentRuns(t *testing.T) {
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("noted"), claimDecision("sub-1 is done")},
 		usersRoute: {claimDecision("the users route is added")},
 	})
@@ -243,7 +243,7 @@ func TestAPersonsMessageStartsALeadTurnWhenTheLeadIsIdleAndASubAgentRuns(t *test
 }
 
 func TestASubAgentEndingAfterTheLeadsTurnStartsALeadTurnWithItsReport(t *testing.T) {
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is done")},
 		usersRoute: {claimDecision("the users route is added")},
 	})

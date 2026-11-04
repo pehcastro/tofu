@@ -45,7 +45,7 @@ func TestTheTraceNamesACacheBreakOnlyWhereARequestReadLessThanItsOwnAgentLeftCac
 		if input+read+write > 0 {
 			events = append(events, session.Event{ID: request, Agent: agent, Kind: session.EventRequest, Body: body})
 		}
-		exchanges = append(exchanges, session.Exchange{Request: request, Agent: agent, At: start.Add(at), Wire: llm.WireAnthropic, Tools: tools, Messages: messages})
+		exchanges = append(exchanges, session.Exchange{Request: request, Agent: agent, At: start.Add(at), Wire: core.WireAnthropic, Tools: tools, Messages: messages})
 	}
 	head, brief := []string{"system"}, []string{"system", "brief"}
 	sent("lead-1", "", 0, "tools", append(head, "task"), 3, 0, 20000, 0, 20000)

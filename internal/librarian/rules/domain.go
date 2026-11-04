@@ -1,4 +1,4 @@
-package rule
+package rules
 
 import (
 	"fmt"
@@ -160,7 +160,7 @@ func placeOf(name string) (domain, kind string, ok bool) {
 }
 
 func parseDocument(data []byte, reported string) (Document, error) {
-	header, _, found := skill.SplitFrontMatter(string(data))
+	header, _, found := skills.SplitFrontMatter(string(data))
 	if !found {
 		return Document{}, fmt.Errorf("%s: the file opens with no front matter, or never closes it", reported)
 	}

@@ -20,7 +20,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/store/session"
@@ -75,14 +75,14 @@ func stream(w http.ResponseWriter, events []string) {
 	}
 }
 
-func sessionConfig(t *testing.T, replies ...string) (turn.Config, *capturedServer) {
+func sessionConfig(t *testing.T, replies ...string) (loop.Config, *capturedServer) {
 	t.Helper()
 	server := &capturedServer{replies: replies}
 	config, _ := servedSession(t, server)
 	return config, server
 }
 
-func servedSession(t *testing.T, server http.Handler) (turn.Config, []contract.Tool) {
+func servedSession(t *testing.T, server http.Handler) (loop.Config, []contract.Tool) {
 	t.Helper()
 	listening := httptest.NewServer(server)
 	t.Cleanup(listening.Close)
@@ -99,36 +99,36 @@ func servedSession(t *testing.T, server http.Handler) (turn.Config, []contract.T
 	if err := os.WriteFile(filepath.Join(root, "API_SPEC.md"), []byte(strings.Repeat("GET /customers returns every customer\n", 200)), 0o600); err != nil {
 		t.Fatalf("writing the spec: %v", err)
 	}
-	read, err := turn.NewReadTool(root)
+	read, err := loop.NewReadTool(root)
 	if err != nil {
 		t.Fatalf("building read: %v", err)
 	}
-	write, err := turn.NewWriteTool(root)
+	write, err := loop.NewWriteTool(root)
 	if err != nil {
 		t.Fatalf("building write: %v", err)
 	}
-	return turn.Config{
-		Model:          turn.Subscription{Wire: wire},
-		Spend:          turn.SpendSubscription,
-		Tools:          turn.NewRegistry(read, write),
+	return loop.Config{
+		Model:          loop.Subscription{Wire: wire},
+		Spend:          loop.SpendSubscription,
+		Tools:          loop.NewRegistry(read, write),
 		Environment:    sessionEnvironment,
-		Caps:           turn.Caps{MaxSteps: 5},
+		Caps:           loop.Caps{MaxSteps: 5},
 		ResultBytesCap: 1 << 16,
 		ArtifactDir:    filepath.Join(root, "artifacts"),
 		NewID:          func() string { return "turn-test" },
 	}, []contract.Tool{read, write}
 }
 
-func sessionSpec(t *testing.T, task string, role rule.Role) turn.ComposeSpec {
+func sessionSpec(t *testing.T, task string, role rule.Role) loop.ComposeSpec {
 	t.Helper()
 	rules, err := rule.LoadFS(shipped.Files(), "library")
 	if err != nil {
 		t.Fatalf("loading the shipped rules: %v", err)
 	}
-	return turn.ComposeSpec{
+	return loop.ComposeSpec{
 		Task:         task,
 		Environment:  sessionEnvironment,
-		ToolGuidance: turn.EveryToolIsRelativeToTheWorkingDirectory + turn.SpawnAddendum,
+		ToolGuidance: loop.EveryToolIsRelativeToTheWorkingDirectory + loop.SpawnAddendum,
 		Rules:        rules,
 		Role:         role,
 	}
@@ -242,10 +242,10 @@ func assertCachedPrefixCarriesOver(t *testing.T, cached, next []cachedPiece) {
 
 func TestSiblingSubAgentsFromOneDefinitionShareTheCachedPrefix(t *testing.T) {
 	base, server := sessionConfig(t)
-	definition := subagent.Definition{Name: "ts-dev", Description: "typescript", Origin: "library", Runs: subagent.RunsModel,
+	definition := subagents.Definition{Name: "ts-dev", Description: "typescript", Origin: "library", Runs: subagents.RunsModel,
 		Instructions: "you write typescript for bun and hono"}
-	spawn := turn.NewSpawnTool("turn-test", base, &subagent.Roster{})
-	spawn.SubAgents = turn.SubAgents{Defined: []subagent.Definition{definition}, Prompt: sessionSpec(t, "", rule.RoleAny)}
+	spawn := loop.NewSpawnTool("turn-test", base, &subagents.Roster{})
+	spawn.SubAgents = loop.SubAgents{Defined: []subagents.Definition{definition}, Prompt: sessionSpec(t, "", rule.RoleAny)}
 	for _, brief := range []struct{ task, owns string }{
 		{"write the customers routes against API_SPEC.md", "src/routes/customers.ts"},
 		{"debug the orders routes against API_SPEC.md", "src/routes/orders.ts"},
@@ -281,16 +281,16 @@ func TestTheNextTurnsFirstRequestReadsTheLastTurnsCachedPrefixAtTheLifetimeItsSe
 				ctx = anthropic.WithCacheTTL(ctx, layout.setting)
 			}
 			for _, task := range []string{firstTurnTask, secondTurnTask, thirdTurnTask} {
-				composed, err := turn.Compose(sessionSpec(t, task, rule.RoleOrchestrator))
+				composed, err := loop.Compose(sessionSpec(t, task, rule.RoleOrchestrator))
 				if err != nil {
 					t.Fatalf("composing: %v", err)
 				}
 				config.System, config.Environment, config.Task = composed.Head(), composed.WithTaskRules(sessionEnvironment), task
-				row, err := turn.Run(ctx, config)
+				row, err := loop.Run(ctx, config)
 				if err != nil {
 					t.Fatalf("running %q: %v", task, err)
 				}
-				config.History = turn.Sendable(row.Conversation)
+				config.History = loop.Sendable(row.Conversation)
 			}
 			if len(server.bodies) != 4 {
 				t.Fatalf("three turns sent %d requests, want 2, 1 and 1", len(server.bodies))
@@ -315,19 +315,19 @@ func TestTwoSessionsInOneProjectSendTheSameCachedPrefix(t *testing.T) {
 	var bodies [][]byte
 	for _, task := range []string{firstTurnTask, secondTurnTask} {
 		config, server := sessionConfig(t)
-		bash, err := turn.NewBashTool(project)
+		bash, err := loop.NewBashTool(project)
 		if err != nil {
 			t.Fatalf("building bash: %v", err)
 		}
 		spec := sessionSpec(t, task, rule.RoleOrchestrator)
-		spec.Environment = turn.Environment(project, time.Now())
-		composed, err := turn.Compose(spec)
+		spec.Environment = loop.Environment(project, time.Now())
+		composed, err := loop.Compose(spec)
 		if err != nil {
 			t.Fatalf("composing: %v", err)
 		}
-		config.Tools = turn.NewRegistry(bash)
+		config.Tools = loop.NewRegistry(bash)
 		config.System, config.Environment, config.Task = composed.Head(), composed.WithTaskRules(spec.Environment), task
-		if _, err := turn.Run(context.Background(), config); err != nil {
+		if _, err := loop.Run(context.Background(), config); err != nil {
 			t.Fatalf("running %q: %v", task, err)
 		}
 		bodies = append(bodies, server.bodies[0])
@@ -392,19 +392,19 @@ func TestASubAgentReadsItsBriefFromCacheOnItsSecondRequestAtTheLifetimeItsSettin
 		t.Run("setting "+cmp.Or(setting, "unset"), func(t *testing.T) {
 			server := &leadAndSubAgentServer{}
 			lead, tools := servedSession(t, server)
-			definition := subagent.Definition{Name: "ts-dev", Description: "typescript", Origin: "library", Runs: subagent.RunsModel, Instructions: subAgentInstructions}
-			spawn := turn.NewSpawnTool("turn-test", lead, &subagent.Roster{})
-			spawn.SubAgents = turn.SubAgents{Defined: []subagent.Definition{definition}, Prompt: sessionSpec(t, "", rule.RoleAny)}
-			spawn.Limits = func() turn.SubAgentLimits {
-				return turn.SubAgentLimits{Running: 2, Depth: 1, CheckIn: time.Hour, CacheTTL: setting}
+			definition := subagents.Definition{Name: "ts-dev", Description: "typescript", Origin: "library", Runs: subagents.RunsModel, Instructions: subAgentInstructions}
+			spawn := loop.NewSpawnTool("turn-test", lead, &subagents.Roster{})
+			spawn.SubAgents = loop.SubAgents{Defined: []subagents.Definition{definition}, Prompt: sessionSpec(t, "", rule.RoleAny)}
+			spawn.Limits = func() loop.SubAgentLimits {
+				return loop.SubAgentLimits{Running: 2, Depth: 1, CheckIn: time.Hour, CacheTTL: setting}
 			}
-			lead.Tools = turn.NewRegistry(append(tools, spawn)...)
-			composed, err := turn.Compose(sessionSpec(t, firstTurnTask, rule.RoleOrchestrator))
+			lead.Tools = loop.NewRegistry(append(tools, spawn)...)
+			composed, err := loop.Compose(sessionSpec(t, firstTurnTask, rule.RoleOrchestrator))
 			if err != nil {
 				t.Fatalf("composing: %v", err)
 			}
 			lead.System, lead.Environment, lead.Task = composed.Head(), composed.WithTaskRules(sessionEnvironment), firstTurnTask
-			if _, err := turn.Run(context.Background(), lead); err != nil {
+			if _, err := loop.Run(context.Background(), lead); err != nil {
 				t.Fatalf("running the lead: %v", err)
 			}
 			for deadline := time.Now().Add(5 * time.Second); len(spawn.Inbox.Take()) == 0; time.Sleep(10 * time.Millisecond) {
@@ -438,7 +438,7 @@ func TestTheSessionRecordsHowMuchOfARequestsCacheWriteLivesFiveMinutesAndHowMuch
 	}))
 	store, id := session.NewStore(t.TempDir()), session.NewEventID()
 	config.Sessions, config.Session, config.Task = store, id, firstTurnTask
-	if _, err := turn.Run(context.Background(), config); err != nil {
+	if _, err := loop.Run(context.Background(), config); err != nil {
 		t.Fatalf("running: %v", err)
 	}
 	events, err := store.Events(id)
@@ -463,8 +463,8 @@ type describedTool struct {
 
 func (describedTool) Name() string { return "roster" }
 
-func (d describedTool) Definition() llm.Tool {
-	return llm.Tool{Name: "roster", Description: *d.description, Parameters: *d.schema}
+func (d describedTool) Definition() core.Tool {
+	return core.Tool{Name: "roster", Description: *d.description, Parameters: *d.schema}
 }
 
 func (describedTool) Run(context.Context, json.RawMessage) (contract.Result, error) {
@@ -486,21 +486,21 @@ func TestASessionsLaterTurnSendsTheSystemPromptAndToolsItsFirstTurnSent(t *testi
 		t.Run(changed.name, func(t *testing.T) {
 			config, server := sessionConfig(t, "text", "text")
 			description, schema := "lists the sub-agents ts-dev and go-dev", firstSchema
-			read, _ := turn.NewReadTool(t.TempDir())
-			config.Tools = turn.NewRegistry(read, describedTool{description: &description, schema: &schema})
-			config.Prefix = &turn.Prefix{}
-			composed, err := turn.Compose(sessionSpec(t, firstTurnTask, rule.RoleOrchestrator))
+			read, _ := loop.NewReadTool(t.TempDir())
+			config.Tools = loop.NewRegistry(read, describedTool{description: &description, schema: &schema})
+			config.Prefix = &loop.Prefix{}
+			composed, err := loop.Compose(sessionSpec(t, firstTurnTask, rule.RoleOrchestrator))
 			if err != nil {
 				t.Fatalf("composing: %v", err)
 			}
 			config.System, config.Environment = composed.Head(), composed.WithTaskRules(sessionEnvironment)
 			for _, task := range []string{firstTurnTask, secondTurnTask} {
 				config.Task = task
-				row, err := turn.Run(context.Background(), config)
+				row, err := loop.Run(context.Background(), config)
 				if err != nil {
 					t.Fatalf("running %q: %v", task, err)
 				}
-				config.History = turn.Sendable(row.Conversation)
+				config.History = loop.Sendable(row.Conversation)
 				config.Memory, description, schema = "the person prefers bun over node", "lists the sub-agents ts-dev, go-dev and rust-dev", changed.schema
 			}
 			if len(server.bodies) != 2 {
@@ -568,12 +568,12 @@ func TestThePlanRidesAfterTheCachedPrefixAndTheCacheReadsWhatItReadWithoutIt(t *
 			bodies = append(bodies, body)
 			stream(w, steps[min(len(bodies), len(steps))-1])
 		}))
-		plan := tools.NewPlan()
-		config.Tools, config.Task, config.Caps.MaxSteps = turn.NewRegistry(append(built, plan)...), firstTurnTask, 10
+		plan := registry.NewPlan()
+		config.Tools, config.Task, config.Caps.MaxSteps = loop.NewRegistry(append(built, plan)...), firstTurnTask, 10
 		if shown {
 			config.Plan = plan.Shown
 		}
-		if _, err := turn.Run(context.Background(), config); err != nil {
+		if _, err := loop.Run(context.Background(), config); err != nil {
 			t.Fatalf("running with the plan shown %v: %v", shown, err)
 		}
 		if len(bodies) != len(steps) {

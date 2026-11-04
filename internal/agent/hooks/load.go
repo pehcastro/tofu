@@ -1,4 +1,4 @@
-package hook
+package hooks
 
 import (
 	"crypto/sha256"
@@ -94,7 +94,7 @@ type Engine struct {
 	state    string
 	hooks    []Hook
 	problems []string
-	bash     shell.Choice
+	bash     process.Choice
 	resolve  sync.Once
 	bashErr  error
 	mu       sync.Mutex
@@ -133,7 +133,7 @@ const (
 	slotsDir  = "slots"
 )
 
-func Load(project string, bash shell.Choice) *Engine {
+func Load(project string, bash process.Choice) *Engine {
 	full, err := filepath.Abs(project)
 	engine := &Engine{project: full, bash: bash}
 	tofuHome, homeErr := sys.HomeConfigDir()

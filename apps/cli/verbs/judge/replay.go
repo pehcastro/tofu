@@ -13,12 +13,12 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/judge/state"
 	"tofu/internal/sys"
 	"tofu/library/questions"
@@ -385,7 +385,7 @@ func (r replayReport) lines(page cli.Page) []string {
 		for _, move := range r.Moves {
 			cells := []string{wiring.VerdictLook(move.Before).Text + " → " + wiring.VerdictLook(move.After).Text}
 			for _, n := range []int{move.Rows, move.Labeled, move.Agree, move.Disagree} {
-				cells = append(cells, widget.Lead(strconv.Itoa(n), len(header[len(cells)])))
+				cells = append(cells, render.Lead(strconv.Itoa(n), len(header[len(cells)])))
 			}
 			rows = append(rows, cli.Row{Mark: cli.Changed, Cells: cells})
 		}

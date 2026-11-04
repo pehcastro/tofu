@@ -1,6 +1,6 @@
 //go:build !windows && !linux
 
-package shell
+package process
 
 import (
 	"errors"
@@ -20,6 +20,6 @@ func (device) write([]byte) error { return errNoTerminal }
 
 func (device) resize(Size) error { return errNoTerminal }
 
-func startConsole(*exec.Cmd, io.Writer, Lifetime, bool, safe.Report) (tree, <-chan error, *terminal, error) {
+func startConsole(*exec.Cmd, io.Writer, Lifetime, bool, recover.Report) (tree, <-chan error, *terminal, error) {
 	return tree{}, nil, nil, errNoTerminal
 }

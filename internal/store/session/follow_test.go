@@ -352,8 +352,8 @@ func TestFollowEventsCrossTheChannelUnchanged(t *testing.T) {
 		{Kind: host.EventToolCall, ID: "call-1", Tool: "bash", Args: json.RawMessage(`{"command":"go test"}`)},
 		{Kind: host.EventToolResult, ID: "call-1", Text: "ok", ExitCode: &exit},
 		{Kind: host.EventDecision, ID: "call-1", Decision: &host.Decision{Tool: "bash", Verdict: host.Ask, Answers: []host.GateAnswer{{Question: "q", Value: 0.4, Max: 1}}}},
-		{Kind: host.EventDecision, ID: "call-2", Decision: &host.Decision{Tool: "remember", MemoryScope: memory.Project}},
-		{Kind: host.EventAwaitPerson, ID: "ask-1", Questions: []turn.PersonQuestion{{ID: "q1", Question: "which?", Options: []turn.PersonOption{{Label: "this"}}}}, Accepts: []host.ApprovalDecision{"accept"}},
+		{Kind: host.EventDecision, ID: "call-2", Decision: &host.Decision{Tool: "remember", MemoryScope: entries.Project}},
+		{Kind: host.EventAwaitPerson, ID: "ask-1", Questions: []loop.PersonQuestion{{ID: "q1", Question: "which?", Options: []loop.PersonOption{{Label: "this"}}}}, Accepts: []host.ApprovalDecision{"accept"}},
 		{Kind: host.EventPersisted, Logged: &session.Event{Seq: 3, Kind: session.EventMessage, Body: json.RawMessage(`{"role":"assistant"}`)}},
 		{Kind: host.EventTurnStarted, ID: "turn-1", Text: "the task", Origin: host.Origin{Kind: host.OriginPerson}, LastAt: time.Date(2026, 10, 16, 1, 2, 3, 0, time.UTC)},
 	}

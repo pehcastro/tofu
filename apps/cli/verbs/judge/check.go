@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
@@ -120,7 +120,7 @@ func parseCheckArgs(args []string) (checkOpts, error) {
 	return opts, nil
 }
 
-func RunCheck(ctx context.Context, client *jev.Client, rulePath, command string) (ledger.Row, error) {
+func RunCheck(ctx context.Context, client *core.Client, rulePath, command string) (ledger.Row, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return ledger.Row{}, err
@@ -153,7 +153,7 @@ func RunCheck(ctx context.Context, client *jev.Client, rulePath, command string)
 	}
 	set.Rule, set.Mode = &r, gate.ModeShadow
 
-	decision, err := client.Ask(ctx, jev.Request{State: rawState, Questions: set.Questions})
+	decision, err := client.Ask(ctx, core.Request{State: rawState, Questions: set.Questions})
 	if err != nil {
 		return ledger.Row{}, err
 	}

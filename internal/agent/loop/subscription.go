@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -11,15 +11,15 @@ import (
 
 type Subscription struct {
 	Wire     *anthropic.Wire
-	Effort   llm.Effort
+	Effort   core.Effort
 	CacheTTL string
 }
 
-func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (s Subscription) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	var system []string
-	messages := make([]llm.Message, 0, len(request.Messages))
+	messages := make([]core.Message, 0, len(request.Messages))
 	for _, message := range request.Messages {
-		if message.Role == llm.RoleSystem {
+		if message.Role == core.RoleSystem {
 			system = append(system, message.Content)
 			continue
 		}
@@ -40,19 +40,19 @@ func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 		OmitThinkingSummary: request.OmitThinkingSummary,
 	})
 	if err != nil {
-		return llm.Decision{}, err
+		return core.Decision{}, err
 	}
 
-	decision := llm.Decision{
+	decision := core.Decision{
 		Build:            result.Model,
 		RequestID:        result.ID,
-		Outcome:          llm.OutcomeAfter(result.Stop, len(result.ToolCalls)),
+		Outcome:          core.OutcomeAfter(result.Stop, len(result.ToolCalls)),
 		Stop:             result.StopReason,
 		Content:          result.Content,
-		Thinking:         llm.Thinking{Text: result.Thinking, Signature: result.ThinkingSignature},
+		Thinking:         core.Thinking{Text: result.Thinking, Signature: result.ThinkingSignature},
 		ToolCalls:        result.ToolCalls,
-		Usage:            llm.Usage{InputTokens: result.Usage.Input, OutputTokens: result.Usage.Output, ReasoningTokens: result.Usage.Thinking},
-		PromptAccounting: llm.PromptAccountingFor(anthropic.Name),
+		Usage:            core.Usage{InputTokens: result.Usage.Input, OutputTokens: result.Usage.Output, ReasoningTokens: result.Usage.Thinking},
+		PromptAccounting: core.PromptAccountingFor(anthropic.Name),
 		CacheReadTokens:  result.Usage.CacheRead,
 		CacheWriteTokens: result.Usage.CacheWrite,
 		CacheWrite5m:     result.Usage.CacheWrite5m,
@@ -60,7 +60,7 @@ func (s Subscription) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 		FirstTokenMS:     result.FirstTokenMS,
 		Warnings:         result.Warnings,
 	}
-	if decision.Outcome == llm.OutcomeRefusal {
+	if decision.Outcome == core.OutcomeRefusal {
 		decision.Refusal = result.StopReason
 	}
 	return decision, nil

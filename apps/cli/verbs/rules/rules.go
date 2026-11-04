@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/host"
@@ -27,7 +27,7 @@ const (
 )
 
 type Deps struct {
-	Agents func(dir string) (subagent.Found, error)
+	Agents func(dir string) (subagents.Found, error)
 	Why    func(args []string, out, errOut io.Writer) int
 }
 
@@ -75,22 +75,22 @@ func Verb(deps Deps) func(args []string, out, errOut io.Writer) int {
 	}
 }
 
-func listedOrigin(stack wiring.RuleStack, r rule.Rule) string {
+func listedOrigin(stack wiring.RuleStack, r rules.Rule) string {
 	if stack.Origin == wiring.RulesFromTheBinary || stack.Origin == wiring.RulesFromTheProject && strings.HasPrefix(r.File, wiring.LibraryRoot+"/") {
 		return "shipped"
 	}
 	return "library"
 }
 
-func listingMark(mode rule.Mode) cli.Mark {
+func listingMark(mode rules.Mode) cli.Mark {
 	switch mode {
 	case "":
 		return cli.Done
-	case rule.ModeEnforced:
+	case rules.ModeEnforced:
 		return cli.Active
-	case rule.ModeShadow:
+	case rules.ModeShadow:
 		return cli.Idle
-	case rule.ModeOff:
+	case rules.ModeOff:
 		return cli.Removed
 	}
 	panic("tofu: unknown rule mode " + string(mode))
@@ -131,10 +131,10 @@ func listVerb(args []string, out, errOut io.Writer) int {
 		}
 	}
 	for _, off := range stack.SwitchedOff() {
-		listing = append(listing, host.RuleListing{ID: off.Base.ID, Kind: string(off.Base.Kind), Origin: off.Layer, Mode: string(rule.ModeOff), File: off.Rule.File, Override: off.Listing()})
+		listing = append(listing, host.RuleListing{ID: off.Base.ID, Kind: string(off.Base.Kind), Origin: off.Layer, Mode: string(rules.ModeOff), File: off.Rule.File, Override: off.Listing()})
 	}
 	for _, off := range stack.ShippedOff {
-		listing = append(listing, host.RuleListing{ID: off.ID, Kind: string(off.Kind), Origin: listedOrigin(stack, off), Mode: string(rule.ModeOff), Switch: stack.SwitchOn(off.ID, opts.dir)})
+		listing = append(listing, host.RuleListing{ID: off.ID, Kind: string(off.Kind), Origin: listedOrigin(stack, off), Mode: string(rules.ModeOff), Switch: stack.SwitchOn(off.ID, opts.dir)})
 	}
 	if opts.library == "" {
 		library, points := wiring.ReadLibrary()
@@ -150,14 +150,14 @@ func listVerb(args []string, out, errOut io.Writer) int {
 }
 
 func listLines(page cli.Page, report host.RuleListReport, checked []string) []string {
-	checkMode := func(r host.RuleListing) rule.Mode {
-		if r.Mode == string(rule.ModeOff) || r.Kind == wiring.PointKind || slices.Contains(checked, r.ID) {
-			return rule.Mode(r.Mode)
+	checkMode := func(r host.RuleListing) rules.Mode {
+		if r.Mode == string(rules.ModeOff) || r.Kind == wiring.PointKind || slices.Contains(checked, r.ID) {
+			return rules.Mode(r.Mode)
 		}
 		return ""
 	}
 	var origins []string
-	checks := map[rule.Mode]int{}
+	checks := map[rules.Mode]int{}
 	running, points := 0, 0
 	for _, r := range report.Rules {
 		if !slices.Contains(origins, r.Origin) {
@@ -168,13 +168,13 @@ func listLines(page cli.Page, report host.RuleListReport, checked []string) []st
 			continue
 		}
 		checks[checkMode(r)]++
-		if r.Mode != string(rule.ModeOff) {
+		if r.Mode != string(rules.ModeOff) {
 			running++
 		}
 	}
 	verdict := cli.Verdict{Mark: cli.Done, Text: "no checks"}
 	var counts []string
-	for _, mode := range []rule.Mode{rule.ModeShadow, rule.ModeEnforced} {
+	for _, mode := range []rules.Mode{rules.ModeShadow, rules.ModeEnforced} {
 		if count := checks[mode]; count > 0 {
 			verdict.Mark = listingMark(mode)
 			counts = append(counts, strconv.Itoa(count)+" "+mode.String())

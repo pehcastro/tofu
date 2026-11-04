@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"cmp"
@@ -13,18 +13,18 @@ import (
 
 type Typecheck struct {
 	root     contract.Root
-	checkers *turn.Typecheckers
+	checkers *loop.Typecheckers
 }
 
-func NewTypecheck(dir string, checkers *turn.Typecheckers) (Typecheck, error) {
+func NewTypecheck(dir string, checkers *loop.Typecheckers) (Typecheck, error) {
 	root, err := contract.NewRoot(dir)
 	return Typecheck{root: root, checkers: checkers}, err
 }
 
 func (Typecheck) Name() string { return "typecheck" }
 
-func (Typecheck) Definition() llm.Tool {
-	return llm.Tool{
+func (Typecheck) Definition() core.Tool {
+	return core.Tool{
 		Name: "typecheck",
 		Description: "typechecks a typescript project with the project's own checker, tsc, vue-tsc or svelte-check as its package.json declares, kept watching it, and returns the error count and the errors. " +
 			"path is a file or a directory, the working directory when left out: the nearest tsconfig.json at or above it names the project, " +

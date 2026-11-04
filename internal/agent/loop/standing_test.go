@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -16,13 +16,13 @@ import (
 
 type seenByAll struct {
 	mu       sync.Mutex
-	lead     []llm.Decision
-	subAgent []llm.Decision
+	lead     []core.Decision
+	subAgent []core.Decision
 	leadSaw  []string
 	subSaw   []string
 }
 
-func (m *seenByAll) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (m *seenByAll) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	last := request.Messages[len(request.Messages)-1].Content
@@ -32,7 +32,7 @@ func (m *seenByAll) Ask(ctx context.Context, request llm.Request) (llm.Decision,
 	}
 	*saw = append(*saw, last)
 	if len(*queue) == 0 {
-		return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: "nothing more queued"}, nil
+		return core.Decision{Build: "m1", Outcome: core.OutcomeMessage, Content: "nothing more queued"}, nil
 	}
 	next := (*queue)[0]
 	*queue = (*queue)[1:]
@@ -61,14 +61,14 @@ func (g *gateSeeing) Decide(ctx context.Context, request GateRequest) (GateDecis
 	return asksForSubAgents{}.Decide(ctx, request)
 }
 
-func shellCall(id, command string) llm.Decision {
+func shellCall(id, command string) core.Decision {
 	raw, _ := json.Marshal(map[string]any{"command": command})
-	return toolCallDecision(llm.ToolCall{ID: id, Name: "bash", Arguments: raw})
+	return toolCallDecision(core.ToolCall{ID: id, Name: "bash", Arguments: raw})
 }
 
-func messageCall(id string, args map[string]any) llm.Decision {
+func messageCall(id string, args map[string]any) core.Decision {
 	raw, _ := json.Marshal(args)
-	return toolCallDecision(llm.ToolCall{ID: id, Name: "message", Arguments: raw})
+	return toolCallDecision(core.ToolCall{ID: id, Name: "message", Arguments: raw})
 }
 
 func crewOn(t *testing.T, model *seenByAll, gate Gate) Config {
@@ -81,7 +81,7 @@ func crewOn(t *testing.T, model *seenByAll, gate Gate) Config {
 	}
 	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(bash), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096, Project: project,
 		ArtifactDir: filepath.Join(project, "artifacts"), NewID: func() string { return "turn-lead" }, Gate: gate, GateMode: GateEnforce}
-	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	lead := base
 	lead.Task, lead.Tools, lead.Inbox = "hand the notes to sub-agents", NewRegistry(bash, spawn), spawn.Inbox
 	return lead
@@ -89,14 +89,14 @@ func crewOn(t *testing.T, model *seenByAll, gate Gate) Config {
 
 func TestAnAllowHereStandsForThatSubAgentAndThatKindOfCallOnlyAndNeedsNoProse(t *testing.T) {
 	model := &seenByAll{
-		lead: []llm.Decision{
+		lead: []core.Decision{
 			spawnCall("call-spawn-1", "write two notes under mine/", "mine/**"),
 			messageCall("call-allow-here", map[string]any{"to": "sub-1", "answer": "allow_here"}),
 			spawnCall("call-spawn-2", "write a note under yours/", "yours/**"),
 			messageCall("call-allow", map[string]any{"to": "sub-2", "answer": "allow"}),
 			claimDecision("both wrote their notes"),
 		},
-		subAgent: []llm.Decision{
+		subAgent: []core.Decision{
 			shellCall("s1-a", "echo hello > mine/a.txt"),
 			shellCall("s1-b", "echo hello > mine/b.txt"),
 			claimDecision("wrote mine/a.txt and mine/b.txt"),
@@ -126,7 +126,7 @@ func TestAnAllowHereStandsForThatSubAgentAndThatKindOfCallOnlyAndNeedsNoProse(t 
 
 func TestAStandingAllowEndsWhenTheSubAgentEnds(t *testing.T) {
 	model := &seenByAll{
-		lead: []llm.Decision{
+		lead: []core.Decision{
 			spawnCall("call-spawn-1", "write a note under mine/", "mine/**"),
 			messageCall("call-allow-here", map[string]any{"to": "sub-1", "answer": "allow_here"}),
 			messageCall("call-more", map[string]any{"to": "sub-1", "text": "write one more"}),
@@ -134,7 +134,7 @@ func TestAStandingAllowEndsWhenTheSubAgentEnds(t *testing.T) {
 			messageCall("call-allow", map[string]any{"to": "sub-1", "answer": "allow"}),
 			claimDecision("sub-1 wrote both"),
 		},
-		subAgent: []llm.Decision{
+		subAgent: []core.Decision{
 			shellCall("s1-a", "echo hello > mine/a.txt"),
 			claimDecision("wrote mine/a.txt"),
 			shellCall("s1-b", "echo hello > mine/b.txt"),
@@ -150,11 +150,11 @@ func TestAStandingAllowEndsWhenTheSubAgentEnds(t *testing.T) {
 
 func TestACallTheReadListRefusesNeverReachesTheGateOrTheLead(t *testing.T) {
 	model := &seenByAll{
-		lead: []llm.Decision{
+		lead: []core.Decision{
 			spawnCall("call-spawn-1", "peek at a script", "mine/**"),
 			claimDecision("sub-1 reported"),
 		},
-		subAgent: []llm.Decision{
+		subAgent: []core.Decision{
 			shellCall("s1-a", "node /tmp/peek.mjs"),
 			claimDecision("node was refused"),
 		},

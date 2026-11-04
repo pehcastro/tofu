@@ -15,8 +15,8 @@ import (
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/konst"
-	"tofu/internal/models/llm/catalog"
-	"tofu/internal/ui/tui/app"
+	models "tofu/internal/models/llm/catalog"
+	tui "tofu/internal/ui/tui/app"
 )
 
 const servedID = "claude-sub/claude-sonnet-5-5"

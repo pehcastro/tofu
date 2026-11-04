@@ -38,7 +38,7 @@ func SetupOf(name, ruleDir, prompt string) (Setup, error) {
 	if !present {
 		return Setup{}, fmt.Errorf("setup %q names rule directory %s, which is not a directory, so the name would stand for nothing", name, ruleDir)
 	}
-	loaded, err := rule.LoadDir(ruleDir)
+	loaded, err := rules.LoadDir(ruleDir)
 	if err != nil {
 		return Setup{}, err
 	}

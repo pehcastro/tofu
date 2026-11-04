@@ -1,4 +1,4 @@
-package tui
+package app
 
 import (
 	"cmp"
@@ -15,7 +15,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/models/classifiers/core"
 	library "tofu/internal/models/llm/catalog"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	isettings "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/ui/tui/chat/session"
@@ -129,7 +129,7 @@ func (a *App) openPicker(assign string) {
 	}
 	envFile := filepath.Join(a.options.Root, sys.CredentialFileName)
 	keys := models.Keys{
-		Set: func(name string) bool { _, err := jev.KeyFor(envFile, name); return err == nil },
+		Set: func(name string) bool { _, err := core.KeyFor(envFile, name); return err == nil },
 		Save: func(ctx context.Context, name, value string) error {
 			if save := a.options.SaveKey; save != nil {
 				_, err := save(ctx, name, value)

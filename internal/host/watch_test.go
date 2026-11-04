@@ -141,12 +141,12 @@ func TestTheElapsedTimeIsTheSubAgentsOwnAndNotTheViewsClock(t *testing.T) {
 	}
 }
 
-func recordedRow(id string, tools ...string) turn.Row {
-	step := turn.StepRow{Index: 1}
+func recordedRow(id string, tools ...string) loop.Row {
+	step := loop.StepRow{Index: 1}
 	for _, tool := range tools {
-		step.ToolCalls = append(step.ToolCalls, turn.ToolCallRow{Tool: tool, Command: "it"})
+		step.ToolCalls = append(step.ToolCalls, loop.ToolCallRow{Tool: tool, Command: "it"})
 	}
-	return turn.Row{ID: id, Steps: []turn.StepRow{step}}
+	return loop.Row{ID: id, Steps: []loop.StepRow{step}}
 }
 
 func TestAFinishedSubAgentDrawsNoMoreCallsThanTheWatchPaneHoldsAndSaysHowManyItHid(t *testing.T) {
@@ -154,7 +154,7 @@ func TestAFinishedSubAgentDrawsNoMoreCallsThanTheWatchPaneHoldsAndSaysHowManyItH
 	for index := range ran {
 		ran[index] = "tool" + strconv.Itoa(index)
 	}
-	calls := recordedOrCalling(recordedCalls([]turn.Row{recordedRow("turn-1-c1", ran...)}, "turn-1-c1"), nil, nil, 0)
+	calls := recordedOrCalling(recordedCalls([]loop.Row{recordedRow("turn-1-c1", ran...)}, "turn-1-c1"), nil, nil, 0)
 
 	if len(calls) != konst.SubAgentCallsWatched {
 		t.Fatalf("a sub-agent that ran %d tools drew %d calls, want at most the %d the pane holds", len(ran), len(calls), konst.SubAgentCallsWatched)
@@ -200,7 +200,7 @@ func TestARunningSubAgentAndAFinishedOneHideTheSameCallsInTheSameWords(t *testin
 	subAgents, ran := runningThroughCalls(t, konst.SubAgentCallsWatched*2)
 
 	running := subAgents[0].Calls
-	finished := recordedOrCalling(recordedCalls([]turn.Row{recordedRow("turn-1-c1", ran...)}, "turn-1-c1"), nil, nil, 0)
+	finished := recordedOrCalling(recordedCalls([]loop.Row{recordedRow("turn-1-c1", ran...)}, "turn-1-c1"), nil, nil, 0)
 	if len(running) != len(finished) {
 		t.Fatalf("the same %d calls draw %d lines while the sub-agent runs and %d once it stops", len(ran), len(running), len(finished))
 	}
@@ -212,7 +212,7 @@ func TestARunningSubAgentAndAFinishedOneHideTheSameCallsInTheSameWords(t *testin
 }
 
 func TestACompleteCallListIsDrawnWholeWithNoHiddenLine(t *testing.T) {
-	calls := recordedCalls([]turn.Row{recordedRow("turn-1-c1", "read", "write")}, "turn-1-c1")
+	calls := recordedCalls([]loop.Row{recordedRow("turn-1-c1", "read", "write")}, "turn-1-c1")
 	if len(calls) != 2 || calls[0].Tool != "read" || calls[1].Text != "it" {
 		t.Fatalf("two recorded calls drew %+v, want both whole and in order", calls)
 	}

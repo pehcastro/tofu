@@ -1,4 +1,4 @@
-package browser_test
+package driver_test
 
 import (
 	"cmp"
@@ -17,10 +17,10 @@ import (
 	"time"
 
 	"tofu/internal/dummy"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/tools/web/browser/driver"
-	"tofu/internal/tools/web/browser/loop"
+	browser "tofu/internal/tools/web/browser/driver"
+	jevloop "tofu/internal/tools/web/browser/loop"
 	"tofu/library/questions"
 )
 
@@ -212,14 +212,14 @@ func TestActSendsTheTargetGuardAndReadsTheStaleKind(t *testing.T) {
 
 type recordedWire struct{ answer []byte }
 
-func (w recordedWire) Caps() jev.WireCaps {
-	return jev.WireCaps{Name: "recorded", CriteriaKinds: []jev.CriteriaKind{jev.CriteriaString, jev.CriteriaObject}}
+func (w recordedWire) Caps() core.WireCaps {
+	return core.WireCaps{Name: "recorded", CriteriaKinds: []core.CriteriaKind{core.CriteriaString, core.CriteriaObject}}
 }
 
 func (w recordedWire) Model() string { return "~typesafe/jev-latest" }
 
-func (w recordedWire) Post(context.Context, []byte) (jev.Raw, error) {
-	return jev.Raw{Body: w.answer, Attempts: 1, Latency: time.Millisecond}, nil
+func (w recordedWire) Post(context.Context, []byte) (core.Raw, error) {
+	return core.Raw{Body: w.answer, Attempts: 1, Latency: time.Millisecond}, nil
 }
 
 func TestBrowserRunsOneJevStepOnTheSharedTab(t *testing.T) {
@@ -231,7 +231,7 @@ func TestBrowserRunsOneJevStepOnTheSharedTab(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := jev.NewClient(jev.Config{Wire: recordedWire{answer}})
+	client, err := core.NewClient(core.Config{Wire: recordedWire{answer}})
 	if err != nil {
 		t.Fatal(err)
 	}

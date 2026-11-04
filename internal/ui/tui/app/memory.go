@@ -1,4 +1,4 @@
-package tui
+package app
 
 import (
 	"cmp"
@@ -9,7 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/internal/host"
-	"tofu/internal/store/memory/entries"
+	memory "tofu/internal/store/memory/entries"
 	isettings "tofu/internal/store/settings"
 	"tofu/internal/ui/tui/chat/session"
 	"tofu/internal/ui/tui/pickers/palette"

@@ -1,4 +1,4 @@
-package jevloop
+package loop
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"tofu/internal/dummy"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/library/questions"
@@ -23,18 +23,18 @@ type recordedWire struct {
 	posted [][]byte
 }
 
-func (w *recordedWire) Caps() jev.WireCaps {
-	return jev.WireCaps{Name: "recorded", CriteriaKinds: []jev.CriteriaKind{jev.CriteriaString, jev.CriteriaObject}}
+func (w *recordedWire) Caps() core.WireCaps {
+	return core.WireCaps{Name: "recorded", CriteriaKinds: []core.CriteriaKind{core.CriteriaString, core.CriteriaObject}}
 }
 
 func (w *recordedWire) Model() string { return "~typesafe/jev-latest" }
 
-func (w *recordedWire) Post(_ context.Context, body []byte) (jev.Raw, error) {
+func (w *recordedWire) Post(_ context.Context, body []byte) (core.Raw, error) {
 	w.posted = append(w.posted, body)
 	if w.fail != nil {
-		return jev.Raw{}, w.fail
+		return core.Raw{}, w.fail
 	}
-	return jev.Raw{Body: w.answer, Attempts: 1, Latency: time.Millisecond}, nil
+	return core.Raw{Body: w.answer, Attempts: 1, Latency: time.Millisecond}, nil
 }
 
 func readFixture(t *testing.T, name string) []byte {
@@ -46,9 +46,9 @@ func readFixture(t *testing.T, name string) []byte {
 	return data
 }
 
-func hotelPage(t *testing.T) browser.Page {
+func hotelPage(t *testing.T) driver.Page {
 	t.Helper()
-	page, err := browser.ParsePage(readFixture(t, "hotel.json"))
+	page, err := driver.ParsePage(readFixture(t, "hotel.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func recordedChooser(t *testing.T, wire *recordedWire) Jev {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+	client, err := core.NewClient(core.Config{Wire: wire})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,8 +70,8 @@ func recordedChooser(t *testing.T, wire *recordedWire) Jev {
 
 type postedRequest struct {
 	State struct {
-		Goal     string            `json:"goal"`
-		Elements []browser.Element `json:"elements"`
+		Goal     string           `json:"goal"`
+		Elements []driver.Element `json:"elements"`
 	} `json:"state"`
 	Questions map[string]struct {
 		Criteria map[string]json.RawMessage `json:"criteria"`
@@ -121,7 +121,7 @@ func TestTheHotelFormAsksOneOpQuestionAndOneTargetPerOpWithCandidates(t *testing
 		}
 	}
 
-	want := browser.Action{Op: browser.OpSelect, Element: 6, Value: "Design"}
+	want := driver.Action{Op: driver.OpSelect, Element: 6, Value: "Design"}
 	if choice.Action != want {
 		t.Fatalf("chose %+v, want %+v, the select_target option at 0.93", choice.Action, want)
 	}
@@ -132,11 +132,11 @@ func TestTheHotelFormAsksOneOpQuestionAndOneTargetPerOpWithCandidates(t *testing
 
 func TestAQuestionOverTheChoiceCeilingIsRefusedBeforeTheWire(t *testing.T) {
 	page := hotelPage(t)
-	var options []browser.SelectOption
+	var options []driver.SelectOption
 	for i := 0; i < 300; i++ {
-		options = append(options, browser.SelectOption{Label: fmt.Sprint("city ", i), Value: fmt.Sprint(i)})
+		options = append(options, driver.SelectOption{Label: fmt.Sprint("city ", i), Value: fmt.Sprint(i)})
 	}
-	page.Elements = append(page.Elements, browser.Element{Index: 99, Role: browser.RoleSelect, Label: "City", Options: options})
+	page.Elements = append(page.Elements, driver.Element{Index: 99, Role: driver.RoleSelect, Label: "City", Options: options})
 
 	wire := &recordedWire{answer: readFixture(t, "hotel_answer.json")}
 	_, err := recordedChooser(t, wire).Choose(context.Background(), "goal", page, nil)
@@ -151,7 +151,7 @@ func TestAQuestionOverTheChoiceCeilingIsRefusedBeforeTheWire(t *testing.T) {
 func TestTheStateCarriesOnlyTheLastTenSteps(t *testing.T) {
 	var steps []Step
 	for i := 1; i <= 12; i++ {
-		steps = append(steps, Step{Choice: Choice{Action: browser.Action{Op: browser.OpClick, Element: i}}, Label: fmt.Sprint("step ", i)})
+		steps = append(steps, Step{Choice: Choice{Action: driver.Action{Op: driver.OpClick, Element: i}}, Label: fmt.Sprint("step ", i)})
 	}
 	wire := &recordedWire{answer: readFixture(t, "hotel_answer.json")}
 	if _, err := recordedChooser(t, wire).Choose(context.Background(), "goal", hotelPage(t), steps); err != nil {
@@ -173,13 +173,13 @@ func TestTheStateCarriesOnlyTheLastTenSteps(t *testing.T) {
 }
 
 func TestAReadOnlyFieldIsNeverATypeTextCandidate(t *testing.T) {
-	page, err := browser.ParsePage([]byte(`{"url":"http://fixture/","fingerprint":"f1","elements":[
+	page, err := driver.ParsePage([]byte(`{"url":"http://fixture/","fingerprint":"f1","elements":[
 		{"index":1,"role":"textbox","label":"Booking reference","value":"AX12","readonly":true},
 		{"index":2,"role":"textbox","label":"Guest name"}]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	options, _ := candidates(browser.OpTypeText, page)
+	options, _ := candidates(driver.OpTypeText, page)
 	var names []string
 	for _, option := range options {
 		names = append(names, option.Name)

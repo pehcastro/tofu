@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"bufio"
@@ -291,7 +291,7 @@ func startTestRunner(dir string) (*testRunner, error) {
 		cancel()
 		return nil, err
 	}
-	tracked, err := shell.StartTracked(cmd)
+	tracked, err := process.StartTracked(cmd)
 	_ = written.Close()
 	if err != nil {
 		_ = output.Close()
@@ -301,8 +301,8 @@ func startTestRunner(dir string) (*testRunner, error) {
 	release := sync.OnceFunc(tracked.Release)
 	runner := &testRunner{process: cmd.Process, stop: func() { cancel(); release() }, input: input, answers: map[int]testReply{}, changed: make(chan struct{})}
 	report := sys.Crashes(dir)
-	safe.Go(report, "test runner read", func() { runner.read(output) })
-	safe.Go(report, "test runner wait", func() {
+	recover.Go(report, "test runner read", func() { runner.read(output) })
+	recover.Go(report, "test runner wait", func() {
 		defer release()
 		_ = cmd.Wait()
 	})

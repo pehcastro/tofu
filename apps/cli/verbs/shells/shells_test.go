@@ -11,7 +11,7 @@ import (
 )
 
 func TestShellsVerbListsReadsAndKillsARealProcess(t *testing.T) {
-	registry := shell.OpenAt(t.TempDir())
+	registry := process.OpenAt(t.TempDir())
 	root := t.TempDir()
 	if _, err := registry.Start(root, "dev-server", "sleep 10 & echo listening on :3000; wait", ""); err != nil {
 		t.Fatal(err)
@@ -21,7 +21,7 @@ func TestShellsVerbListsReadsAndKillsARealProcess(t *testing.T) {
 	}
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
-		if entry, err := registry.Read("build"); err == nil && entry.State == shell.Exited {
+		if entry, err := registry.Read("build"); err == nil && entry.State == process.Exited {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -61,7 +61,7 @@ func TestShellsVerbListsReadsAndKillsARealProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if entry.State != shell.Killed {
-		t.Errorf("the process killed from the command line is state %q, want %q", entry.State, shell.Killed)
+	if entry.State != process.Killed {
+		t.Errorf("the process killed from the command line is state %q, want %q", entry.State, process.Killed)
 	}
 }

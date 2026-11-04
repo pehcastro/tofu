@@ -60,10 +60,10 @@ func TestAMessageTheLeadTookOffTheChannelLeavesTheOthersTheirIDs(t *testing.T) {
 
 type heldAsk struct{ asked chan struct{} }
 
-func (m heldAsk) Ask(ctx context.Context, _ llm.Request) (llm.Decision, error) {
+func (m heldAsk) Ask(ctx context.Context, _ core.Request) (core.Decision, error) {
 	m.asked <- struct{}{}
 	<-ctx.Done()
-	return llm.Decision{}, ctx.Err()
+	return core.Decision{}, ctx.Err()
 }
 
 func TestSendNowCancelsTheAskInFlightAsSentNowAndAStopStaysAStop(t *testing.T) {
@@ -75,7 +75,7 @@ func TestSendNowCancelsTheAskInFlightAsSentNowAndAStopStaysAStop(t *testing.T) {
 	ask := func(signal chan struct{}) error {
 		answered := make(chan error, 1)
 		go func() {
-			_, err := watch.Ask(context.Background(), llm.Request{})
+			_, err := watch.Ask(context.Background(), core.Request{})
 			answered <- err
 		}()
 		<-model.asked
@@ -88,10 +88,10 @@ func TestSendNowCancelsTheAskInFlightAsSentNowAndAStopStaysAStop(t *testing.T) {
 			return nil
 		}
 	}
-	if err := ask(sendNow); !errors.Is(err, turn.SentNow{}) {
-		t.Fatalf("send now ended the ask with %v, want turn.SentNow so the step is asked again", err)
+	if err := ask(sendNow); !errors.Is(err, loop.SentNow{}) {
+		t.Fatalf("send now ended the ask with %v, want loop.SentNow so the step is asked again", err)
 	}
-	if err := ask(stops); errors.Is(err, turn.SentNow{}) || !errors.Is(err, context.Canceled) {
+	if err := ask(stops); errors.Is(err, loop.SentNow{}) || !errors.Is(err, context.Canceled) {
 		t.Fatalf("a lead stop ended the ask with %v, want a cancel the turn ends on", err)
 	}
 }

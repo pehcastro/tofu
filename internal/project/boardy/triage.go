@@ -56,7 +56,7 @@ func (m Managed) request(key string, ticket Ticket, actor string) (Ticket, error
 		return Ticket{}, err
 	}
 	ticket.ID, ticket.Status = "", Triage
-	s := subject{event: rule.HookTriageRequest, key: key, ticket: ticket, to: Triage, actor: actor}
+	s := subject{event: rules.HookTriageRequest, key: key, ticket: ticket, to: Triage, actor: actor}
 	if err := m.gate(&s); err != nil {
 		return Ticket{}, err
 	}
@@ -209,7 +209,7 @@ func (m Managed) AcceptPlanned(key, id, epic, sprint, actor string) (Ticket, err
 		ticket := req.Ticket
 		ticket.Status, ticket.Reason, ticket.Epic, ticket.Sprint = Backlog, "", cmp.Or(epic, ticket.Epic), cmp.Or(sprint, ticket.Sprint)
 		ticket.Log = strings.TrimSpace(ticket.Log + "\n" + m.Store.logLine(actor, fmt.Sprintf("accepted triage request %s from %s", id, cmp.Or(req.By.ID, "an unknown actor"))))
-		accepting := subject{event: rule.HookTriageAccept, key: key, ticket: ticket, from: Triage, to: Backlog, actor: actor}
+		accepting := subject{event: rules.HookTriageAccept, key: key, ticket: ticket, from: Triage, to: Backlog, actor: actor}
 		if err := m.gate(&accepting); err != nil {
 			return err
 		}
@@ -222,7 +222,7 @@ func (m Managed) AcceptPlanned(key, id, epic, sprint, actor string) (Ticket, err
 		return accepted, err
 	}
 	err = m.Store.Record(key, Event{Ticket: accepted.ID, Kind: Accepted, Actor: actor, From: Triage, To: accepted.Status, Text: id})
-	done := m.subjectOf(rule.HookTriageAccept, key, accepted, accepted.Status, actor, 0)
+	done := m.subjectOf(rules.HookTriageAccept, key, accepted, accepted.Status, actor, 0)
 	done.from = Triage
 	set, setErr := m.gatePlanned(key, accepted, actor)
 	if setErr == nil {

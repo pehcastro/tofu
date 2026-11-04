@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/tools/shell/sift"
 )
@@ -79,18 +79,18 @@ type Answered struct {
 }
 
 type Asker struct {
-	Client *jev.Client
+	Client *core.Client
 	Set    question.Set
 	Ledger *ledger.Writer
 }
 
 func (a Asker) Ask(ctx context.Context, shell sift.Shell, units []sift.Unit, task string) Answered {
-	questions := make([]jev.Question, len(a.Set.Questions))
+	questions := make([]core.Question, len(a.Set.Questions))
 	for i, q := range a.Set.Questions {
 		questions[i] = q.ToJev()
 	}
 
-	replies := make([]*jev.Decision, len(units))
+	replies := make([]*core.Decision, len(units))
 	states := make([]json.RawMessage, len(units))
 	var wg sync.WaitGroup
 	for i, unit := range units {
@@ -105,7 +105,7 @@ func (a Asker) Ask(ctx context.Context, shell sift.Shell, units []sift.Unit, tas
 				return
 			}
 			states[i] = state
-			decision, err := a.Client.Ask(ctx, jev.Request{State: state, Questions: questions})
+			decision, err := a.Client.Ask(ctx, core.Request{State: state, Questions: questions})
 			if err != nil {
 				return
 			}

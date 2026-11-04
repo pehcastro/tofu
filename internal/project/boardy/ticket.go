@@ -259,7 +259,7 @@ func RevisionHeading(index int) string {
 }
 
 func ParseTicket(raw []byte) (Ticket, error) {
-	front, body, found := skill.SplitFrontMatter(string(raw))
+	front, body, found := skills.SplitFrontMatter(string(raw))
 	if !found {
 		return Ticket{}, errors.New("no front matter between two --- lines")
 	}

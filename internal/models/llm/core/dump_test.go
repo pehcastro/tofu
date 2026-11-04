@@ -1,4 +1,4 @@
-package llm_test
+package core_test
 
 import (
 	"slices"
@@ -22,7 +22,7 @@ const (
 	stubResidency = "eu"
 )
 
-func wireHeaders(t *testing.T) map[string][]llm.Header {
+func wireHeaders(t *testing.T) map[string][]core.Header {
 	t.Helper()
 	metadata, _, err := codex.Identity{
 		InstallationID: stubInstall,
@@ -34,7 +34,7 @@ func wireHeaders(t *testing.T) map[string][]llm.Header {
 	if err != nil {
 		t.Fatalf("building the codex turn metadata: %v", err)
 	}
-	return map[string][]llm.Header{
+	return map[string][]core.Header{
 		"anthropic oauth": anthropic.Headers(anthropic.HeaderOptions{
 			Token: stubToken, OAuth: true, Stream: true, AgentRequest: true, SessionID: stubSession,
 		}),
@@ -61,7 +61,7 @@ func wireHeaders(t *testing.T) map[string][]llm.Header {
 
 func TestNoDumpPrintsAnIdentifierOrACredential(t *testing.T) {
 	for wire, headers := range wireHeaders(t) {
-		text := llm.Dump{
+		text := core.Dump{
 			Method:  "POST",
 			URL:     "https://example.invalid/v1",
 			Headers: headers,
@@ -77,11 +77,11 @@ func TestNoDumpPrintsAnIdentifierOrACredential(t *testing.T) {
 }
 
 func TestEveryHeaderLeftInClearIsOnTheSafeList(t *testing.T) {
-	safe := llm.HeadersSafeInClear()
+	safe := core.HeadersSafeInClear()
 	for wire, headers := range wireHeaders(t) {
 		for _, header := range headers {
 			onList := slices.Contains(safe, strings.ToLower(header.Name))
-			inClear := llm.RedactHeader(header.Name, header.Value) == header.Value
+			inClear := core.RedactHeader(header.Name, header.Value) == header.Value
 			if inClear != onList {
 				t.Fatalf("%s sends %s in clear=%v while the safe list says %v", wire, header.Name, inClear, onList)
 			}
@@ -90,7 +90,7 @@ func TestEveryHeaderLeftInClearIsOnTheSafeList(t *testing.T) {
 }
 
 func TestTheBodyIdentifiersAreHiddenToo(t *testing.T) {
-	text := llm.Dump{
+	text := core.Dump{
 		Method:      "POST",
 		URL:         "https://example.invalid/v1",
 		Body:        []byte(`{"metadata":{"user_id":"{\"session_id\":\"` + stubSession + `\"}"}}`),
@@ -99,7 +99,7 @@ func TestTheBodyIdentifiersAreHiddenToo(t *testing.T) {
 	if strings.Contains(text, stubSession) {
 		t.Fatalf("the body prints the session id:\n%s", text)
 	}
-	if !strings.Contains(text, llm.Redacted) {
+	if !strings.Contains(text, core.Redacted) {
 		t.Fatalf("the body was not marked as redacted:\n%s", text)
 	}
 }

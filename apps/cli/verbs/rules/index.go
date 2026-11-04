@@ -10,12 +10,12 @@ import (
 	"strings"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/host"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 )
 
 type IndexListing struct {
@@ -41,7 +41,7 @@ type IndexReport struct {
 	Rules      []IndexListing `json:"rules"`
 }
 
-func indexVerb(args []string, out, errOut io.Writer, agentsIn func(dir string) (subagent.Found, error)) int {
+func indexVerb(args []string, out, errOut io.Writer, agentsIn func(dir string) (subagents.Found, error)) int {
 	o := output.Verb{Name: "rules index", UsageLine: `tofu rules index "<task>" [path...] [--task kind] [--role orchestrator|sub-agent] [--agent name] [--library dir] [--dir project] [--json]`, Out: out, ErrOut: errOut}
 	kept := make([]string, 0, len(args))
 	verb, role, agentName, verbAsked, roleAsked := rule.VerbNone, rule.RoleAny, "", false, false
@@ -86,11 +86,11 @@ func indexVerb(args []string, out, errOut io.Writer, agentsIn func(dir string) (
 	if err != nil {
 		return o.Fail(err)
 	}
-	var agent subagent.Definition
+	var agent subagents.Definition
 	if agentName != "" {
 		found, err := agentsIn(opts.dir)
 		if err == nil {
-			agent, err = turn.SubAgents{Defined: found.Definitions}.Named(agentName)
+			agent, err = loop.SubAgents{Defined: found.Definitions}.Named(agentName)
 		}
 		if err != nil {
 			return o.Fail(err)
@@ -98,7 +98,7 @@ func indexVerb(args []string, out, errOut io.Writer, agentsIn func(dir string) (
 		role = rule.RoleSubAgent
 	}
 	rules := stack.Rules
-	task := turn.TaskNamed(opts.rest[0])
+	task := loop.TaskNamed(opts.rest[0])
 	if verbAsked {
 		task.Verb = verb
 	}
@@ -115,7 +115,7 @@ func indexVerb(args []string, out, errOut io.Writer, agentsIn func(dir string) (
 	domain := cmp.Or(agent.Domain, rule.DomainDev)
 	if asked := rule.AskedOfTheTask(rules, domain, task); len(asked) > 0 {
 		report.DecidedBy = "Jev, on " + strconv.Itoa(len(asked)) + " rules that declare touches"
-		if task.Judged, err = turn.NewRuleJudge(opts.dir).Of(task, asked); err != nil {
+		if task.Judged, err = loop.NewRuleJudge(opts.dir).Of(task, asked); err != nil {
 			report.DecidedBy = "the touches keyword, since " + err.Error()
 		}
 	}

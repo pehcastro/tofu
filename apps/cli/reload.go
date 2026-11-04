@@ -16,11 +16,11 @@ import (
 	"strings"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/host"
-	"tofu/internal/librarian/skills"
+	skill "tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/catalog"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
@@ -57,7 +57,7 @@ func takeInventory(dir string) ([]reloadPart, error) {
 		return nil, err
 	}
 	library, err := wiring.ModelLibrary(dir)
-	var broken *models.BrokenLibrary
+	var broken *catalog.BrokenLibrary
 	if err != nil && !errors.As(err, &broken) {
 		return nil, err
 	}
@@ -100,7 +100,7 @@ func takeInventory(dir string) ([]reloadPart, error) {
 	for _, one := range library.Models {
 		all[one.Slug()] = one.Layer + " " + string(one.Use)
 		layers[one.Layer]++
-		if one.Use != models.UseExcluded {
+		if one.Use != catalog.UseExcluded {
 			usable[one.Slug()] = one.Layer
 		}
 	}
@@ -113,7 +113,7 @@ func takeInventory(dir string) ([]reloadPart, error) {
 	for _, one := range library.Roles {
 		roles[string(one.ID)] = one.Model.Slug()
 	}
-	for _, tier := range subagent.Tiers() {
+	for _, tier := range subagents.Tiers() {
 		if slug := strings.TrimSpace(store.Text(tier.Setting())); slug != "" {
 			tiers["@"+string(tier)] = slug
 		}

@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"unicode/utf8"
@@ -50,7 +50,7 @@ func readOnly(name string) bool {
 	return false
 }
 
-func (r Registry) parallelPrefix(calls []llm.ToolCall) int {
+func (r Registry) parallelPrefix(calls []core.ToolCall) int {
 	if spawner, spawning := r.byName["spawn"].(*SpawnTool); spawning && calls[0].Name == "spawn" {
 		return spawner.disjointPrefix(calls)
 	}
@@ -63,8 +63,8 @@ func (r Registry) parallelPrefix(calls []llm.ToolCall) int {
 	return width
 }
 
-func (r Registry) Definitions() []llm.Tool {
-	defs := make([]llm.Tool, len(r.tools))
+func (r Registry) Definitions() []core.Tool {
+	defs := make([]core.Tool, len(r.tools))
 	for i, tool := range r.tools {
 		defs[i] = tool.Definition()
 	}

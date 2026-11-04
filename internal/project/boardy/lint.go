@@ -145,7 +145,7 @@ func ownsInside(glob, parent string) bool {
 	}
 	if !strings.Contains(glob, "*") {
 		if path.Ext(glob) != "" {
-			matched, err := subagent.Matches(glob, []string{parent})
+			matched, err := subagents.Matches(glob, []string{parent})
 			return matched && err == nil
 		}
 		glob = strings.TrimSuffix(glob, "/") + "/**"
@@ -159,14 +159,14 @@ func ownsInside(glob, parent string) bool {
 
 func unreadableOwns(glob string) error {
 	held := heldGlob(glob)
-	_, err := subagent.Matches(literalPrefix(held), []string{held})
+	_, err := subagents.Matches(literalPrefix(held), []string{held})
 	return err
 }
 
 func ownsMeet(left, right []string) (string, string, bool) {
 	for _, a := range left {
 		for _, b := range right {
-			if subagent.Overlap(heldGlob(a), heldGlob(b)) {
+			if subagents.Overlap(heldGlob(a), heldGlob(b)) {
 				return a, b, true
 			}
 		}

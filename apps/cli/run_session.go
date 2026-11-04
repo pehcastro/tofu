@@ -19,7 +19,7 @@ const (
 type runResumed struct {
 	carry    sessionResume
 	wire     string
-	prefix   *turn.Prefix
+	prefix   *loop.Prefix
 	pick     host.Pick
 	pickFrom string
 	release  func() error
@@ -46,14 +46,14 @@ func resumeRun(dir, handle string, say func(string)) (runResumed, error) {
 	if err != nil {
 		return runResumed{}, err
 	}
-	resumed := runResumed{carry: carry, prefix: &turn.Prefix{}, pick: pick, pickFrom: "the model tofu session set chose", release: release}
+	resumed := runResumed{carry: carry, prefix: &loop.Prefix{}, pick: pick, pickFrom: "the model tofu session set chose", release: release}
 	if pick.Model == "" {
 		resumed.pick, resumed.pickFrom = lastAsked(store, dir, carry.Session)
 	}
 	if header, err := store.Header(carry.Session); err == nil {
 		resumed.wire = header.Wire
 	}
-	if prefix, err := turn.HeldPrefix(store, carry.Session, ""); err == nil {
+	if prefix, err := loop.HeldPrefix(store, carry.Session, ""); err == nil {
 		resumed.prefix = prefix
 	} else {
 		say("the system prompt and tools " + carry.Session + " first sent were not read back, so this turn sends them anew: " + err.Error())
@@ -92,13 +92,13 @@ func (r runResumed) onItsModel(opts wiring.RunOpts) (wiring.RunOpts, string) {
 	return opts, r.pickFrom
 }
 
-func (r runResumed) into(config *turn.Config) {
+func (r runResumed) into(config *loop.Config) {
 	if r.carry.Session == "" {
 		return
 	}
-	config.History, config.Prefix, config.SessionSource = r.carry.messages, r.prefix, hook.SessionResumed
+	config.History, config.Prefix, config.SessionSource = r.carry.messages, r.prefix, hooks.SessionResumed
 	if r.wire != "" && r.wire != config.Wire {
-		config.History = turn.WithoutThinking(config.History)
+		config.History = loop.WithoutThinking(config.History)
 	}
 }
 

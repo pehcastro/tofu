@@ -53,10 +53,10 @@ func TestGateTakesOnlyItsThreeArms(t *testing.T) {
 }
 
 func TestTofuRunUnderEnforceDoesNotWriteTheDeniedFile(t *testing.T) {
-	dir := testkit.ChdirTemp(t)
+	dir := cli.ChdirTemp(t)
 	stubJev(t, 200, untrustedDenyReply)
 
-	gate, err := toolGateOn(dir, logHere(t), jev.ReadKeyring())
+	gate, err := toolGateOn(dir, logHere(t), core.ReadKeyring())
 	if err != nil {
 		t.Fatalf("toolGateOn:%v", err)
 	}
@@ -71,14 +71,14 @@ func TestTofuRunUnderEnforceDoesNotWriteTheDeniedFile(t *testing.T) {
 		LoopGuardRepeats: konst.TurnLoopGuardRepeats,
 		LoopGuardWindow:  konst.TurnLoopGuardWindow,
 	}
-	config, _ := mustConfig(t, opts, built, runtime{model: noteThenStop(), spend: turn.SpendSubscription, gate: gate})
-	if config.GateMode != turn.GateEnforce {
+	config, _ := mustConfig(t, opts, built, runtime{model: noteThenStop(), spend: loop.SpendSubscription, gate: gate})
+	if config.GateMode != loop.GateEnforce {
 		t.Fatalf("the run is in %s, want enforce from the flag", config.GateMode)
 	}
 
-	row, err := turn.Run(context.Background(), config)
+	row, err := loop.Run(context.Background(), config)
 	if err != nil {
-		t.Fatalf("turn.Run: %v", err)
+		t.Fatalf("loop.Run: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "note.txt")); !os.IsNotExist(err) {
 		t.Fatalf("the denied call wrote note.txt anyway (stat err %v)", err)
@@ -87,7 +87,7 @@ func TestTofuRunUnderEnforceDoesNotWriteTheDeniedFile(t *testing.T) {
 	if call.GateVerdict != string(ledger.VerdictDeny) || !strings.Contains(call.Error, "the verdict is deny") {
 		t.Fatalf("the tool call row is %+v, want the deny and the refusal on it", call)
 	}
-	if row.Outcome != turn.OutcomeStopped {
+	if row.Outcome != loop.OutcomeStopped {
 		t.Fatalf("the turn ended as %s, want stopped", row.Outcome)
 	}
 	t.Logf("the model reads: %s", call.Error)
@@ -102,9 +102,9 @@ func TestInTheAppAnAskUnderEnforceWaitsForThePerson(t *testing.T) {
 
 			stubbedTurn(dir, noteThenStop(), answered)(t.Context(), onTheSubscription, "write the note", driver.emit)
 
-			if len(driver.of(tui.EventAwaitPerson)) != 1 || len(driver.of(tui.EventResumed)) != 1 {
+			if len(driver.of(app.EventAwaitPerson)) != 1 || len(driver.of(app.EventResumed)) != 1 {
 				t.Fatalf("await %d resumed %d, want one of each around the wait",
-					len(driver.of(tui.EventAwaitPerson)), len(driver.of(tui.EventResumed)))
+					len(driver.of(app.EventAwaitPerson)), len(driver.of(app.EventResumed)))
 			}
 			_, statErr := os.Stat(filepath.Join(dir, "note.txt"))
 			if answered && statErr != nil {

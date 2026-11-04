@@ -219,11 +219,11 @@ func (g DoneGate) Refusal() string {
 func DoneRefusal(repo, id string, owns []string) string {
 	ref, err := SplitID(id)
 	store, openErr := OpenStore(repo)
-	var hooks []rule.Hook
+	var hooks []rules.Hook
 	if err = errors.Join(err, openErr); err == nil {
 		hooks, err = store.hooks(ref.Key)
 	}
-	if err == nil && !slices.ContainsFunc(hooks, func(h rule.Hook) bool { return runsCheck(h, checkDoneStamp) }) {
+	if err == nil && !slices.ContainsFunc(hooks, func(h rules.Hook) bool { return runsCheck(h, checkDoneStamp) }) {
 		return ""
 	}
 	return checkDone(repo, owns).Refusal()

@@ -1,4 +1,4 @@
-package subagent
+package subagents
 
 import (
 	"encoding/json"

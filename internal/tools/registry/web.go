@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"cmp"
@@ -38,8 +38,8 @@ type webFetch struct {
 
 func (webFetch) Name() string { return "fetch" }
 
-func (webFetch) Definition() llm.Tool {
-	return llm.Tool{
+func (webFetch) Definition() core.Tool {
+	return core.Tool{
 		Name: "fetch",
 		Description: "reads one page from the web and returns it as text units rather than as html: headings, paragraphs, list items, " +
 			"table rows and code blocks, with code kept character for character and a link's target kept next to its words. " +
@@ -112,8 +112,8 @@ type webSearch struct {
 
 func (webSearch) Name() string { return "web_search" }
 
-func (t webSearch) Definition() llm.Tool {
-	return llm.Tool{
+func (t webSearch) Definition() core.Tool {
+	return core.Tool{
 		Name: "web_search",
 		Description: "asks " + t.config.Provider.Name + " a question and returns ranked results, each with its title, its address and enough of the page to decide whether to fetch it. " +
 			"use it when the answer is not in this working directory, and fetch the addresses worth reading. " +

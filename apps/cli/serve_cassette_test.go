@@ -13,10 +13,10 @@ func TestACassetteRefusesARequestTheAnthropicWireWouldRefuse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	dangling := llm.Request{Messages: []llm.Message{
-		{Role: llm.RoleUser, Content: "read the note"},
-		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "toolu_1", Name: "read", Arguments: json.RawMessage(`{"path":"note.txt"}`)}}},
-		{Role: llm.RoleUser, Content: "and now?"},
+	dangling := core.Request{Messages: []core.Message{
+		{Role: core.RoleUser, Content: "read the note"},
+		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "toolu_1", Name: "read", Arguments: json.RawMessage(`{"path":"note.txt"}`)}}},
+		{Role: core.RoleUser, Content: "and now?"},
 	}}
 	if _, err := deck.take(dangling); err == nil || !strings.Contains(err.Error(), "toolu_1") {
 		t.Fatalf("a request with an unanswered tool_use was answered from the cassette, err %v", err)

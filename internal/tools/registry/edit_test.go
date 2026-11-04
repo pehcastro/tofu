@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/judge/state"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 	"tofu/internal/tools/contract"
 )
 
@@ -37,7 +37,7 @@ say('Starting compilation in watch mode...');
 check();
 `
 
-func warmEditor(t *testing.T, files map[string]string) (string, *turn.Typecheckers, func(oldString, newString string) (string, time.Duration)) {
+func warmEditor(t *testing.T, files map[string]string) (string, *loop.Typecheckers, func(oldString, newString string) (string, time.Duration)) {
 	dir := t.TempDir()
 	files["tsconfig.json"], files["package.json"], files["bun.lock"] = `{"compilerOptions":{"strict":true}}`, `{"name":"edited"}`, "{}"
 	files["count.ts"] = "export const count: number = 3;\n"
@@ -49,7 +49,7 @@ func warmEditor(t *testing.T, files map[string]string) (string, *turn.Typechecke
 			t.Fatal(err)
 		}
 	}
-	checkers := turn.NewTypecheckers()
+	checkers := loop.NewTypecheckers()
 	t.Cleanup(checkers.Close)
 	checkers.Warm(dir)
 	if warm, err := checkers.Typecheck(context.Background(), dir); err != nil || !strings.Contains(warm, "errors in .: 0") {
@@ -144,8 +144,8 @@ func TestAnEditOnAFastProjectKeepsItsInlineTypecheck(t *testing.T) {
 	t.Logf("edit, %s:\n%s", took, edited)
 }
 
-func severalFiles(t *testing.T) (string, *turn.ReadLedger, map[string]string) {
-	dir, ledger := t.TempDir(), turn.NewReadLedger()
+func severalFiles(t *testing.T) (string, *loop.ReadLedger, map[string]string) {
+	dir, ledger := t.TempDir(), loop.NewReadLedger()
 	files := map[string]string{
 		"a.go":       "package a\n\nconst A = 1\n",
 		"b.go":       "package a\n\nconst B = 2\n",
@@ -306,10 +306,10 @@ func TestAnEditBesideARepeatedLineIsWrittenAsMatched(t *testing.T) {
 func TestEveryCheckOnAnEditCallReadsFileTwo(t *testing.T) {
 	project := t.TempDir()
 	harness := editCall(change("a.go", "A = 1", "A = 10"), change(".tofu/settings.json", "{}", `{"x":1}`))
-	if !turn.PersonOnly(project, turn.GateRequest{Tool: "edit", Args: harness}) {
+	if !loop.PersonOnly(project, loop.GateRequest{Tool: "edit", Args: harness}) {
 		t.Error("a harness file as file two is not person only")
 	}
-	if place := turn.CallPlace(turn.GateRequest{Tool: "edit", Args: editCall(change("a.go", "x", "y"), change("b.go", "x", "y"))}, project); !strings.Contains(place, "b.go") {
+	if place := loop.CallPlace(loop.GateRequest{Tool: "edit", Args: editCall(change("a.go", "x", "y"), change("b.go", "x", "y"))}, project); !strings.Contains(place, "b.go") {
 		t.Errorf("the place of a call that writes b.go is %q", place)
 	}
 	for _, key := range []string{"edits", "Edits"} {
@@ -325,9 +325,9 @@ func TestEveryCheckOnAnEditCallReadsFileTwo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	budgeted := turn.WithSourceBudget([]contract.Tool{editor.Reading(ledger)}, nil)[0]
+	budgeted := loop.WithSourceBudget([]contract.Tool{editor.Reading(ledger)}, nil)[0]
 	_, err = budgeted.Run(context.Background(), editCall(change("a.go", "A = 1", "A = 10"), change("b.go", "B = 2", strings.Repeat("// x\n", 250))))
-	var over turn.SourceBudgetError
+	var over loop.SourceBudgetError
 	if !errors.As(err, &over) || over.Path != "b.go" {
 		t.Fatalf("file two over the budget: want a refusal naming b.go, got %v", err)
 	}

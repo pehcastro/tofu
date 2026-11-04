@@ -51,9 +51,9 @@ func treeVerb(o output.Verb, open wiring.Opener, verb string, args []string) int
 		return o.Usage(fmt.Errorf("memory %s takes %d arguments, not %d", verb, want, len(rest)))
 	}
 	_, err := os.Stat(rest[0])
-	var store *memtree.Store
+	var store *tree.Store
 	if err == nil {
-		store, err = memtree.Open(rest[0])
+		store, err = tree.Open(rest[0])
 	}
 	if err != nil {
 		return o.Fail(err)
@@ -80,7 +80,7 @@ func treeVerb(o output.Verb, open wiring.Opener, verb string, args []string) int
 	return output.ExitOK
 }
 
-func buildTree(o output.Verb, open wiring.Opener, store *memtree.Store, budget int) int {
+func buildTree(o output.Verb, open wiring.Opener, store *tree.Store, budget int) int {
 	dir, err := os.Getwd()
 	if err != nil {
 		return o.Fail(err)
@@ -92,7 +92,7 @@ func buildTree(o output.Verb, open wiring.Opener, store *memtree.Store, budget i
 	}
 	memoryModel := wiring.OpenMemoryModel(dir, session, open)
 	defer memoryModel.Release()
-	one, all := memoryModel.Compactors(func(ctx context.Context, _, _ string, model turn.Model, request llm.Request) (llm.Decision, error) {
+	one, all := memoryModel.Compactors(func(ctx context.Context, _, _ string, model loop.Model, request core.Request) (core.Decision, error) {
 		asked.Add(1)
 		decision, err := model.Ask(ctx, request)
 		if decision.CacheReadTokens > 0 {
@@ -104,10 +104,10 @@ func buildTree(o output.Verb, open wiring.Opener, store *memtree.Store, budget i
 		writtenForAnHour.Add(int64(decision.CacheWrite1h))
 		return decision, err
 	})
-	var built memtree.Built
+	var built tree.Built
 	err = store.Advance(budget, budget/2)
 	if err == nil {
-		built, err = memtree.BuildInReplies(context.Background(), func(building func(*memtree.Store) error) error { return building(store) }, one, all)
+		built, err = tree.BuildInReplies(context.Background(), func(building func(*tree.Store) error) error { return building(store) }, one, all)
 	}
 	if err == nil {
 		err = store.Advance(budget, budget/2)

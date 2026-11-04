@@ -11,19 +11,19 @@ import (
 	"tofu/internal/sys"
 )
 
-func qaDomain(t *testing.T) rule.Domain {
+func qaDomain(t *testing.T) rules.Domain {
 	t.Helper()
-	domains, err := rule.LoadDomains(os.DirFS(filepath.Join(sys.SourceRoot(), "library")), "library")
+	domains, err := rules.LoadDomains(os.DirFS(filepath.Join(sys.SourceRoot(), "library")), "library")
 	if err != nil {
 		t.Fatalf("LoadDomains: %v", err)
 	}
 	for _, domain := range domains {
-		if domain.Name == rule.DomainQA {
+		if domain.Name == rules.DomainQA {
 			return domain
 		}
 	}
 	t.Fatal("the library ships no qa domain")
-	return rule.Domain{}
+	return rules.Domain{}
 }
 
 func TestEveryQAAgentAndSkillNamesTheReferencesItReads(t *testing.T) {

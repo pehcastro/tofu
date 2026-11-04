@@ -23,7 +23,7 @@ func providerBlock(providers []Provider, width int) string {
 	for _, provider := range providers {
 		var fields []string
 		if provider.Key != "" {
-			fields = append(fields, "key "+widget.Mask(provider.Key))
+			fields = append(fields, "key "+render.Mask(provider.Key))
 		}
 		if provider.State != "" {
 			fields = append(fields, provider.State)

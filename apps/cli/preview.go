@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/sample"
 )
 

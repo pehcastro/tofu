@@ -29,23 +29,23 @@ func liveWire(t *testing.T) *Wire {
 	if os.Getenv("TOFU_LIVE_ANTHROPIC") != "1" {
 		t.Skip("set TOFU_LIVE_ANTHROPIC=1 to spend a turn of the subscription quota")
 	}
-	path, err := cred.Path()
+	path, err := accounts.Path()
 	if err != nil {
 		t.Fatalf("locating the credential store: %v", err)
 	}
-	store, err := cred.Open(path)
+	store, err := accounts.Open(path)
 	if err != nil {
 		t.Skipf("no credential store, run tofu login claude-sub: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	spec, err := cred.Lookup(string(cred.ClaudeSub))
+	spec, err := accounts.Lookup(string(accounts.ClaudeSub))
 	if err != nil {
 		t.Fatalf("looking up the anthropic spec: %v", err)
 	}
 
 	wire, err := New(Config{
 		Model:     cmp.Or(os.Getenv("TOFU_LIVE_ANTHROPIC_MODEL"), liveModel),
-		Token:     cred.NewManager(store, spec).Token,
+		Token:     accounts.NewManager(store, spec).Token,
 		SessionID: "00000000-0000-4000-8000-000000000001",
 		InstallID: "tofu-live-test",
 	})
@@ -59,7 +59,7 @@ func TestLiveCompletion(t *testing.T) {
 	wire := liveWire(t)
 	result, dump, err := wire.Ask(context.Background(), Request{
 		MaxTokens: 16,
-		Messages:  []llm.Message{{Role: llm.RoleUser, Content: "Reply with the single word: ok"}},
+		Messages:  []core.Message{{Role: core.RoleUser, Content: "Reply with the single word: ok"}},
 	})
 	t.Logf("request dump:\n%s", dump)
 	if err != nil {
@@ -83,8 +83,8 @@ func TestLiveWritesTheInstructionPrefixOnTheFirstRequest(t *testing.T) {
 	}
 	nonce := strconv.FormatInt(time.Now().UnixNano(), 36)
 	system := []string{"conversation " + nonce + " starts here.\n" + string(instructions)}
-	tools := []llm.Tool{{Name: "read", Description: "Read a file."}, {Name: "write", Description: "Write a file."}}
-	messages := []llm.Message{{Role: llm.RoleUser, Content: "Reply with the single word: ok"}}
+	tools := []core.Tool{{Name: "read", Description: "Read a file."}, {Name: "write", Description: "Write a file."}}
+	messages := []core.Message{{Role: core.RoleUser, Content: "Reply with the single word: ok"}}
 
 	first, dump, err := wire.Ask(context.Background(), Request{
 		MaxTokens: 16, System: system, Tools: tools, Messages: messages})
@@ -102,8 +102,8 @@ func TestLiveWritesTheInstructionPrefixOnTheFirstRequest(t *testing.T) {
 
 	second, _, err := wire.Ask(context.Background(), Request{MaxTokens: 16, System: system, Tools: tools,
 		Messages: append(messages,
-			llm.Message{Role: llm.RoleAssistant, Content: first.Content},
-			llm.Message{Role: llm.RoleUser, Content: "Reply with the single word: ok"})})
+			core.Message{Role: core.RoleAssistant, Content: first.Content},
+			core.Message{Role: core.RoleUser, Content: "Reply with the single word: ok"})})
 	if err != nil {
 		t.Fatalf("second send: %v", err)
 	}
@@ -128,8 +128,8 @@ func redSquarePNG(t *testing.T) []byte {
 
 func TestLiveDescribesAPastedImage(t *testing.T) {
 	wire := liveWire(t)
-	messages := []llm.Message{{Role: llm.RoleUser, Content: "What single color is this square? Reply with one word.",
-		Images: []llm.Image{{MediaType: "image/png", Data: redSquarePNG(t)}}}}
+	messages := []core.Message{{Role: core.RoleUser, Content: "What single color is this square? Reply with one word.",
+		Images: []core.Image{{MediaType: "image/png", Data: redSquarePNG(t)}}}}
 	result, dump, err := wire.Ask(context.Background(), Request{MaxTokens: 16, Messages: messages})
 	t.Logf("request dump:\n%s", dump)
 	if err != nil {
@@ -146,7 +146,7 @@ func TestLiveDescribesAPastedImage(t *testing.T) {
 
 func TestLiveToolCallRoundTrip(t *testing.T) {
 	wire := liveWire(t)
-	tools := []llm.Tool{{
+	tools := []core.Tool{{
 		Name:        "_probe",
 		Description: "Return the answer to a fixed question.",
 		Parameters: map[string]any{
@@ -155,7 +155,7 @@ func TestLiveToolCallRoundTrip(t *testing.T) {
 			"required":   []string{"question"},
 		},
 	}}
-	messages := []llm.Message{{Role: llm.RoleUser,
+	messages := []core.Message{{Role: core.RoleUser,
 		Content: "Call the _probe tool once with question=\"colour\", then reply with its answer and nothing else."}}
 
 	first, dump, err := wire.Ask(context.Background(), Request{MaxTokens: 256, Tools: tools, Messages: messages})
@@ -173,8 +173,8 @@ func TestLiveToolCallRoundTrip(t *testing.T) {
 	}
 
 	messages = append(messages,
-		llm.Message{Role: llm.RoleAssistant, Content: first.Content, ToolCalls: first.ToolCalls},
-		llm.Message{Role: llm.RoleTool, ToolCallID: first.ToolCalls[0].ID, Content: "chartreuse"},
+		core.Message{Role: core.RoleAssistant, Content: first.Content, ToolCalls: first.ToolCalls},
+		core.Message{Role: core.RoleTool, ToolCallID: first.ToolCalls[0].ID, Content: "chartreuse"},
 	)
 	second, secondDump, err := wire.Ask(context.Background(), Request{MaxTokens: 64, Tools: tools, Messages: messages})
 	t.Logf("second request dump:\n%s", secondDump)

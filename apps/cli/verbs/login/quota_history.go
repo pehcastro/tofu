@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/models/llm/quota"
 	"tofu/internal/sys"
@@ -70,7 +70,7 @@ func historyPage(page cli.Page, report quotaHistoryReport, now time.Time) []stri
 	}
 	rows := make([]cli.Row, len(report.Readings))
 	for i, reading := range report.Readings {
-		rows[i] = cli.Row{Cells: []string{reading.Provider, reading.Window, page.Bar(reading.Used)}, Detail: widget.Until(now.Sub(reading.At)) + " ago"}
+		rows[i] = cli.Row{Cells: []string{reading.Provider, reading.Window, page.Bar(reading.Used)}, Detail: render.Until(now.Sub(reading.At)) + " ago"}
 	}
 	lines := append(page.Title("Usage history", []string{strconv.Itoa(len(report.Readings)) + " readings"}, verdict), "")
 	return append(lines, page.Rows(rows)...)

@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -51,10 +51,10 @@ type Compaction struct {
 	Drops        []recall.Drop `json:"drops"`
 }
 
-func WithoutThinking(messages []llm.Message) []llm.Message {
+func WithoutThinking(messages []core.Message) []core.Message {
 	cleared := slices.Clone(messages)
 	for i := range cleared {
-		cleared[i].Thinking = llm.Thinking{}
+		cleared[i].Thinking = core.Thinking{}
 	}
 	return cleared
 }
@@ -73,7 +73,7 @@ func RecordedContext(events []session.Event) (recall.Conversation, error) {
 		sent := Config{System: prompt.System, Instructions: prompt.Instructions}.SystemMessage()
 		conversation.Instructions, conversation.ToolSchemas = sent+conversation.Instructions, prompt.ToolSchemas
 		for _, part := range prompt.Parts {
-			if part.Sent() && !part.PerTurn && part.Kind != string(rule.ConcernEnvironment) {
+			if part.Sent() && !part.PerTurn && part.Kind != string(rules.ConcernEnvironment) {
 				conversation.Parts = append(conversation.Parts, recall.PromptPart{Name: identityPartName(part), Tokens: part.Tokens})
 			}
 		}
@@ -95,19 +95,19 @@ func identityPartName(part session.PromptPart) string {
 	return recall.PartTofu
 }
 
-func historyOf(messages []llm.Message) recall.Conversation {
+func historyOf(messages []core.Message) recall.Conversation {
 	var conversation recall.Conversation
-	calls := make(map[string]llm.ToolCall)
+	calls := make(map[string]core.ToolCall)
 	step := 0
 	for _, message := range messages {
-		if message.Role == llm.RoleSystem {
+		if message.Role == core.RoleSystem {
 			conversation.Instructions += message.Content
 			continue
 		}
-		if message.Role == llm.RoleAssistant {
+		if message.Role == core.RoleAssistant {
 			step++
 		}
-		entry := recall.Entry{Step: step, Text: WithoutToolRef(message.Content), Images: len(message.Images), Memory: message.Origin.Source == llm.SourceMemoryView}
+		entry := recall.Entry{Step: step, Text: WithoutToolRef(message.Content), Images: len(message.Images), Memory: message.Origin.Source == core.SourceMemoryView}
 		if task, said := personTask(message); said {
 			entry.Said = task
 		}
@@ -123,7 +123,7 @@ func historyOf(messages []llm.Message) recall.Conversation {
 	return conversation
 }
 
-func (b *Inbox) Deliver(text string, origin llm.Origin) {
+func (b *Inbox) Deliver(text string, origin core.Origin) {
 	origin.PostedAt = time.Now()
 	b.post(inboxItem{text: text, origin: origin})
 }
@@ -155,7 +155,7 @@ type duePage struct {
 	tool, header, note, after string
 }
 
-func (g ShrinkGate) admit(preview recall.Config, messages []llm.Message, due []duePage) []duePage {
+func (g ShrinkGate) admit(preview recall.Config, messages []core.Message, due []duePage) []duePage {
 	switch g {
 	case ShrinkWhenFull:
 		return due
@@ -174,15 +174,15 @@ func (g ShrinkGate) admit(preview recall.Config, messages []llm.Message, due []d
 	panic("turn: unknown shrink gate " + string(g))
 }
 
-func ShrinkPages(store *recall.Store, preview recall.Config, messages []llm.Message, gate ShrinkGate) error {
-	calls := make(map[string]llm.ToolCall)
+func ShrinkPages(store *recall.Store, preview recall.Config, messages []core.Message, gate ShrinkGate) error {
+	calls := make(map[string]core.ToolCall)
 	var pages []int
 	whole := 0
 	for i, message := range messages {
 		for _, call := range message.ToolCalls {
 			calls[call.ID] = call
 		}
-		if name := calls[message.ToolCallID].Name; message.Role == llm.RoleTool && (name == "browser_observe" || name == "browser_act") && !strings.HasPrefix(WithoutToolRef(message.Content), "error: ") {
+		if name := calls[message.ToolCallID].Name; message.Role == core.RoleTool && (name == "browser_observe" || name == "browser_act") && !strings.HasPrefix(WithoutToolRef(message.Content), "error: ") {
 			pages = append(pages, i)
 			if shrunkHandle(message.Content) == "" {
 				whole++
@@ -257,7 +257,7 @@ const (
 	causeBudget   shrinkCause = "the conversation crossed its context budget"
 )
 
-func shrinkOverflow(artifacts Artifacts, messages []llm.Message, sentTokens, windowTokens int) (overflowShrink, error) {
+func shrinkOverflow(artifacts Artifacts, messages []core.Message, sentTokens, windowTokens int) (overflowShrink, error) {
 	target := sentTokens
 	if windowTokens > 0 {
 		target = min(target, windowTokens)
@@ -276,11 +276,11 @@ type Compacted struct {
 	TokensAfter  int
 	Kept         int
 	Drops        []recall.Drop
-	Before       []llm.Message
-	Messages     []llm.Message
+	Before       []core.Message
+	Messages     []core.Message
 }
 
-func BranchCarried(wire string, carried []llm.Message, message int) (Compacted, error) {
+func BranchCarried(wire string, carried []core.Message, message int) (Compacted, error) {
 	var said []int
 	var listed []string
 	for i, one := range carried {
@@ -306,7 +306,7 @@ func BranchCarried(wire string, carried []llm.Message, message int) (Compacted, 
 	return Compacted{Kind: ForkBranch, Message: message, Words: words, Kept: at, TokensBefore: HistoryTokens(preview, carried), TokensAfter: HistoryTokens(preview, kept), Before: carried, Messages: kept}, nil
 }
 
-func CompactCarried(project string, places sys.Places, wire, task, focus string, carried []llm.Message) (Compacted, error) {
+func CompactCarried(project string, places sys.Places, wire, task, focus string, carried []core.Message) (Compacted, error) {
 	artifacts, err := NewArtifacts(filepath.Join(places.State, "artifacts"), true)
 	if err != nil {
 		return Compacted{}, err
@@ -329,7 +329,7 @@ func CompactCarried(project string, places sys.Places, wire, task, focus string,
 	for unchanged < len(shrunk) && shrunk[unchanged].Content == carried[unchanged].Content && len(shrunk[unchanged].Images) == len(carried[unchanged].Images) {
 		unchanged++
 	}
-	for unchanged > 0 && unchanged < len(shrunk) && shrunk[unchanged].Role != llm.RoleAssistant {
+	for unchanged > 0 && unchanged < len(shrunk) && shrunk[unchanged].Role != core.RoleAssistant {
 		unchanged--
 	}
 	for i := range shrunk {
@@ -387,7 +387,7 @@ func RecordCarried(store *session.Store, from string, compacted Compacted, by st
 	written.note(err)
 	request, steps := "", 0
 	for _, message := range compacted.Messages {
-		if message.Role == llm.RoleAssistant {
+		if message.Role == core.RoleAssistant {
 			request, steps = session.NewEventID(), steps+1
 		}
 		written.message(message, request, nil)
@@ -412,32 +412,32 @@ func RecordCarried(store *session.Store, from string, compacted Compacted, by st
 	return into, errors.Join(forked, edited, log.Close(), ended.Close())
 }
 
-func shrinkTo(artifacts Artifacts, messages []llm.Message, estimate, target int, cause shrinkCause) (overflowShrink, error) {
+func shrinkTo(artifacts Artifacts, messages []core.Message, estimate, target int, cause shrinkCause) (overflowShrink, error) {
 	return shrinkFrom(artifacts, messages, estimate, target, 0, cause, "")
 }
 
-func lastAssistant(messages []llm.Message) int {
+func lastAssistant(messages []core.Message) int {
 	last := len(messages) - 1
-	for last >= 0 && messages[last].Role != llm.RoleAssistant {
+	for last >= 0 && messages[last].Role != core.RoleAssistant {
 		last--
 	}
 	return last
 }
 
-func shrinkFrom(artifacts Artifacts, messages []llm.Message, estimate, target, from int, cause shrinkCause, focus string) (overflowShrink, error) {
+func shrinkFrom(artifacts Artifacts, messages []core.Message, estimate, target, from int, cause shrinkCause, focus string) (overflowShrink, error) {
 	lastStep := lastAssistant(messages)
 	shrink := overflowShrink{bytesBefore: messagesBytes(messages)}
-	calls := make(map[string]llm.ToolCall)
+	calls := make(map[string]core.ToolCall)
 	var candidates []dropCandidate
 	step := 0
 	for i, message := range messages[:max(lastStep, 0)] {
-		if message.Role == llm.RoleAssistant {
+		if message.Role == core.RoleAssistant {
 			step++
 		}
 		for _, call := range message.ToolCalls {
 			calls[call.ID] = call
 		}
-		if i < from || message.Role != llm.RoleTool {
+		if i < from || message.Role != core.RoleTool {
 			continue
 		}
 		if len(message.Images) > 0 && estimate > target {
@@ -496,13 +496,13 @@ func shrunkNote(artifacts Artifacts, tool, result string, cause shrinkCause) (no
 
 const pictureDropped = "the picture read here was seen when this result came back and was dropped later to save room; read the file again to see it"
 
-func dropPicture(message *llm.Message) int {
+func dropPicture(message *core.Message) int {
 	freed := len(message.Images) * konst.ImageTokens
 	message.Images, message.Content = nil, message.Content+"\n"+pictureDropped
 	return freed
 }
 
-func pictureDrop(step int, call llm.ToolCall, message llm.Message, freed int) recall.Drop {
+func pictureDrop(step int, call core.ToolCall, message core.Message, freed int) recall.Drop {
 	var read readArgs
 	_ = json.Unmarshal(call.Arguments, &read)
 	bytes := 0
@@ -512,10 +512,10 @@ func pictureDrop(step int, call llm.ToolCall, message llm.Message, freed int) re
 	return recall.Drop{Step: step, Tool: call.Name, Path: read.Path, Bytes: bytes, TokensFreed: freed, Reason: recall.DroppedAged}
 }
 
-func picturesToDrop(messages []llm.Message) int {
+func picturesToDrop(messages []core.Message) int {
 	pictured := 0
 	for _, message := range messages {
-		if message.Role == llm.RoleTool && len(message.Images) > 0 {
+		if message.Role == core.RoleTool && len(message.Images) > 0 {
 			pictured++
 		}
 	}
@@ -525,29 +525,29 @@ func picturesToDrop(messages []llm.Message) int {
 	return pictured - konst.ImageResultsKept
 }
 
-func keepNewestPictures(messages []llm.Message) []recall.Drop {
+func keepNewestPictures(messages []core.Message) []recall.Drop {
 	toDrop := picturesToDrop(messages)
-	calls := map[string]llm.ToolCall{}
+	calls := map[string]core.ToolCall{}
 	var drops []recall.Drop
 	step := 0
 	for i, message := range messages {
 		if len(drops) == toDrop {
 			break
 		}
-		if message.Role == llm.RoleAssistant {
+		if message.Role == core.RoleAssistant {
 			step++
 		}
 		for _, call := range message.ToolCalls {
 			calls[call.ID] = call
 		}
-		if message.Role == llm.RoleTool && len(message.Images) > 0 {
+		if message.Role == core.RoleTool && len(message.Images) > 0 {
 			drops = append(drops, pictureDrop(step, calls[message.ToolCallID], message, dropPicture(&messages[i])))
 		}
 	}
 	return drops
 }
 
-func HistoryTokens(preview recall.Config, messages []llm.Message) int {
+func HistoryTokens(preview recall.Config, messages []core.Message) int {
 	pictures := 0
 	for _, message := range messages {
 		pictures += len(message.Images)
@@ -555,7 +555,7 @@ func HistoryTokens(preview recall.Config, messages []llm.Message) int {
 	return len(messages)*konst.MessageFramingTokens + messagesBytes(messages)*1000/preview.BytesPerThousandTokens + pictures*konst.ImageTokens
 }
 
-func messagesBytes(messages []llm.Message) int {
+func messagesBytes(messages []core.Message) int {
 	total := 0
 	for _, message := range messages {
 		total += len(message.Content)
@@ -566,7 +566,7 @@ func messagesBytes(messages []llm.Message) int {
 	return total
 }
 
-func noteOf(call llm.ToolCall) string {
+func noteOf(call core.ToolCall) string {
 	var said struct {
 		Note string `json:"note"`
 	}
@@ -574,7 +574,7 @@ func noteOf(call llm.ToolCall) string {
 	return said.Note
 }
 
-func noteAfter(messages []llm.Message) string {
+func noteAfter(messages []core.Message) string {
 	for _, message := range messages {
 		if len(message.ToolCalls) == 0 {
 			continue
@@ -634,11 +634,11 @@ func shrunkHandle(text string) string {
 	return ""
 }
 
-func arrivedTogether(messages []llm.Message, task string) (string, int, int) {
+func arrivedTogether(messages []core.Message, task string) (string, int, int) {
 	for from := len(messages); from >= 0; from-- {
 		environment := environmentBefore(messages[:from])
 		to, joined := from, ""
-		for to < len(messages) && messages[to].Role == llm.RoleUser && strings.HasPrefix(task, joined+messages[to].Content) {
+		for to < len(messages) && messages[to].Role == core.RoleUser && strings.HasPrefix(task, joined+messages[to].Content) {
 			joined, to = joined+messages[to].Content+taskItemsApart, to+1
 		}
 		switch {
@@ -653,7 +653,7 @@ func arrivedTogether(messages []llm.Message, task string) (string, int, int) {
 	return "", 0, 0
 }
 
-func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message, messages []llm.Message, forced ForkKind, number, most int) (*Fork, []llm.Message, error) {
+func forkHistory(artifacts Artifacts, budget recall.Budget, opening core.Message, messages []core.Message, forced ForkKind, number, most int) (*Fork, []core.Message, error) {
 	if err := ShrinkPages(artifacts.store, artifacts.preview, messages, ShrinkWhenPaid); err != nil {
 		return nil, nil, err
 	}
@@ -671,10 +671,10 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 		counted += " of at most " + strconv.Itoa(most) + ", and the turn stops at the cap"
 	}
 	task := opening.Content
-	isTask := func(message llm.Message) bool {
-		return message.Role == llm.RoleUser && message.Origin.Source != llm.SourceForkCarry && task != "" && strings.Contains(message.Content, task)
+	isTask := func(message core.Message) bool {
+		return message.Role == core.RoleUser && message.Origin.Source != core.SourceForkCarry && task != "" && strings.Contains(message.Content, task)
 	}
-	var system []llm.Message
+	var system []core.Message
 	foldedFrom, foldedTo := -1, -1
 	for i, message := range messages {
 		switch {
@@ -703,11 +703,11 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 		}
 	}
 	opening.Origin.TakenAt = started
-	carried := func(tail []llm.Message, fileTokens int) ([]llm.Message, recall.Carry, int, error) {
+	carried := func(tail []core.Message, fileTokens int) ([]core.Message, recall.Carry, int, error) {
 		lost := 0
 		before := len(messages) - len(tail)
 		for i, message := range messages[:before] {
-			if message.Role == llm.RoleUser && !isTask(message) && (i < foldedFrom || i >= foldedTo) {
+			if message.Role == core.RoleUser && !isTask(message) && (i < foldedFrom || i >= foldedTo) {
 				lost += len(message.Images)
 			}
 		}
@@ -718,7 +718,7 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 		}
 		tail = slices.DeleteFunc(slices.Clone(tail), promptChange)
 		for i := range tail {
-			tail[i].Thinking = llm.Thinking{}
+			tail[i].Thinking = core.Thinking{}
 		}
 		ended.HeldWhole = len(tail)
 		carry, err := recall.CarryWithFiles(artifacts.store, artifacts.preview, ended, artifacts.standing, fileTokens)
@@ -726,11 +726,11 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening llm.Message,
 		if lost > 0 {
 			carry.Text += "\n" + strconv.Itoa(lost) + picturesLost
 		}
-		said := llm.Message{Role: llm.RoleUser, Content: carry.Text, Origin: llm.Origin{Source: llm.SourceForkCarry, TakenAt: started}}
+		said := core.Message{Role: core.RoleUser, Content: carry.Text, Origin: core.Origin{Source: core.SourceForkCarry, TakenAt: started}}
 		if len(tail) > 0 && isTask(tail[0]) {
-			return slices.Concat(system, tail[:1], []llm.Message{said}, tail[1:]), carry, len(tail), err
+			return slices.Concat(system, tail[:1], []core.Message{said}, tail[1:]), carry, len(tail), err
 		}
-		return slices.Concat(system, []llm.Message{opening, said}, tail), carry, len(tail), err
+		return slices.Concat(system, []core.Message{opening, said}, tail), carry, len(tail), err
 	}
 	begun, carry, held, err := carried(nil, 0)
 	if err != nil {
@@ -779,39 +779,39 @@ const (
 	picturesLost = " picture(s) the person pasted before this fork did not fit under the context budget and are not in this session: ask the person to paste them again if they still matter.\n"
 )
 
-func forkNumberIn(messages []llm.Message) int {
+func forkNumberIn(messages []core.Message) int {
 	newest := 0
 	for _, message := range messages {
 		number := 0
-		if _, err := fmt.Sscanf(message.Content, forkCounted+"%d", &number); err == nil && message.Role == llm.RoleUser {
+		if _, err := fmt.Sscanf(message.Content, forkCounted+"%d", &number); err == nil && message.Role == core.RoleUser {
 			newest = max(newest, number)
 		}
 	}
 	return newest
 }
 
-func tailStart(preview recall.Config, messages []llm.Message, room int) int {
+func tailStart(preview recall.Config, messages []core.Message, room int) int {
 	start := len(messages)
-	floor := slices.IndexFunc(messages, func(message llm.Message) bool { return message.Role == llm.RoleAssistant })
+	floor := slices.IndexFunc(messages, func(message core.Message) bool { return message.Role == core.RoleAssistant })
 	if floor < 0 {
 		return start
 	}
 	for i := len(messages) - 1; i >= floor; i-- {
-		if messages[i].Role == llm.RoleTool {
+		if messages[i].Role == core.RoleTool {
 			continue
 		}
 		if HistoryTokens(preview, messages[i:]) > room {
 			break
 		}
 		start = i
-		if messages[i].Role == llm.RoleAssistant {
+		if messages[i].Role == core.RoleAssistant {
 			room = min(room, konst.ForkTailTokens)
 		}
 	}
 	return start
 }
 
-func warmFrom(preview recall.Config, messages []llm.Message) int {
+func warmFrom(preview recall.Config, messages []core.Message) int {
 	after := 0
 	for i := len(messages) - 1; i >= 0; i-- {
 		if after > konst.TrimWarmSuffixTokens {
@@ -822,7 +822,7 @@ func warmFrom(preview recall.Config, messages []llm.Message) int {
 	return 0
 }
 
-func trimRead(artifacts Artifacts, budget recall.Budget, step int, messages []llm.Message, from int) (*Compaction, overflowShrink, error) {
+func trimRead(artifacts Artifacts, budget recall.Budget, step int, messages []core.Message, from int) (*Compaction, overflowShrink, error) {
 	tokens := budget.Tokens(artifacts.preview, historyOf(messages))
 	if tokens <= budget.Bands.Target() {
 		return nil, overflowShrink{}, nil

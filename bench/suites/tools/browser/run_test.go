@@ -73,7 +73,7 @@ func TestTheChooserOverTheCorpus(t *testing.T) {
 			t.Skip("set TOFU_LIVE=1 for the live pass through TypeSafe, or pass -args -replay <answers file> to rebuild its report with no network")
 		}
 		sys.AllowLiveCredential(t)
-		key, err := jev.TypeSafeKey(filepath.Join(sys.SourceRoot(), ".env"))
+		key, err := core.TypeSafeKey(filepath.Join(sys.SourceRoot(), ".env"))
 		if err != nil {
 			t.Fatalf("no credential: %v", err)
 		}
@@ -120,7 +120,7 @@ func TestTheImageArmsOverTheCorpus(t *testing.T) {
 			t.Skip("set TOFU_LIVE=1 for the live pass through TypeSafe, or pass -args -replay-images <answers file> to rebuild its report with no network")
 		}
 		sys.AllowLiveCredential(t)
-		key, err := jev.TypeSafeKey(filepath.Join(sys.SourceRoot(), ".env"))
+		key, err := core.TypeSafeKey(filepath.Join(sys.SourceRoot(), ".env"))
 		if err != nil {
 			t.Fatalf("no credential: %v", err)
 		}
@@ -177,16 +177,16 @@ func TestTheImageArmsOverTheCorpus(t *testing.T) {
 
 type scripted struct {
 	byURL  map[string]Case
-	answer map[string]browser.Action
+	answer map[string]driver.Action
 }
 
-func (s scripted) Caps() jev.WireCaps {
-	return jev.WireCaps{Name: "scripted", CriteriaKinds: []jev.CriteriaKind{jev.CriteriaString, jev.CriteriaObject}}
+func (s scripted) Caps() core.WireCaps {
+	return core.WireCaps{Name: "scripted", CriteriaKinds: []core.CriteriaKind{core.CriteriaString, core.CriteriaObject}}
 }
 
 func (s scripted) Model() string { return "~typesafe/jev-latest" }
 
-func (s scripted) Post(_ context.Context, body []byte) (jev.Raw, error) {
+func (s scripted) Post(_ context.Context, body []byte) (core.Raw, error) {
 	var posted struct {
 		State struct {
 			Page struct {
@@ -198,12 +198,12 @@ func (s scripted) Post(_ context.Context, body []byte) (jev.Raw, error) {
 		} `json:"questions"`
 	}
 	if err := json.Unmarshal(body, &posted); err != nil {
-		return jev.Raw{}, err
+		return core.Raw{}, err
 	}
 	c := s.byURL[posted.State.Page.URL]
 	want := s.answer[c.ID]
 	target := strconv.Itoa(want.Element)
-	if want.Op == browser.OpSelect {
+	if want.Op == driver.OpSelect {
 		element, _ := c.Page.Element(want.Element)
 		for position, option := range element.Options {
 			if option.Value == want.Value {
@@ -233,16 +233,16 @@ func (s scripted) Post(_ context.Context, body []byte) (jev.Raw, error) {
 		"usage":   map[string]any{"input_tokens": input, "output_tokens": 0, "cost": float64(input) * jevDollarsPerMillionInput / 1e6},
 		"answers": answers,
 	})
-	return jev.Raw{Body: answer, Attempts: 1, Latency: 150 * time.Millisecond}, err
+	return core.Raw{Body: answer, Attempts: 1, Latency: 150 * time.Millisecond}, err
 }
 
 func TestTheReportRebuildsFromRecordedAnswersWithEveryField(t *testing.T) {
 	cases := corpus(t)
-	wire := scripted{byURL: map[string]Case{}, answer: map[string]browser.Action{}}
+	wire := scripted{byURL: map[string]Case{}, answer: map[string]driver.Action{}}
 	for _, c := range cases {
 		wire.byURL[c.Page.URL], wire.answer[c.ID] = c, c.Want
 	}
-	wire.answer["drafts"] = browser.Action{Op: browser.OpClick, Element: 2}
+	wire.answer["drafts"] = driver.Action{Op: driver.OpClick, Element: 2}
 	set, err := Questions()
 	if err != nil {
 		t.Fatal(err)

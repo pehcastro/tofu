@@ -17,7 +17,7 @@ func TestServeTurnsPageOneGenerationWithTypedPreviews(t *testing.T) {
 		t.Fatal(err)
 	}
 	name, at := "page-test", time.Now().Add(-time.Hour)
-	prompt := "<env>\nworking directory F:/x\n</env>" + turn.TheTaskFollows + "fix the parser\nand the lexer too"
+	prompt := "<env>\nworking directory F:/x\n</env>" + loop.TheTaskFollows + "fix the parser\nand the lexer too"
 	record := func(header session.Header, id, task, said string) {
 		log, err := store.Open(header)
 		if err != nil {
@@ -30,7 +30,7 @@ func TestServeTurnsPageOneGenerationWithTypedPreviews(t *testing.T) {
 			{session.EventTurnStart, session.TurnStart{Task: task}},
 			{session.EventMessage, session.MessageBody{Role: session.RoleUser, Content: task}},
 			{session.EventMessage, session.MessageBody{Role: session.RoleAssistant, Content: said}},
-			{session.EventTurnEnd, turn.Row{}},
+			{session.EventTurnEnd, loop.Row{}},
 		} {
 			if _, err := log.Append(session.Event{Kind: step.kind, Turn: id, At: at}, step.body); err != nil {
 				t.Fatal(err)

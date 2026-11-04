@@ -24,16 +24,16 @@ type CheckpointScore struct {
 	CostUSD    float64
 }
 
-func JevAnswerability(ctx context.Context, wire jev.Wire, task, arm, carry string) (CheckpointScore, error) {
-	question := jev.Question{
+func JevAnswerability(ctx context.Context, wire core.Wire, task, arm, carry string) (CheckpointScore, error) {
+	question := core.Question{
 		ID:           checkpointAnswerabilityQuestionID,
-		Kind:         jev.QuestionScore,
+		Kind:         core.QuestionScore,
 		Instructions: "the state carries a task and the carry a forked or checkpointed session would start from. score whether a reader could answer the task from the carry alone, without running anything else.",
 		Levels:       checkpointScoreLevels,
 	}
 	started := time.Now()
 	state := map[string]any{"task": task, "arm": arm, "carry": carry}
-	call := typesafe.Ask(ctx, wire, jev.Request{State: state, Questions: []jev.Question{question}})
+	call := typesafe.Ask(ctx, wire, core.Request{State: state, Questions: []core.Question{question}})
 	if call.Err != nil {
 		return CheckpointScore{}, call.Err
 	}

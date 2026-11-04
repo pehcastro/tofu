@@ -24,7 +24,7 @@ func TestLineCapOverRecordedToolResults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	artifacts, err := turn.NewArtifacts(t.TempDir(), true)
+	artifacts, err := loop.NewArtifacts(t.TempDir(), true)
 	if err != nil {
 		t.Fatal(err)
 	}

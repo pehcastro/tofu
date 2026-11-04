@@ -81,9 +81,9 @@ func Replay(recorded RecordedTurn) ([]ReplayArm, BytesSkipped) {
 				skipped.ByRetry += call.ResultBytes
 				continue
 			}
-			if !tools.SideEffectFree(call.Tool) {
+			if !registry.SideEffectFree(call.Tool) {
 				clear(seen)
-			} else if key, keyed := tools.CallKey(call.Tool, call.Args); keyed {
+			} else if key, keyed := registry.CallKey(call.Tool, call.Args); keyed {
 				if seen[key] {
 					layered.CacheHits++
 					layered.AnswersChanged++

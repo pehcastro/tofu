@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -85,21 +85,21 @@ type HookRun struct {
 	Rewrote bool   `json:"rewrote_args,omitempty"`
 }
 
-func hookRunOf(event hook.Event, verdict hook.Verdict) []HookRun {
+func hookRunOf(event hooks.Event, verdict hooks.Verdict) []HookRun {
 	if verdict.Ran == 0 {
 		return nil
 	}
 	return []HookRun{{Event: string(event), Ran: verdict.Ran, Block: verdict.Block, Ask: verdict.Ask, Context: verdict.Added(), Rewrote: verdict.Args != nil}}
 }
 
-func (r ToolCallRow) Outcome() llm.ToolOutcome {
+func (r ToolCallRow) Outcome() core.ToolOutcome {
 	if _, skipped := skipReason(r.Error); skipped {
-		return llm.ToolOutcomeSkipped
+		return core.ToolOutcomeSkipped
 	}
 	if r.Error != "" || (r.ExitCode != nil && *r.ExitCode != 0) {
-		return llm.ToolOutcomeFailed
+		return core.ToolOutcomeFailed
 	}
-	return llm.ToolOutcomeRan
+	return core.ToolOutcomeRan
 }
 
 type Phase string
@@ -170,7 +170,7 @@ type StepRow struct {
 	Compaction       *Compaction       `json:"compaction,omitempty"`
 	Fork             *Fork             `json:"fork,omitempty"`
 
-	Grants []subagent.Question `json:"grants,omitempty"`
+	Grants []subagents.Question `json:"grants,omitempty"`
 }
 
 type Spend string
@@ -211,11 +211,11 @@ type Row struct {
 	Guard    *LoopGuardStop `json:"loop_guard,omitempty"`
 	ForkStop string         `json:"fork_stop,omitempty"`
 
-	Conversation []llm.Message `json:"-"`
-	System       string        `json:"-"`
-	Tools        []string      `json:"-"`
-	ToolSchemas  string        `json:"-"`
-	Parts        []keptPart    `json:"-"`
+	Conversation []core.Message `json:"-"`
+	System       string         `json:"-"`
+	Tools        []string       `json:"-"`
+	ToolSchemas  string         `json:"-"`
+	Parts        []keptPart     `json:"-"`
 }
 
 type keptPart struct {
@@ -233,41 +233,41 @@ type MessageToolCall = session.MessageToolCall
 
 type MessageRow = session.MessageBody
 
-func toolOutcomeName(outcome llm.ToolOutcome) string {
+func toolOutcomeName(outcome core.ToolOutcome) string {
 	switch outcome {
-	case llm.ToolOutcomeUnset:
+	case core.ToolOutcomeUnset:
 		return ""
-	case llm.ToolOutcomeRan:
+	case core.ToolOutcomeRan:
 		return session.ToolOutcomeRan
-	case llm.ToolOutcomeFailed:
+	case core.ToolOutcomeFailed:
 		return session.ToolOutcomeFailed
-	case llm.ToolOutcomeAborted:
+	case core.ToolOutcomeAborted:
 		return session.ToolOutcomeAborted
-	case llm.ToolOutcomeSkipped:
+	case core.ToolOutcomeSkipped:
 		return session.ToolOutcomeSkipped
 	}
 	panic("turn: unknown tool outcome")
 }
 
-func RecordedOrigin(origin llm.Origin) *session.Origin {
+func RecordedOrigin(origin core.Origin) *session.Origin {
 	if origin.Source == "" {
 		return nil
 	}
 	return &session.Origin{Kind: string(origin.Kind()), Sub: string(origin.Source), Name: origin.Name, Shown: origin.Shown, ID: origin.ID, Schedule: origin.Schedule, Exit: origin.Exit, DurationMs: origin.Ran.Milliseconds()}
 }
 
-func OriginOf(message MessageRow) llm.Origin {
+func OriginOf(message MessageRow) core.Origin {
 	switch {
-	case message.From != nil && llm.Source(message.From.Sub).Known():
+	case message.From != nil && core.Source(message.From.Sub).Known():
 		from := message.From
-		return llm.Origin{Source: llm.Source(from.Sub), Name: from.Name, Shown: from.Shown, ID: from.ID, Schedule: from.Schedule, Exit: from.Exit, Ran: time.Duration(from.DurationMs) * time.Millisecond}
+		return core.Origin{Source: core.Source(from.Sub), Name: from.Name, Shown: from.Shown, ID: from.ID, Schedule: from.Schedule, Exit: from.Exit, Ran: time.Duration(from.DurationMs) * time.Millisecond}
 	case message.Role == session.RoleUser:
-		return llm.LegacyOrigin(message.Origin)
+		return core.LegacyOrigin(message.Origin)
 	}
-	return llm.Origin{}
+	return core.Origin{}
 }
 
-func messageRowOf(message llm.Message) MessageRow {
+func messageRowOf(message core.Message) MessageRow {
 	row := MessageRow{
 		Role:            message.Role.String(),
 		Content:         message.Content,
@@ -278,7 +278,7 @@ func messageRowOf(message llm.Message) MessageRow {
 		From:            RecordedOrigin(message.Origin),
 		KeptHead:        message.KeptHead,
 	}
-	if message.Role == llm.RoleUser {
+	if message.Role == core.RoleUser {
 		row.Origin = message.Origin.Legacy()
 	}
 	if !message.Origin.PostedAt.IsZero() {
@@ -301,13 +301,13 @@ func messageRowOf(message llm.Message) MessageRow {
 	return row
 }
 
-func messageOf(m MessageRow) (llm.Message, error) {
+func messageOf(m MessageRow) (core.Message, error) {
 	signature := m.ThinkingSignature
 	if m.Reasoning != nil {
 		signature = codex.EncodeReasoning(m.Reasoning.ID, m.Reasoning.EncryptedContent)
 	}
-	message := llm.Message{Content: m.Content, ToolCallID: m.ToolCallID, ToolResultBytes: m.ToolResultBytes,
-		Thinking: llm.Thinking{Text: m.Thinking, Signature: signature}, Origin: OriginOf(m), KeptHead: m.KeptHead}
+	message := core.Message{Content: m.Content, ToolCallID: m.ToolCallID, ToolResultBytes: m.ToolResultBytes,
+		Thinking: core.Thinking{Text: m.Thinking, Signature: signature}, Origin: OriginOf(m), KeptHead: m.KeptHead}
 	if m.PostedAt != nil {
 		message.Origin.PostedAt = *m.PostedAt
 	}
@@ -316,46 +316,46 @@ func messageOf(m MessageRow) (llm.Message, error) {
 	}
 	switch m.Role {
 	case session.RoleSystem:
-		message.Role = llm.RoleSystem
+		message.Role = core.RoleSystem
 	case session.RoleUser:
-		message.Role = llm.RoleUser
+		message.Role = core.RoleUser
 	case session.RoleAssistant:
-		message.Role = llm.RoleAssistant
+		message.Role = core.RoleAssistant
 	case session.RoleTool:
-		message.Role = llm.RoleTool
+		message.Role = core.RoleTool
 	default:
-		return llm.Message{}, errors.New("turn: a recorded message names the role " + strconv.Quote(m.Role) + ", which is none this build sends")
+		return core.Message{}, errors.New("turn: a recorded message names the role " + strconv.Quote(m.Role) + ", which is none this build sends")
 	}
 	outcome, err := ToolOutcomeOf(m.ToolOutcome)
 	if err != nil {
-		return llm.Message{}, err
+		return core.Message{}, err
 	}
 	message.ToolOutcome = outcome
 	for _, call := range m.ToolCalls {
-		message.ToolCalls = append(message.ToolCalls, llm.ToolCall{ID: call.ID, Name: call.Name, Arguments: call.Arguments})
+		message.ToolCalls = append(message.ToolCalls, core.ToolCall{ID: call.ID, Name: call.Name, Arguments: call.Arguments})
 	}
 	for _, picture := range m.Pictures {
 		if len(picture.Data) > 0 {
-			message.Images = append(message.Images, llm.Image{MediaType: picture.MediaType, Data: picture.Data})
+			message.Images = append(message.Images, core.Image{MediaType: picture.MediaType, Data: picture.Data})
 		}
 	}
 	return message, nil
 }
 
-func ToolOutcomeOf(recorded string) (llm.ToolOutcome, error) {
+func ToolOutcomeOf(recorded string) (core.ToolOutcome, error) {
 	switch recorded {
 	case "":
-		return llm.ToolOutcomeUnset, nil
+		return core.ToolOutcomeUnset, nil
 	case session.ToolOutcomeRan:
-		return llm.ToolOutcomeRan, nil
+		return core.ToolOutcomeRan, nil
 	case session.ToolOutcomeFailed:
-		return llm.ToolOutcomeFailed, nil
+		return core.ToolOutcomeFailed, nil
 	case session.ToolOutcomeAborted:
-		return llm.ToolOutcomeAborted, nil
+		return core.ToolOutcomeAborted, nil
 	case session.ToolOutcomeSkipped:
-		return llm.ToolOutcomeSkipped, nil
+		return core.ToolOutcomeSkipped, nil
 	}
-	return llm.ToolOutcomeUnset, errors.New("turn: a recorded tool result names the tool outcome " + strconv.Quote(recorded) + ", which is none this build records")
+	return core.ToolOutcomeUnset, errors.New("turn: a recorded tool result names the tool outcome " + strconv.Quote(recorded) + ", which is none this build records")
 }
 
 func CheckToolOutcomes(events []session.Event) error {
@@ -371,7 +371,7 @@ func CheckToolOutcomes(events []session.Event) error {
 	return nil
 }
 
-func ConversationFrom(events []session.Event) ([]llm.Message, error) {
+func ConversationFrom(events []session.Event) ([]core.Message, error) {
 	reading, err := session.ReadEvents(events)
 	if err != nil {
 		return nil, err
@@ -379,8 +379,8 @@ func ConversationFrom(events []session.Event) ([]llm.Message, error) {
 	return ConversationOf(reading)
 }
 
-func ConversationOf(reading session.Reading) ([]llm.Message, error) {
-	messages := make([]llm.Message, 0, len(reading.Messages))
+func ConversationOf(reading session.Reading) ([]core.Message, error) {
+	messages := make([]core.Message, 0, len(reading.Messages))
 	for _, recorded := range reading.Messages {
 		message, err := messageOf(recorded.MessageBody)
 		if err != nil {
@@ -391,23 +391,23 @@ func ConversationOf(reading session.Reading) ([]llm.Message, error) {
 	return Sendable(messages), nil
 }
 
-func Sendable(messages []llm.Message) []llm.Message {
+func Sendable(messages []core.Message) []core.Message {
 	answered := map[string]bool{}
 	for _, message := range messages {
 		if message.ToolCallID != "" {
 			answered[message.ToolCallID] = true
 		}
 	}
-	sendable := make([]llm.Message, 0, len(messages))
+	sendable := make([]core.Message, 0, len(messages))
 	for _, message := range messages {
-		var kept []llm.ToolCall
+		var kept []core.ToolCall
 		for _, call := range message.ToolCalls {
 			if answered[call.ID] {
 				kept = append(kept, call)
 			}
 		}
 		message.ToolCalls = kept
-		if message.Role == llm.RoleAssistant && kept == nil && llm.BlankText(message.Content) {
+		if message.Role == core.RoleAssistant && kept == nil && core.BlankText(message.Content) {
 			continue
 		}
 		sendable = append(sendable, message)
@@ -415,7 +415,7 @@ func Sendable(messages []llm.Message) []llm.Message {
 	return sendable
 }
 
-func NewestTask(messages []llm.Message) string {
+func NewestTask(messages []core.Message) string {
 	for _, message := range slices.Backward(messages) {
 		if task, said := personTask(message); said {
 			return task
@@ -424,13 +424,13 @@ func NewestTask(messages []llm.Message) string {
 	return ""
 }
 
-func personTask(message llm.Message) (string, bool) {
+func personTask(message core.Message) (string, bool) {
 	task, found := TaskIn(message.Content)
-	return task, found && message.Role == llm.RoleUser && (message.Origin.Source == "" || saidByThePerson(message.Origin))
+	return task, found && message.Role == core.RoleUser && (message.Origin.Source == "" || saidByThePerson(message.Origin))
 }
 
-func (r Row) PromptAccounting() llm.PromptAccounting {
-	return llm.PromptAccountingFor(r.Wire)
+func (r Row) PromptAccounting() core.PromptAccounting {
+	return core.PromptAccountingFor(r.Wire)
 }
 
 func (r Row) Header() session.Header {
@@ -526,7 +526,7 @@ type record struct {
 	undoBegun        chan struct{}
 	undoErr          error
 	lastTools        toolsKept
-	task             llm.Origin
+	task             core.Origin
 	instructionFiles string
 	announce         CalledAsEachRequestIsSent
 	lastSent         *messagesKept
@@ -534,7 +534,7 @@ type record struct {
 
 type toolsKept struct {
 	log   *session.Log
-	tools []llm.Tool
+	tools []core.Tool
 	hash  string
 }
 
@@ -605,7 +605,7 @@ func (r *record) add(event session.Event, body any) session.Event {
 	return appended
 }
 
-func (r *record) begin(row Row, task llm.Origin) {
+func (r *record) begin(row Row, task core.Origin) {
 	if r == nil {
 		return
 	}
@@ -641,8 +641,8 @@ func (r *record) begin(row Row, task llm.Origin) {
 		r.undo = &snapshot.Repo{State: r.store.State(), Session: r.store.Dir(cmp.Or(header.Root, header.ID)), Tree: project}
 		r.undoBegun = make(chan struct{})
 		repo, turn, report := *r.undo, r.turn, sys.Crashes(project)
-		safe.Go(report, "undo snapshot", func() {
-			r.undoErr = safe.Call(report, "undo snapshot", func() error { return repo.Begin(context.Background(), turn) })
+		recover.Go(report, "undo snapshot", func() {
+			r.undoErr = recover.Call(report, "undo snapshot", func() error { return repo.Begin(context.Background(), turn) })
 			close(r.undoBegun)
 			if r.undoErr == nil {
 				_ = repo.Prune(context.Background())
@@ -665,13 +665,13 @@ func (r *record) undoStarted() bool {
 	return r.undo != nil
 }
 
-func (r *record) message(message llm.Message, request string, results map[string]ToolCallRow) {
+func (r *record) message(message core.Message, request string, results map[string]ToolCallRow) {
 	if r == nil {
 		return
 	}
 	switch message.Role {
-	case llm.RoleSystem:
-	case llm.RoleTool:
+	case core.RoleSystem:
+	case core.RoleTool:
 		row := results[message.ToolCallID]
 		row.ID, row.Parent, row.Author, row.Call, row.Tool = "", "", "", "", ""
 		if row.Proxy == nil {
@@ -680,7 +680,7 @@ func (r *record) message(message llm.Message, request string, results map[string
 		held, _ := r.heldRow(message)
 		r.add(session.Event{Kind: session.EventToolResult, Call: message.ToolCallID, Request: request},
 			resultRow{ToolCallRow: row, Content: message.Content, ToolOutcome: toolOutcomeName(message.ToolOutcome), Pictures: held.Pictures, KeptHead: message.KeptHead})
-	case llm.RoleAssistant:
+	case core.RoleAssistant:
 		if len(message.ToolCalls) > 0 {
 			r.undoStarted()
 		}
@@ -701,7 +701,7 @@ func (r *record) message(message llm.Message, request string, results map[string
 	}
 }
 
-func (r *record) heldRow(message llm.Message) (MessageRow, []session.Picture) {
+func (r *record) heldRow(message core.Message) (MessageRow, []session.Picture) {
 	row := messageRowOf(message)
 	sent := row.Pictures
 	row.Pictures = nil
@@ -713,7 +713,7 @@ func (r *record) heldRow(message llm.Message) (MessageRow, []session.Picture) {
 	return row, sent
 }
 
-func (r *record) keptList(messages []llm.Message) ([]string, []session.Picture) {
+func (r *record) keptList(messages []core.Message) ([]string, []session.Picture) {
 	hashes := make([]string, 0, len(messages))
 	var pictures []session.Picture
 	for _, message := range messages {
@@ -730,7 +730,7 @@ const (
 	memoryLineShape = "id"
 )
 
-func (r *record) sent(id, why string, request llm.Request, preview recall.Config) {
+func (r *record) sent(id, why string, request core.Request, preview recall.Config) {
 	if r == nil {
 		return
 	}
@@ -773,7 +773,7 @@ func (r *record) sent(id, why string, request llm.Request, preview recall.Config
 	}
 }
 
-func (r *record) exchange(id, why, wire string, request llm.Request, started time.Time, attempts []llm.Attempt, decision llm.Decision, failed error) {
+func (r *record) exchange(id, why, wire string, request core.Request, started time.Time, attempts []core.Attempt, decision core.Decision, failed error) {
 	if r == nil {
 		return
 	}
@@ -802,7 +802,7 @@ func (r *record) exchange(id, why, wire string, request llm.Request, started tim
 	r.note(r.log.Exchanged(exchange))
 }
 
-func (r *record) keptTools(tools []llm.Tool) string {
+func (r *record) keptTools(tools []core.Tool) string {
 	if r.lastTools.log == r.log && reflect.DeepEqual(tools, r.lastTools.tools) {
 		return r.lastTools.hash
 	}
@@ -814,7 +814,7 @@ func (r *record) keptTools(tools []llm.Tool) string {
 	return hash
 }
 
-func (r *record) listChange(kind, why string, before, after []llm.Message) {
+func (r *record) listChange(kind, why string, before, after []core.Message) {
 	if r == nil {
 		return
 	}
@@ -827,10 +827,10 @@ func (r *record) listChange(kind, why string, before, after []llm.Message) {
 }
 
 func (r *record) notice(text string) {
-	r.noted(llm.Origin{Source: llm.SourceNotice}, text)
+	r.noted(core.Origin{Source: core.SourceNotice}, text)
 }
 
-func (r *record) noted(origin llm.Origin, text string) {
+func (r *record) noted(origin core.Origin, text string) {
 	if r == nil {
 		return
 	}

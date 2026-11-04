@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -18,8 +18,8 @@ const bigLinePad = "............................................"
 
 func runOneTool(t *testing.T, tool contract.Tool, args string, truncate bool) (string, string) {
 	t.Helper()
-	model := &stubModel{decisions: []llm.Decision{
-		toolCallDecision(llm.ToolCall{ID: "call-1", Name: tool.Name(), Arguments: json.RawMessage(args)}),
+	model := &stubModel{decisions: []core.Decision{
+		toolCallDecision(core.ToolCall{ID: "call-1", Name: tool.Name(), Arguments: json.RawMessage(args)}),
 		messageDecision(),
 	}}
 	dir := t.TempDir()

@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"cmp"
@@ -24,12 +24,12 @@ type ticketVerb string
 
 const (
 	ticketRead        ticketVerb = "ticket_read"
-	ticketLog         ticketVerb = turn.TicketLogToolName
+	ticketLog         ticketVerb = loop.TicketLogToolName
 	ticketAsk         ticketVerb = "ticket_ask"
 	ticketRequest     ticketVerb = "ticket_request"
 	ticketCreate      ticketVerb = "ticket_create"
-	ticketMove        ticketVerb = turn.TicketMoveToolName
-	ticketNotPossible ticketVerb = turn.TicketNotPossibleToolName
+	ticketMove        ticketVerb = loop.TicketMoveToolName
+	ticketNotPossible ticketVerb = loop.TicketNotPossibleToolName
 	ticketAssign      ticketVerb = "ticket_assign"
 	ticketList        ticketVerb = "ticket_list"
 )
@@ -123,7 +123,7 @@ func (t ticketTool) spokenBoard() boardy.Managed {
 	if err != nil {
 		return t.board
 	}
-	lead, found := turn.PMAuthor(sessions, t.actor, seeded.Model)
+	lead, found := loop.PMAuthor(sessions, t.actor, seeded.Model)
 	if !found {
 		return t.board
 	}
@@ -134,7 +134,7 @@ func (t ticketTool) spokenBoard() boardy.Managed {
 
 func (t ticketTool) Name() string { return string(t.verb) }
 
-func (t ticketTool) Definition() llm.Tool {
+func (t ticketTool) Definition() core.Tool {
 	describe, properties, required := "", map[string]any{"id": stringParam("the ticket id, such as DEMO-2")}, []string{"id"}
 	switch t.verb {
 	case ticketRead:
@@ -204,7 +204,7 @@ func (t ticketTool) Definition() llm.Tool {
 		describe = fmt.Sprintf("lists the tickets in one status across the boards of this project, oldest first, with the time since each last changed; it shows %d and counts the rest", konst.LeadCheckInReviewsMost)
 		properties, required = map[string]any{"status": map[string]any{"type": "string", "enum": boardy.Statuses()}}, []string{"status"}
 	}
-	return llm.Tool{Name: string(t.verb), Description: describe, Parameters: map[string]any{"type": "object", "properties": properties, "required": required}}
+	return core.Tool{Name: string(t.verb), Description: describe, Parameters: map[string]any{"type": "object", "properties": properties, "required": required}}
 }
 
 func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
@@ -305,8 +305,8 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (contract.Result
 			if status, err = boardy.ParseStatus(args.Status); err != nil {
 				break
 			}
-			tickets := turn.BoardTickets(t.board.Store, status)
-			lines, more := turn.Waiting(tickets, time.Now())
+			tickets := loop.BoardTickets(t.board.Store, status)
+			lines, more := loop.Waiting(tickets, time.Now())
 			for i := range lines {
 				lines[i] += " " + tickets[i].Title
 			}

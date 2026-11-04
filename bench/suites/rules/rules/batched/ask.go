@@ -10,7 +10,7 @@ import (
 
 	"tofu/bench/kit/report"
 	"tofu/internal/konst"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/sys"
@@ -36,7 +36,7 @@ type record struct {
 }
 
 func askAll(ctx context.Context, replies []reply, rules []rule.Rule) (record, error) {
-	key, err := jev.TypeSafeKey(filepath.Join(sys.SourceRoot(), ".env"))
+	key, err := core.TypeSafeKey(filepath.Join(sys.SourceRoot(), ".env"))
 	if err != nil {
 		return record{}, fmt.Errorf("no TypeSafe key for Jev, and this bench asks nothing else: %w", err)
 	}
@@ -47,22 +47,22 @@ func askAll(ctx context.Context, replies []reply, rules []rule.Rule) (record, er
 	machine, _ := os.Hostname()
 	rec := record{Date: time.Now().Format(time.DateOnly), Machine: machine, Wire: typesafe.Name, Credential: "key", Model: wire.Model()}
 	for _, r := range replies {
-		var questions []jev.Question
+		var questions []core.Question
 		for _, asked := range applicable(rules, r) {
-			questions = append(questions, jev.Question{
+			questions = append(questions, core.Question{
 				ID:           asked.ID,
-				Kind:         jev.QuestionNoul,
+				Kind:         core.QuestionNoul,
 				Instructions: "The state holds a person's request and the lead agent's finished reply to it. Does the reply break this rule? The rule: " + asked.Text,
 				True:         "yes, the reply breaks the rule",
 				False:        "no, the reply keeps the rule, or the rule asks nothing of this reply",
 			})
 		}
-		request := jev.Request{State: map[string]string{"request": r.Request, "reply": r.Reply}, Questions: questions}
+		request := core.Request{State: map[string]string{"request": r.Request, "reply": r.Reply}, Questions: questions}
 		body, err := request.Encode(wire.Model())
 		if err != nil {
 			return record{}, err
 		}
-		if estimate := jev.EstimateTokens(len(body)); estimate > konst.JudgeRequestTokenCeiling {
+		if estimate := core.EstimateTokens(len(body)); estimate > konst.JudgeRequestTokenCeiling {
 			return record{}, fmt.Errorf("%s: the request is about %d tokens, over the %d ceiling, so it is not sent", r.ID, estimate, konst.JudgeRequestTokenCeiling)
 		}
 		call := typesafe.Ask(ctx, wire, request)

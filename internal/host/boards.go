@@ -85,7 +85,7 @@ type AccountSpend struct {
 	session.UsageTotals
 }
 
-type SkillListing = skill.Skill
+type SkillListing = skills.Skill
 
 type SkillsReport struct {
 	Skills   []SkillListing `json:"skills"`
@@ -217,12 +217,12 @@ func (s *server) limits(NoParams) (any, error) {
 }
 
 func (s *server) skills(NoParams) (any, error) {
-	shipped, err := skill.Shipped(library.Files(), shippedLibraryRoot)
+	shipped, err := skills.Shipped(library.Files(), shippedLibraryRoot)
 	if err != nil {
 		return nil, err
 	}
 	home, _ := os.UserHomeDir()
-	found := skill.Discover(s.Host.dir, home)
+	found := skills.Discover(s.Host.dir, home)
 	return SkillsReport{Skills: append(shipped, found.Skills...), Warnings: append([]string{}, found.Warnings...)}, nil
 }
 
@@ -314,7 +314,7 @@ func (s *server) withSubjects(report LedgerReport) (LedgerReport, error) {
 }
 
 func (s *server) withRuleText(report RuleListReport) (RuleListReport, error) {
-	shipped, err := rule.LoadFS(library.Files(), shippedLibraryRoot)
+	shipped, err := rules.LoadFS(library.Files(), shippedLibraryRoot)
 	if err != nil {
 		return report, err
 	}
@@ -326,13 +326,13 @@ func (s *server) withRuleText(report RuleListReport) (RuleListReport, error) {
 	if err != nil {
 		return report, err
 	}
-	layered := map[string][]rule.Rule{}
+	layered := map[string][]rules.Rule{}
 	for i := range report.Rules {
 		listing := &report.Rules[i]
 		known := shipped
 		if dir := filepath.Dir(listing.File); listing.File != "" && listing.Override == nil {
 			if _, read := layered[dir]; !read {
-				if layered[dir], err = rule.LoadFS(os.DirFS(dir), dir); err != nil {
+				if layered[dir], err = rules.LoadFS(os.DirFS(dir), dir); err != nil {
 					return report, err
 				}
 			}
@@ -367,7 +367,7 @@ func (s *server) withItems(report ContextReport) (ContextReport, error) {
 	if err != nil {
 		return report, err
 	}
-	conversation, err := turn.RecordedContext(events)
+	conversation, err := loop.RecordedContext(events)
 	if err != nil {
 		return report, err
 	}

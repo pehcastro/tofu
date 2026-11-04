@@ -188,7 +188,7 @@ func (m *Model) settingRow(width int, selected bool, row Row) string {
 	if row.Origin != "" {
 		label += "  " + look.Faint(row.Origin)
 	}
-	rendered := look.SettingRow(width, selected, label, widget.Fit(row.Description, width-markerCells), m.display(row), control(row))
+	rendered := look.SettingRow(width, selected, label, render.Fit(row.Description, width-markerCells), m.display(row), control(row))
 	switch m.density {
 	case densityCompact:
 		return strings.SplitN(rendered, "\n", 2)[0]

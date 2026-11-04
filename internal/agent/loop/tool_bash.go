@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -29,22 +29,22 @@ import (
 
 type BashTool struct {
 	root      contract.Root
-	choice    shell.Choice
+	choice    process.Choice
 	probe     *toolchainProbe
 	softLimit time.Duration
 }
 
 type shellRegistryKey struct{}
 
-func WithShellRegistry(ctx context.Context, registry *shell.Registry) context.Context {
+func WithShellRegistry(ctx context.Context, registry *process.Registry) context.Context {
 	if registry == nil {
 		return ctx
 	}
 	return context.WithValue(ctx, shellRegistryKey{}, registry)
 }
 
-func ShellRegistryFrom(ctx context.Context) *shell.Registry {
-	registry, _ := ctx.Value(shellRegistryKey{}).(*shell.Registry)
+func ShellRegistryFrom(ctx context.Context) *process.Registry {
+	registry, _ := ctx.Value(shellRegistryKey{}).(*process.Registry)
 	return registry
 }
 
@@ -76,7 +76,7 @@ func NewBashToolCached(root string, cache *ToolchainCache) (*BashTool, error) {
 		return nil, err
 	}
 	probe := cache.probeFor(string(resolved), realToolchainRunner, konst.ToolchainProbeTimeoutMillis*time.Millisecond)
-	choice, err := shell.Resolve("")
+	choice, err := process.Resolve("")
 	if err != nil {
 		return nil, err
 	}
@@ -90,7 +90,7 @@ type toolchainProbe struct {
 
 func startToolchainProbe(dir string, run toolchainRunner, timeout time.Duration) *toolchainProbe {
 	probe := &toolchainProbe{done: make(chan struct{})}
-	safe.Go(sys.Crashes(dir), "toolchain probe", func() {
+	recover.Go(sys.Crashes(dir), "toolchain probe", func() {
 		defer close(probe.done)
 		probe.states = probeToolchain(dir, run, timeout)
 	})
@@ -130,7 +130,7 @@ type shellEnv struct{ setting string }
 func realShellEnv() shellEnv { return shellEnv{} }
 
 type RunShell struct {
-	choice shell.Choice
+	choice process.Choice
 	cache  *ToolchainCache
 	run    *toolchainRunner
 }
@@ -145,7 +145,7 @@ func (r RunShell) runner() toolchainRunner {
 }
 
 func resolveRunShell(env shellEnv, run toolchainRunner) (RunShell, error) {
-	choice, err := shell.Resolve(env.setting)
+	choice, err := process.Resolve(env.setting)
 	if err != nil {
 		return RunShell{}, err
 	}
@@ -308,7 +308,7 @@ func bashFailureText(code int) string {
 
 func (t *BashTool) Name() string { return bashToolName }
 
-func (t *BashTool) Definition() llm.Tool {
+func (t *BashTool) Definition() core.Tool {
 	description := fmt.Sprintf(
 		"runs one command in %s for the project's own package manager, build and tests. cwd is the working directory: no cd. "+
 			"a command still running after %d ms, or %d ms in a sub-agent, moves to a background shell and returns its name. "+
@@ -322,7 +322,7 @@ func (t *BashTool) Definition() llm.Tool {
 	if t.choice.Note != "" {
 		description += " " + t.choice.Note
 	}
-	return llm.Tool{
+	return core.Tool{
 		Name:        bashToolName,
 		Description: description,
 		Parameters: map[string]any{
@@ -351,7 +351,7 @@ func (t *BashTool) checkPort(ctx context.Context, port int) contract.Result {
 	lookup, cancel := context.WithTimeout(ctx, konst.PortHolderTimeoutMillis*time.Millisecond)
 	defer cancel()
 	var lines []string
-	for _, address := range shell.Probe(lookup, port, konst.PortCheckTimeoutMillis*time.Millisecond) {
+	for _, address := range process.Probe(lookup, port, konst.PortCheckTimeoutMillis*time.Millisecond) {
 		state := "free"
 		if address.Open {
 			state = "held by " + address.Holder()
@@ -370,7 +370,7 @@ func (t *BashTool) checkPort(ctx context.Context, port int) contract.Result {
 func (t *BashTool) command(lifetime, scope context.Context, command string) *exec.Cmd {
 	env := append(sys.ScratchEnv(scope), subAgentDepthVar+"="+strconv.Itoa(processDepth()+1))
 	if actor := boardActor(scope); actor != "" {
-		env = append(env, subagent.SessionEnv+"="+actor)
+		env = append(env, subagents.SessionEnv+"="+actor)
 	}
 	cmd := t.choice.Command(lifetime, string(t.root), command, env...)
 	cmd.WaitDelay = konst.BashWaitDelayMillis * time.Millisecond
@@ -406,18 +406,18 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (contract.R
 		return contract.Result{}, errors.New("bash: background needs a shell registry and none is attached to this turn")
 	}
 	cmd := t.command(context.Background(), ctx, args.Command)
-	got, err := registry.YieldReady(ctx, cmd, args.Command, shellOwnerFrom(ctx), shell.Wait{
+	got, err := registry.YieldReady(ctx, cmd, args.Command, shellOwnerFrom(ctx), process.Wait{
 		Within: konst.BackgroundReadyMillis * time.Millisecond,
 		Poll:   konst.ReadyPollMillis * time.Millisecond,
-		Port:   shell.NamedPort(string(t.root), args.Command, cmd.Env),
-		Kept:   shell.KeptBackground,
+		Port:   process.NamedPort(string(t.root), args.Command, cmd.Env),
+		Kept:   process.KeptBackground,
 		Call:   shellCallFrom(ctx),
 	})
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("bash: %w", err)
 	}
 	ran := got.Shell
-	if ran.State == shell.Running {
+	if ran.State == process.Running {
 		return contract.Result{
 			Content: fmt.Sprintf("%s is still running as pid %d in %s, and keeps running after this call: it is listed on the shells screen. this call returned after %d ms because %s. its output so far:\n%s",
 				ran.Name, ran.PID, ran.Dir, got.Took.Milliseconds(), got.Ready.Words(), got.Output),
@@ -433,20 +433,20 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (contract.R
 func deadlineResult(command, output string, deadline time.Duration) contract.Result {
 	killed := fmt.Sprintf("bash: %s: %q was killed at its deadline and its output until then is above. do not run it again unchanged: narrow it, or pass timeout_ms up to %d when the command truly needs longer. "+
 		"a question about which files exist or what they contain is answered by project_report, glob or search without a shell and without this cost",
-		shell.HitDeadline(deadline), command, konst.BashMaxDeadlineMillis)
+		process.HitDeadline(deadline), command, konst.BashMaxDeadlineMillis)
 	return contract.Result{Content: output + "\n" + killed, Command: command, Outcome: contract.ResultFailed, FailureText: killed}
 }
 
-func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, command, corrected string, deadline time.Duration) (contract.Result, error) {
+func (t *BashTool) runOrMove(ctx context.Context, registry *process.Registry, command, corrected string, deadline time.Duration) (contract.Result, error) {
 	limit, inbox := konst.BashSoftLimitMillis*time.Millisecond, (*Inbox)(nil)
 	if ledByTheLead(ctx) {
 		limit, inbox = t.softLimit, leadInboxFrom(ctx)
 	}
-	wait := shell.Wait{Within: min(deadline, limit), Call: shellCallFrom(ctx)}
+	wait := process.Wait{Within: min(deadline, limit), Call: shellCallFrom(ctx)}
 	if deadline > limit {
-		wait.Kept = shell.KeptMoved
+		wait.Kept = process.KeptMoved
 	}
-	if wait.Kept == shell.KeptMoved && inbox != nil {
+	if wait.Kept == process.KeptMoved && inbox != nil {
 		var stop func()
 		wait.Early, stop = inbox.whenTyped(sys.Crashes(string(t.root)))
 		defer stop()
@@ -456,19 +456,19 @@ func (t *BashTool) runOrMove(ctx context.Context, registry *shell.Registry, comm
 		return contract.Result{}, fmt.Errorf("bash: %w", err)
 	}
 	ran := got.Shell
-	if got.Ready == shell.ReadyWaited && deadline <= limit {
-		if err := registry.KillAtDeadline(ran.Name, deadline); err != nil && !errors.Is(err, shell.ErrNotRunning) {
+	if got.Ready == process.ReadyWaited && deadline <= limit {
+		if err := registry.KillAtDeadline(ran.Name, deadline); err != nil && !errors.Is(err, process.ErrNotRunning) {
 			return contract.Result{}, fmt.Errorf("bash: %w", err)
 		}
 		return deadlineResult(command, corrected+got.Output, deadline), nil
 	}
 	switch got.Ready {
-	case shell.ReadyExited:
+	case process.ReadyExited:
 		output := &heldOutput{}
 		_, _ = output.Write([]byte(got.Output))
 		text, dropped := output.text()
 		return exitedResult(command, text, *ran.ExitCode, dropped+corrected), nil
-	case shell.ReadyStopped:
+	case process.ReadyStopped:
 		return contract.Result{
 			Content:     got.Output,
 			Command:     command,
@@ -522,11 +522,11 @@ func OwnShellsCalled(ctx context.Context, request GateRequest) []string {
 	return nil
 }
 
-func stopOwned(registry *shell.Registry, command string, owned []shell.Shell) (contract.Result, error) {
+func stopOwned(registry *process.Registry, command string, owned []process.Shell) (contract.Result, error) {
 	var names, left []string
 	for _, one := range owned {
 		err := registry.AgentKill(one.Name)
-		var held shell.HeldError
+		var held process.HeldError
 		switch {
 		case errors.As(err, &held):
 			left = append(left, one.Name+" is held by the person and was left running")
@@ -604,7 +604,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 	subAgent := !ledByTheLead(ctx)
 	if registry := ShellRegistryFrom(ctx); registry != nil {
 		owned := registry.Owning(args.Command)
-		startedElsewhere := slices.ContainsFunc(owned, func(one shell.Shell) bool { return one.Owner != owner })
+		startedElsewhere := slices.ContainsFunc(owned, func(one process.Shell) bool { return one.Owner != owner })
 		if len(owned) > 0 && (!subAgent || !startedElsewhere) {
 			return stopOwned(registry, args.Command, owned)
 		}
@@ -632,7 +632,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 	cmd := t.command(ctx, ctx, args.Command)
 	output := &heldOutput{}
 	cmd.Stdout, cmd.Stderr = output, output
-	tracked, startErr := shell.StartTracked(cmd)
+	tracked, startErr := process.StartTracked(cmd)
 	if startErr != nil {
 		return contract.Result{}, fmt.Errorf("bash: %w", startErr)
 	}
@@ -658,7 +658,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 	return exitedResult(args.Command, text, cmd.ProcessState.ExitCode(), note), nil
 }
 
-func codeFlags(code subagent.InlineCode) []string {
+func codeFlags(code subagents.InlineCode) []string {
 	if code.Python() {
 		return append([]string{"-I"}, slices.DeleteFunc(slices.Clone(code.Flags), func(flag string) bool { return flag == "-I" })...)
 	}
@@ -672,7 +672,7 @@ type inlineCodeTool struct {
 
 func (inlineCodeTool) Name() string { return bashToolName }
 
-func (inlineCodeTool) Definition() llm.Tool { return llm.Tool{Name: bashToolName} }
+func (inlineCodeTool) Definition() core.Tool { return core.Tool{Name: bashToolName} }
 
 func (t inlineCodeTool) Run(ctx context.Context, _ json.RawMessage) (contract.Result, error) {
 	code := *t.request.Code
@@ -691,11 +691,11 @@ func (t inlineCodeTool) Run(ctx context.Context, _ json.RawMessage) (contract.Re
 	cmd := exec.CommandContext(ctx, code.Program, argv...)
 	tmp := filepath.Join(code.Cwd, "tmp")
 	cmd.Dir, cmd.WaitDelay = code.Cwd, konst.BashWaitDelayMillis*time.Millisecond
-	cmd.Env = shell.CodeEnv("TMPDIR="+tmp, "TMP="+tmp, "TEMP="+tmp, "PYTHONUNBUFFERED=1", "PYTHONDONTWRITEBYTECODE=1", "AI_AGENT=tofu")
+	cmd.Env = process.CodeEnv("TMPDIR="+tmp, "TMP="+tmp, "TEMP="+tmp, "PYTHONUNBUFFERED=1", "PYTHONDONTWRITEBYTECODE=1", "AI_AGENT=tofu")
 	output := &heldOutput{}
 	cmd.Stdout, cmd.Stderr = output, output
 	started := time.Now()
-	tracked, err := shell.StartTracked(cmd)
+	tracked, err := process.StartTracked(cmd)
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("bash: %w", err)
 	}
@@ -703,7 +703,7 @@ func (t inlineCodeTool) Run(ctx context.Context, _ json.RawMessage) (contract.Re
 	runErr := cmd.Wait()
 	text, dropped := output.text()
 	command := strings.Join(append([]string{code.Program}, argv...), " ")
-	ran := "ran " + command + " in " + code.Cwd + " with environment " + shell.CodeEnvProfile + ", killed at " + deadline.String() + "\n" + dropped
+	ran := "ran " + command + " in " + code.Cwd + " with environment " + process.CodeEnvProfile + ", killed at " + deadline.String() + "\n" + dropped
 	var result contract.Result
 	switch {
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
@@ -737,7 +737,7 @@ func (h *heldOutput) Write(p []byte) (int, error) {
 func (h *heldOutput) text() (string, string) {
 	head, tail := h.head, h.tail[max(0, len(h.tail)-konst.BashOutputHeldBytes/2):]
 	if len(head)+len(tail) == h.total {
-		return shell.Decode(slices.Concat(head, tail)), ""
+		return process.Decode(slices.Concat(head, tail)), ""
 	}
 	for cut := len(head) - 1; cut >= max(0, len(head)-utf8.UTFMax); cut-- {
 		if utf8.RuneStart(head[cut]) {
@@ -751,7 +751,7 @@ func (h *heldOutput) text() (string, string) {
 		tail = tail[1:]
 	}
 	dropped := h.total - len(head) - len(tail)
-	return shell.Decode(slices.Concat(head, fmt.Appendf(nil, "\n...(%d bytes dropped here as they arrived)...\n", dropped), tail)), fmt.Sprintf(
+	return process.Decode(slices.Concat(head, fmt.Appendf(nil, "\n...(%d bytes dropped here as they arrived)...\n", dropped), tail)), fmt.Sprintf(
 		heldDropLead+"%d bytes and a call holds %d while it runs, so the %d in the middle were dropped as they arrived\n",
 		h.total, konst.BashOutputHeldBytes, dropped)
 }

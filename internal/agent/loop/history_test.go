@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -26,8 +26,8 @@ type scriptedPages struct {
 
 func (s scriptedPages) Name() string { return s.name }
 
-func (s scriptedPages) Definition() llm.Tool {
-	return llm.Tool{Name: s.name, Parameters: map[string]any{"type": "object"}}
+func (s scriptedPages) Definition() core.Tool {
+	return core.Tool{Name: s.name, Parameters: map[string]any{"type": "object"}}
 }
 
 func (s scriptedPages) Run(context.Context, json.RawMessage) (contract.Result, error) {
@@ -54,15 +54,15 @@ func (p shownPage) result() string {
 
 type seenModel struct {
 	*stubModel
-	seen [][]llm.Message
+	seen [][]core.Message
 }
 
-func (m *seenModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (m *seenModel) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	m.seen = append(m.seen, slices.Clone(request.Messages))
 	return m.stubModel.Ask(ctx, request)
 }
 
-func browsePages(t *testing.T, resultCap int, pages []shownPage) ([][]llm.Message, string) {
+func browsePages(t *testing.T, resultCap int, pages []shownPage) ([][]core.Message, string) {
 	t.Helper()
 	var results []string
 	model := &seenModel{stubModel: &stubModel{}}
@@ -71,7 +71,7 @@ func browsePages(t *testing.T, resultCap int, pages []shownPage) ([][]llm.Messag
 		if err != nil {
 			t.Fatal(err)
 		}
-		model.decisions = append(model.decisions, toolCallDecision(llm.ToolCall{ID: "call-" + strconv.Itoa(i), Name: page.tool, Arguments: args}))
+		model.decisions = append(model.decisions, toolCallDecision(core.ToolCall{ID: "call-" + strconv.Itoa(i), Name: page.tool, Arguments: args}))
 		if page.rows == 0 {
 			results = append(results, "")
 			continue
@@ -88,10 +88,10 @@ func browsePages(t *testing.T, resultCap int, pages []shownPage) ([][]llm.Messag
 	return model.seen, dir
 }
 
-func toolResults(messages []llm.Message) []string {
+func toolResults(messages []core.Message) []string {
 	var results []string
 	for _, message := range messages {
-		if message.Role == llm.RoleTool {
+		if message.Role == core.RoleTool {
 			results = append(results, WithoutToolRef(message.Content))
 		}
 	}
@@ -123,7 +123,7 @@ func TestSixPagesShrinkInOneBatchKeepingTheNoteWrittenAfterEachAndTheCachedPrefi
 			t.Errorf("request %d holds pages %v whole out of %d, want at most 4 and always the last 2", r, whole, len(results))
 		}
 		before := requests[r-1]
-		if len(requests[r]) < len(before) || !slices.EqualFunc(before, requests[r][:len(before)], func(a, b llm.Message) bool { return a.Content == b.Content && a.ToolCallID == b.ToolCallID }) {
+		if len(requests[r]) < len(before) || !slices.EqualFunc(before, requests[r][:len(before)], func(a, b core.Message) bool { return a.Content == b.Content && a.ToolCallID == b.ToolCallID }) {
 			broke = append(broke, r)
 		}
 	}
@@ -162,7 +162,7 @@ func TestSmallOldPagesBehindTwoLargeOnesStayWholeBecauseTheRewriteCostsMoreThanI
 	requests, _ := browsePages(t, 32768, pages)
 	for r := 1; r < len(requests); r++ {
 		before := requests[r-1]
-		if len(requests[r]) < len(before) || !slices.EqualFunc(before, requests[r][:len(before)], func(a, b llm.Message) bool { return a.Content == b.Content }) {
+		if len(requests[r]) < len(before) || !slices.EqualFunc(before, requests[r][:len(before)], func(a, b core.Message) bool { return a.Content == b.Content }) {
 			t.Errorf("the prefix changed before request %d, want it never to change when no shrink pays for its rewrite", r)
 		}
 	}
@@ -203,10 +203,10 @@ func TestAnActThatListsOnlyChangesShrinksToThePageItActedOnAndErrorsStayWhole(t 
 	forked := slices.Clone(requests[len(requests)-1])
 	for i, page := range []shownPage{{url: "https://stays.test/rooms/2", title: "Stay two", rows: 400}, pages[3], pages[3]} {
 		id := "call-" + strconv.Itoa(9+i)
-		forked = append(forked, llm.Message{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: id, Name: "browser_observe", Arguments: json.RawMessage(`{"tab":1,"note":"back on the results"}`)}}},
-			llm.Message{Role: llm.RoleTool, ToolCallID: id, Content: page.result()})
+		forked = append(forked, core.Message{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: id, Name: "browser_observe", Arguments: json.RawMessage(`{"tab":1,"note":"back on the results"}`)}}},
+			core.Message{Role: core.RoleTool, ToolCallID: id, Content: page.result()})
 	}
-	at := slices.IndexFunc(forked, func(message llm.Message) bool { return message.ToolCallID == "call-4" })
+	at := slices.IndexFunc(forked, func(message core.Message) bool { return message.ToolCallID == "call-4" })
 	artifacts, err := NewArtifacts(dir, true)
 	if err != nil {
 		t.Fatal(err)
@@ -228,17 +228,17 @@ func TestAnActThatListsOnlyChangesShrinksToThePageItActedOnAndErrorsStayWhole(t 
 	}
 }
 
-func forkStep(said string, results ...string) []llm.Message {
-	step := []llm.Message{{Role: llm.RoleAssistant, Content: said}}
+func forkStep(said string, results ...string) []core.Message {
+	step := []core.Message{{Role: core.RoleAssistant, Content: said}}
 	for i, result := range results {
 		id := said + "-" + strconv.Itoa(i)
-		step[0].ToolCalls = append(step[0].ToolCalls, llm.ToolCall{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"` + id + `.go"}`)})
-		step = append(step, llm.Message{Role: llm.RoleTool, ToolCallID: id, Content: result})
+		step[0].ToolCalls = append(step[0].ToolCalls, core.ToolCall{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"` + id + `.go"}`)})
+		step = append(step, core.Message{Role: core.RoleTool, ToolCallID: id, Content: result})
 	}
 	return step
 }
 
-func checkedFork(t *testing.T, budget recall.Budget, forced ForkKind, messages []llm.Message) (*Fork, []llm.Message) {
+func checkedFork(t *testing.T, budget recall.Budget, forced ForkKind, messages []core.Message) (*Fork, []core.Message) {
 	t.Helper()
 	artifacts, err := NewArtifacts(t.TempDir(), true)
 	if err != nil {
@@ -249,7 +249,7 @@ func checkedFork(t *testing.T, budget recall.Budget, forced ForkKind, messages [
 		t.Fatal(err)
 	}
 	tail := begun[3:]
-	if fork.TailMessages != len(tail) || !slices.EqualFunc(tail, messages[len(messages)-len(tail):], func(a, b llm.Message) bool {
+	if fork.TailMessages != len(tail) || !slices.EqualFunc(tail, messages[len(messages)-len(tail):], func(a, b core.Message) bool {
 		return a.Content == b.Content && a.ToolCallID == b.ToolCallID && len(a.ToolCalls) == len(b.ToolCalls) && len(a.Images) == len(b.Images)
 	}) {
 		t.Fatalf("the fork records a tail of %d and keeps %d messages after the carry, want the end of the old history word for word", fork.TailMessages, len(tail))
@@ -258,11 +258,11 @@ func checkedFork(t *testing.T, budget recall.Budget, forced ForkKind, messages [
 	for i, message := range begun {
 		for _, call := range message.ToolCalls {
 			called[call.ID] = true
-			if !slices.ContainsFunc(begun[i+1:], func(m llm.Message) bool { return m.ToolCallID == call.ID }) {
+			if !slices.ContainsFunc(begun[i+1:], func(m core.Message) bool { return m.ToolCallID == call.ID }) {
 				t.Errorf("call %s is kept and its result is not", call.ID)
 			}
 		}
-		if message.Role == llm.RoleTool && !called[message.ToolCallID] {
+		if message.Role == core.RoleTool && !called[message.ToolCallID] {
 			t.Errorf("the result of %s is kept and its call is not", message.ToolCallID)
 		}
 	}
@@ -278,14 +278,14 @@ func checkedFork(t *testing.T, budget recall.Budget, forced ForkKind, messages [
 func TestForkKeepsWholeStepsOfTheTailAndNeverSplitsACallFromItsResult(t *testing.T) {
 	budget := recall.Budget{}.At(6300+konst.ImageTokens*100/konst.ContextForkPercentOfUsable, "a small budget to fork under, with room for the task's picture")
 	small, large := strings.Repeat("a line of the parser\n", 10), strings.Repeat("a line of the parser\n", 300)
-	head := []llm.Message{{Role: llm.RoleSystem, Content: "you are tofu"}, {Role: llm.RoleUser, Content: "fix the parser", Images: []llm.Image{{MediaType: "image/png", Data: []byte("png")}}}}
-	history := func(steps ...[]llm.Message) []llm.Message {
-		return slices.Concat(append([][]llm.Message{head}, steps...)...)
+	head := []core.Message{{Role: core.RoleSystem, Content: "you are tofu"}, {Role: core.RoleUser, Content: "fix the parser", Images: []core.Image{{MediaType: "image/png", Data: []byte("png")}}}}
+	history := func(steps ...[]core.Message) []core.Message {
+		return slices.Concat(append([][]core.Message{head}, steps...)...)
 	}
 	for _, c := range []struct {
 		name     string
 		forced   ForkKind
-		messages []llm.Message
+		messages []core.Message
 		tail     int
 	}{
 		{"a tail that would start on a tool result", ForkContinuation,
@@ -295,7 +295,7 @@ func TestForkKeepsWholeStepsOfTheTailAndNeverSplitsACallFromItsResult(t *testing
 		{"a tail bigger than the budget on its own", ForkContinuation,
 			history(forkStep("old", small), forkStep("read the whole generated table", large, large)), 0},
 		{"an image in the tail is priced and kept with its message", ForkContinuation,
-			history(forkStep("old", small), []llm.Message{{Role: llm.RoleUser, Content: "this one", Images: []llm.Image{{MediaType: "image/png", Data: []byte("png")}}}}, forkStep("read it", small)), 5},
+			history(forkStep("old", small), []core.Message{{Role: core.RoleUser, Content: "this one", Images: []core.Image{{MediaType: "image/png", Data: []byte("png")}}}}, forkStep("read it", small)), 5},
 		{"a forced fork with almost no history", ForkAccountSpent,
 			history(forkStep("read the parser", small)), 2},
 	} {
@@ -317,8 +317,8 @@ func TestForkKeepsWholeStepsOfTheTailAndNeverSplitsACallFromItsResult(t *testing
 			t.Fatalf("one small step after the fork crosses the %d target again, so the turn forks every step", budget.Bands.Target())
 		}
 		fork, again := checkedFork(t, budget, ForkContinuation, next)
-		if slices.ContainsFunc(again[3:], func(m llm.Message) bool { return m.Content == begun[2].Content }) || fork.TailMessages == 0 {
-			t.Errorf("the second fork kept %d messages and the first carry among them is %v", fork.TailMessages, slices.ContainsFunc(again[3:], func(m llm.Message) bool { return m.Content == begun[2].Content }))
+		if slices.ContainsFunc(again[3:], func(m core.Message) bool { return m.Content == begun[2].Content }) || fork.TailMessages == 0 {
+			t.Errorf("the second fork kept %d messages and the first carry among them is %v", fork.TailMessages, slices.ContainsFunc(again[3:], func(m core.Message) bool { return m.Content == begun[2].Content }))
 		}
 	})
 }
@@ -331,7 +331,7 @@ func TestForkAtTheDefaultCeilingRecordsTheCountThatDecidedAndKeepsANewestStepOve
 	budget := recall.Budget{}.At(konst.ContextCeilingTokens, "the default ceiling").Sending(cfg, strings.Repeat(`{"name":"read"}`, 2000))
 	table := strings.Repeat("0001 func parser(lexer token) window { return budget.carry(1) }\n", 480)
 	messages := slices.Concat(
-		[]llm.Message{{Role: llm.RoleSystem, Content: "you are tofu"}, {Role: llm.RoleUser, Content: "read the tables"}},
+		[]core.Message{{Role: core.RoleSystem, Content: "you are tofu"}, {Role: core.RoleUser, Content: "read the tables"}},
 		forkStep("old", strings.Repeat(table, budget.Bands.Target()/cfg.Tokens(table)+1)),
 		forkStep("read two generated tables at once", table, table))
 	newest := HistoryTokens(cfg, messages[len(messages)-3:])
@@ -446,20 +446,20 @@ func TestCompactCarriedKeepsTheWarmHeadAndTheNewSessionReadsBackShrunk(t *testin
 	}
 }
 
-func compactFixture(big string) []llm.Message {
-	read := func(id string) []llm.ToolCall {
-		return []llm.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"` + id + `.txt"}`)}}
+func compactFixture(big string) []core.Message {
+	read := func(id string) []core.ToolCall {
+		return []core.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"` + id + `.txt"}`)}}
 	}
-	return []llm.Message{
-		{Role: llm.RoleUser, Content: "read a"},
-		{Role: llm.RoleAssistant, Content: "reading a", ToolCalls: read("a")},
-		{Role: llm.RoleTool, ToolCallID: "a", Content: big},
-		{Role: llm.RoleAssistant, Content: "a is numbered lines"},
-		{Role: llm.RoleUser, Content: "read b and c"},
-		{Role: llm.RoleAssistant, Content: "reading b", ToolCalls: read("b")},
-		{Role: llm.RoleTool, ToolCallID: "b", Content: big},
-		{Role: llm.RoleAssistant, Content: "reading c", ToolCalls: read("c")},
-		{Role: llm.RoleTool, ToolCallID: "c", Content: big},
+	return []core.Message{
+		{Role: core.RoleUser, Content: "read a"},
+		{Role: core.RoleAssistant, Content: "reading a", ToolCalls: read("a")},
+		{Role: core.RoleTool, ToolCallID: "a", Content: big},
+		{Role: core.RoleAssistant, Content: "a is numbered lines"},
+		{Role: core.RoleUser, Content: "read b and c"},
+		{Role: core.RoleAssistant, Content: "reading b", ToolCalls: read("b")},
+		{Role: core.RoleTool, ToolCallID: "b", Content: big},
+		{Role: core.RoleAssistant, Content: "reading c", ToolCalls: read("c")},
+		{Role: core.RoleTool, ToolCallID: "c", Content: big},
 	}
 }
 

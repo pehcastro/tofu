@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -22,14 +22,14 @@ func TestTheLeadListsARunningAndAFinishedSubAgentWithoutWaitingForTheRunningOne(
 	if err != nil {
 		t.Fatal(err)
 	}
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey: {
-			toolCallDecision(llm.ToolCall{ID: "call-users", Name: "spawn", Arguments: users}, llm.ToolCall{ID: "call-orders", Name: "spawn", Arguments: orders}),
-			toolCallDecision(llm.ToolCall{ID: "call-list", Name: "subagents", Arguments: json.RawMessage(`{}`)}),
+			toolCallDecision(core.ToolCall{ID: "call-users", Name: "spawn", Arguments: users}, core.ToolCall{ID: "call-orders", Name: "spawn", Arguments: orders}),
+			toolCallDecision(core.ToolCall{ID: "call-list", Name: "subagents", Arguments: json.RawMessage(`{}`)}),
 			claimDecision("ts-dev-1 is running"), claimDecision("noted"), claimDecision("done"), claimDecision("done"),
 		},
 		usersRoute: {
-			toolCallDecision(llm.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"plan.md"}`)}),
+			toolCallDecision(core.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"plan.md"}`)}),
 			claimDecision("the users route is added"),
 		},
 		ordersRoute: {claimDecision("the orders route is added")},
@@ -39,7 +39,7 @@ func TestTheLeadListsARunningAndAFinishedSubAgentWithoutWaitingForTheRunningOne(
 	defer listing()
 	lead := crewLead(t, model)
 	spawn := lead.Tools.byName["spawn"].(*SpawnTool)
-	spawn.SubAgents.Open = func(_ subagent.Definition, effort llm.Effort) (SubAgentModel, error) {
+	spawn.SubAgents.Open = func(_ subagents.Definition, effort core.Effort) (SubAgentModel, error) {
 		return SubAgentModel{Effort: effort}, nil
 	}
 	var aMinuteLater atomic.Bool
@@ -54,7 +54,7 @@ func TestTheLeadListsARunningAndAFinishedSubAgentWithoutWaitingForTheRunningOne(
 	finished := func() bool {
 		for _, agent := range spawn.roster.SubAgents() {
 			if agent.ID == "sub-1" {
-				return agent.State == subagent.Finished
+				return agent.State == subagents.Finished
 			}
 		}
 		return false

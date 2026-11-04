@@ -1,4 +1,4 @@
-package tools_test
+package registry_test
 
 import (
 	"bytes"
@@ -22,16 +22,16 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/konst"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	"tofu/internal/store/settings"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/registry"
-	"tofu/internal/tools/web/browser/driver"
-	"tofu/internal/tools/web/browser/loop"
+	browser "tofu/internal/tools/web/browser/driver"
+	jevloop "tofu/internal/tools/web/browser/loop"
 	"tofu/library"
 	"tofu/library/questions"
 )
@@ -214,9 +214,9 @@ func (w *writerStub) Ask(_ context.Context, request llm.Request) (llm.Decision, 
 	return llm.Decision{Build: "stub", Outcome: llm.OutcomeMessage, Content: w.answers[min(len(w.asked), len(w.answers))-1]}, nil
 }
 
-func drive(home, driver string) tools.BrowserSettings {
-	return tools.BrowserSettings{Home: home, Mode: settings.BrowserDrive, Driver: driver, Steps: 30,
-		Model: func() (turn.Model, string, error) { return &writerStub{}, "a stub", nil }}
+func drive(home, driver string) registry.BrowserSettings {
+	return registry.BrowserSettings{Home: home, Mode: settings.BrowserDrive, Driver: driver, Steps: 30,
+		Model: func() (loop.Model, string, error) { return &writerStub{}, "a stub", nil }}
 }
 
 func TestTheBrowserSettingsDecideWhichBrowserToolsAreOffered(t *testing.T) {
@@ -227,17 +227,17 @@ func TestTheBrowserSettingsDecideWhichBrowserToolsAreOffered(t *testing.T) {
 		{settings.BrowserDrive, settings.DriverGoal, "browser_tabs browser_read browser_do browser_motion"},
 		{settings.BrowserDrive, settings.DriverSteps, "browser_tabs browser_observe browser_act browser_motion"},
 	} {
-		offered, err := tools.NewBrowser(tools.BrowserSettings{Home: shortHome(t), Mode: arm.mode, Driver: arm.driver, Steps: 30})
+		offered, err := registry.NewBrowser(registry.BrowserSettings{Home: shortHome(t), Mode: arm.mode, Driver: arm.driver, Steps: 30})
 		t.Logf("browser=%s browserDriver=%s offers %q", arm.mode, arm.driver, names(offered))
 		if err != nil || names(offered) != arm.want {
 			t.Fatalf("browser=%s browserDriver=%s offers %q, %v, want %q", arm.mode, arm.driver, names(offered), err, arm.want)
 		}
 	}
-	for _, refused := range []tools.BrowserSettings{
+	for _, refused := range []registry.BrowserSettings{
 		{Home: shortHome(t), Mode: "on", Driver: settings.DriverGoal},
 		{Home: shortHome(t), Mode: settings.BrowserDrive, Driver: "regex"},
 	} {
-		if offered, err := tools.NewBrowser(refused); err == nil {
+		if offered, err := registry.NewBrowser(refused); err == nil {
 			t.Fatalf("%+v offers %q rather than being refused", refused, names(offered))
 		}
 	}
@@ -251,7 +251,7 @@ func TestEveryBrowserToolWithNoHostNamesTheInstall(t *testing.T) {
 		{settings.DriverGoal, "browser_read", `{"tab":7}`},
 		{settings.DriverGoal, "browser_do", `{"tab":7,"goal":"book a room"}`},
 	} {
-		offered, err := tools.NewBrowser(drive(shortHome(t), call.driver))
+		offered, err := registry.NewBrowser(drive(shortHome(t), call.driver))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -266,7 +266,7 @@ func TestEveryBrowserToolWithNoHostNamesTheInstall(t *testing.T) {
 func TestTheBrowserToolsAgainstAFakeHost(t *testing.T) {
 	chrome := &fakeChrome{}
 	home := hostWithTwoTabs(t, chrome)
-	offered, err := tools.NewBrowser(drive(home, settings.DriverGoal))
+	offered, err := registry.NewBrowser(drive(home, settings.DriverGoal))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -310,10 +310,10 @@ func TestTheBrowserToolsAgainstAFakeHost(t *testing.T) {
 func TestTheTabTofuOpenedClosesAtTheEndAndThePersonsStays(t *testing.T) {
 	chrome := &fakeChrome{}
 	home := hostWithTwoTabs(t, chrome)
-	tabs := tools.NewBrowserTabs(home)
+	tabs := registry.NewBrowserTabs(home)
 	config := drive(home, settings.DriverSteps)
 	config.Tabs = tabs
-	offered, err := tools.NewBrowser(config)
+	offered, err := registry.NewBrowser(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -608,7 +608,7 @@ func browserOn(t *testing.T, page *cdpPage, driver string) func(name, args strin
 		t.Fatal(err)
 	}
 	go page.serve(fromHostR, toHostW, hello)
-	offered, err := tools.NewBrowser(drive(home, driver))
+	offered, err := registry.NewBrowser(drive(home, driver))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -730,7 +730,7 @@ func TestABrowserCallWithoutANoteOrWithALongOneIsRefusedBeforeItTouchesThePage(t
 	if _, err := try("browser_act", `{`+longest+click+`}`); err != nil || page.releases() != 1 {
 		t.Fatalf("an act with a 200 character note answered %v after %d clicks; want it run", err, page.releases())
 	}
-	offered, err := tools.NewBrowser(drive(shortHome(t), settings.DriverSteps))
+	offered, err := registry.NewBrowser(drive(shortHome(t), settings.DriverSteps))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -790,7 +790,7 @@ func TestTheBrowserSubAgentObservesActsObservesAndReportsItsTab(t *testing.T) {
 	}
 	go page.serve(fromHostR, toHostW, hello)
 
-	offered, err := tools.NewBrowser(drive(home, settings.DriverSubagent))
+	offered, err := registry.NewBrowser(drive(home, settings.DriverSubagent))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -798,9 +798,9 @@ func TestTheBrowserSubAgentObservesActsObservesAndReportsItsTab(t *testing.T) {
 	for _, tool := range offered {
 		names = append(names, tool.Name())
 	}
-	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: names})
-	defined := slices.IndexFunc(found.Definitions, func(d subagent.Definition) bool { return d.Name == "browser" })
-	if defined < 0 || found.Definitions[defined].Runs == subagent.RunsRefused {
+	found := subagents.Definitions(subagents.Scan{Library: library.Files(), Tools: names})
+	defined := slices.IndexFunc(found.Definitions, func(d subagents.Definition) bool { return d.Name == "browser" })
+	if defined < 0 || found.Definitions[defined].Runs == subagents.RunsRefused {
 		t.Fatalf("the library defines no browser sub-agent that runs: %+v", found)
 	}
 	script := &spawnScript{decisions: []llm.Decision{
@@ -809,10 +809,10 @@ func TestTheBrowserSubAgentObservesActsObservesAndReportsItsTab(t *testing.T) {
 		calls("browser_observe", `{"note":"n","tab":7}`),
 		{Build: "cassette", Outcome: llm.OutcomeMessage, Content: "clicked Next on tab 7; it shows page 2 of the stays; tab 7 is left open on https://stays.test/page-2"},
 	}}
-	base := turn.Config{Model: script, Spend: turn.SpendSubscription, Tools: turn.NewRegistry(offered...), Caps: turn.Caps{MaxSteps: 8},
+	base := loop.Config{Model: script, Spend: loop.SpendSubscription, Tools: loop.NewRegistry(offered...), Caps: loop.Caps{MaxSteps: 8},
 		ResultBytesCap: 8192, ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }}
-	spawner := turn.NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
-	spawner.SubAgents = turn.SubAgents{Defined: found.Definitions}
+	spawner := loop.NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
+	spawner.SubAgents = loop.SubAgents{Defined: found.Definitions}
 	if _, err := spawner.Run(context.Background(), json.RawMessage(`{"agent":"browser","task":"on tab 7, go to the next page of stays and say what it shows","owns":["notes/**"]}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -1198,17 +1198,17 @@ type recordedJev struct {
 	bodies  []string
 }
 
-func (w *recordedJev) Caps() jev.WireCaps {
-	return jev.WireCaps{Name: "recorded", CriteriaKinds: []jev.CriteriaKind{jev.CriteriaString, jev.CriteriaObject}}
+func (w *recordedJev) Caps() core.WireCaps {
+	return core.WireCaps{Name: "recorded", CriteriaKinds: []core.CriteriaKind{core.CriteriaString, core.CriteriaObject}}
 }
 
 func (w *recordedJev) Model() string { return "~typesafe/jev-latest" }
 
-func (w *recordedJev) Post(_ context.Context, body []byte) (jev.Raw, error) {
+func (w *recordedJev) Post(_ context.Context, body []byte) (core.Raw, error) {
 	w.bodies = append(w.bodies, string(body))
 	answer := w.answers[min(w.posted, len(w.answers)-1)]
 	w.posted++
-	return jev.Raw{Body: answer, Attempts: 1, Latency: 3 * time.Millisecond}, nil
+	return core.Raw{Body: answer, Attempts: 1, Latency: 3 * time.Millisecond}, nil
 }
 
 func formAnswer(op string) []byte {
@@ -1239,7 +1239,7 @@ func jevOn(t *testing.T, wire *recordedJev, ledgerDir string) func() (jevloop.Je
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+	client, err := core.NewClient(core.Config{Wire: wire})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1253,7 +1253,7 @@ func TestBrowserDoRunsTheJevLoopOnADriveTab(t *testing.T) {
 	browserDo := func(home string, steps int) contract.Tool {
 		config := drive(home, settings.DriverGoal)
 		config.Judge, config.Steps = func() (jevloop.Jev, error) { return current() }, steps
-		offered, err := tools.NewBrowser(config)
+		offered, err := registry.NewBrowser(config)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1361,8 +1361,8 @@ func browserDoOn(t *testing.T, chrome *fakeChrome, wire *recordedJev, writer *wr
 	t.Helper()
 	config := drive(hostWithTwoTabs(t, chrome), settings.DriverGoal)
 	config.Judge = jevOn(t, wire, shortHome(t))
-	config.Model = func() (turn.Model, string, error) { return writer, "a stub", nil }
-	offered, err := tools.NewBrowser(config)
+	config.Model = func() (loop.Model, string, error) { return writer, "a stub", nil }
+	offered, err := registry.NewBrowser(config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1487,17 +1487,17 @@ func TestBrowserDoFollowsATabItsOwnTabOpened(t *testing.T) {
 func TestBrowserDoWithAURLOpensATabAsksTheBrowserModelAndAnswersFirst(t *testing.T) {
 	chrome := &fakeChrome{page: strings.Replace(formPage, `"elements":[`, `"links":{"3":"http://127.0.0.1:8000/rooms/42"},"elements":[`, 1)}
 	var wire *recordedJev
-	var writer turn.Model
+	var writer loop.Model
 	config := drive(hostWithTwoTabs(t, chrome), settings.DriverGoal)
 	config.Judge = func() (jevloop.Jev, error) { return jevOn(t, wire, shortHome(t))() }
-	config.Model = func() (turn.Model, string, error) {
+	config.Model = func() (loop.Model, string, error) {
 		return writer, "claude-sub/claude-haiku-4-5-20251001 from modelTier.dumb", nil
 	}
-	offered, err := tools.NewBrowser(config)
+	offered, err := registry.NewBrowser(config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	do := func(asked turn.Model, args string, answers ...[]byte) (contract.Result, error) {
+	do := func(asked loop.Model, args string, answers ...[]byte) (contract.Result, error) {
 		wire, writer = &recordedJev{answers: answers}, asked
 		return browserTool(t, offered, "browser_do").Run(context.Background(), json.RawMessage(args))
 	}
@@ -1563,7 +1563,7 @@ func TestTheBrowseRuleComposesForABrowsingTaskOnTheOrchestratorOnly(t *testing.T
 		{rule.RoleSubAgent, "find hotels in Atibaia on airbnb", false},
 		{rule.RoleOrchestrator, "find the parser that drops the last line", false},
 	} {
-		composed, err := turn.Compose(turn.ComposeSpec{Task: c.task, Environment: "a project", ToolGuidance: "read before you edit", Rules: rules, Role: c.role})
+		composed, err := loop.Compose(loop.ComposeSpec{Task: c.task, Environment: "a project", ToolGuidance: "read before you edit", Rules: rules, Role: c.role})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1577,9 +1577,9 @@ func TestTheBrowseRuleComposesForABrowsingTaskOnTheOrchestratorOnly(t *testing.T
 
 type allowingGate struct{ asked []string }
 
-func (g *allowingGate) Decide(_ context.Context, request turn.GateRequest) (turn.GateDecision, error) {
+func (g *allowingGate) Decide(_ context.Context, request loop.GateRequest) (loop.GateDecision, error) {
 	g.asked = append(g.asked, request.Tool)
-	return turn.GateDecision{Verdict: ledger.VerdictAllow}, nil
+	return loop.GateDecision{Verdict: ledger.VerdictAllow}, nil
 }
 
 func TestTheBrowserReadToolsMakeNoGateCall(t *testing.T) {
@@ -1595,13 +1595,13 @@ func TestTheBrowserReadToolsMakeNoGateCall(t *testing.T) {
 			{ID: "c3", Name: "browser_act", Arguments: json.RawMessage(`{"tab":7,"actions":[{"ref":"e1","action":"click"}]}`)},
 		},
 	} {
-		offered, err := tools.NewBrowser(drive(shortHome(t), driver))
+		offered, err := registry.NewBrowser(drive(shortHome(t), driver))
 		if err != nil {
 			t.Fatal(err)
 		}
 		gate := &allowingGate{}
-		if _, err := turn.Run(context.Background(), turn.Config{Model: &scriptedModel{calls: calls}, Spend: turn.SpendSubscription, Tools: turn.NewRegistry(offered...),
-			Gate: gate, GateMode: turn.GateEnforce, Task: "book a room", ResultBytesCap: 4096, ArtifactDir: t.TempDir()}); err != nil {
+		if _, err := loop.Run(context.Background(), loop.Config{Model: &scriptedModel{calls: calls}, Spend: loop.SpendSubscription, Tools: loop.NewRegistry(offered...),
+			Gate: gate, GateMode: loop.GateEnforce, Task: "book a room", ResultBytesCap: 4096, ArtifactDir: t.TempDir()}); err != nil {
 			t.Fatal(err)
 		}
 		t.Logf("%s: the gate was asked about %v", driver, gate.asked)

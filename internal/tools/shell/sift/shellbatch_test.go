@@ -12,12 +12,12 @@ import (
 
 const batchModel = "~typesafe/jev-latest"
 
-func batchCaps() jev.WireCaps {
-	return jev.WireCaps{Name: "test", MaxRequestTokens: konst.JudgeRequestTokenCeiling, MaxStateTokens: konst.JudgeStateTokenCeiling}
+func batchCaps() core.WireCaps {
+	return core.WireCaps{Name: "test", MaxRequestTokens: konst.JudgeRequestTokenCeiling, MaxStateTokens: konst.JudgeStateTokenCeiling}
 }
 
-func batchRubric() jev.Question {
-	return jev.Question{ID: NeededQuestion, Kind: jev.QuestionNoul, Instructions: "keep what the task needs", True: "the task needs it", False: "filler"}
+func batchRubric() core.Question {
+	return core.Question{ID: NeededQuestion, Kind: core.QuestionNoul, Instructions: "keep what the task needs", True: "the task needs it", False: "filler"}
 }
 
 func linesOf(chunks, lines, width int) string {
@@ -55,17 +55,17 @@ func TestOneShellResultIsOneRequestWithTheRubricInState(t *testing.T) {
 	if state.Rubric != (ShellRubric{Instructions: rubric.Instructions, True: rubric.True, False: rubric.False}) {
 		t.Fatalf("the rubric in state is %+v", state.Rubric)
 	}
-	answers := map[string]jev.Answer{}
+	answers := map[string]core.Answer{}
 	for i, question := range batch.Request.Questions {
 		chunk := fmt.Sprintf("chunks[%d]", batch.Indexes[i])
 		if !strings.HasSuffix(question.ID, fmt.Sprintf("_%d", batch.Indexes[i])) || !strings.Contains(question.Instructions, chunk) || !strings.Contains(question.True, chunk) || !strings.Contains(question.False, chunk) {
 			t.Fatalf("question %d asks about %+v and should name %s", i, question, chunk)
 		}
 		if i > 0 {
-			answers[question.ID] = jev.Answer{Noul: float64(batch.Indexes[i]) / 100}
+			answers[question.ID] = core.Answer{Noul: float64(batch.Indexes[i]) / 100}
 		}
 	}
-	scores := batch.Scores(jev.Decision{Answers: answers})
+	scores := batch.Scores(core.Decision{Answers: answers})
 	if _, scored := scores[batch.Indexes[0]]; scored || len(scores) != len(candidates)-1 {
 		t.Fatalf("an unanswered chunk was scored, or an answered one dropped: %v", scores)
 	}

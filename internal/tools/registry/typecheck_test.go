@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -26,7 +26,7 @@ func typecheckProject(t *testing.T, files map[string]string) (string, func(path 
 			t.Fatal(err)
 		}
 	}
-	checkers := turn.NewTypecheckers()
+	checkers := loop.NewTypecheckers()
 	t.Cleanup(checkers.Close)
 	tool, err := NewTypecheck(dir, checkers)
 	if err != nil {

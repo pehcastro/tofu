@@ -23,7 +23,7 @@ func liveBattery(t *testing.T) (Battery, []Turn, []corpus.SkippedTurn) {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
 	sys.AllowLiveCredential(t)
-	key, err := jev.TypeSafeKey(filepath.Join(repoRoot, ".env"))
+	key, err := core.TypeSafeKey(filepath.Join(repoRoot, ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
@@ -38,13 +38,13 @@ func liveBattery(t *testing.T) (Battery, []Turn, []corpus.SkippedTurn) {
 	return battery, turns, skipped
 }
 
-func askDirect(t *testing.T, b Battery, built state.StopCheckState) jev.Decision {
+func askDirect(t *testing.T, b Battery, built state.StopCheckState) core.Decision {
 	t.Helper()
 	raw, _, err := state.BuildStopCheck(built)
 	if err != nil {
 		t.Fatalf("BuildStopCheck: %v", err)
 	}
-	decision, err := b.client.Ask(context.Background(), jev.Request{State: json.RawMessage(raw), Questions: b.battery})
+	decision, err := b.client.Ask(context.Background(), core.Request{State: json.RawMessage(raw), Questions: b.battery})
 	if err != nil {
 		t.Fatalf("Ask: %v", err)
 	}
@@ -107,11 +107,11 @@ func TestTheSameStateUnderTwoTasks(t *testing.T) {
 	}
 }
 
-func answerValue(a jev.Answer) float64 {
+func answerValue(a core.Answer) float64 {
 	switch a.Kind {
-	case jev.QuestionNoul:
+	case core.QuestionNoul:
 		return a.Noul
-	case jev.QuestionScore:
+	case core.QuestionScore:
 		return a.Score
 	default:
 		return 0

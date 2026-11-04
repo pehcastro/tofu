@@ -19,17 +19,17 @@ import (
 type heldModel struct {
 	asked   chan struct{}
 	release chan struct{}
-	replies []llm.Decision
+	replies []core.Decision
 }
 
-func (m *heldModel) Ask(context.Context, llm.Request) (llm.Decision, error) {
+func (m *heldModel) Ask(context.Context, core.Request) (core.Decision, error) {
 	if m.asked != nil {
 		m.asked <- struct{}{}
 		<-m.release
 		m.asked = nil
 	}
 	if len(m.replies) == 0 {
-		return llm.Decision{Build: "stub", Outcome: llm.OutcomeMessage, Content: "done"}, nil
+		return core.Decision{Build: "stub", Outcome: core.OutcomeMessage, Content: "done"}, nil
 	}
 	reply := m.replies[0]
 	m.replies = m.replies[1:]
@@ -43,8 +43,8 @@ type heldEngine struct {
 
 func (e heldEngine) Prepare(start Turn, hooks Hooks) (Prepared, error) {
 	store, err := session.OpenIn(e.dir)
-	pick := func(context.Context) (turn.Account, error) { return turn.Account{Model: hooks.Lead(e.model)}, nil }
-	return Prepared{Config: turn.Config{Accounts: turn.Accounts{Pick: pick}, Sessions: store, Session: start.Session, NewID: func() string { return start.ID }, Task: start.Task, Caps: turn.Caps{MaxSteps: 4}, Inbox: hooks.Inbox, ResultBytesCap: konst.TurnResultBytesCap, Spend: turn.SpendSubscription}, Sessions: store}, err
+	pick := func(context.Context) (loop.Account, error) { return loop.Account{Model: hooks.Lead(e.model)}, nil }
+	return Prepared{Config: loop.Config{Accounts: loop.Accounts{Pick: pick}, Sessions: store, Session: start.Session, NewID: func() string { return start.ID }, Task: start.Task, Caps: loop.Caps{MaxSteps: 4}, Inbox: hooks.Inbox, ResultBytesCap: konst.TurnResultBytesCap, Spend: loop.SpendSubscription}, Sessions: store}, err
 }
 
 func (heldEngine) Renew() {}
@@ -61,9 +61,9 @@ func TestEveryRefTheWireHandsOutResolvesToItsItem(t *testing.T) {
 	home, project := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	model := &heldModel{asked: make(chan struct{}, 1), release: make(chan struct{}), replies: []llm.Decision{
-		{Build: "stub", Outcome: llm.OutcomeToolCalls, Content: "looking first", ToolCalls: []llm.ToolCall{{ID: "call-1", Name: "nothing", Arguments: json.RawMessage(`{}`)}}},
-		{Build: "stub", Outcome: llm.OutcomeMessage, Content: "the port is 8080"},
+	model := &heldModel{asked: make(chan struct{}, 1), release: make(chan struct{}), replies: []core.Decision{
+		{Build: "stub", Outcome: core.OutcomeToolCalls, Content: "looking first", ToolCalls: []core.ToolCall{{ID: "call-1", Name: "nothing", Arguments: json.RawMessage(`{}`)}}},
+		{Build: "stub", Outcome: core.OutcomeMessage, Content: "the port is 8080"},
 	}}
 	h, _ := New(Config{Dir: project, Engine: heldEngine{dir: project, model: model}})
 	t.Cleanup(h.Close)
@@ -169,8 +169,8 @@ func TestTurnSendKeepsAMentionWhereItWasAndEveryLineCarriesTheTokenForItsItem(t 
 		var about Identity
 		if json.Unmarshal(line.Params, &about) == nil && about.Item != "" {
 			lines++
-			if about.Ref != tools.QuoteRef(about.Item) {
-				t.Errorf("%s carries ref %q for item %q, want %q", line.Method, about.Ref, about.Item, tools.QuoteRef(about.Item))
+			if about.Ref != registry.QuoteRef(about.Item) {
+				t.Errorf("%s carries ref %q for item %q, want %q", line.Method, about.Ref, about.Item, registry.QuoteRef(about.Item))
 			}
 		}
 		return line.Method == "turn.completed"

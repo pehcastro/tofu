@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -30,7 +30,7 @@ func Checked(dir string, list []contract.Tool) ([]contract.Tool, error) {
 
 func (c cited) Name() string { return c.tool.Name() }
 
-func (c cited) Definition() llm.Tool { return c.tool.Definition() }
+func (c cited) Definition() core.Tool { return c.tool.Definition() }
 
 func (c cited) Uncached() contract.Tool { return c.tool }
 
@@ -50,7 +50,7 @@ func (c cited) Run(ctx context.Context, raw json.RawMessage) (contract.Result, e
 
 func leadingDirs(root, command string) []string {
 	var dirs []string
-	for _, step := range shell.Steps(root, command) {
+	for _, step := range process.Steps(root, command) {
 		if !step.Moved {
 			break
 		}

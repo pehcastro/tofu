@@ -14,7 +14,7 @@ import (
 )
 
 type Move struct {
-	Op    browser.Op
+	Op    driver.Op
 	Label string
 	Value string
 	Goal  string
@@ -22,18 +22,18 @@ type Move struct {
 
 func Script() []Move {
 	return []Move{
-		{browser.OpTypeText, "Destination", "Lis", "Start typing Lis as the destination"},
-		{browser.OpClick, "Lisbon", "", "Pick Lisbon from the suggestions"},
-		{browser.OpScrollDown, "", "", "Scroll down to the stays"},
-		{browser.OpClick, "Casa Flora", "", "Open the first stay in the list"},
-		{browser.OpClick, "Casa Azul", "", "Open the second stay in the list"},
-		{browser.OpWait, "", "", "Wait for the prices to refresh"},
-		{browser.OpScrollDown, "", "", "Scroll down to the booking form"},
-		{browser.OpClick, "12", "", "Check in on the twelfth"},
-		{browser.OpSelect, "Guests", "2", "Book for two guests"},
-		{browser.OpTypeText, "Name", "Ada Lovelace", "Book under the name Ada Lovelace"},
-		{browser.OpClick, "Book", "", "Submit the booking"},
-		{browser.OpClick, "Back to search", "", "Return to the search page"},
+		{driver.OpTypeText, "Destination", "Lis", "Start typing Lis as the destination"},
+		{driver.OpClick, "Lisbon", "", "Pick Lisbon from the suggestions"},
+		{driver.OpScrollDown, "", "", "Scroll down to the stays"},
+		{driver.OpClick, "Casa Flora", "", "Open the first stay in the list"},
+		{driver.OpClick, "Casa Azul", "", "Open the second stay in the list"},
+		{driver.OpWait, "", "", "Wait for the prices to refresh"},
+		{driver.OpScrollDown, "", "", "Scroll down to the booking form"},
+		{driver.OpClick, "12", "", "Check in on the twelfth"},
+		{driver.OpSelect, "Guests", "2", "Book for two guests"},
+		{driver.OpTypeText, "Name", "Ada Lovelace", "Book under the name Ada Lovelace"},
+		{driver.OpClick, "Book", "", "Submit the booking"},
+		{driver.OpClick, "Back to search", "", "Return to the search page"},
 	}
 }
 
@@ -47,8 +47,8 @@ func (m Move) String() string {
 	return fmt.Sprintf("%s %q %q", m.Op, m.Label, m.Value)
 }
 
-func (m Move) on(page browser.Page) (browser.Action, error) {
-	action := browser.Action{Op: m.Op, Value: m.Value}
+func (m Move) on(page driver.Page) (driver.Action, error) {
+	action := driver.Action{Op: m.Op, Value: m.Value}
 	if m.Label == "" {
 		return action, nil
 	}
@@ -72,14 +72,14 @@ type Phases struct {
 }
 
 type Row struct {
-	Step           int           `json:"step"`
-	Move           string        `json:"move"`
-	Chooser        string        `json:"chooser"`
-	JevChose       string        `json:"jev_chose,omitempty"`
-	Stale          browser.Stale `json:"stale,omitempty"`
-	Error          string        `json:"error,omitempty"`
-	Calls          int           `json:"calls"`
-	ExtensionTimed bool          `json:"extension_timed"`
+	Step           int          `json:"step"`
+	Move           string       `json:"move"`
+	Chooser        string       `json:"chooser"`
+	JevChose       string       `json:"jev_chose,omitempty"`
+	Stale          driver.Stale `json:"stale,omitempty"`
+	Error          string       `json:"error,omitempty"`
+	Calls          int          `json:"calls"`
+	ExtensionTimed bool         `json:"extension_timed"`
 	Phases
 	InputTokens  int `json:"jev_input_tokens"`
 	OutputTokens int `json:"jev_output_tokens"`
@@ -89,9 +89,9 @@ func millis(d time.Duration) float64 {
 	return float64(d) / float64(time.Millisecond)
 }
 
-func Run(ctx context.Context, tab browser.SharedTab, judge *jevloop.Jev, moves []Move) []Row {
-	var calls []browser.CallTime
-	tab.Client.Timed = func(call browser.CallTime) { calls = append(calls, call) }
+func Run(ctx context.Context, tab driver.SharedTab, judge *loop.Jev, moves []Move) []Row {
+	var calls []driver.CallTime
+	tab.Client.Timed = func(call driver.CallTime) { calls = append(calls, call) }
 	defer func() { tab.Client.Timed = nil }()
 	chooser := "scripted"
 	if judge != nil {
@@ -125,7 +125,7 @@ func Run(ctx context.Context, tab browser.SharedTab, judge *jevloop.Jev, moves [
 	return rows
 }
 
-func step(ctx context.Context, tab browser.SharedTab, judge *jevloop.Jev, move Move, row *Row) error {
+func step(ctx context.Context, tab driver.SharedTab, judge *loop.Jev, move Move, row *Row) error {
 	page, err := tab.Snapshot(ctx)
 	if err != nil {
 		return err
@@ -198,7 +198,7 @@ func Summarise(rows []Row) Summary {
 		summary.Phases = append(summary.Phases, Phase{column.name, stat.Percentile(values, 50), stat.Percentile(values, 90)})
 	}
 	for _, row := range rows {
-		if row.Stale != browser.StaleNone {
+		if row.Stale != driver.StaleNone {
 			summary.DidNotRun++
 		}
 		if row.Error != "" {

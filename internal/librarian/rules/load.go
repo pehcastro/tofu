@@ -1,4 +1,4 @@
-package rule
+package rules
 
 import (
 	"fmt"
@@ -278,7 +278,7 @@ func (r *Rule) setField(key, value, path string, line int) error {
 		var globs []string
 		for one := range strings.SplitSeq(value, ",") {
 			glob := strings.TrimSpace(one)
-			if _, err := subagent.Matches("a/path/the/globs/are/tested/against", []string{glob}); err != nil {
+			if _, err := subagents.Matches("a/path/the/globs/are/tested/against", []string{glob}); err != nil {
 				return fmt.Errorf("%s:%d: %s names %q, which is not a path glob: %v", path, line, key, glob, err)
 			}
 			globs = append(globs, glob)

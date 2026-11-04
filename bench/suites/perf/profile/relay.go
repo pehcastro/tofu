@@ -80,7 +80,7 @@ func installedRelay(tofu, home string, env []string) ([]string, error) {
 	if err := runIn(env, tofu, "browser", "--hosts-key", benchHostsKey, "install"); err != nil {
 		return nil, err
 	}
-	raw, err := os.ReadFile(filepath.Join(filepath.Dir(browser.ExtensionDir(home)), browser.HostName+".json"))
+	raw, err := os.ReadFile(filepath.Join(filepath.Dir(driver.ExtensionDir(home)), driver.HostName+".json"))
 	var manifest struct {
 		Path           string   `json:"path"`
 		AllowedOrigins []string `json:"allowed_origins"`
@@ -130,7 +130,7 @@ func relayOnce(command, env []string, settle, window time.Duration) (idleReading
 	go func() {
 		var types []string
 		for {
-			raw, err := browser.ReadMessage(stdout)
+			raw, err := driver.ReadMessage(stdout)
 			if err != nil {
 				heard <- types
 				return
@@ -142,8 +142,8 @@ func relayOnce(command, env []string, settle, window time.Duration) (idleReading
 			types = append(types, message.T)
 		}
 	}()
-	hello, _ := json.Marshal(map[string]any{"t": "hello", "version": browser.ProtocolVersion, "build": printed.Data.Build, "tabs": []browser.Tab{{ID: 1, URL: "https://example.test/", Title: "Example"}}})
-	if err := browser.WriteMessage(stdin, hello); err != nil {
+	hello, _ := json.Marshal(map[string]any{"t": "hello", "version": driver.ProtocolVersion, "build": printed.Data.Build, "tabs": []driver.Tab{{ID: 1, URL: "https://example.test/", Title: "Example"}}})
+	if err := driver.WriteMessage(stdin, hello); err != nil {
 		_ = cmd.Process.Kill()
 		return idleReading{}, fmt.Errorf("%s took no hello: %v: %s", command[0], err, stderr.String())
 	}

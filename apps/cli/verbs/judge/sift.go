@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
@@ -168,7 +168,7 @@ func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	var wg sync.WaitGroup
 	for i := range parts {
 		wg.Go(func() {
-			errs[i] = sys.Crashed(".", safe.Call(nil, "sift", func() (err error) {
+			errs[i] = sys.Crashed(".", recover.Call(nil, "sift", func() (err error) {
 				marks[i], costs[i], err = siftOne(client, set, parts, i, opts, rule)
 				return err
 			}))
@@ -186,13 +186,13 @@ func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	return marks, total, nil
 }
 
-func siftOne(client *jev.Client, set wiring.Battery, parts []sift.Part, index int, opts siftOpts, rule sift.Rule) (sift.Mark, float64, error) {
+func siftOne(client *core.Client, set wiring.Battery, parts []sift.Part, index int, opts siftOpts, rule sift.Rule) (sift.Mark, float64, error) {
 	state, err := json.Marshal(sift.BuildState(parts, index, opts.task))
 	if err != nil {
 		return sift.Mark{}, 0, err
 	}
 	built := json.RawMessage(state)
-	decision, err := client.Ask(context.Background(), jev.Request{State: built, Questions: set.Questions})
+	decision, err := client.Ask(context.Background(), core.Request{State: built, Questions: set.Questions})
 	if err != nil {
 		return sift.Mark{Keep: true, Reason: "kept: " + err.Error()}, 0, nil
 	}

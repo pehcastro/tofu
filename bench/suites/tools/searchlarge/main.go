@@ -39,11 +39,11 @@ func calls() []call {
 func runner(repo, name string) (contract.Tool, error) {
 	switch name {
 	case "read":
-		return turn.NewReadTool(repo)
+		return loop.NewReadTool(repo)
 	case "glob":
-		return tools.NewGlob(repo)
+		return registry.NewGlob(repo)
 	case "grep", "search":
-		return tools.NewSearch(repo)
+		return registry.NewSearch(repo)
 	}
 	return nil, fmt.Errorf("no tool named %s", name)
 }
@@ -151,7 +151,7 @@ func run(repo string, single bool, cold, warm int, out string) error {
 	if err != nil {
 		return fmt.Errorf("the repository is not at a pinned tag: %w", err)
 	}
-	files, err := tools.ListPaths(repo)
+	files, err := registry.ListPaths(repo)
 	if err != nil {
 		return err
 	}

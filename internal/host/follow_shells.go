@@ -34,14 +34,14 @@ func (h *Host) servedShell(s *seat, ask followAsk) followReply {
 	var err error
 	switch {
 	case !h.servesShells():
-		err = shell.RefusedOtherProcess
+		err = process.RefusedOtherProcess
 	case ask.Op == followTakeOver:
 		reply.Hold, err = h.takeShell(s, ask)
 	case ask.Op == followInput:
 		err = h.shells.Input(ask.Shell, ask.Data)
 	case ask.Op == followResize:
-		var size shell.Size
-		if size, err = shell.NewSize(ask.Cols, ask.Rows); err == nil {
+		var size process.Size
+		if size, err = process.NewSize(ask.Cols, ask.Rows); err == nil {
 			err = h.shells.Resize(ask.Shell, size)
 		}
 	case ask.Op == followRelease:
@@ -52,7 +52,7 @@ func (h *Host) servedShell(s *seat, ask followAsk) followReply {
 			h.held.mu.Unlock()
 		}
 	}
-	var refused shell.Refused
+	var refused process.Refused
 	switch {
 	case errors.As(err, &refused):
 		reply.OK, reply.Shell = false, refused
@@ -62,10 +62,10 @@ func (h *Host) servedShell(s *seat, ask followAsk) followReply {
 	return reply
 }
 
-func (h *Host) takeShell(s *seat, ask followAsk) (shell.Hold, error) {
-	size, err := shell.NewSize(ask.Cols, ask.Rows)
+func (h *Host) takeShell(s *seat, ask followAsk) (process.Hold, error) {
+	size, err := process.NewSize(ask.Cols, ask.Rows)
 	if err != nil {
-		return shell.Hold{}, err
+		return process.Hold{}, err
 	}
 	hold, err := h.shells.TakeOver(ask.Shell, size)
 	if err != nil {
@@ -77,7 +77,7 @@ func (h *Host) takeShell(s *seat, ask followAsk) (shell.Hold, error) {
 	}
 	h.held.by[ask.Shell] = &heldShell{seat: s, next: hold.Next}
 	h.held.mu.Unlock()
-	h.held.pushing.Do(func() { safe.Go(h.report, "follow shell raw", h.pushRaw) })
+	h.held.pushing.Do(func() { recover.Go(h.report, "follow shell raw", h.pushRaw) })
 	return hold, nil
 }
 
@@ -129,7 +129,7 @@ func (h *Host) shellNotice(name, text string) {
 		f.ask(followAsk{Op: followShellNote, Shell: name, Text: text})
 		return
 	}
-	origin := llm.Origin{Source: llm.SourceShellHolder, Name: name}
+	origin := core.Origin{Source: core.SourceShellHolder, Name: name}
 	h.mu.Lock()
 	if !h.running && !h.closed {
 		h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort}, text, origin)
@@ -141,10 +141,10 @@ func (h *Host) shellNotice(name, text string) {
 	inbox.Deliver(text, origin)
 }
 
-func (h *Host) heldShell(ask followAsk) (shell.Hold, error) {
+func (h *Host) heldShell(ask followAsk) (process.Hold, error) {
 	f := h.following.Load()
 	if f == nil {
-		return shell.Hold{}, shell.RefusedOtherProcess
+		return process.Hold{}, process.RefusedOtherProcess
 	}
 	reply := f.ask(ask)
 	switch {

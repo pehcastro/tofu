@@ -34,11 +34,11 @@ func (f *calibrationFake) ask(_ context.Context, c calibrationCase) (askedCase, 
 			build = f.rerunBuild
 		}
 	}
-	return askedCase{Build: build, Answers: map[string]jev.Answer{
-		"risk":           {Kind: jev.QuestionScore, Score: risk, Probabilities: map[string]float64{strconv.FormatFloat(risk, 'g', -1, 64): 1}},
-		"approval":       {Kind: jev.QuestionNoul, Noul: 0.5},
-		"user_requested": {Kind: jev.QuestionNoul},
-		"from_untrusted": {Kind: jev.QuestionNoul},
+	return askedCase{Build: build, Answers: map[string]core.Answer{
+		"risk":           {Kind: core.QuestionScore, Score: risk, Probabilities: map[string]float64{strconv.FormatFloat(risk, 'g', -1, 64): 1}},
+		"approval":       {Kind: core.QuestionNoul, Noul: 0.5},
+		"user_requested": {Kind: core.QuestionNoul},
+		"from_untrusted": {Kind: core.QuestionNoul},
 	}}, nil
 }
 

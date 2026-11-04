@@ -1,4 +1,4 @@
-package tools_test
+package registry_test
 
 import (
 	"context"
@@ -188,7 +188,7 @@ func TestTheTwoRecordToolsAddAMeasuredCostToEveryRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loading the elide library: %v", err)
 	}
-	verbs, err := tools.NewVerbs(t.TempDir())
+	verbs, err := registry.NewVerbs(t.TempDir())
 	if err != nil {
 		t.Fatalf("building the verb tools: %v", err)
 	}

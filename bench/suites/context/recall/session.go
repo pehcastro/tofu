@@ -174,7 +174,7 @@ func ReplaySession(store *rc.Store, cfg rc.Config, bands rc.Bands, session Sessi
 		return ReplayResult{}, errors.New("recall: a session with no steps has nothing to replay")
 	}
 	signpostBytes := cmp.Or(arm.Signpost, konst.FactSignpostBytes)
-	accounting := llm.PromptAccountingFor(session.Wire)
+	accounting := core.PromptAccountingFor(session.Wire)
 	unrecordedPrefixBytes := session.Steps[0].CacheReadTokens * cfg.BytesPerThousandTokens / 1000
 	instructions := session.Task + strings.Repeat(".", unrecordedPrefixBytes)
 	conversation := rc.Conversation{Instructions: instructions}

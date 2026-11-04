@@ -9,7 +9,7 @@ import (
 	"strconv"
 
 	"tofu/internal/agent/loop"
-	"tofu/internal/librarian/skills"
+	skill "tofu/internal/librarian/skills"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/registry"
 )
@@ -47,8 +47,8 @@ func MeasureResume(arm ResumeArm) (ResumedTurn, error) {
 		return measured, err
 	}
 	project, store, turns := filepath.Join(scratch, "project"), session.NewStore(filepath.Join(scratch, "sessions")), 0
-	config := turn.Config{Model: turn.Subscription{Wire: wire}, Spend: turn.SpendSubscription, Caps: turn.Caps{MaxSteps: 2}, ResultBytesCap: 1 << 16,
-		ArtifactDir: filepath.Join(scratch, "artifacts"), Sessions: store, Session: "bench-resume", Inbox: turn.NewInbox(), Prefix: &turn.Prefix{},
+	config := loop.Config{Model: loop.Subscription{Wire: wire}, Spend: loop.SpendSubscription, Caps: loop.Caps{MaxSteps: 2}, ResultBytesCap: 1 << 16,
+		ArtifactDir: filepath.Join(scratch, "artifacts"), Sessions: store, Session: "bench-resume", Inbox: loop.NewInbox(), Prefix: &loop.Prefix{},
 		NewID: func() string { turns++; return "turn-bench-" + strconv.Itoa(turns) }}
 	for at, task := range []string{RealTask, "now run the test it fixed and say what it printed", "summarise what changed"} {
 		switch at {
@@ -61,28 +61,28 @@ func MeasureResume(arm ResumeArm) (ResumedTurn, error) {
 				return measured, err
 			}
 		case 2:
-			config.Inbox, config.Prefix = turn.NewInbox(), &turn.Prefix{}
+			config.Inbox, config.Prefix = loop.NewInbox(), &loop.Prefix{}
 			if arm.HeadReadBack {
-				if config.Prefix, err = turn.HeldPrefix(store, config.Session, ""); err != nil {
+				if config.Prefix, err = loop.HeldPrefix(store, config.Session, ""); err != nil {
 					return measured, err
 				}
 			}
 		}
 		skills := skill.Discover(project, "").Skills
-		config.Tools = turn.NewRegistry()
+		config.Tools = loop.NewRegistry()
 		if len(skills) > 0 {
-			config.Tools = turn.NewRegistry(tools.NewSkill(skills))
+			config.Tools = loop.NewRegistry(registry.NewSkill(skills))
 		}
-		composed, err := turn.Compose(turn.ComposeSpec{Task: task, Environment: laterEnvironment, ToolGuidance: RealToolGuidance, Rules: shipped, Skills: skills})
+		composed, err := loop.Compose(loop.ComposeSpec{Task: task, Environment: laterEnvironment, ToolGuidance: RealToolGuidance, Rules: shipped, Skills: skills})
 		if err != nil {
 			return measured, err
 		}
 		config.Task, config.System, config.Parts, config.Environment = task, composed.Head(), composed.Parts, composed.WithTaskRules(laterEnvironment)
-		row, err := turn.Run(context.Background(), config)
+		row, err := loop.Run(context.Background(), config)
 		if err != nil {
 			return measured, err
 		}
-		config.History = turn.Sendable(row.Conversation)
+		config.History = loop.Sendable(row.Conversation)
 	}
 	bodies := answering.sent()
 	if len(bodies) != 3 {

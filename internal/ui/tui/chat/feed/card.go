@@ -123,15 +123,15 @@ func (m Model) aboutCards() (about []Event, lead int) {
 
 func movesLine(moves []roster.Transition, width int) string {
 	var shown []roster.Transition
-	fixed, reopened := -widget.Cells(moveSeparator), 0
+	fixed, reopened := -render.Cells(moveSeparator), 0
 	for index, move := range moves {
 		if move.Move == roster.Spawned || move.Move == roster.Reviewed && index < len(moves)-1 {
 			continue
 		}
 		shown = append(shown, move)
-		fixed += widget.Cells(string(move.Move) + moveSeparator)
+		fixed += render.Cells(string(move.Move) + moveSeparator)
 		if move.Move == roster.SentBack {
-			fixed += widget.Cells(reasonSeparator)
+			fixed += render.Cells(reasonSeparator)
 			reopened++
 		}
 	}
@@ -139,10 +139,10 @@ func movesLine(moves []roster.Transition, width int) string {
 	for index, move := range shown {
 		parts[index] = look.Style(moveColour(move.Move)).Render(string(move.Move))
 		if move.Move == roster.SentBack {
-			parts[index] += look.Muted(reasonSeparator + widget.Fit(move.Reason, (width-fixed)/max(1, reopened)))
+			parts[index] += look.Muted(reasonSeparator + render.Fit(move.Reason, (width-fixed)/max(1, reopened)))
 		}
 	}
-	return widget.Fit(strings.Join(parts, look.Faint(moveSeparator)), width)
+	return render.Fit(strings.Join(parts, look.Faint(moveSeparator)), width)
 }
 
 func moveColour(move roster.Move) look.Color {

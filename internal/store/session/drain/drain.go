@@ -43,21 +43,21 @@ func wakes() []Wake {
 	return []Wake{WakePerson, WakeReport, WakeMessage, WakeBrief, WakeCron, WakeMemory, WakeTofu, WakeClassifier}
 }
 
-func wakeOf(origin llm.Origin) Wake {
+func wakeOf(origin core.Origin) Wake {
 	switch origin.Source {
-	case llm.SourceReport, llm.SourceReportFor:
+	case core.SourceReport, core.SourceReportFor:
 		return WakeReport
-	case llm.SourceMessage, llm.SourceAsk:
+	case core.SourceMessage, core.SourceAsk:
 		return WakeMessage
-	case llm.SourceBrief:
+	case core.SourceBrief:
 		return WakeBrief
 	}
 	switch origin.Kind() {
-	case llm.OriginPerson:
+	case core.OriginPerson:
 		return WakePerson
-	case llm.OriginCron:
+	case core.OriginCron:
 		return WakeCron
-	case llm.OriginMemory:
+	case core.OriginMemory:
 		return WakeMemory
 	}
 	return WakeTofu
@@ -309,7 +309,7 @@ func (p *pass) read(event session.Event) {
 		th, tokens := p.thread(event.Agent), p.tokens(len(said.Content))
 		th.resident[messageBlock] += tokens
 		p.block(messageBlock, tokens)
-		if woke := wakeOf(turn.OriginOf(said)); !th.busy && (th.waking == "" || slices.Index(wakes(), woke) < slices.Index(wakes(), th.waking)) {
+		if woke := wakeOf(loop.OriginOf(said)); !th.busy && (th.waking == "" || slices.Index(wakes(), woke) < slices.Index(wakes(), th.waking)) {
 			th.waking = woke
 		}
 	case session.EventToolCall:
@@ -322,7 +322,7 @@ func (p *pass) read(event session.Event) {
 		p.calls[event.Call] = call.Tool
 		at := where{agent: event.Agent, turn: event.Turn, call: event.Call}
 		switch {
-		case call.Tool == turn.ShellToolName || call.Tool == "bash":
+		case call.Tool == loop.ShellToolName || call.Tool == "bash":
 			p.tests[event.Call] = runsTests(args.Command)
 		case call.Tool == "read" && args.Path != "":
 			p.signals.reread(p.thread(event.Agent), args.Path, at)
@@ -385,7 +385,7 @@ func (p *pass) request(event session.Event, body requestBody) {
 	if body.CostUSD != nil {
 		usd, p.report.CostRecorded = *body.CostUSD, true
 	}
-	input, write1h := max(0, llm.PromptAccountingFor(wire).FreshTokens(body.Prompt, body.Read)), body.Write1h
+	input, write1h := max(0, core.PromptAccountingFor(wire).FreshTokens(body.Prompt, body.Read)), body.Write1h
 	write5m := FiveMinuteWrites(body.Write, body.Write5m, body.Write1h)
 	written := weights.Write5m*float64(write5m) + weights.Write1h*float64(write1h)
 	spend := Spend{Calls: 1, USD: usd,

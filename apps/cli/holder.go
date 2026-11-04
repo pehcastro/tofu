@@ -48,10 +48,10 @@ func runHub(dir string, say func(string)) error {
 	}
 	home, _ := os.UserHomeDir()
 	told := wiring.CrashTold(dir, say)
-	safe.Go(told, "session sweep", func() { sweepSessions(dir, say) })
+	recover.Go(told, "session sweep", func() { sweepSessions(dir, say) })
 	hostEnded := make(chan struct{})
 	defer close(hostEnded)
-	safe.Go(told, "scratch sweep", func() { shellsverb.SweepScratch(dir, say, hostEnded) })
+	recover.Go(told, "scratch sweep", func() { shellsverb.SweepScratch(dir, say, hostEnded) })
 	return host.RunHub(dir, told, say, func(id string, projectTurn *sync.Mutex) (*host.Host, func(), []string) {
 		resumed, unrecorded, err := hostedCarry(id)
 		switch {
@@ -64,13 +64,13 @@ func runHub(dir string, say func(string)) error {
 		if shells != nil {
 			shells = shells.ForSession(id)
 		}
-		engine := &appEngine{dir: dir, open: deckOpener(deck), tabs: tools.NewBrowserTabs(home), places: places, arms: wiring.RunOpts{DoneArm: os.Getenv(doneReviewVariable)}}
+		engine := &appEngine{dir: dir, open: deckOpener(deck), tabs: registry.NewBrowserTabs(home), places: places, arms: wiring.RunOpts{DoneArm: os.Getenv(doneReviewVariable)}}
 		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: shells, Check: shellsverb.CronChecker(dir), Resumed: resumed.hosted(), Unrecorded: unrecorded, ProjectTurn: projectTurn, Now: clock})
 		return live, func() {
 			live.Close()
 			leaveShells(shells)
 			engine.warm.Close()
-			for _, warning := range turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit) {
+			for _, warning := range loop.EndSession(context.Background(), dir, live.ID(), sessionEndExit) {
 				say(warning)
 			}
 		}, troubles

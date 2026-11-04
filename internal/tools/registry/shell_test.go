@@ -1,4 +1,4 @@
-package tools_test
+package registry_test
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/tools/contract"
-	"tofu/internal/tools/registry"
+	tools "tofu/internal/tools/registry"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -31,7 +31,7 @@ func freePort(t *testing.T) int {
 func waitPort(t *testing.T, port int, open bool) {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
-	for shell.PortOpen("127.0.0.1", port, 200*time.Millisecond) != open {
+	for process.PortOpen("127.0.0.1", port, 200*time.Millisecond) != open {
 		if time.Now().After(deadline) {
 			t.Fatalf("port %d never became open=%v", port, open)
 		}
@@ -39,12 +39,12 @@ func waitPort(t *testing.T, port int, open bool) {
 	}
 }
 
-func serving(t *testing.T) (*shell.Registry, context.Context, shell.Shell, int) {
+func serving(t *testing.T) (*process.Registry, context.Context, process.Shell, int) {
 	t.Helper()
 	if _, err := exec.LookPath("node"); err != nil {
 		t.Skip("node is not on PATH, so no server can be started")
 	}
-	registry := shell.OpenAt(filepath.Join(t.TempDir(), "shells"))
+	registry := process.OpenAt(filepath.Join(t.TempDir(), "shells"))
 	port := freePort(t)
 	command := "node -e \"require('http').createServer((q,s)=>s.end('ok')).listen(" + strconv.Itoa(port) + ")\""
 	started, err := registry.Start(t.TempDir(), "bash-1", command, "")
@@ -53,7 +53,7 @@ func serving(t *testing.T) (*shell.Registry, context.Context, shell.Shell, int) 
 	}
 	t.Cleanup(func() { _ = registry.Kill("bash-1") })
 	waitPort(t, port, true)
-	return registry, turn.WithShellRegistry(context.Background(), registry), started, port
+	return registry, loop.WithShellRegistry(context.Background(), registry), started, port
 }
 
 func runShell(t *testing.T, ctx context.Context, op, name string) contract.Result {
@@ -67,8 +67,8 @@ func runShell(t *testing.T, ctx context.Context, op, name string) contract.Resul
 }
 
 func TestOutputWaitAndLogsSayHowLongItRanAndWhenItLastPrinted(t *testing.T) {
-	registry := shell.OpenAt(filepath.Join(t.TempDir(), "shells"))
-	ctx := turn.WithShellRegistry(context.Background(), registry)
+	registry := process.OpenAt(filepath.Join(t.TempDir(), "shells"))
+	ctx := loop.WithShellRegistry(context.Background(), registry)
 	for name, command := range map[string]string{"bash-1": "echo hi; sleep 30", "bash-2": "sleep 30"} {
 		if _, err := registry.Start(t.TempDir(), name, command, ""); err != nil {
 			t.Fatal(err)
@@ -93,13 +93,13 @@ func TestOutputWaitAndLogsSayHowLongItRanAndWhenItLastPrinted(t *testing.T) {
 func TestStopKillsTheServerTheWrapperStartedAndRestartBringsItBack(t *testing.T) {
 	registry, ctx, started, port := serving(t)
 	runShell(t, ctx, "stop", "bash-1")
-	if shell.PortOpen("127.0.0.1", port, 500*time.Millisecond) {
+	if process.PortOpen("127.0.0.1", port, 500*time.Millisecond) {
 		t.Fatalf("port %d still answers after stop, so the node child outlived its wrapper", port)
 	}
 	restarted := runShell(t, ctx, "restart", "bash-1")
 	waitPort(t, port, true)
 	again, err := registry.Read("bash-1")
-	if err != nil || again.State != shell.Running || again.Dir != started.Dir || again.Command != started.Command || again.PID == started.PID {
+	if err != nil || again.State != process.Running || again.Dir != started.Dir || again.Command != started.Command || again.PID == started.PID {
 		t.Fatalf("after restart the entry reads %+v, err %v, want the same command and folder under a new pid\n%s", again, err, restarted.Content)
 	}
 }
@@ -132,7 +132,7 @@ func TestAKillOfAShellPidIsRoutedToStopAndAStrangerIsNot(t *testing.T) {
 			t.Errorf("%q was not read as a kill of bash-1: %+v", own, owned)
 		}
 	}
-	bash, err := turn.NewBashTool(t.TempDir())
+	bash, err := loop.NewBashTool(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,10 +141,10 @@ func TestAKillOfAShellPidIsRoutedToStopAndAStrangerIsNot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if shell.PortOpen("127.0.0.1", port, 500*time.Millisecond) {
+	if process.PortOpen("127.0.0.1", port, 500*time.Millisecond) {
 		t.Fatalf("port %d still answers after a routed taskkill\n%s", port, result.Content)
 	}
-	if after, _ := registry.Read("bash-1"); after.State != shell.Killed {
+	if after, _ := registry.Read("bash-1"); after.State != process.Killed {
 		t.Fatalf("the routed taskkill left bash-1 %s, want killed\n%s", after.State, result.Content)
 	}
 	if owned := registry.Owning("taskkill //PID " + strconv.Itoa(started.PID) + " //F"); len(owned) != 0 {
@@ -165,7 +165,7 @@ func TestAKillByANameOnlyTofusShellsRunIsRoutedToStop(t *testing.T) {
 	if err := os.Link(node, probe); err != nil {
 		t.Skipf("no hard link of node could be made beside the test: %v", err)
 	}
-	registry := shell.OpenAt(filepath.Join(t.TempDir(), "shells"))
+	registry := process.OpenAt(filepath.Join(t.TempDir(), "shells"))
 	started, err := registry.Start(t.TempDir(), "bash-1", strconv.Quote(filepath.ToSlash(probe))+` -e "setTimeout(() => {}, 60000)"`, "")
 	if err != nil {
 		t.Fatal(err)
@@ -186,27 +186,27 @@ func TestAKillByANameOnlyTofusShellsRunIsRoutedToStop(t *testing.T) {
 			t.Errorf("%q was not read as a kill of bash-1: %+v", own, owned)
 		}
 	}
-	bash, err := turn.NewBashTool(t.TempDir())
+	bash, err := loop.NewBashTool(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
 	raw, _ := json.Marshal(map[string]string{"command": "Stop-Process -Name " + name})
-	result, err := bash.Run(turn.WithShellRegistry(context.Background(), registry), raw)
+	result, err := bash.Run(loop.WithShellRegistry(context.Background(), registry), raw)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if after, _ := registry.Read("bash-1"); after.State != shell.Killed {
+	if after, _ := registry.Read("bash-1"); after.State != process.Killed {
 		t.Fatalf("the routed Stop-Process left bash-1 %s, want killed\n%s", after.State, result.Content)
 	}
 }
 
 func TestWaitEndsOnTheUntilTextOrACancelWhileTheCommandStillRuns(t *testing.T) {
-	registry := shell.OpenAt(filepath.Join(t.TempDir(), "shells"))
+	registry := process.OpenAt(filepath.Join(t.TempDir(), "shells"))
 	if _, err := registry.Start(t.TempDir(), "bash-1", "sleep 1; echo Listening on 3000; sleep 120", ""); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = registry.Kill("bash-1") })
-	ctx := turn.WithShellRegistry(context.Background(), registry)
+	ctx := loop.WithShellRegistry(context.Background(), registry)
 	began := time.Now()
 	raw, _ := json.Marshal(map[string]string{"op": "wait", "name": "bash-1", "until": "Listening on"})
 	ready, err := tools.Shells{}.Run(ctx, raw)

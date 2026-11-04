@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -17,26 +17,26 @@ type sideCallModel struct {
 	script   *crew
 	spawn    *SpawnTool
 	fails    bool
-	sideSaw  []llm.Message
-	waiting  []subagent.State
+	sideSaw  []core.Message
+	waiting  []subagents.State
 	sideRuns int
 }
 
-func (m *sideCallModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
-	if len(request.Tools) == 0 || request.ToolChoice == llm.ToolChoiceNone {
+func (m *sideCallModel) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
+	if len(request.Tools) == 0 || request.ToolChoice == core.ToolChoiceNone {
 		m.sideRuns++
 		m.sideSaw = request.Messages
 		for _, held := range m.spawn.roster.SubAgents() {
 			m.waiting = append(m.waiting, held.State)
 		}
 		if m.fails {
-			return llm.Decision{}, errors.New("the orchestrator's wire is down")
+			return core.Decision{}, errors.New("the orchestrator's wire is down")
 		}
 	}
 	return m.script.Ask(ctx, request)
 }
 
-func askTurn(t *testing.T, fails bool, side []llm.Decision, subAgent ...llm.Decision) *sideCallModel {
+func askTurn(t *testing.T, fails bool, side []core.Decision, subAgent ...core.Decision) *sideCallModel {
 	t.Helper()
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "plan.md"), []byte("bash-2 already serves the app, so the users route goes first\n"), 0o644); err != nil {
@@ -47,10 +47,10 @@ func askTurn(t *testing.T, fails bool, side []llm.Decision, subAgent ...llm.Deci
 	if err != nil {
 		t.Fatal(err)
 	}
-	script := newCrew(map[string][]llm.Decision{
-		leadKey: {toolCallDecision(llm.ToolCall{ID: "call-plan", Name: "read", Arguments: json.RawMessage(`{"path":"plan.md"}`)}),
+	script := newCrew(map[string][]core.Decision{
+		leadKey: {toolCallDecision(core.ToolCall{ID: "call-plan", Name: "read", Arguments: json.RawMessage(`{"path":"plan.md"}`)}),
 			spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is on it"), claimDecision("sub-1 is done")},
-		usersRoute: append([]llm.Decision{toolCallDecision(llm.ToolCall{ID: "call-ask", Name: "ask", Arguments: args})}, subAgent...),
+		usersRoute: append([]core.Decision{toolCallDecision(core.ToolCall{ID: "call-ask", Name: "ask", Arguments: args})}, subAgent...),
 		sideKey:    side,
 	})
 	release := script.hold(usersRoute, 1)
@@ -66,7 +66,7 @@ func askTurn(t *testing.T, fails bool, side []llm.Decision, subAgent ...llm.Deci
 func subAgentSaw(t *testing.T, model *sideCallModel) string {
 	t.Helper()
 	for _, request := range model.script.requests(usersRoute) {
-		if last := request.Messages[len(request.Messages)-1]; last.Role == llm.RoleTool && last.ToolCallID == "call-ask" {
+		if last := request.Messages[len(request.Messages)-1]; last.Role == core.RoleTool && last.ToolCallID == "call-ask" {
 			return last.Content
 		}
 	}
@@ -76,22 +76,22 @@ func subAgentSaw(t *testing.T, model *sideCallModel) string {
 
 func TestASubAgentAsksAndItsNextStepSeesTheOrchestratorsAnswer(t *testing.T) {
 	const answer = "no, bash-2 serves it on 3003"
-	model := askTurn(t, false, []llm.Decision{claimDecision(answer)}, claimDecision("the route is added and checked on 3003"))
+	model := askTurn(t, false, []core.Decision{claimDecision(answer)}, claimDecision("the route is added and checked on 3003"))
 	if model.sideRuns != 1 {
 		t.Fatalf("the side call ran %d times, want 1", model.sideRuns)
 	}
-	if len(model.waiting) != 1 || model.waiting[0] != subagent.WaitingAnswer {
-		t.Errorf("while the side call ran the roster showed %v, want [%s]", model.waiting, subagent.WaitingAnswer)
+	if len(model.waiting) != 1 || model.waiting[0] != subagents.WaitingAnswer {
+		t.Errorf("while the side call ran the roster showed %v, want [%s]", model.waiting, subagents.WaitingAnswer)
 	}
 	if lead, side := model.script.requests(leadKey)[0].Messages[0], model.sideSaw[0]; side.Role != lead.Role || side.Content != lead.Content || strings.Contains(lead.Content, "answer a sub-agent's ask in one line") {
 		t.Errorf("the side call does not open on the lead's own first message, which lacks answer_asks:\nlead %+v\nside %+v", lead, side)
 	}
-	if asked := model.sideSaw[len(model.sideSaw)-1]; asked.Role != llm.RoleUser || !strings.Contains(asked.Content, "answer a sub-agent's ask in one line") {
+	if asked := model.sideSaw[len(model.sideSaw)-1]; asked.Role != core.RoleUser || !strings.Contains(asked.Content, "answer a sub-agent's ask in one line") {
 		t.Errorf("the side call's last user message does not carry the answer_asks rule: %+v", asked)
 	}
 	planned := false
 	for _, message := range model.sideSaw {
-		planned = planned || (message.Role == llm.RoleTool && strings.Contains(message.Content, "the users route goes first"))
+		planned = planned || (message.Role == core.RoleTool && strings.Contains(message.Content, "the users route goes first"))
 	}
 	if !planned {
 		t.Errorf("the side call did not see the orchestrator's step before the spawn: %+v", model.sideSaw)
@@ -108,8 +108,8 @@ func TestASubAgentAsksAndItsNextStepSeesTheOrchestratorsAnswer(t *testing.T) {
 }
 
 func TestARunThatAskedEndsFinishedAndItsOpenGrantStillNeedsContext(t *testing.T) {
-	outside := toolCallDecision(llm.ToolCall{ID: "call-write", Name: "write", Arguments: json.RawMessage(`{"path":"src/orders.ts","content":"x"}`)})
-	model := askTurn(t, false, []llm.Decision{claimDecision("yes, on 3000")}, outside, claimDecision("the route is added"))
+	outside := toolCallDecision(core.ToolCall{ID: "call-write", Name: "write", Arguments: json.RawMessage(`{"path":"src/orders.ts","content":"x"}`)})
+	model := askTurn(t, false, []core.Decision{claimDecision("yes, on 3000")}, outside, claimDecision("the route is added"))
 	listed, err := subAgentsTool{orchestrator: model.spawn}.Run(t.Context(), nil)
 	if err != nil || !strings.Contains(listed.Content, "sub-1: no definition, finished") {
 		t.Errorf("subagents after the run ended listed %q, %v, want sub-1 finished", listed.Content, err)

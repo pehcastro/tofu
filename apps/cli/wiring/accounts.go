@@ -21,7 +21,7 @@ import (
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/catalog"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/quota"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
@@ -40,51 +40,51 @@ const (
 
 type Accounts struct {
 	Dir      string
-	Provider cred.Provider
-	Spec     cred.Spec
-	Store    *cred.Store
+	Provider accounts.Provider
+	Spec     accounts.Spec
+	Store    *accounts.Store
 	ModelID  string
 	URLs     map[quota.Provider]string
 	Now      func() time.Time
-	Fixed    turn.Model
+	Fixed    loop.Model
 
 	spends   []string
 	effort   llm.Effort
-	wrap     func(turn.Model, recall.Budget) (turn.Model, error)
+	wrap     func(loop.Model, recall.Budget) (loop.Model, error)
 	budget   recall.Budget
-	budgetOf func(models.Model) (recall.Budget, error)
+	budgetOf func(catalog.Model) (recall.Budget, error)
 
-	verbosity        models.Verbosity
-	reasoningContext models.ReasoningContext
+	verbosity        catalog.Verbosity
+	reasoningContext catalog.ReasoningContext
 
 	polling   sync.Once
 	poller    *quota.Poller
 	pollerErr error
 }
 
-func FixedAccounts(model turn.Model) *Accounts {
+func FixedAccounts(model loop.Model) *Accounts {
 	return &Accounts{Now: time.Now, Fixed: model}
 }
 
-func (a *Accounts) ForTurn() turn.Accounts {
+func (a *Accounts) ForTurn() loop.Accounts {
 	if a.Fixed != nil {
-		return turn.Accounts{Pick: a.Pick, Next: a.Next, Resets: a.resets}
+		return loop.Accounts{Pick: a.Pick, Next: a.Next, Resets: a.resets}
 	}
-	moveOn := func(ctx context.Context, left []string, conversationTokens int) (turn.Moved, error) {
+	moveOn := func(ctx context.Context, left []string, conversationTokens int) (loop.Moved, error) {
 		return a.continuing().move(ctx, left, conversationTokens)
 	}
-	return turn.Accounts{Pick: a.Pick, Next: a.Next, Resets: a.resets, Elsewhere: moveOn, Keep: a.keep}
+	return loop.Accounts{Pick: a.Pick, Next: a.Next, Resets: a.resets, Elsewhere: moveOn, Keep: a.keep}
 }
 
-func (a *Accounts) keep(ctx context.Context, held turn.Held) (turn.Account, string, error) {
+func (a *Accounts) keep(ctx context.Context, held loop.Held) (loop.Account, string, error) {
 	candidates, rows, err := a.read(ctx)
 	if err != nil {
-		return turn.Account{}, "", err
+		return loop.Account{}, "", err
 	}
-	return keeping(candidates, held, a.Dir, a.spends, a.Now(), func(choice quota.Choice) (turn.Account, error) { return a.account(choice, rows) })
+	return keeping(candidates, held, a.Dir, a.spends, a.Now(), func(choice quota.Choice) (loop.Account, error) { return a.account(choice, rows) })
 }
 
-func keeping(candidates []quota.Candidate, held turn.Held, dir string, spends []string, now time.Time, on func(quota.Choice) (turn.Account, error)) (turn.Account, string, error) {
+func keeping(candidates []quota.Candidate, held loop.Held, dir string, spends []string, now time.Time, on func(quota.Choice) (loop.Account, error)) (loop.Account, string, error) {
 	ttl := settingspkg.TextSaying(cmp.Or(dir, "."), settingspkg.LeadCache, nil)
 	if ttl == konst.SubscriptionCacheHistory5m {
 		ttl = konst.SubscriptionCacheTTL
@@ -93,17 +93,17 @@ func keeping(candidates []quota.Candidate, held turn.Held, dir string, spends []
 	at := slices.IndexFunc(candidates, func(candidate quota.Candidate) bool { return candidate.ID == held.ID })
 	switch {
 	case held.Idle >= lifetime:
-		return turn.Account{}, fmt.Sprintf("account #%d last answered %s ago, past its %s cache, so this turn takes the account with the most headroom", held.ID, held.Idle.Round(time.Minute), ttl), nil
+		return loop.Account{}, fmt.Sprintf("account #%d last answered %s ago, past its %s cache, so this turn takes the account with the most headroom", held.ID, held.Idle.Round(time.Minute), ttl), nil
 	case at < 0:
-		return turn.Account{}, fmt.Sprintf("account #%d is no longer signed in, so this turn moves to another account and writes its cache there once", held.ID), nil
+		return loop.Account{}, fmt.Sprintf("account #%d is no longer signed in, so this turn moves to another account and writes its cache there once", held.ID), nil
 	case quota.Spent(candidates[at].Report, spends, now):
-		return turn.Account{}, fmt.Sprintf("account #%d is at its limit, so this turn moves to the account with the most headroom and writes its cache there once", held.ID), nil
+		return loop.Account{}, fmt.Sprintf("account #%d is at its limit, so this turn moves to the account with the most headroom and writes its cache there once", held.ID), nil
 	}
 	kept, err := on(quota.Choice{ID: held.ID, Headroom: quota.Left(candidates[at].Report, spends, now)})
 	return kept, "", err
 }
 
-func (a *Accounts) resets(ctx context.Context, pinned turn.Account) (time.Time, bool) {
+func (a *Accounts) resets(ctx context.Context, pinned loop.Account) (time.Time, bool) {
 	if a.Fixed != nil {
 		return time.Time{}, false
 	}
@@ -126,12 +126,12 @@ func (s StandIns) Mine() []frame.Quota {
 	return slices.DeleteFunc(slices.Clone(s.Readings), func(reading frame.Quota) bool { return reading.Source() != s.Source })
 }
 
-func (s StandIns) account(ctx context.Context, reading frame.Quota) (turn.Account, error) {
+func (s StandIns) account(ctx context.Context, reading frame.Quota) (loop.Account, error) {
 	_, window, _ := strings.Cut(reading.Label, " ")
 	return s.on(ctx, quota.Choice{ID: reading.AccountID(), Headroom: quota.Headroom{Fraction: 1 - reading.Fraction, Window: window}})
 }
 
-func (s StandIns) on(ctx context.Context, choice quota.Choice) (turn.Account, error) {
+func (s StandIns) on(ctx context.Context, choice quota.Choice) (loop.Account, error) {
 	account, err := s.Held.Pick(ctx)
 	account.ID, account.Headroom, account.Window = choice.ID, choice.Headroom.Fraction, choice.Headroom.Window
 	return account, err
@@ -150,29 +150,29 @@ func (s StandIns) candidates() []quota.Candidate {
 	return candidates
 }
 
-func (s StandIns) ForTurn() turn.Accounts {
-	return turn.Accounts{
-		Pick: func(ctx context.Context) (turn.Account, error) {
+func (s StandIns) ForTurn() loop.Accounts {
+	return loop.Accounts{
+		Pick: func(ctx context.Context) (loop.Account, error) {
 			choice, _ := quota.Pick(s.candidates(), quota.Provider(s.Source), s.Held.spends, s.Held.Now())
 			return s.on(ctx, choice)
 		},
-		Keep: func(ctx context.Context, held turn.Held) (turn.Account, string, error) {
-			return keeping(s.candidates(), held, s.Held.Dir, s.Held.spends, s.Held.Now(), func(choice quota.Choice) (turn.Account, error) { return s.on(ctx, choice) })
+		Keep: func(ctx context.Context, held loop.Held) (loop.Account, string, error) {
+			return keeping(s.candidates(), held, s.Held.Dir, s.Held.spends, s.Held.Now(), func(choice quota.Choice) (loop.Account, error) { return s.on(ctx, choice) })
 		},
-		Next: func(ctx context.Context, pinned turn.Account) (turn.Account, bool, error) {
+		Next: func(ctx context.Context, pinned loop.Account) (loop.Account, bool, error) {
 			candidates, now := s.candidates(), s.Held.Now()
 			pinnedAt := slices.IndexFunc(candidates, func(candidate quota.Candidate) bool { return candidate.ID == pinned.ID })
 			if pinnedAt < 0 || !quota.Spent(candidates[pinnedAt].Report, s.Held.spends, now) || len(candidates) == 1 {
-				return turn.Account{}, false, nil
+				return loop.Account{}, false, nil
 			}
 			if err := everySpent(s.Source, candidates, s.Held.spends, now); err != nil {
-				return turn.Account{}, false, err
+				return loop.Account{}, false, err
 			}
 			choice, _ := quota.Pick(candidates, quota.Provider(s.Source), s.Held.spends, now)
 			next, err := s.on(ctx, choice)
 			return next, err == nil, err
 		},
-		Resets: func(_ context.Context, pinned turn.Account) (time.Time, bool) {
+		Resets: func(_ context.Context, pinned loop.Account) (time.Time, bool) {
 			mine := s.Mine()
 			if pinnedAt := slices.IndexFunc(mine, func(reading frame.Quota) bool { return reading.AccountID() == pinned.ID }); pinnedAt >= 0 {
 				return mine[pinnedAt].ResetsAt, !mine[pinnedAt].ResetsAt.IsZero()
@@ -193,56 +193,56 @@ func (a *Accounts) Close() {
 	}
 }
 
-func (a *Accounts) wrapped(model turn.Model) (turn.Model, error) {
+func (a *Accounts) wrapped(model loop.Model) (loop.Model, error) {
 	if a.wrap == nil {
 		return model, nil
 	}
 	return a.wrap(model, a.budget)
 }
 
-func (a *Accounts) Pick(ctx context.Context) (turn.Account, error) {
+func (a *Accounts) Pick(ctx context.Context) (loop.Account, error) {
 	if a.Fixed != nil {
 		model, err := a.wrapped(a.Fixed)
-		return turn.Account{Model: model}, err
+		return loop.Account{Model: model}, err
 	}
 	candidates, rows, err := a.read(ctx)
 	if err != nil {
-		return turn.Account{}, err
+		return loop.Account{}, err
 	}
 	choice, found := quota.Pick(candidates, quota.Provider(a.Provider), a.spends, a.Now())
 	if !found {
-		return turn.Account{}, fmt.Errorf("no %s subscription credential, run %s", a.Provider, LoginHint(string(a.Provider)))
+		return loop.Account{}, fmt.Errorf("no %s subscription credential, run %s", a.Provider, LoginHint(string(a.Provider)))
 	}
 	return a.account(choice, rows)
 }
 
-func (a *Accounts) Next(ctx context.Context, pinned turn.Account) (turn.Account, bool, error) {
+func (a *Accounts) Next(ctx context.Context, pinned loop.Account) (loop.Account, bool, error) {
 	if a.Fixed != nil || pinned.ID == 0 {
-		return turn.Account{}, false, nil
+		return loop.Account{}, false, nil
 	}
 	candidates, rows, err := a.read(ctx)
 	if err != nil {
-		return turn.Account{}, false, err
+		return loop.Account{}, false, err
 	}
 	serving := slices.ContainsFunc(candidates, func(candidate quota.Candidate) bool {
 		return candidate.ID == pinned.ID && !quota.Spent(candidate.Report, a.spends, a.Now())
 	})
 	if serving || len(candidates) < 2 {
-		return turn.Account{}, false, nil
+		return loop.Account{}, false, nil
 	}
 	if err := everySpent(string(a.Provider), candidates, a.spends, a.Now()); err != nil {
-		return turn.Account{}, false, err
+		return loop.Account{}, false, err
 	}
 	choice, found := quota.Pick(candidates, quota.Provider(a.Provider), a.spends, a.Now())
 	if !found || choice.ID == pinned.ID {
-		return turn.Account{}, false, nil
+		return loop.Account{}, false, nil
 	}
 	moved, err := a.account(choice, rows)
 	return moved, err == nil, err
 }
 
 func everySpent(source string, candidates []quota.Candidate, spends []string, now time.Time) error {
-	spent := &turn.EveryAccountSpent{Source: source}
+	spent := &loop.EveryAccountSpent{Source: source}
 	for _, candidate := range candidates {
 		if !quota.Spent(candidate.Report, spends, now) {
 			return nil
@@ -255,13 +255,13 @@ func everySpent(source string, candidates []quota.Candidate, spends []string, no
 	return spent
 }
 
-func (a *Accounts) read(ctx context.Context) ([]quota.Candidate, map[int64]cred.Row, error) {
+func (a *Accounts) read(ctx context.Context) ([]quota.Candidate, map[int64]accounts.Row, error) {
 	stored, err := a.Store.List()
 	if err != nil {
 		return nil, nil, err
 	}
 	now := a.Now()
-	var mine []cred.Row
+	var mine []accounts.Row
 	for _, row := range stored {
 		if row.Credential.Provider == a.Provider && row.Unusable(now) == "" {
 			mine = append(mine, row)
@@ -276,7 +276,7 @@ func (a *Accounts) read(ctx context.Context) ([]quota.Candidate, map[int64]cred.
 		return nil, nil, err
 	}
 	candidates := make([]quota.Candidate, 0, len(mine))
-	rows := make(map[int64]cred.Row, len(mine))
+	rows := make(map[int64]accounts.Row, len(mine))
 	for i, row := range mine {
 		rows[row.ID] = row
 		candidates = append(candidates, quota.Candidate{
@@ -294,18 +294,18 @@ func (a *Accounts) Quota() (*quota.Poller, error) {
 	return a.poller, a.pollerErr
 }
 
-func (a *Accounts) account(choice quota.Choice, rows map[int64]cred.Row) (turn.Account, error) {
+func (a *Accounts) account(choice quota.Choice, rows map[int64]accounts.Row) (loop.Account, error) {
 	row := rows[choice.ID]
 	model, err := a.modelOn(row)
 	if err != nil {
-		return turn.Account{}, err
+		return loop.Account{}, err
 	}
 	wrapped, err := a.wrapped(model)
 	if err != nil {
-		return turn.Account{}, err
+		return loop.Account{}, err
 	}
 	_ = a.Store.MarkUsed(choice.ID, a.Now())
-	return turn.Account{
+	return loop.Account{
 		ID:       choice.ID,
 		Model:    wrapped,
 		Headroom: choice.Headroom.Fraction,
@@ -313,8 +313,8 @@ func (a *Accounts) account(choice quota.Choice, rows map[int64]cred.Row) (turn.A
 	}, nil
 }
 
-func (a *Accounts) modelOn(row cred.Row) (turn.Model, error) {
-	token := cred.NewAccountManager(a.Store, a.Spec, row.ID).Token
+func (a *Accounts) modelOn(row accounts.Row) (loop.Model, error) {
+	token := accounts.NewAccountManager(a.Store, a.Spec, row.ID).Token
 	session, err := SessionID()
 	if err != nil {
 		return nil, err
@@ -327,7 +327,7 @@ func (a *Accounts) modelOn(row cred.Row) (turn.Model, error) {
 	heard := quota.Account{Provider: quota.Provider(a.Provider), AccountID: row.Credential.Identity.AccountID, Row: row.ID}
 	named := transport.Account{Source: string(a.Provider), Label: strings.TrimSpace("#" + strconv.FormatInt(row.ID, 10) + " " + row.Credential.Identity.Email), SignIn: LoginHint(string(a.Provider))}
 	onHeaders := func(header http.Header) { _ = poller.Heard(heard, header) }
-	if a.Provider == cred.CodexSub {
+	if a.Provider == accounts.CodexSub {
 		wire, err := codex.New(codex.Config{
 			Model:          a.ModelID,
 			Token:          token,
@@ -361,7 +361,7 @@ func (a *Accounts) modelOn(row cred.Row) (turn.Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	return turn.Subscription{Wire: wire, Effort: a.effort, CacheTTL: settingspkg.TextSaying(a.Dir, settingspkg.LeadCache, nil)}, nil
+	return loop.Subscription{Wire: wire, Effort: a.effort, CacheTTL: settingspkg.TextSaying(a.Dir, settingspkg.LeadCache, nil)}, nil
 }
 
 func KeepAccountsAlive(held HeldStore, note, told func(string)) (stop func()) {
@@ -372,14 +372,14 @@ func KeepAccountsAlive(held HeldStore, note, told func(string)) (stop func()) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	report := CrashTold(".", told)
-	safe.Go(report, "credential keeper", func() {
+	recover.Go(report, "credential keeper", func() {
 		defer close(done)
 		lock := claimKeeper(ctx, held.Path+keeperLockSuffix, note)
 		if lock == nil {
 			return
 		}
 		defer func() { _ = sys.Unlock(lock) }()
-		safe.Loop(report, "credential keeper", ctx.Done(), func() { cred.NewKeeper(held.Store, note).Run(ctx) })
+		recover.Loop(report, "credential keeper", ctx.Done(), func() { accounts.NewKeeper(held.Store, note).Run(ctx) })
 	})
 	return func() {
 		cancel()
@@ -412,8 +412,8 @@ func claimKeeper(ctx context.Context, path string, note func(string)) *os.File {
 	}
 }
 
-func ClientVersion(versions settingspkg.Fingerprint, provider cred.Provider) string {
-	if provider == cred.CodexSub {
+func ClientVersion(versions settingspkg.Fingerprint, provider accounts.Provider) string {
+	if provider == accounts.CodexSub {
 		return versions.Codex
 	}
 	return versions.ClaudeCode
@@ -429,15 +429,15 @@ func SubFingerprint(dir string) (settingspkg.Fingerprint, func(version string) e
 	}
 }
 
-func MetaModel(selected models.Model, effort llm.Effort) (turn.Model, error) {
-	key, err := jev.KeyFor(sys.CredentialFileName, sys.MetaMuseKeyName)
+func MetaModel(selected catalog.Model, effort llm.Effort) (loop.Model, error) {
+	key, err := core.KeyFor(sys.CredentialFileName, sys.MetaMuseKeyName)
 	if err != nil {
 		return nil, fmt.Errorf("%w: run %s", err, LoginHint(MetaName))
 	}
 	registry, _ := ModelRegistry()
 	price := registry.Prices[selected.Slug()]
 	wire, err := codex.New(codex.Config{
-		BaseURL:   models.MetaBaseURL() + codex.KeyPath,
+		BaseURL:   catalog.MetaBaseURL() + codex.KeyPath,
 		Model:     selected.ID,
 		Token:     func(context.Context, string) (string, error) { return key, nil },
 		Transport: TurnTransport(),
@@ -448,7 +448,7 @@ func MetaModel(selected models.Model, effort llm.Effort) (turn.Model, error) {
 	return CodexTurn{Wire: wire, Effort: effort, Verbosity: selected.Verbosity, ReasoningContext: selected.ReasoningContext}, err
 }
 
-func ListUSD(price models.Price, input, cached, output int) float64 {
+func ListUSD(price catalog.Price, input, cached, output int) float64 {
 	rates := price.Rates
 	for _, tier := range price.Tiers {
 		if input > tier.AboveTokens {
@@ -458,7 +458,7 @@ func ListUSD(price models.Price, input, cached, output int) float64 {
 	return (float64(input-cached)*rates.Input + float64(cached)*rates.CacheRead + float64(output)*rates.Output) / TokensPerMillion
 }
 
-func tallyMetaCall(model string, price models.Price, result codex.Result, header http.Header, failed error) {
+func tallyMetaCall(model string, price catalog.Price, result codex.Result, header http.Header, failed error) {
 	usage := result.Usage
 	use := ledger.KeyUse{Key: sys.MetaMuseKeyName, Provider: MetaName, Model: cmp.Or(result.Model, model),
 		Usage:      ledger.Usage{InputTokens: usage.Input, OutputTokens: usage.Output, CacheReadInputTokens: usage.CacheRead, ReasoningOutputTokens: usage.Reasoning},
@@ -474,7 +474,7 @@ func tallyMetaCall(model string, price models.Price, result codex.Result, header
 	_ = ledger.Tally(use)
 }
 
-func OpenAccounts(opts RunOpts, selected models.Model) (*Accounts, turn.Spend, error) {
+func OpenAccounts(opts RunOpts, selected catalog.Model) (*Accounts, loop.Spend, error) {
 	modelID := selected.ID
 	spend := WireSpend(opts.Wire)
 	if opts.Wire == WireKey {
@@ -485,16 +485,16 @@ func OpenAccounts(opts RunOpts, selected models.Model) (*Accounts, turn.Spend, e
 		model, err := MetaModel(selected, opts.Effort)
 		return &Accounts{ModelID: modelID, Now: time.Now, Fixed: model}, spend, err
 	}
-	provider := cred.Provider(selected.Subscription)
-	spec, err := cred.Lookup(string(provider))
+	provider := accounts.Provider(selected.Subscription)
+	spec, err := accounts.Lookup(string(provider))
 	if err != nil {
 		return nil, spend, err
 	}
-	path, err := cred.Path()
+	path, err := accounts.Path()
 	if err != nil {
 		return nil, spend, err
 	}
-	store, err := cred.Open(path)
+	store, err := accounts.Open(path)
 	if err != nil {
 		return nil, spend, err
 	}

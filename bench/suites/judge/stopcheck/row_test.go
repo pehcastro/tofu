@@ -12,9 +12,9 @@ import (
 )
 
 func TestToLedgerAnswersAndBackCarryTheSameKindAndValue(t *testing.T) {
-	in := map[string]jev.Answer{
-		"effort":     {Kind: jev.QuestionScore, Score: 1.9},
-		"worth_this": {Kind: jev.QuestionNoul, Noul: 0.48},
+	in := map[string]core.Answer{
+		"effort":     {Kind: core.QuestionScore, Score: 1.9},
+		"worth_this": {Kind: core.QuestionNoul, Noul: 0.48},
 	}
 	converted := toLedgerAnswers(1, in)
 	back := toJevAnswers(converted)

@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -13,19 +13,19 @@ import (
 	"tofu/internal/store/session"
 )
 
-func messageTo(id, to, text string) llm.Decision {
+func messageTo(id, to, text string) core.Decision {
 	args, err := json.Marshal(messageArgs{To: to, Text: text})
 	if err != nil {
 		panic(err)
 	}
-	return toolCallDecision(llm.ToolCall{ID: id, Name: "message", Arguments: args})
+	return toolCallDecision(core.ToolCall{ID: id, Name: "message", Arguments: args})
 }
 
 func answerTo(t *testing.T, model *crew, call string) string {
 	t.Helper()
 	for _, request := range model.requests(leadKey) {
 		for _, message := range request.Messages {
-			if message.Role == llm.RoleTool && message.ToolCallID == call {
+			if message.Role == core.RoleTool && message.ToolCallID == call {
 				return WithoutToolRef(message.Content)
 			}
 		}
@@ -35,7 +35,7 @@ func answerTo(t *testing.T, model *crew, call string) string {
 }
 
 func TestAMessageToASubAgentSpawnedInAnEarlierTurnReachesIt(t *testing.T) {
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey: {
 			spawnCall("call-spawn", usersRoute, "src/users.ts"),
 			messageTo("call-running", "sub-1", "use port 3003"), claimDecision("told sub-1"),
@@ -43,7 +43,7 @@ func TestAMessageToASubAgentSpawnedInAnEarlierTurnReachesIt(t *testing.T) {
 			claimDecision("all done"),
 		},
 		usersRoute: {
-			toolCallDecision(llm.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"plan.md"}`)}),
+			toolCallDecision(core.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"plan.md"}`)}),
 			claimDecision("the users route is added on 3003"),
 			claimDecision("the health route is added"),
 		},
@@ -73,8 +73,8 @@ func TestAMessageToASubAgentSpawnedInAnEarlierTurnReachesIt(t *testing.T) {
 		t.Errorf("a message to sub-1 after it ended answered %q, want it resumed", said)
 	}
 	resumed := asked[2].Messages
-	if !slices.ContainsFunc(resumed, func(message llm.Message) bool {
-		return message.Role == llm.RoleAssistant && strings.Contains(message.Content, "the users route is added on 3003")
+	if !slices.ContainsFunc(resumed, func(message core.Message) bool {
+		return message.Role == core.RoleAssistant && strings.Contains(message.Content, "the users route is added on 3003")
 	}) || !strings.HasSuffix(lastUser(asked[2]), "also add /health") {
 		t.Errorf("the resumed sub-1 did not see its own history and the lead's text: %+v", resumed)
 	}
@@ -89,8 +89,8 @@ func TestTheLeadStopsOneOfTwoRunningSubAgentsAndTheOtherKeepsRunning(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	model := newCrew(map[string][]llm.Decision{
-		leadKey:     {besideARead(spawnCall("call-users", usersRoute, "src/users.ts")), spawnCall("call-orders", ordersRoute, "src/orders.ts"), toolCallDecision(llm.ToolCall{ID: "call-stop", Name: "message", Arguments: stop}), claimDecision("sub-1 is stopped"), claimDecision("noted"), claimDecision("done")},
+	model := newCrew(map[string][]core.Decision{
+		leadKey:     {besideARead(spawnCall("call-users", usersRoute, "src/users.ts")), spawnCall("call-orders", ordersRoute, "src/orders.ts"), toolCallDecision(core.ToolCall{ID: "call-stop", Name: "message", Arguments: stop}), claimDecision("sub-1 is stopped"), claimDecision("noted"), claimDecision("done")},
 		usersRoute:  {claimDecision("the users route is added")},
 		ordersRoute: {claimDecision("the orders route is added")},
 	})
@@ -101,8 +101,8 @@ func TestTheLeadStopsOneOfTwoRunningSubAgentsAndTheOtherKeepsRunning(t *testing.
 	spawn := lead.Tools.byName["spawn"].(*SpawnTool)
 	typed := make(chan string, 1)
 	led := startLead(context.Background(), lead, typed)
-	states := func() map[string]subagent.State {
-		held := map[string]subagent.State{}
+	states := func() map[string]subagents.State {
+		held := map[string]subagents.State{}
 		for _, agent := range spawn.roster.SubAgents() {
 			held[agent.ID] = agent.State
 		}
@@ -110,13 +110,13 @@ func TestTheLeadStopsOneOfTwoRunningSubAgentsAndTheOtherKeepsRunning(t *testing.
 	}
 	waitFor(t, "the lead's spawn turn to end", func() bool { return len(led.turns()) == 1 })
 	typed <- "stop sub-1"
-	waitFor(t, "sub-1 to stop", func() bool { return states()["sub-1"] == subagent.Parked })
-	if said := answerTo(t, model, "call-stop"); strings.HasPrefix(said, "error:") || states()["sub-2"] != subagent.Working || model.answered(ordersRoute) != 0 {
+	waitFor(t, "sub-1 to stop", func() bool { return states()["sub-1"] == subagents.Parked })
+	if said := answerTo(t, model, "call-stop"); strings.HasPrefix(said, "error:") || states()["sub-2"] != subagents.Working || model.answered(ordersRoute) != 0 {
 		t.Fatalf("stopping sub-1 answered %q and left sub-2 %s, want sub-1 stopped and sub-2 still running", said, states()["sub-2"])
 	}
 	orders()
 	led.wait(t)
-	if states()["sub-2"] != subagent.Finished || model.answered(ordersRoute) != 1 {
+	if states()["sub-2"] != subagents.Finished || model.answered(ordersRoute) != 1 {
 		t.Fatalf("sub-2 ended %s, want it to finish its work after sub-1 was stopped", states()["sub-2"])
 	}
 }
@@ -126,8 +126,8 @@ func TestAMessageToAnUnknownNameIsRefusedListingTheNames(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	model := newCrew(map[string][]llm.Decision{
-		leadKey: {toolCallDecision(llm.ToolCall{ID: "call-spawn", Name: "spawn", Arguments: brief}), messageTo("call-message", "ts-dev-9", "also add /health"),
+	model := newCrew(map[string][]core.Decision{
+		leadKey: {toolCallDecision(core.ToolCall{ID: "call-spawn", Name: "spawn", Arguments: brief}), messageTo("call-message", "ts-dev-9", "also add /health"),
 			claimDecision("ts-dev-9 is no one"), claimDecision("done")},
 		usersRoute: {claimDecision("the users route is added")},
 	})
@@ -139,9 +139,9 @@ func TestAMessageToAnUnknownNameIsRefusedListingTheNames(t *testing.T) {
 }
 
 func TestASubAgentMessagedAfterItEndedResendsItsLastRequestUnchangedThinkingIncluded(t *testing.T) {
-	thought := toolCallDecision(llm.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"plan.md"}`)})
-	thought.Thinking = llm.Thinking{Text: "the plan names the route", Signature: "signed-by-the-wire"}
-	model := newCrew(map[string][]llm.Decision{
+	thought := toolCallDecision(core.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"plan.md"}`)})
+	thought.Thinking = core.Thinking{Text: "the plan names the route", Signature: "signed-by-the-wire"}
+	model := newCrew(map[string][]core.Decision{
 		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), messageTo("call-ended", "sub-1", "also add /health"), claimDecision("asked sub-1 for more"), claimDecision("all done")},
 		usersRoute: {thought, claimDecision("the users route is added"), claimDecision("the health route is added")},
 	})
@@ -154,7 +154,7 @@ func TestASubAgentMessagedAfterItEndedResendsItsLastRequestUnchangedThinkingIncl
 	}
 	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(read), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096, ArtifactDir: filepath.Join(root, "artifacts"),
 		NewID: func() string { return "turn-lead" }, Sessions: session.NewStore(t.TempDir()), Session: session.NewEventID()}
-	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	lead := base
 	lead.Task, lead.Tools, lead.Inbox = "hand the work to a sub-agent", NewRegistry(read, spawn), spawn.Inbox
 	led := startLead(context.Background(), lead, nil)

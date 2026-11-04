@@ -20,11 +20,11 @@ type RerunQuestion struct {
 	Straddle bool
 }
 
-func RerunAgreement(ctx context.Context, wire jev.Wire, battery []jev.Question, state any, reruns int) ([]RerunQuestion, []typesafe.Call, error) {
+func RerunAgreement(ctx context.Context, wire core.Wire, battery []core.Question, state any, reruns int) ([]RerunQuestion, []typesafe.Call, error) {
 	values := make(map[string][]float64, len(battery))
 	var calls []typesafe.Call
 	for run := 0; run < reruns; run++ {
-		call := typesafe.Ask(ctx, wire, jev.Request{State: state, Questions: battery})
+		call := typesafe.Ask(ctx, wire, core.Request{State: state, Questions: battery})
 		calls = append(calls, call)
 		if call.Err != nil {
 			return nil, calls, fmt.Errorf("rerun %d: %w", run, call.Err)
@@ -50,13 +50,13 @@ func RerunAgreement(ctx context.Context, wire jev.Wire, battery []jev.Question, 
 	return results, calls, nil
 }
 
-func answerValue(a jev.Answer) float64 {
+func answerValue(a core.Answer) float64 {
 	switch a.Kind {
-	case jev.QuestionNoul:
+	case core.QuestionNoul:
 		return a.Noul
-	case jev.QuestionScore:
+	case core.QuestionScore:
 		return a.Score
-	case jev.QuestionChoice:
+	case core.QuestionChoice:
 		return a.Confidence
 	}
 	panic("bench: unknown answer kind")

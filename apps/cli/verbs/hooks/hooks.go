@@ -9,8 +9,8 @@ import (
 	"strconv"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
-	"tofu/internal/agent/hooks"
+	cli "tofu/apps/cli/page"
+	hook "tofu/internal/agent/hooks"
 	"tofu/internal/host"
 	"tofu/internal/tools/shell/process"
 )
@@ -20,7 +20,7 @@ const Subcommands = "tofu hooks [trust] [--json]"
 func Verb(args []string, out, errOut io.Writer) int {
 	o := output.Verb{Name: "hooks", UsageLine: Subcommands, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	words := output.WithoutJSON(args)
-	engine := hook.Load(".", shell.Choice{})
+	engine := hook.Load(".", process.Choice{})
 	switch {
 	case len(words) == 0:
 		return hooksList(o, engine)

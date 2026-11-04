@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -16,16 +16,16 @@ import (
 	"tofu/internal/tools/contract"
 )
 
-func taskOpening(task string) llm.Message {
-	return llm.Message{Role: llm.RoleUser, Content: task, Origin: llm.Origin{Source: llm.SourceForkTask}}
+func taskOpening(task string) core.Message {
+	return core.Message{Role: core.RoleUser, Content: task, Origin: core.Origin{Source: core.SourceForkTask}}
 }
 
 type sizedRead struct{ bytes map[string]int }
 
 func (sizedRead) Name() string { return "read" }
 
-func (sizedRead) Definition() llm.Tool {
-	return llm.Tool{Name: "read", Parameters: map[string]any{"type": "object"}}
+func (sizedRead) Definition() core.Tool {
+	return core.Tool{Name: "read", Parameters: map[string]any{"type": "object"}}
 }
 
 func (r sizedRead) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
@@ -40,33 +40,33 @@ func (r sizedRead) Run(_ context.Context, raw json.RawMessage) (contract.Result,
 }
 
 type scriptedLead struct {
-	steps    func(step int) llm.Decision
+	steps    func(step int) core.Decision
 	state    string
 	stateErr error
-	asked    []llm.Request
+	asked    []core.Request
 	stated   []int
 	loud     bool
 }
 
 const stateCacheRead = 4321
 
-func (m *scriptedLead) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (m *scriptedLead) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	m.asked = append(m.asked, request)
-	if request.Messages[len(request.Messages)-1].Origin.Source == llm.SourceForkState {
+	if request.Messages[len(request.Messages)-1].Origin.Source == core.SourceForkState {
 		m.stated = append(m.stated, len(m.asked)-1)
 		m.loud = m.loud || !AskedQuietly(ctx)
-		return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: m.state, CacheReadTokens: stateCacheRead}, m.stateErr
+		return core.Decision{Build: "m1", Outcome: core.OutcomeMessage, Content: m.state, CacheReadTokens: stateCacheRead}, m.stateErr
 	}
 	m.loud = m.loud || AskedQuietly(ctx)
 	return m.steps(len(m.asked) - len(m.stated)), nil
 }
 
-func readStep(step int) llm.Decision {
+func readStep(step int) core.Decision {
 	id := "call-" + strconv.Itoa(step)
-	calls := []llm.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"f` + strconv.Itoa(step) + `.go"}`)}}
+	calls := []core.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"f` + strconv.Itoa(step) + `.go"}`)}}
 	if step == 1 {
-		calls = append(calls, llm.ToolCall{ID: "call-sh", Name: "bash", Arguments: json.RawMessage(`{"command":"cat > a.sh <<'EOF'\necho one\necho two\nEOF"}`)},
-			llm.ToolCall{ID: "call-w", Name: "write", Arguments: json.RawMessage(`{"path":"b.go","content":"package b"}`)})
+		calls = append(calls, core.ToolCall{ID: "call-sh", Name: "bash", Arguments: json.RawMessage(`{"command":"cat > a.sh <<'EOF'\necho one\necho two\nEOF"}`)},
+			core.ToolCall{ID: "call-w", Name: "write", Arguments: json.RawMessage(`{"path":"b.go","content":"package b"}`)})
 	}
 	return toolCallDecision(calls...)
 }
@@ -101,7 +101,7 @@ func TestAForkCarriesTheLeadsOwnStateAndPointsAtCallsLookupReadsBackFromAnyGener
 			for i := range 16 {
 				bytes["f"+strconv.Itoa(i+1)+".go"] = 3000
 			}
-			model := &scriptedLead{state: c.state, stateErr: c.stateErr, steps: func(step int) llm.Decision {
+			model := &scriptedLead{state: c.state, stateErr: c.stateErr, steps: func(step int) core.Decision {
 				if step > 14 {
 					return messageDecision()
 				}
@@ -125,12 +125,12 @@ func TestAForkCarriesTheLeadsOwnStateAndPointsAtCallsLookupReadsBackFromAnyGener
 			}
 			for n, at := range model.stated {
 				asked, before := model.asked[at], model.asked[at-1]
-				if len(asked.Messages) <= len(before.Messages) || !slices.EqualFunc(before.Messages, asked.Messages[:len(before.Messages)], func(a, b llm.Message) bool {
+				if len(asked.Messages) <= len(before.Messages) || !slices.EqualFunc(before.Messages, asked.Messages[:len(before.Messages)], func(a, b core.Message) bool {
 					return a.Content == b.Content && a.ToolCallID == b.ToolCallID
 				}) {
 					t.Errorf("state request %d does not open on the request before it, so it cannot read that request's cache", n+1)
 				}
-				if asked.ToolChoice != llm.ToolChoiceNone || !slices.EqualFunc(asked.Tools, before.Tools, func(a, b llm.Tool) bool { return a.Name == b.Name }) {
+				if asked.ToolChoice != core.ToolChoiceNone || !slices.EqualFunc(asked.Tools, before.Tools, func(a, b core.Tool) bool { return a.Name == b.Name }) {
 					t.Errorf("state request %d sends tool choice %v and tools other than the step's", n+1, asked.ToolChoice)
 				}
 			}
@@ -167,12 +167,12 @@ func TestAForkCarriesTheLeadsOwnStateAndPointsAtCallsLookupReadsBackFromAnyGener
 				t.Errorf("the first carry copies the script or lists the write:\n%s", first.Carry.Text)
 			}
 			after := model.asked[model.stated[0]+1]
-			if !slices.ContainsFunc(after.Tools, func(tool llm.Tool) bool { return tool.Name == LookupToolName }) {
+			if !slices.ContainsFunc(after.Tools, func(tool core.Tool) bool { return tool.Name == LookupToolName }) {
 				t.Fatal("a turn that records its session is not offered lookup")
 			}
 			tasks := 0
 			for _, message := range after.Messages {
-				if strings.Contains(message.Content, config.Task) && message.Origin.Source != llm.SourceForkCarry {
+				if strings.Contains(message.Content, config.Task) && message.Origin.Source != core.SourceForkCarry {
 					tasks++
 				}
 			}
@@ -194,7 +194,7 @@ func TestAForkCarriesTheLeadsOwnStateAndPointsAtCallsLookupReadsBackFromAnyGener
 }
 
 func TestATrimOfResultsAlreadyReadRunsWhenTheBudgetIsCrossedAndTheForkOnlyIfItIsNotEnough(t *testing.T) {
-	model := &scriptedLead{state: "unused", steps: func(step int) llm.Decision {
+	model := &scriptedLead{state: "unused", steps: func(step int) core.Decision {
 		if step > 8 {
 			return messageDecision()
 		}
@@ -244,7 +244,7 @@ func TestATrimOfResultsAlreadyReadRunsWhenTheBudgetIsCrossedAndTheForkOnlyIfItIs
 	if err != nil || !slices.ContainsFunc(facts, pointed) {
 		t.Errorf("a later fork would not point at the trimmed read of f1.go, %v:\n%s", err, strings.Join(facts, "\n"))
 	}
-	if slices.ContainsFunc(model.asked[0].Tools, func(tool llm.Tool) bool { return tool.Name == LookupToolName }) {
+	if slices.ContainsFunc(model.asked[0].Tools, func(tool core.Tool) bool { return tool.Name == LookupToolName }) {
 		t.Error("a turn that records no session is offered lookup")
 	}
 }
@@ -255,15 +255,15 @@ func TestAForkKeepsTheTaskOnceCountsOnFromTheChainAndNeverGrows(t *testing.T) {
 		t.Fatal(err)
 	}
 	const task = "rename the parser"
-	messages := []llm.Message{
-		{Role: llm.RoleSystem, Content: "you are tofu"},
-		{Role: llm.RoleUser, Content: "this is fork 4.\nan older carry"},
-		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "c0", Name: "read", Arguments: json.RawMessage(`{"path":"old.go"}`)}}},
-		{Role: llm.RoleTool, ToolCallID: "c0", Content: strings.Repeat("a line of the old parser\n", 120)},
-		{Role: llm.RoleAssistant, Content: "the older turn is done"},
-		{Role: llm.RoleUser, Content: task, Origin: llm.Origin{Source: llm.SourceTask}},
-		{Role: llm.RoleAssistant, Thinking: llm.Thinking{Text: "read a.go first", Signature: "signed"}, ToolCalls: []llm.ToolCall{{ID: "c1", Name: "read", Arguments: json.RawMessage(`{"path":"a.go"}`)}}},
-		{Role: llm.RoleTool, ToolCallID: "c1", Content: "package a"},
+	messages := []core.Message{
+		{Role: core.RoleSystem, Content: "you are tofu"},
+		{Role: core.RoleUser, Content: "this is fork 4.\nan older carry"},
+		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c0", Name: "read", Arguments: json.RawMessage(`{"path":"old.go"}`)}}},
+		{Role: core.RoleTool, ToolCallID: "c0", Content: strings.Repeat("a line of the old parser\n", 120)},
+		{Role: core.RoleAssistant, Content: "the older turn is done"},
+		{Role: core.RoleUser, Content: task, Origin: core.Origin{Source: core.SourceTask}},
+		{Role: core.RoleAssistant, Thinking: core.Thinking{Text: "read a.go first", Signature: "signed"}, ToolCalls: []core.ToolCall{{ID: "c1", Name: "read", Arguments: json.RawMessage(`{"path":"a.go"}`)}}},
+		{Role: core.RoleTool, ToolCallID: "c1", Content: "package a"},
 	}
 	fork, begun, err := forkHistory(artifacts, recall.Budget{}.At(1800, "a small budget"), taskOpening(task), messages, "", 1, 0)
 	if err != nil || fork == nil {
@@ -287,12 +287,12 @@ func TestAForkKeepsTheTaskOnceCountsOnFromTheChainAndNeverGrows(t *testing.T) {
 	if held != 1 || fork.TailMessages == 0 {
 		t.Fatalf("the fork holds the task %d times with a tail of %d", held, fork.TailMessages)
 	}
-	if begun[1].Content != task || begun[2].Origin.Source != llm.SourceForkCarry {
+	if begun[1].Content != task || begun[2].Origin.Source != core.SourceForkCarry {
 		t.Errorf("the forked conversation opens on %q and then %q, not the task and the carry", begun[1].Content, begun[2].Origin.Source)
 	}
-	tiny := []llm.Message{{Role: llm.RoleSystem, Content: strings.Repeat("you are tofu ", 900)}, {Role: llm.RoleUser, Content: task},
-		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "c1", Name: "read", Arguments: json.RawMessage(`{"path":"a.go"}`)}}},
-		{Role: llm.RoleTool, ToolCallID: "c1", Content: "package a"}}
+	tiny := []core.Message{{Role: core.RoleSystem, Content: strings.Repeat("you are tofu ", 900)}, {Role: core.RoleUser, Content: task},
+		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "c1", Name: "read", Arguments: json.RawMessage(`{"path":"a.go"}`)}}},
+		{Role: core.RoleTool, ToolCallID: "c1", Content: "package a"}}
 	if grown, _, err := forkHistory(artifacts, recall.Budget{}.At(3000, "a ceiling under the system prompt"), taskOpening(task), tiny, "", 1, 0); err != nil || grown != nil {
 		t.Errorf("a fork from %d to %d tokens was taken, %v", grown.TokensBefore, grown.TokensAfter, err)
 	}
@@ -302,25 +302,25 @@ type pictureRead struct{ calls int }
 
 func (*pictureRead) Name() string { return "read" }
 
-func (*pictureRead) Definition() llm.Tool {
-	return llm.Tool{Name: "read", Parameters: map[string]any{"type": "object"}}
+func (*pictureRead) Definition() core.Tool {
+	return core.Tool{Name: "read", Parameters: map[string]any{"type": "object"}}
 }
 
 func (r *pictureRead) Run(context.Context, json.RawMessage) (contract.Result, error) {
 	r.calls++
-	return contract.Result{Content: "a.png: png, 4x4", Images: []llm.Image{{MediaType: "image/png", Data: []byte("png")}}, Repeat: r.calls > 1}, nil
+	return contract.Result{Content: "a.png: png, 4x4", Images: []core.Image{{MediaType: "image/png", Data: []byte("png")}}, Repeat: r.calls > 1}, nil
 }
 
-func pictureStep(id string) []llm.Message {
-	return []llm.Message{
-		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"` + id + `.png"}`)}}},
-		{Role: llm.RoleTool, ToolCallID: id, Content: id + ".png: png, 4x4", Images: []llm.Image{{MediaType: "image/png", Data: []byte(id)}}},
+func pictureStep(id string) []core.Message {
+	return []core.Message{
+		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"` + id + `.png"}`)}}},
+		{Role: core.RoleTool, ToolCallID: id, Content: id + ".png: png, 4x4", Images: []core.Image{{MediaType: "image/png", Data: []byte(id)}}},
 	}
 }
 
 func TestAPictureAToolReadsReachesTheModelCountsAndIsTheFirstThingDropped(t *testing.T) {
-	model := &stubModel{decisions: []llm.Decision{toolCallDecision(llm.ToolCall{ID: "p1", Name: "read", Arguments: json.RawMessage(`{"path":"a.png"}`)}),
-		toolCallDecision(llm.ToolCall{ID: "p2", Name: "read", Arguments: json.RawMessage(`{"path":"a.png"}`)}), messageDecision()}}
+	model := &stubModel{decisions: []core.Decision{toolCallDecision(core.ToolCall{ID: "p1", Name: "read", Arguments: json.RawMessage(`{"path":"a.png"}`)}),
+		toolCallDecision(core.ToolCall{ID: "p2", Name: "read", Arguments: json.RawMessage(`{"path":"a.png"}`)}), messageDecision()}}
 	config := baseConfig(t, model, NewRegistry(&pictureRead{}))
 	if _, err := Run(context.Background(), config); err != nil {
 		t.Fatal(err)
@@ -337,10 +337,10 @@ func TestAPictureAToolReadsReachesTheModelCountsAndIsTheFirstThingDropped(t *tes
 		t.Fatal(err)
 	}
 	text := strings.Repeat("a line of the parser\n", 400)
-	messages := slices.Concat([]llm.Message{{Role: llm.RoleSystem, Content: "you are tofu"}, {Role: llm.RoleUser, Content: "look"}},
+	messages := slices.Concat([]core.Message{{Role: core.RoleSystem, Content: "you are tofu"}, {Role: core.RoleUser, Content: "look"}},
 		pictureStep("old"), pictureStep("new"),
-		[]llm.Message{{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "t1", Name: "read", Arguments: json.RawMessage(`{"path":"a.go"}`)}}},
-			{Role: llm.RoleTool, ToolCallID: "t1", Content: text}, {Role: llm.RoleAssistant, Content: "read them"}})
+		[]core.Message{{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "t1", Name: "read", Arguments: json.RawMessage(`{"path":"a.go"}`)}}},
+			{Role: core.RoleTool, ToolCallID: "t1", Content: text}, {Role: core.RoleAssistant, Content: "read them"}})
 	withPictures := HistoryTokens(artifacts.preview, messages)
 	budget, err := recall.BudgetUnder("m1", 0, konst.ContextCeilingTokens)
 	if err != nil {
@@ -358,13 +358,13 @@ func TestAPictureAToolReadsReachesTheModelCountsAndIsTheFirstThingDropped(t *tes
 		t.Errorf("a shrink that needed one picture's room dropped %d results: old picture %d, new picture %d, text kept %v", shrink.results, len(messages[3].Images), len(messages[5].Images), messages[7].Content == text)
 	}
 
-	var many []llm.Message
+	var many []core.Message
 	rewrites := 0
 	for i := range 2 * konst.ImageResultsKept {
 		sent := slices.Clone(many)
 		many = append(many, pictureStep("p"+strconv.Itoa(i))...)
 		keepNewestPictures(many)
-		if !slices.EqualFunc(sent, many[:len(sent)], func(a, b llm.Message) bool { return a.Content == b.Content && len(a.Images) == len(b.Images) }) {
+		if !slices.EqualFunc(sent, many[:len(sent)], func(a, b core.Message) bool { return a.Content == b.Content && len(a.Images) == len(b.Images) }) {
 			rewrites++
 		}
 		pictures := 0
@@ -385,13 +385,13 @@ func TestAPictureAToolReadsReachesTheModelCountsAndIsTheFirstThingDropped(t *tes
 		t.Fatalf("no fork, %v", err)
 	}
 	for _, message := range begun {
-		if message.Role == llm.RoleTool && len(message.Images) > 0 {
+		if message.Role == core.RoleTool && len(message.Images) > 0 {
 			t.Errorf("the fork carries the picture of %s", message.ToolCallID)
 		}
 	}
 }
 
-func stripped(messages []llm.Message) []llm.Message {
+func stripped(messages []core.Message) []core.Message {
 	plain := slices.Clone(messages)
 	for i := range plain {
 		plain[i].Images = nil
@@ -409,13 +409,13 @@ func TestTheCarrysLastWordIsWhatTheModelSaidNeverTheArgumentsOfItsCalls(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	messages := []llm.Message{
-		{Role: llm.RoleSystem, Content: "you are tofu"},
-		{Role: llm.RoleUser, Content: "write the generator"},
-		{Role: llm.RoleAssistant, Content: "the generator writes one line per rule"},
-		{Role: llm.RoleUser, Content: "go on"},
-		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "w1", Name: "write", Arguments: args}}},
-		{Role: llm.RoleTool, ToolCallID: "w1", Content: "wrote gen.sh"},
+	messages := []core.Message{
+		{Role: core.RoleSystem, Content: "you are tofu"},
+		{Role: core.RoleUser, Content: "write the generator"},
+		{Role: core.RoleAssistant, Content: "the generator writes one line per rule"},
+		{Role: core.RoleUser, Content: "go on"},
+		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "w1", Name: "write", Arguments: args}}},
+		{Role: core.RoleTool, ToolCallID: "w1", Content: "wrote gen.sh"},
 	}
 	fork, _, err := forkHistory(artifacts, recall.Budget{}.At(3000, "a budget the script crosses"), taskOpening("go on"), messages, "", 1, 0)
 	if err != nil || fork == nil {
@@ -431,13 +431,13 @@ func TestNoRequestOfAResumedConversationGoesPastTheCeiling(t *testing.T) {
 	said := func(bytes int) string {
 		return strings.Repeat("the parser is renamed and every caller follows it. ", bytes/50)
 	}
-	brief := llm.Message{Role: llm.RoleUser, Content: "rename the parser", Origin: llm.Origin{Source: llm.SourceBrief}}
-	words, reads := []llm.Message{brief}, []llm.Message{brief}
+	brief := core.Message{Role: core.RoleUser, Content: "rename the parser", Origin: core.Origin{Source: core.SourceBrief}}
+	words, reads := []core.Message{brief}, []core.Message{brief}
 	for i := range 6 {
 		id := "read-" + strconv.Itoa(i)
-		words = append(words, llm.Message{Role: llm.RoleAssistant, Content: said(8000)}, llm.Message{Role: llm.RoleUser, Content: "go on"})
-		reads = append(reads, llm.Message{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"p.go"}`)}}},
-			llm.Message{Role: llm.RoleTool, ToolCallID: id, Content: said(8000)})
+		words = append(words, core.Message{Role: core.RoleAssistant, Content: said(8000)}, core.Message{Role: core.RoleUser, Content: "go on"})
+		reads = append(reads, core.Message{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"p.go"}`)}}},
+			core.Message{Role: core.RoleTool, ToolCallID: id, Content: said(8000)})
 	}
 	preview, err := recall.LoadConfig()
 	if err != nil {
@@ -446,17 +446,17 @@ func TestNoRequestOfAResumedConversationGoesPastTheCeiling(t *testing.T) {
 	preview = preview.OnWire("anthropic")
 	for _, c := range []struct {
 		name    string
-		history []llm.Message
+		history []core.Message
 		task    string
 		refused bool
 	}{
 		{"its own words, which no trim frees", words, "go on with the rename", false},
-		{"one answer longer than the ceiling", []llm.Message{brief, {Role: llm.RoleAssistant, Content: said(60000)}}, "go on with the rename", false},
+		{"one answer longer than the ceiling", []core.Message{brief, {Role: core.RoleAssistant, Content: said(60000)}}, "go on with the rename", false},
 		{"reads the trim frees", reads, "go on with the rename", false},
-		{"a task longer than the ceiling", []llm.Message{brief, {Role: llm.RoleAssistant, Content: "renamed"}}, said(40000), true},
+		{"a task longer than the ceiling", []core.Message{brief, {Role: core.RoleAssistant, Content: "renamed"}}, said(40000), true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			model := &scriptedLead{state: "goal: rename the parser", steps: func(int) llm.Decision { return messageDecision() }}
+			model := &scriptedLead{state: "goal: rename the parser", steps: func(int) core.Decision { return messageDecision() }}
 			config, _ := forkingConfig(t, model, nil, strconv.Itoa(ceiling))
 			config.History, config.Task, config.SpawnedFrom = c.history, c.task, "lead"
 			_, err := Run(context.Background(), config)

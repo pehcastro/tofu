@@ -188,7 +188,7 @@ func StartSnapshots(state string) (dir string, stop func(), err error) {
 		}
 	}
 	done, finished := make(chan struct{}), make(chan struct{})
-	safe.Go(Crashes("."), "profile snapshots", func() {
+	recover.Go(Crashes("."), "profile snapshots", func() {
 		defer close(finished)
 		tick := time.NewTicker(SnapshotEvery)
 		defer tick.Stop()

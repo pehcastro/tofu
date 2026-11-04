@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
@@ -56,26 +56,26 @@ func Verb(args []string, out, errOut io.Writer) int {
 	return shellsStop(o, registry, names[0])
 }
 
-func LaunchShellRegistry(dir string) (*shell.Registry, error) {
+func LaunchShellRegistry(dir string) (*process.Registry, error) {
 	state, err := sys.ProjectStateDir()
 	if err != nil {
 		return nil, err
 	}
-	registry := shell.OpenAt(sys.Join(state, "shells"))
+	registry := process.OpenAt(sys.Join(state, "shells"))
 	if settingspkg.IntSaying(dir, settingspkg.PersistentRegistry, nil) != 0 {
-		registry.Lifetime = shell.OutlivesTofu
+		registry.Lifetime = process.OutlivesTofu
 	}
 	return registry, nil
 }
 
 type shellReading struct {
-	shell.Shell
+	process.Shell
 	ElapsedMS  int64      `json:"elapsed_ms"`
 	LastOutput *time.Time `json:"last_output,omitempty"`
-	timing     shell.Timing
+	timing     process.Timing
 }
 
-func readShell(registry *shell.Registry, one shell.Shell, now time.Time) shellReading {
+func readShell(registry *process.Registry, one process.Shell, now time.Time) shellReading {
 	timing := registry.Timing(one, now)
 	reading := shellReading{Shell: one, ElapsedMS: timing.Ran.Milliseconds(), timing: timing}
 	if !timing.Last.IsZero() {
@@ -84,12 +84,12 @@ func readShell(registry *shell.Registry, one shell.Shell, now time.Time) shellRe
 	return reading
 }
 
-func shellsList(o output.Verb, registry *shell.Registry) int {
+func shellsList(o output.Verb, registry *process.Registry) int {
 	shells, err := registry.List()
 	if err != nil {
 		return o.Fail(err)
 	}
-	shells = slices.DeleteFunc(shells, shell.Shell.OneShot)
+	shells = slices.DeleteFunc(shells, process.Shell.OneShot)
 	now := time.Now()
 	readings := make([]shellReading, len(shells))
 	for i, one := range shells {
@@ -118,12 +118,12 @@ func shellsLines(page cli.Page, shells []shellReading, now time.Time) []string {
 	return append(append(page.Title("Shells", []string{output.Plural(len(shells), "shell") + " running"}, cli.Verdict{}), ""), cli.Indent(page.Rows(rows)...)...)
 }
 
-func shellsLog(o output.Verb, registry *shell.Registry, name string) int {
+func shellsLog(o output.Verb, registry *process.Registry, name string) int {
 	entry, err := registry.Read(name)
 	if err != nil {
 		return shellsFailed(o, name, err)
 	}
-	log, err := registry.Tail(name, shell.DefaultTail)
+	log, err := registry.Tail(name, process.DefaultTail)
 	if err != nil {
 		return shellsFailed(o, name, err)
 	}
@@ -145,7 +145,7 @@ func shellsLog(o output.Verb, registry *shell.Registry, name string) int {
 	})
 }
 
-func shellsStop(o output.Verb, registry *shell.Registry, name string) int {
+func shellsStop(o output.Verb, registry *process.Registry, name string) int {
 	if err := registry.Kill(name); err != nil {
 		return shellsFailed(o, name, err)
 	}
@@ -156,7 +156,7 @@ func shellsStop(o output.Verb, registry *shell.Registry, name string) int {
 	})
 }
 
-func shellsRestart(o output.Verb, registry *shell.Registry, name string) int {
+func shellsRestart(o output.Verb, registry *process.Registry, name string) int {
 	started, err := registry.Restart(name)
 	if err != nil {
 		return shellsFailed(o, name, err)
@@ -171,7 +171,7 @@ func shellsFailed(o output.Verb, name string, err error) int {
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		err = output.ProblemError{What: "no shell " + name, Hint: "tofu shells list"}
-	case errors.Is(err, shell.ErrNotRunning):
+	case errors.Is(err, process.ErrNotRunning):
 		err = output.ProblemError{What: name + " is not running", Hint: "tofu shells restart " + name}
 	}
 	return o.Fail(err)

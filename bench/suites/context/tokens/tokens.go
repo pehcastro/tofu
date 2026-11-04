@@ -51,7 +51,7 @@ func Run(sessionsDir, repoRoot string, recordedBy time.Time) (Result, error) {
 		return Result{}, err
 	}
 	defer remove()
-	glob, err := tools.NewGlob(tree)
+	glob, err := registry.NewGlob(tree)
 	if err != nil {
 		return Result{}, err
 	}
@@ -94,7 +94,7 @@ func Run(sessionsDir, repoRoot string, recordedBy time.Time) (Result, error) {
 	return result, nil
 }
 
-func replayGlob(glob tools.Glob, call corpus.RecordedCall) GlobCall {
+func replayGlob(glob registry.Glob, call corpus.RecordedCall) GlobCall {
 	replayed := GlobCall{
 		Args:        strings.Join(strings.Fields(string(call.Args)), " "),
 		BeforeBytes: call.ResultBytes,

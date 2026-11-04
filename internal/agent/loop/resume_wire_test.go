@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -13,10 +13,10 @@ import (
 	"tofu/internal/store/session"
 )
 
-func threeReads(prefix string) llm.Decision {
-	var calls []llm.ToolCall
+func threeReads(prefix string) core.Decision {
+	var calls []core.ToolCall
 	for _, path := range []string{"a.txt", "b.txt", "c.txt"} {
-		calls = append(calls, llm.ToolCall{ID: prefix + "-" + path, Name: "read", Arguments: json.RawMessage(`{"path":"` + path + `"}`)})
+		calls = append(calls, core.ToolCall{ID: prefix + "-" + path, Name: "read", Arguments: json.RawMessage(`{"path":"` + path + `"}`)})
 	}
 	return toolCallDecision(calls...)
 }
@@ -24,7 +24,7 @@ func threeReads(prefix string) llm.Decision {
 func TestAContinuationForkCarryingParallelCallsReadsBackAsAListAnthropicAccepts(t *testing.T) {
 	bulky := threeReads("first")
 	bulky.Content = strings.Repeat("a long account of the plan so far. ", 250)
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey: {bulky, threeReads("second"), threeReads("third"), claimDecision("read them all")},
 	})
 	store, first := session.NewStore(t.TempDir()), session.NewEventID()
@@ -54,7 +54,7 @@ func TestAContinuationForkCarryingParallelCallsReadsBackAsAListAnthropicAccepts(
 		t.Fatalf("the turn ended in %s after continuation forks carrying %v tail messages, want one that carried calls", turns[0].Session, tails)
 	}
 	for i, request := range model.requests(leadKey) {
-		sent := slices.DeleteFunc(slices.Clone(request.Messages), func(message llm.Message) bool { return message.Role == llm.RoleSystem })
+		sent := slices.DeleteFunc(slices.Clone(request.Messages), func(message core.Message) bool { return message.Role == core.RoleSystem })
 		if _, err := (anthropic.Request{Model: "claude-opus-5", Messages: sent}).Encode(true); err != nil {
 			t.Errorf("live request %d: %v", i+1, err)
 		}
@@ -80,7 +80,7 @@ func TestAContinuationForkCarryingParallelCallsReadsBackAsAListAnthropicAccepts(
 	if err != nil {
 		t.Fatal(err)
 	}
-	resumed = append(resumed, llm.Message{Role: llm.RoleUser, Content: "go on"})
+	resumed = append(resumed, core.Message{Role: core.RoleUser, Content: "go on"})
 	if _, err := (anthropic.Request{Model: "claude-opus-5", Messages: resumed}).Encode(true); err != nil {
 		t.Errorf("the forked session read back as --continue reads it: %v", err)
 	}

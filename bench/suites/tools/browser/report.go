@@ -38,13 +38,13 @@ func millis(d time.Duration) float64 {
 	return float64(d) / float64(time.Millisecond)
 }
 
-func action(a browser.Action) string {
+func action(a driver.Action) string {
 	switch a.Op {
-	case browser.OpClick, browser.OpTypeText:
+	case driver.OpClick, driver.OpTypeText:
 		return fmt.Sprintf("%s %d", a.Op, a.Element)
-	case browser.OpSelect:
+	case driver.OpSelect:
 		return fmt.Sprintf("%s %d %q", a.Op, a.Element, a.Value)
-	case browser.OpScrollUp, browser.OpScrollDown, browser.OpWait, browser.OpDone, browser.OpBlocked:
+	case driver.OpScrollUp, driver.OpScrollDown, driver.OpWait, driver.OpDone, driver.OpBlocked:
 		return a.Op.String()
 	}
 	panic(fmt.Sprintf("browserbench: unknown op %d", int(a.Op)))

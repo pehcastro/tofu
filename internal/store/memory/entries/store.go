@@ -1,4 +1,4 @@
-package memory
+package entries
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/store/memory/tree"
+	memtree "tofu/internal/store/memory/tree"
 )
 
 const (

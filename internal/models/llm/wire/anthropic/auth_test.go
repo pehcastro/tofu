@@ -44,7 +44,7 @@ func revokedEndpoint(t *testing.T, revoked ...string) (*httptest.Server, *atomic
 	return server, &calls
 }
 
-func renewing(renewals *atomic.Int32, renewed string) llm.TokenSource {
+func renewing(renewals *atomic.Int32, renewed string) core.TokenSource {
 	return func(_ context.Context, rejected string) (string, error) {
 		if rejected == "" {
 			return "sk-ant-oat01-stale", nil
@@ -54,12 +54,12 @@ func renewing(renewals *atomic.Int32, renewed string) llm.TokenSource {
 	}
 }
 
-func ask(t *testing.T, server *httptest.Server, token llm.TokenSource) (anthropic.Result, error) {
+func ask(t *testing.T, server *httptest.Server, token core.TokenSource) (anthropic.Result, error) {
 	wire, err := anthropic.New(anthropic.Config{BaseURL: server.URL, Model: "claude-test", Proxy: true, Token: token})
 	if err != nil {
 		t.Fatalf("new wire: %v", err)
 	}
-	result, _, err := wire.Ask(context.Background(), anthropic.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "hi"}}})
+	result, _, err := wire.Ask(context.Background(), anthropic.Request{Messages: []core.Message{{Role: core.RoleUser, Content: "hi"}}})
 	return result, err
 }
 

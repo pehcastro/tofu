@@ -11,9 +11,9 @@ import (
 	"tofu/internal/store/session"
 )
 
-func pythonAsk(code string) turn.GateRequest {
+func pythonAsk(code string) loop.GateRequest {
 	args, _ := json.Marshal(map[string]string{"command": `python -c "` + code + `"`})
-	return turn.GateRequest{Tool: "bash", Args: args}
+	return loop.GateRequest{Tool: "bash", Args: args}
 }
 
 func TestAnAlwaysOnInterpreterCodeCoversThatCodeAloneAndNeverReachesTheFile(t *testing.T) {
@@ -27,10 +27,10 @@ func TestAnAlwaysOnInterpreterCodeCoversThatCodeAloneAndNeverReachesTheFile(t *t
 	}
 	answeredStanding(t, first, pythonAsk("import os; print(1)"), AlwaysHere)
 	answeredStanding(t, first, pythonAsk("import os; print(9)"), NeverHere)
-	if answer := unasked(t, first, pythonAsk("import os; print(1)")); answer != turn.PersonAlwaysHere {
+	if answer := unasked(t, first, pythonAsk("import os; print(1)")); answer != loop.PersonAlwaysHere {
 		t.Errorf("the exact code allowed always answered %v, want it run unasked", answer)
 	}
-	if answer := answeredStanding(t, first, pythonAsk("import os; print(2)"), Denied); answer != turn.PersonDenied {
+	if answer := answeredStanding(t, first, pythonAsk("import os; print(2)"), Denied); answer != loop.PersonDenied {
 		t.Errorf("different code after an always on python -c answered %v without asking", answer)
 	}
 	store, err := session.OpenIn(project)
@@ -46,7 +46,7 @@ func TestAnAlwaysOnInterpreterCodeCoversThatCodeAloneAndNeverReachesTheFile(t *t
 	if err := json.Unmarshal(body, &kept); err != nil {
 		t.Fatal(err)
 	}
-	if len(kept) != 1 || kept[0].Decision != RejectAlways || !turn.PlacesCode(kept[0].Target) {
+	if len(kept) != 1 || kept[0].Decision != RejectAlways || !loop.PlacesCode(kept[0].Target) {
 		t.Fatalf("standing.json holds %s, want only the reject_always on code", body)
 	}
 	first.Close()
@@ -57,7 +57,7 @@ func TestAnAlwaysOnInterpreterCodeCoversThatCodeAloneAndNeverReachesTheFile(t *t
 	}
 	second, _ := New(Config{Dir: project, Resumed: Carry{Session: here}})
 	defer second.Close()
-	if answer := answeredStanding(t, second, pythonAsk("import os; print(9)"), Denied); answer != turn.PersonDenied {
+	if answer := answeredStanding(t, second, pythonAsk("import os; print(9)"), Denied); answer != loop.PersonDenied {
 		t.Errorf("an allow on code written into standing.json answered %v without asking", answer)
 	}
 }

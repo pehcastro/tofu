@@ -105,7 +105,7 @@ func servingHost(t *testing.T, h *Host, project string, cfg ServeConfig) *wireCl
 			if err != nil {
 				return Carry{}, err
 			}
-			messages, err := turn.ConversationFrom(events)
+			messages, err := loop.ConversationFrom(events)
 			return Carry{Session: id, Messages: messages, Store: store}, err
 		}
 	}

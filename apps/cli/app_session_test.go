@@ -27,14 +27,14 @@ import (
 )
 
 type sendModel struct {
-	queued   []llm.Decision
-	requests []llm.Request
+	queued   []core.Decision
+	requests []core.Request
 }
 
-func (m *sendModel) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+func (m *sendModel) Ask(_ context.Context, request core.Request) (core.Decision, error) {
 	m.requests = append(m.requests, request)
 	if len(m.queued) == 0 {
-		return llm.Decision{}, errors.New("sendModel: no more decisions queued")
+		return core.Decision{}, errors.New("sendModel: no more decisions queued")
 	}
 	next := m.queued[0]
 	m.queued = m.queued[1:]
@@ -46,41 +46,41 @@ type rememberingModel struct {
 	reads int
 }
 
-func (m *rememberingModel) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+func (m *rememberingModel) Ask(_ context.Context, request core.Request) (core.Decision, error) {
 	for _, message := range request.Messages {
-		if message.Role != llm.RoleSystem && strings.Contains(message.Content, m.fact) {
-			return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "from what I already read, " + m.fact}, nil
+		if message.Role != core.RoleSystem && strings.Contains(message.Content, m.fact) {
+			return core.Decision{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "from what I already read, " + m.fact}, nil
 		}
 	}
 	m.reads++
-	return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+	return core.Decision{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
 		{ID: "call-" + strconv.Itoa(m.reads), Name: "read", Arguments: json.RawMessage(`{"path":"notes.txt"}`)},
 	}}, nil
 }
 
 type eventLog struct {
 	mu     sync.Mutex
-	events []tui.Event
+	events []app.Event
 }
 
-func (l *eventLog) add(event tui.Event) {
+func (l *eventLog) add(event app.Event) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.events = append(l.events, event)
 }
 
-func (l *eventLog) all() []tui.Event {
+func (l *eventLog) all() []app.Event {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return slices.Clone(l.events)
 }
 
 func TestASecondSendCarriesTheFirstExchangeAndItsToolCalls(t *testing.T) {
-	dir := testkit.ScratchProject(t)
-	model := &sendModel{queued: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-1")}},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the repo is a go harness"},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "written down"},
+	dir := cli.ScratchProject(t)
+	model := &sendModel{queued: []core.Decision{
+		{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{writeNote("call-1")}},
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "the repo is a go harness"},
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "written down"},
 	}}
 	send := stubbedTurn(dir, model)
 	var events eventLog
@@ -96,13 +96,13 @@ func TestASecondSendCarriesTheFirstExchangeAndItsToolCalls(t *testing.T) {
 		t.Logf("second send carries role=%s tool_call_id=%s tool_calls=%d content=%.40q",
 			message.Role, message.ToolCallID, len(message.ToolCalls), message.Content)
 		switch {
-		case message.Role == llm.RoleUser && strings.HasSuffix(message.Content, "explain the repo"):
+		case message.Role == core.RoleUser && strings.HasSuffix(message.Content, "explain the repo"):
 			task = true
-		case message.Role == llm.RoleAssistant && message.Content == "the repo is a go harness":
+		case message.Role == core.RoleAssistant && message.Content == "the repo is a go harness":
 			answer = true
-		case message.Role == llm.RoleAssistant && len(message.ToolCalls) == 1 && message.ToolCalls[0].ID == "call-1":
+		case message.Role == core.RoleAssistant && len(message.ToolCalls) == 1 && message.ToolCalls[0].ID == "call-1":
 			call = true
-		case message.Role == llm.RoleTool && message.ToolCallID == "call-1":
+		case message.Role == core.RoleTool && message.ToolCallID == "call-1":
 			result = true
 		}
 	}
@@ -113,7 +113,7 @@ func TestASecondSendCarriesTheFirstExchangeAndItsToolCalls(t *testing.T) {
 		t.Errorf("the second send carries the first tool call %v and its result %v, want both", call, result)
 	}
 	last := second[len(second)-1]
-	if last.Role != llm.RoleUser || !strings.HasSuffix(last.Content, "write those findings down") {
+	if last.Role != core.RoleUser || !strings.HasSuffix(last.Content, "write those findings down") {
 		t.Errorf("the last message is %s %q, want the second task", last.Role, last.Content)
 	}
 	if !strings.Contains(last.Content, "today's date: ") {
@@ -123,18 +123,18 @@ func TestASecondSendCarriesTheFirstExchangeAndItsToolCalls(t *testing.T) {
 
 type stoppingModel struct {
 	cancel   context.CancelFunc
-	queued   []llm.Decision
-	requests []llm.Request
+	queued   []core.Decision
+	requests []core.Request
 }
 
-func (m *stoppingModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (m *stoppingModel) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	if err := ctx.Err(); err != nil {
-		return llm.Decision{}, err
+		return core.Decision{}, err
 	}
 	m.requests = append(m.requests, request)
 	if len(m.queued) == 0 {
 		m.cancel()
-		return llm.Decision{}, context.Canceled
+		return core.Decision{}, context.Canceled
 	}
 	next := m.queued[0]
 	m.queued = m.queued[1:]
@@ -142,11 +142,11 @@ func (m *stoppingModel) Ask(ctx context.Context, request llm.Request) (llm.Decis
 }
 
 func TestASendStoppedPartWayCarriesItsWorkIntoThePleaseContinue(t *testing.T) {
-	dir := testkit.ScratchProject(t)
-	model := &stoppingModel{queued: []llm.Decision{{
+	dir := cli.ScratchProject(t)
+	model := &stoppingModel{queued: []core.Decision{{
 		Build:     "stub-model",
-		Outcome:   llm.OutcomeToolCalls,
-		ToolCalls: []llm.ToolCall{writeNote("call-1"), writeNote("call-2")},
+		Outcome:   core.OutcomeToolCalls,
+		ToolCalls: []core.ToolCall{writeNote("call-1"), writeNote("call-2")},
 	}}}
 	stopped, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -156,7 +156,7 @@ func TestASendStoppedPartWayCarriesItsWorkIntoThePleaseContinue(t *testing.T) {
 	var interrupted eventLog
 	send(stopped, onTheSubscription, "explain the repo", interrupted.add)
 	for _, event := range interrupted.all() {
-		if event.Kind == tui.EventFailure {
+		if event.Kind == app.EventFailure {
 			t.Fatalf("stopping a send reported a failure: %s", event.Text)
 		}
 	}
@@ -172,11 +172,11 @@ func TestASendStoppedPartWayCarriesItsWorkIntoThePleaseContinue(t *testing.T) {
 	for _, message := range continued {
 		t.Logf("the continue carries role=%s tool_call_id=%s tool_calls=%d content=%.40q",
 			message.Role, message.ToolCallID, len(message.ToolCalls), message.Content)
-		if message.Role == llm.RoleUser && strings.Contains(message.Content, "explain the repo") {
+		if message.Role == core.RoleUser && strings.Contains(message.Content, "explain the repo") {
 			task++
 		}
 		calls += len(message.ToolCalls)
-		if message.Role == llm.RoleTool {
+		if message.Role == core.RoleTool {
 			results++
 		}
 	}
@@ -187,13 +187,13 @@ func TestASendStoppedPartWayCarriesItsWorkIntoThePleaseContinue(t *testing.T) {
 		t.Errorf("the continue carries %d tool calls and %d results, want the two the stopped send made", calls, results)
 	}
 	last := continued[len(continued)-1]
-	if last.Role != llm.RoleUser || !strings.HasSuffix(last.Content, "please continue") {
+	if last.Role != core.RoleUser || !strings.HasSuffix(last.Content, "please continue") {
 		t.Errorf("the continue ends with %s %q, want the new task", last.Role, last.Content)
 	}
 }
 
 func TestASecondSendAnswersFromWhatTheFirstLearnedWithoutATool(t *testing.T) {
-	dir := testkit.ScratchProject(t)
+	dir := cli.ScratchProject(t)
 	fact := "tofu is a go harness whose code owns the loop"
 	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte(fact+"\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -207,17 +207,17 @@ func TestASecondSendAnswersFromWhatTheFirstLearnedWithoutATool(t *testing.T) {
 
 	firstCalls, secondCalls := 0, 0
 	for _, event := range first.all() {
-		if event.Kind == tui.EventToolCall {
+		if event.Kind == app.EventToolCall {
 			firstCalls++
 		}
 	}
 	answered := ""
 	for _, event := range second.all() {
 		switch event.Kind {
-		case tui.EventToolCall:
+		case app.EventToolCall:
 			secondCalls++
 			t.Errorf("the second send ran %s %q, and it already knew the answer", event.Tool, event.Text)
-		case tui.EventText:
+		case app.EventText:
 			answered = event.Text
 		}
 	}
@@ -231,10 +231,10 @@ func TestASecondSendAnswersFromWhatTheFirstLearnedWithoutATool(t *testing.T) {
 }
 
 func TestTwoSendsAppendToOneSessionBody(t *testing.T) {
-	dir := testkit.ScratchProject(t)
-	model := &sendModel{queued: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "first answer"},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "second answer"},
+	dir := cli.ScratchProject(t)
+	model := &sendModel{queued: []core.Decision{
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "first answer"},
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "second answer"},
 	}}
 	send := stubbedTurn(dir, model)
 	var events eventLog
@@ -291,8 +291,8 @@ func screenshotBoard(t *testing.T, live *appSession) paste.Board {
 }
 
 func TestAnImagePastedBeforeTheFirstSendLandsInTheSessionThatSendCreates(t *testing.T) {
-	dir := testkit.ScratchProject(t)
-	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
+	dir := cli.ScratchProject(t)
+	model := &sendModel{queued: []core.Decision{{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "seen"}}}
 	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
@@ -324,10 +324,10 @@ func TestAnImagePastedBeforeTheFirstSendLandsInTheSessionThatSendCreates(t *test
 }
 
 func TestACronFileThatDidNotLoadIsLeftAsItIsBySends(t *testing.T) {
-	dir := testkit.ScratchProject(t)
-	model := &sendModel{queued: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "first"},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "second"},
+	dir := cli.ScratchProject(t)
+	model := &sendModel{queued: []core.Decision{
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "first"},
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "second"},
 	}}
 	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
@@ -360,10 +360,10 @@ func TestACronFileThatDidNotLoadIsLeftAsItIsBySends(t *testing.T) {
 	}
 	said := false
 	for _, event := range second.all() {
-		if event.Kind == tui.EventFailure {
+		if event.Kind == app.EventFailure {
 			t.Fatalf("the refused write failed the turn: %s", event.Text)
 		}
-		said = said || event.Kind == tui.EventNote && strings.Contains(event.Text, book)
+		said = said || event.Kind == app.EventNote && strings.Contains(event.Text, book)
 	}
 	if !said {
 		t.Fatalf("no note names %s as left as it is: %+v", book, second.all())
@@ -371,8 +371,8 @@ func TestACronFileThatDidNotLoadIsLeftAsItIsBySends(t *testing.T) {
 }
 
 func TestAPastedImageReachesTheRequestSentToTheModel(t *testing.T) {
-	dir := testkit.ScratchProject(t)
-	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
+	dir := cli.ScratchProject(t)
+	model := &sendModel{queued: []core.Decision{{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "seen"}}}
 	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
@@ -397,8 +397,8 @@ func TestAPastedImageReachesTheRequestSentToTheModel(t *testing.T) {
 }
 
 func TestDeletingAPastedImagesTokenDropsItFromTheRequestSentToTheModel(t *testing.T) {
-	dir := testkit.ScratchProject(t)
-	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
+	dir := cli.ScratchProject(t)
+	model := &sendModel{queued: []core.Decision{{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "seen"}}}
 	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
@@ -424,7 +424,7 @@ func TestDeletingAPastedImagesTokenDropsItFromTheRequestSentToTheModel(t *testin
 }
 
 func TestAPasteInARepositoryWithNoRecordedSessionWorks(t *testing.T) {
-	dir := testkit.ScratchProject(t)
+	dir := cli.ScratchProject(t)
 	live := newAppSession(dir, nil, nil, time.Now, sessionResume{})
 	board := screenshotBoard(t, live)
 	msg := board.Attach(1)()
@@ -442,8 +442,8 @@ func TestAPasteInARepositoryWithNoRecordedSessionWorks(t *testing.T) {
 }
 
 func TestASendRecordsTheAttachmentEventInTheSessionBody(t *testing.T) {
-	dir := testkit.ScratchProject(t)
-	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"}}}
+	dir := cli.ScratchProject(t)
+	model := &sendModel{queued: []core.Decision{{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "seen"}}}
 	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
@@ -490,7 +490,7 @@ func TestASendRecordsTheAttachmentEventInTheSessionBody(t *testing.T) {
 }
 
 func TestAConversationThatOutgrowsItsBudgetAcrossSendsForks(t *testing.T) {
-	dir := testkit.ScratchProject(t)
+	dir := cli.ScratchProject(t)
 	model := &sendModel{}
 	send := stubbedTurn(dir, model)
 	cfg, err := recall.LoadConfig()
@@ -501,14 +501,14 @@ func TestAConversationThatOutgrowsItsBudgetAcrossSendsForks(t *testing.T) {
 	bulk := strings.Repeat(sentence, 18_800*cfg.OnWire(wiring.WireSubscription).BytesPerThousandTokens/1000/len(sentence))
 	forkedAt := 0
 	for attempt := 1; attempt <= 8 && forkedAt == 0; attempt++ {
-		model.queued = []llm.Decision{
-			{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-" + strconv.Itoa(attempt))}},
-			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "noted"},
+		model.queued = []core.Decision{
+			{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{writeNote("call-" + strconv.Itoa(attempt))}},
+			{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "noted"},
 		}
 		var events eventLog
 		send(t.Context(), onTheSubscription, bulk, events.add)
 		for _, event := range events.all() {
-			if event.Kind == tui.EventForkStart {
+			if event.Kind == app.EventForkStart {
 				forkedAt = attempt
 			}
 		}
@@ -542,7 +542,7 @@ func TestLiveASecondSendReadsTheCacheOfTheFirst(t *testing.T) {
 	send(t.Context(), onTheSubscription, "read loop.md and judge.md and say in one sentence what each is about", events.add)
 	send(t.Context(), onTheSubscription, "without calling any tool, repeat what judge.md was about", events.add)
 	for _, event := range events.all() {
-		if event.Kind == tui.EventFailure {
+		if event.Kind == app.EventFailure {
 			t.Fatalf("the live run failed: %s", event.Text)
 		}
 	}
@@ -569,7 +569,7 @@ func TestLiveASecondSendReadsTheCacheOfTheFirst(t *testing.T) {
 		if event.Kind != sessionstore.EventStep {
 			continue
 		}
-		var step turn.StepRow
+		var step loop.StepRow
 		if err := json.Unmarshal(event.Body, &step); err != nil {
 			t.Fatal(err)
 		}

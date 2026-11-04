@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -18,22 +18,22 @@ import (
 )
 
 type heldSubAgent struct {
-	agent       subagent.SubAgent
-	definition  subagent.Definition
-	effort      llm.Effort
-	askedEffort llm.Effort
+	agent       subagents.SubAgent
+	definition  subagents.Definition
+	effort      core.Effort
+	askedEffort core.Effort
 	system      string
 	parts       []PromptPart
 	environment string
 	briefFiles  string
 	prefix      Prefix
 	readPrefix  func() (*Prefix, error)
-	boundary    *subagent.Boundary
+	boundary    *subagents.Boundary
 	scratch     sys.ScratchPlace
 	inbox       *Inbox
 	trace       spawnTrace
-	history     []llm.Message
-	reload      func() ([]llm.Message, error)
+	history     []core.Message
+	reload      func() ([]core.Message, error)
 	kept        sync.Mutex
 	restored    bool
 	running     bool
@@ -100,7 +100,7 @@ func (h *heldSubAgent) openCalls() []openCall {
 	return open
 }
 
-func (h *heldSubAgent) conversation() ([]llm.Message, error) {
+func (h *heldSubAgent) conversation() ([]core.Message, error) {
 	h.kept.Lock()
 	defer h.kept.Unlock()
 	if h.reload == nil {
@@ -126,12 +126,12 @@ func (h *heldSubAgent) reloaded() error {
 type watchedTool struct {
 	tool       contract.Tool
 	held       *heldSubAgent
-	definition llm.Tool
+	definition core.Tool
 }
 
 func (w watchedTool) Name() string { return w.tool.Name() }
 
-func (w watchedTool) Definition() llm.Tool { return w.definition }
+func (w watchedTool) Definition() core.Tool { return w.definition }
 
 func (w watchedTool) refusal(raw json.RawMessage) error {
 	if checked, checks := w.tool.(bounded); checks {
@@ -183,10 +183,10 @@ func (h *heldSubAgent) remember(round Row) {
 	h.history = Sendable(round.Conversation)
 }
 
-func (h *heldSubAgent) shed(reload func() ([]llm.Message, error)) {
+func (h *heldSubAgent) shed(reload func() ([]core.Message, error)) {
 	h.kept.Lock()
 	h.history, h.reload = nil, reload
-	h.system, h.environment, h.definition, h.restored = "", "", subagent.Definition{}, true
+	h.system, h.environment, h.definition, h.restored = "", "", subagents.Definition{}, true
 	h.kept.Unlock()
 	h.forking.Lock()
 	h.forked = nil

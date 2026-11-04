@@ -1,4 +1,4 @@
-package turn_test
+package loop_test
 
 import (
 	"context"
@@ -21,34 +21,34 @@ import (
 type prefetchScript struct {
 	mu       sync.Mutex
 	brief    string
-	lead     []llm.Decision
-	subAgent []llm.Decision
-	asked    []llm.Request
+	lead     []core.Decision
+	subAgent []core.Decision
+	asked    []core.Request
 }
 
-func (s *prefetchScript) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+func (s *prefetchScript) Ask(_ context.Context, request core.Request) (core.Decision, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	script := &s.lead
-	opening := request.Messages[slices.IndexFunc(request.Messages, func(message llm.Message) bool { return message.Origin.Source != llm.SourceMemoryView })]
+	opening := request.Messages[slices.IndexFunc(request.Messages, func(message core.Message) bool { return message.Origin.Source != core.SourceMemoryView })]
 	if strings.Contains(opening.Content, s.brief) {
 		script = &s.subAgent
 		s.asked = append(s.asked, request)
 	}
 	if len(*script) == 0 {
-		return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: "done"}, nil
+		return core.Decision{Build: "m1", Outcome: core.OutcomeMessage, Content: "done"}, nil
 	}
 	next := (*script)[0]
 	*script = (*script)[1:]
 	return next, nil
 }
 
-func calling(name string, args any) llm.Decision {
+func calling(name string, args any) core.Decision {
 	raw, err := json.Marshal(args)
 	if err != nil {
 		panic(err)
 	}
-	return llm.Decision{Build: "m1", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{{ID: "call-" + name, Name: name, Arguments: raw}}}
+	return core.Decision{Build: "m1", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{{ID: "call-" + name, Name: name, Arguments: raw}}}
 }
 
 func TestABriefNamingFilesStartsTheSubAgentHoldingThemAndItsEditIsNotRefused(t *testing.T) {
@@ -69,34 +69,34 @@ func TestABriefNamingFilesStartsTheSubAgentHoldingThemAndItsEditIsNotRefused(t *
 			t.Fatal(err)
 		}
 	}
-	ledger := turn.NewReadLedger()
-	read, err := turn.NewReadTool(root)
+	ledger := loop.NewReadLedger()
+	read, err := loop.NewReadTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	edit, err := tools.NewEdit(root)
+	edit, err := registry.NewEdit(root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	brief := "Read API_SPEC.md, then change src/db.ts. Leave ../secret.txt, big.txt and src/index.ts alone."
-	script := &prefetchScript{brief: brief, lead: []llm.Decision{calling("spawn", map[string]any{"task": brief, "owns": []string{"src/**"}})}, subAgent: []llm.Decision{
+	script := &prefetchScript{brief: brief, lead: []core.Decision{calling("spawn", map[string]any{"task": brief, "owns": []string{"src/**"}})}, subAgent: []core.Decision{
 		calling("edit", map[string]any{"path": "src/db.ts", "old_string": "open()", "new_string": "open('app.db')"}),
-		{Build: "m1", Outcome: llm.OutcomeMessage, Content: "changed src/db.ts"},
+		{Build: "m1", Outcome: core.OutcomeMessage, Content: "changed src/db.ts"},
 	}}
-	base := turn.Config{
+	base := loop.Config{
 		Model:          script,
-		Spend:          turn.SpendAPIKey,
-		Tools:          turn.NewRegistry(tools.NewMemo().Wrap([]contract.Tool{read.Reading(ledger), edit.Reading(ledger)})...),
-		Caps:           turn.Caps{MaxSteps: 5},
+		Spend:          loop.SpendAPIKey,
+		Tools:          loop.NewRegistry(registry.NewMemo().Wrap([]contract.Tool{read.Reading(ledger), edit.Reading(ledger)})...),
+		Caps:           loop.Caps{MaxSteps: 5},
 		ResultBytesCap: 4096,
 		ArtifactDir:    filepath.Join(outside, "artifacts"),
 		NewID:          func() string { return "turn-orchestrator" },
 	}
-	spawner := turn.NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+	spawner := loop.NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
 	orchestrator := base
-	orchestrator.Task, orchestrator.Tools, orchestrator.Inbox = "hand the work to a sub-agent", turn.NewRegistry(spawner), spawner.Inbox
+	orchestrator.Task, orchestrator.Tools, orchestrator.Inbox = "hand the work to a sub-agent", loop.NewRegistry(spawner), spawner.Inbox
 
-	if err := turn.Lead(context.Background(), orchestrator, nil, nil, func(turn.Row, error) {}); err != nil {
+	if err := loop.Lead(context.Background(), orchestrator, nil, nil, func(loop.Row, error) {}); err != nil {
 		t.Fatalf("Lead: %v", err)
 	}
 
@@ -119,7 +119,7 @@ func TestABriefNamingFilesStartsTheSubAgentHoldingThemAndItsEditIsNotRefused(t *
 		t.Errorf("the brief is not the end of the first message, so the files reached the task the gate reads as the person's words:\n%s", first)
 	}
 	edited := script.asked[1].Messages
-	if answer := edited[len(edited)-1]; answer.Role != llm.RoleTool || strings.Contains(answer.Content, "has not been read") {
+	if answer := edited[len(edited)-1]; answer.Role != core.RoleTool || strings.Contains(answer.Content, "has not been read") {
 		t.Fatalf("the edit of src/db.ts was refused as unread: %q", answer.Content)
 	}
 	if body, _ := os.ReadFile(filepath.Join(root, "src", "db.ts")); !strings.Contains(string(body), "open('app.db')") {

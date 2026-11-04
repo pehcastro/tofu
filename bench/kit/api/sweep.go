@@ -19,13 +19,13 @@ type OptionSweepPoint struct {
 	ServerError string
 }
 
-func OptionSweep(ctx context.Context, wire jev.Wire, counts []int) ([]OptionSweepPoint, []typesafe.Call) {
+func OptionSweep(ctx context.Context, wire core.Wire, counts []int) ([]OptionSweepPoint, []typesafe.Call) {
 	results := make([]OptionSweepPoint, 0, len(counts))
 	var calls []typesafe.Call
 	for _, count := range counts {
 		question, expected := OptionSweepQuestion(count)
 		state := OptionSweepState(expected)
-		call := typesafe.Ask(ctx, wire, jev.Request{State: state, Questions: []jev.Question{question}})
+		call := typesafe.Ask(ctx, wire, core.Request{State: state, Questions: []core.Question{question}})
 		calls = append(calls, call)
 		if call.Err != nil {
 			results = append(results, OptionSweepPoint{Options: count, Succeeded: false, ServerError: call.Err.Error()})

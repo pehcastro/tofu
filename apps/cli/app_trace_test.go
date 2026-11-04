@@ -17,11 +17,11 @@ import (
 )
 
 type scriptedModel struct {
-	decisions []llm.Decision
+	decisions []core.Decision
 	asked     int
 }
 
-func (m *scriptedModel) Ask(context.Context, llm.Request) (llm.Decision, error) {
+func (m *scriptedModel) Ask(context.Context, core.Request) (core.Decision, error) {
 	m.asked++
 	return m.decisions[m.asked-1], nil
 }
@@ -39,16 +39,16 @@ func (d *appDriver) hashesDrawn() []string {
 }
 
 func TestTheHashChatDrawsIsTheIDOfTheCallInTheRecord(t *testing.T) {
-	dir := testkit.ScratchProject(t)
+	dir := cli.ScratchProject(t)
 	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("a note"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	driver := driveApp(t)
-	model := &scriptedModel{decisions: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+	model := &scriptedModel{decisions: []core.Decision{
+		{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
 			{ID: "toolu_01thecall", Name: "read", Arguments: json.RawMessage(`{"path":"note.txt"}`)},
 		}},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it"},
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "read it"},
 	}}
 	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
 	live.run(t.Context(), onTheSubscription, "read the note", driver.emit)
@@ -71,7 +71,7 @@ func TestTheHashChatDrawsIsTheIDOfTheCallInTheRecord(t *testing.T) {
 		if event.Kind != sessionstore.EventStep {
 			continue
 		}
-		var step turn.StepRow
+		var step loop.StepRow
 		if err := json.Unmarshal(event.Body, &step); err != nil {
 			t.Fatal(err)
 		}

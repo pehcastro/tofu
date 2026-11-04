@@ -30,16 +30,16 @@ type origin struct {
 	Kind string `json:"kind"`
 }
 
-func (from origin) source() llm.Source {
+func (from origin) source() core.Source {
 	switch from.Kind {
 	case "human":
-		return llm.SourceTyped
+		return core.SourceTyped
 	case "task-notification":
-		return llm.SourceReport
+		return core.SourceReport
 	case "peer", "coordinator":
-		return llm.SourceMessage
+		return core.SourceMessage
 	}
-	return llm.SourceNotice
+	return core.SourceNotice
 }
 
 type usage struct {
@@ -211,7 +211,7 @@ func (t *transcript) add(r row, kind session.EventKind, call string, body any) {
 	t.events = append(t.events, session.Event{ID: r.UUID, At: r.Timestamp, Turn: t.turn, Agent: t.agent, Call: call, Kind: kind, Body: encoded})
 }
 
-func (t *transcript) wake(r row, source llm.Source) {
+func (t *transcript) wake(r row, source core.Source) {
 	t.add(r, session.EventMessage, "", session.MessageBody{Role: session.RoleUser, Content: string(r.Message.Content), From: &session.Origin{Sub: string(source)}})
 }
 
@@ -228,7 +228,7 @@ func (t *transcript) row(r row) {
 	case "system":
 		switch r.Subtype {
 		case "scheduled_task_fire":
-			t.wake(r, llm.SourceCronFire)
+			t.wake(r, core.SourceCronFire)
 		case "compact_boundary":
 			type before struct {
 				Tokens int `json:"tokens_before"`
@@ -292,10 +292,10 @@ func (t *transcript) user(r row) {
 	}
 	switch {
 	case t.agent != "" && len(t.requests) == 0:
-		t.wake(r, llm.SourceBrief)
+		t.wake(r, core.SourceBrief)
 	case r.ScheduledFireID != "":
-		t.wake(r, llm.SourceCronFire)
-	case r.Origin.source() == llm.SourceTyped:
+		t.wake(r, core.SourceCronFire)
+	case r.Origin.source() == core.SourceTyped:
 		t.turn = r.UUID
 		if t.agent == "" {
 			t.add(r, session.EventTurnStart, "", session.TurnStart{Wire: anthropicWire})

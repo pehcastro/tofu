@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"bytes"
@@ -86,7 +86,7 @@ func TestEveryRequestIsKeptByteForByteWithTheProviderErrorBody(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var attempt llm.Attempt
+	var attempt core.Attempt
 	if err := json.Unmarshal(failed.Attempts[0].Detail, &attempt); err != nil {
 		t.Fatal(err)
 	}

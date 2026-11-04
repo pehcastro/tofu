@@ -65,11 +65,11 @@ func (t *transcript) String() string {
 	return t.text.String()
 }
 
-func seeds(at time.Time) map[string][]tui.Event {
+func seeds(at time.Time) map[string][]app.Event {
 	work := agentWork(at)
 	var subAgents []subagent.Row
 	for _, event := range work {
-		if event.Kind == tui.EventSubAgent {
+		if event.Kind == app.EventSubAgent {
 			subAgents = event.SubAgents
 		}
 	}
@@ -78,17 +78,17 @@ func seeds(at time.Time) map[string][]tui.Event {
 	for index := range tall {
 		tall[index] = "line " + strconv.Itoa(index+1) + " of the tall result"
 	}
-	return map[string][]tui.Event{
+	return map[string][]app.Event{
 		"agents": work,
 		"ask":    askWork(),
 		"edits":  fileWork(),
-		"spawn": append([]tui.Event{
-			{Kind: tui.EventToolCall, ID: "5e04aa", Tool: "spawn", Text: "audit the shell registry", Promote: true},
-			{Kind: tui.EventSubAgent, SubAgents: spawned},
+		"spawn": append([]app.Event{
+			{Kind: app.EventToolCall, ID: "5e04aa", Tool: "spawn", Text: "audit the shell registry", Promote: true},
+			{Kind: app.EventSubAgent, SubAgents: spawned},
 			result("5e04aa", "spawned [&c4]"),
 		}, done()...),
-		"more": append([]tui.Event{call("6f1a01", "read", "internal/turn/budget.go"), result("6f1a01", "88 lines, 2.4 KB")}, done()...),
-		"tall": append([]tui.Event{call("6f2b01", "bash", "go test -v ./internal/turn/..."), result("6f2b01", strings.Join(tall, "\n"))}, done()...),
+		"more": append([]app.Event{call("6f1a01", "read", "internal/turn/budget.go"), result("6f1a01", "88 lines, 2.4 KB")}, done()...),
+		"tall": append([]app.Event{call("6f2b01", "bash", "go test -v ./internal/turn/..."), result("6f2b01", strings.Join(tall, "\n"))}, done()...),
 	}
 }
 
@@ -97,7 +97,7 @@ type cassette struct {
 	release  <-chan struct{}
 	stopLead <-chan struct{}
 	ended    context.Context
-	emit     func(tui.Event)
+	emit     func(app.Event)
 	rows     []subagent.Row
 	shells   *shellBook
 }
@@ -156,7 +156,7 @@ func (c *cassette) released(ctx context.Context, release <-chan struct{}) bool {
 		case <-release:
 			return true
 		case <-c.stopLead:
-			c.emit(tui.Event{Kind: tui.EventDone, Text: stoppedLeadWords})
+			c.emit(app.Event{Kind: app.EventDone, Text: stoppedLeadWords})
 		}
 	}
 }
@@ -181,23 +181,23 @@ func (c *cassette) play(ctx context.Context, body string) {
 		word, tail, _ := strings.Cut(rest, " ")
 		switch verb {
 		case "requesting":
-			c.emit(tui.Event{Kind: tui.EventRequesting})
+			c.emit(app.Event{Kind: app.EventRequesting})
 		case "spawn":
-			c.emit(tui.Event{Kind: tui.EventToolCall, ID: id, Tool: "spawn", Text: rest, Promote: true})
+			c.emit(app.Event{Kind: app.EventToolCall, ID: id, Tool: "spawn", Text: rest, Promote: true})
 		case "call":
-			c.emit(tui.Event{Kind: tui.EventToolCall, ID: id, Tool: word, Text: tail, Agent: agent})
+			c.emit(app.Event{Kind: app.EventToolCall, ID: id, Tool: word, Text: tail, Agent: agent})
 		case "result":
-			c.emit(tui.Event{Kind: tui.EventToolResult, ID: id, Text: rest, Agent: agent})
+			c.emit(app.Event{Kind: app.EventToolResult, ID: id, Text: rest, Agent: agent})
 		case "thinking":
-			c.emit(tui.Event{Kind: tui.EventThinking, ID: id, Text: rest, Agent: agent})
+			c.emit(app.Event{Kind: app.EventThinking, ID: id, Text: rest, Agent: agent})
 		case "stats":
 			in, _ := strconv.Atoi(id)
 			out, _ := strconv.Atoi(rest)
-			c.emit(tui.Event{Kind: tui.EventStats, Agent: agent, TokensIn: in, TokensOut: out})
+			c.emit(app.Event{Kind: app.EventStats, Agent: agent, TokensIn: in, TokensOut: out})
 		case "text":
-			c.emit(tui.Event{Kind: tui.EventText, ID: id, Text: rest})
+			c.emit(app.Event{Kind: app.EventText, ID: id, Text: rest})
 		case "done":
-			c.emit(tui.Event{Kind: tui.EventDone, Text: text, SubAgents: c.snapshot()})
+			c.emit(app.Event{Kind: app.EventDone, Text: text, SubAgents: c.snapshot()})
 		case "row", "report", "pending":
 			row := c.row(id)
 			switch verb {
@@ -214,7 +214,7 @@ func (c *cassette) play(ctx context.Context, body string) {
 				tool, what, _ := strings.Cut(call, " ")
 				row.Calls = append(row.Calls, subagent.Call{ID: callID, At: c.at.Add(-ago), Tool: tool, Text: what})
 			}
-			c.emit(tui.Event{Kind: tui.EventSubAgent, SubAgents: c.snapshot()})
+			c.emit(app.Event{Kind: app.EventSubAgent, SubAgents: c.snapshot()})
 		case "shell":
 			ago, command, _ := strings.Cut(tail, " ")
 			since, err := time.ParseDuration(ago)
@@ -241,7 +241,7 @@ func (c *cassette) play(ctx context.Context, body string) {
 
 func seededTurn(at time.Time, played cassette) host.Play {
 	planned := seeds(at)
-	return func(ctx context.Context, _ tui.Pick, task string, live host.Live) {
+	return func(ctx context.Context, _ app.Pick, task string, live host.Live) {
 		if body, err := os.ReadFile(filepath.Join("testdata", cassetteDir, task+scriptSuffix)); err == nil {
 			played.at, played.emit, played.stopLead = at, live.Emit, live.LeadStop
 			played.play(ctx, string(body))
@@ -249,7 +249,7 @@ func seededTurn(at time.Time, played cassette) host.Play {
 		}
 		events, known := planned[task]
 		if !known {
-			events = append([]tui.Event{{Kind: tui.EventText, ID: "a0" + strconv.Itoa(len(task)), Text: "noted: " + task}}, done()...)
+			events = append([]app.Event{{Kind: app.EventText, ID: "a0" + strconv.Itoa(len(task)), Text: "noted: " + task}}, done()...)
 		}
 		for _, event := range events {
 			live.Emit(event)
@@ -286,11 +286,11 @@ func launch(t *testing.T, path string) (*reel, *transcript) {
 	t.Setenv(library.MetaBaseURLVariable, metaModels.URL)
 	out := &transcript{release: make(chan struct{}, 1)}
 	book := &shellBook{}
-	r := newReel(fixture.Width, fixture.Height, home, func(options *tui.Options) {
+	r := newReel(fixture.Width, fixture.Height, home, func(options *app.Options) {
 		signed := options.Wires
-		options.Wires = func() []tui.Wire {
+		options.Wires = func() []app.Wire {
 			if stored, _ := sys.StoredKeys(); stored[library.Meta.KeyName()] != "" {
-				return append(signed(), tui.Wire{Name: string(library.Meta), Model: "muse-spark-1.3", Provider: string(library.Meta)})
+				return append(signed(), app.Wire{Name: string(library.Meta), Model: "muse-spark-1.3", Provider: string(library.Meta)})
 			}
 			return signed()
 		}

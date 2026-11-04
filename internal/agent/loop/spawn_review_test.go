@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -19,8 +19,8 @@ type scriptedCheck string
 
 func (s scriptedCheck) Name() string { return string(s) }
 
-func (s scriptedCheck) Definition() llm.Tool {
-	return llm.Tool{Name: string(s), Parameters: map[string]any{"type": "object"}}
+func (s scriptedCheck) Definition() core.Tool {
+	return core.Tool{Name: string(s), Parameters: map[string]any{"type": "object"}}
 }
 
 func (s scriptedCheck) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
@@ -39,17 +39,17 @@ func (s scriptedCheck) Run(_ context.Context, raw json.RawMessage) (contract.Res
 	return result, nil
 }
 
-func called(tool string, args map[string]any) llm.Decision {
+func called(tool string, args map[string]any) core.Decision {
 	raw, err := json.Marshal(args)
 	if err != nil {
 		panic(err)
 	}
-	return toolCallDecision(llm.ToolCall{ID: tool, Name: tool, Arguments: raw})
+	return toolCallDecision(core.ToolCall{ID: tool, Name: tool, Arguments: raw})
 }
 
-func edited(path string) llm.Decision { return called("edit", map[string]any{"path": path}) }
+func edited(path string) core.Decision { return called("edit", map[string]any{"path": path}) }
 
-func bashed(command string, exit int) llm.Decision {
+func bashed(command string, exit int) core.Decision {
 	return called("bash", map[string]any{"command": command, "exit": exit})
 }
 
@@ -58,7 +58,7 @@ type gated struct {
 	report string
 	events []session.Event
 	header session.Header
-	seen   []subagent.SubAgent
+	seen   []subagents.SubAgent
 	spawn  *SpawnTool
 	ctx    context.Context
 	store  *session.Store
@@ -90,10 +90,10 @@ func agentsByKind(t *testing.T, events []session.Event) map[session.EventKind][]
 	return agents
 }
 
-func gatedRun(t *testing.T, project string, definition subagent.Definition, decisions ...llm.Decision) *gated {
+func gatedRun(t *testing.T, project string, definition subagents.Definition, decisions ...core.Decision) *gated {
 	t.Helper()
 	root := t.TempDir()
-	definition.Runs, definition.Description = subagent.RunsInherit, "a fixture"
+	definition.Runs, definition.Description = subagents.RunsInherit, "a fixture"
 	store := session.NewStore(filepath.Join(root, "sessions"))
 	log, err := store.Open(session.Header{})
 	if err != nil {
@@ -101,7 +101,7 @@ func gatedRun(t *testing.T, project string, definition subagent.Definition, deci
 	}
 	t.Cleanup(func() { _ = log.Close() })
 	run := &gated{store: store, log: log}
-	roster := &subagent.Roster{}
+	roster := &subagents.Roster{}
 	base := Config{
 		Model:          &stubModel{decisions: decisions},
 		Spend:          SpendAPIKey,
@@ -113,7 +113,7 @@ func gatedRun(t *testing.T, project string, definition subagent.Definition, deci
 		Step:           func(StepRow) { run.seen = append(run.seen, roster.SubAgents()...) },
 	}
 	run.spawn = NewSpawnTool("turn-orchestrator", base, roster)
-	run.spawn.SubAgents.Defined, run.spawn.Project = []subagent.Definition{definition}, project
+	run.spawn.SubAgents.Defined, run.spawn.Project = []subagents.Definition{definition}, project
 	args, err := json.Marshal(spawnArgs{Task: "change the crate", Owns: []string{"src/**", "README.md", "Cargo.toml"}, Agent: definition.Name})
 	if err != nil {
 		t.Fatal(err)
@@ -126,7 +126,7 @@ func gatedRun(t *testing.T, project string, definition subagent.Definition, deci
 	return run
 }
 
-var rustDev = subagent.Definition{Name: "rust-dev", Language: "rust", Gate: []string{"cargo clippy", "cargo test"}}
+var rustDev = subagents.Definition{Name: "rust-dev", Language: "rust", Gate: []string{"cargo clippy", "cargo test"}}
 
 func reopenedFor(t *testing.T, rows []Row, want int, named ...string) {
 	t.Helper()
@@ -176,10 +176,10 @@ func TestAGateRunBeforeTheLastEditDoesNotCount(t *testing.T) {
 
 func TestASubAgentWithNoGateOrNoChangeInItsLanguageIsUnaffected(t *testing.T) {
 	for name, run := range map[string]*gated{
-		"no gate":                 gatedRun(t, "", subagent.Definition{Name: "rust-dev", Language: "rust"}, edited("src/lib.rs"), bashed("cargo fmt", 0), claimDecision("done")),
+		"no gate":                 gatedRun(t, "", subagents.Definition{Name: "rust-dev", Language: "rust"}, edited("src/lib.rs"), bashed("cargo fmt", 0), claimDecision("done")),
 		"only markdown and toml":  gatedRun(t, "", rustDev, edited("README.md"), edited("Cargo.toml"), claimDecision("done")),
 		"a refused edit":          gatedRun(t, "", rustDev, edited("elsewhere/lib.rs"), claimDecision("done")),
-		"no language on the file": gatedRun(t, "", subagent.Definition{Name: "rust-dev", Gate: rustDev.Gate}, edited("src/lib.rs"), claimDecision("done")),
+		"no language on the file": gatedRun(t, "", subagents.Definition{Name: "rust-dev", Gate: rustDev.Gate}, edited("src/lib.rs"), claimDecision("done")),
 	} {
 		if rows := run.rows; len(rows) != 1 {
 			t.Errorf("%s: %d rounds, want 1: %q", name, len(rows), rows[len(rows)-1].Task)
@@ -209,10 +209,10 @@ func TestASubAgentSentBackOnceByItsGateIsOneSubAgentInTheLogTheRosterAndTheRepor
 	if began := agents[session.EventTurnStart]; !slices.Equal(began, []string{"rust-dev-1", "rust-dev-1"}) {
 		t.Errorf("the log holds turn_start events for %q, want both rounds under rust-dev-1", began)
 	}
-	if listed := run.header.Agents; len(listed) != 1 || listed[0].Agent != "rust-dev-1" || listed[0].Status != subagent.Finished.String() {
+	if listed := run.header.Agents; len(listed) != 1 || listed[0].Agent != "rust-dev-1" || listed[0].Status != subagents.Finished.String() {
 		t.Errorf("the header lists %+v, want rust-dev-1 alone, finished", listed)
 	}
-	var rerun []subagent.SubAgent
+	var rerun []subagents.SubAgent
 	for _, agent := range run.seen {
 		if agent.ID != "rust-dev-1" {
 			t.Fatalf("the roster held %q while the sub-agent ran, want rust-dev-1 alone", agent.ID)
@@ -221,7 +221,7 @@ func TestASubAgentSentBackOnceByItsGateIsOneSubAgentInTheLogTheRosterAndTheRepor
 			rerun = append(rerun, agent)
 		}
 	}
-	if len(rerun) == 0 || rerun[0].State != subagent.Working || rerun[0].Report != "sent back: cargo test did not run" {
+	if len(rerun) == 0 || rerun[0].State != subagents.Working || rerun[0].Report != "sent back: cargo test did not run" {
 		t.Errorf("the second round ran on the roster as %+v, want rust-dev-1 working, saying it was sent back and why", rerun)
 	}
 	if !strings.Contains(run.report, "sent back once: cargo test did not run") || strings.Contains(run.report, "escalating") || strings.Contains(run.report, "-r2") {
@@ -232,7 +232,7 @@ func TestASubAgentSentBackOnceByItsGateIsOneSubAgentInTheLogTheRosterAndTheRepor
 	}
 }
 
-var pyDev = subagent.Definition{Name: "py-dev", Language: "python", Gate: []string{"ruff check", "pytest"}}
+var pyDev = subagents.Definition{Name: "py-dev", Language: "python", Gate: []string{"ruff check", "pytest"}}
 
 func TestAPyDevGateIsMetThroughARunnerAndNotByRuffFormat(t *testing.T) {
 	for name, command := range map[string]string{
@@ -249,14 +249,14 @@ func TestAPyDevGateIsMetThroughARunnerAndNotByRuffFormat(t *testing.T) {
 
 func TestAGoDevGateIsMetByMakeTargetsWhoseRecipesRunIt(t *testing.T) {
 	project := tsProjectHolding(t, map[string]string{"Makefile": "testall:\n\t@echo all\ntest:\n\t@go test ./...\nvet:\n\t-go vet ./...\n"})
-	goDev := subagent.Definition{Name: "go-dev", Language: "go", Gate: []string{"go vet", "go test"}}
+	goDev := subagents.Definition{Name: "go-dev", Language: "go", Gate: []string{"go vet", "go test"}}
 	reopenedFor(t, gatedRun(t, project, goDev, edited("src/x.go"), bashed("make vet && make test", 0), claimDecision("done")).rows, 1)
 	reopenedFor(t, gatedRun(t, project, goDev,
 		edited("src/x.go"), bashed("make testall", 0), bashed("make vet", 2), claimDecision("done"),
 		bashed("make test vet", 0), claimDecision("done")).rows, 2, "go test did not run", "go vet exited 2")
 }
 
-var tsDev = subagent.Definition{Name: "ts-dev", Language: "typescript", Gate: []string{"typecheck", "test"}}
+var tsDev = subagents.Definition{Name: "ts-dev", Language: "typescript", Gate: []string{"typecheck", "test"}}
 
 func tsProjectHolding(t *testing.T, files map[string]string) string {
 	t.Helper()
@@ -274,7 +274,7 @@ func tsProjectHolding(t *testing.T, files map[string]string) string {
 }
 
 func TestATsDevThatNeverCallsTestInAProjectWithNoTestsFinishesInOneRound(t *testing.T) {
-	typechecked := []llm.Decision{edited("src/users.ts"), called("typecheck", map[string]any{}), claimDecision("done"), called("test", map[string]any{}), claimDecision("done")}
+	typechecked := []core.Decision{edited("src/users.ts"), called("typecheck", map[string]any{}), claimDecision("done"), called("test", map[string]any{}), claimDecision("done")}
 	bare := map[string]string{"package.json": `{"name":"bare"}`, "src/users.ts": "export {};\n"}
 	if rows := gatedRun(t, tsProjectHolding(t, bare), tsDev, typechecked...).rows; len(rows) != 1 {
 		t.Errorf("a project with no tests: %d rounds, want 1: %q", len(rows), rows[len(rows)-1].Task)
@@ -289,7 +289,7 @@ func TestATsDevThatNeverCallsTestInAProjectWithNoTestsFinishesInOneRound(t *test
 }
 
 func TestAResumedSubAgentIsOneSubAgentInTheLogAndItsChatLineSaysSo(t *testing.T) {
-	run := gatedRun(t, "", subagent.Definition{Name: "go-dev"}, claimDecision("done"), called("bash", map[string]any{"command": "go vet"}), claimDecision("vetted"))
+	run := gatedRun(t, "", subagents.Definition{Name: "go-dev"}, claimDecision("done"), called("bash", map[string]any{"command": "go vet"}), claimDecision("vetted"))
 	if _, err := (messageTool{orchestrator: run.spawn}).Run(run.ctx, json.RawMessage(`{"to":"go-dev-1","text":"run go vet too"}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -301,10 +301,10 @@ func TestAResumedSubAgentIsOneSubAgentInTheLogAndItsChatLineSaysSo(t *testing.T)
 	if began := agents[session.EventTurnStart]; !slices.Equal(began, []string{"go-dev-1", "go-dev-1"}) {
 		t.Errorf("the log holds turn_start events for %q, want the spawn and the resume both under go-dev-1", began)
 	}
-	if listed := run.header.Agents; len(listed) != 1 || listed[0].Agent != "go-dev-1" || listed[0].Status != subagent.Finished.String() {
+	if listed := run.header.Agents; len(listed) != 1 || listed[0].Agent != "go-dev-1" || listed[0].Status != subagents.Finished.String() {
 		t.Errorf("the header lists %+v, want go-dev-1 alone, finished", listed)
 	}
-	if last := run.seen[len(run.seen)-1]; last.ID != "go-dev-1" || last.State != subagent.Working || last.Report != "resumed by a message" {
+	if last := run.seen[len(run.seen)-1]; last.ID != "go-dev-1" || last.State != subagents.Working || last.Report != "resumed by a message" {
 		t.Errorf("the resume ran on the roster as %+v, want go-dev-1 working, saying it was resumed", last)
 	}
 	if !strings.Contains(run.report, "sub-agent go-dev-1 is finished") || strings.Contains(run.report, "-m1") {

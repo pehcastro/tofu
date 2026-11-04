@@ -32,14 +32,14 @@ import (
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/catalog"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	"tofu/internal/platform/recover"
-	"tofu/internal/store/memory/entries"
+	memory "tofu/internal/store/memory/entries"
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
-	"tofu/internal/tools/registry"
+	tools "tofu/internal/tools/registry"
 	"tofu/internal/tools/shell/process"
 	"tofu/internal/ui/keymap"
 	"tofu/internal/ui/tui/app"
@@ -69,8 +69,8 @@ const (
 
 type appWiring struct {
 	open      wiring.Opener
-	wires     func() []tui.Wire
-	blockers  func() []tui.Requirement
+	wires     func() []app.Wire
+	blockers  func() []app.Requirement
 	clipboard func() (sys.Clipboard, error)
 	quota     func() []frame.Quota
 	reload    func(ctx context.Context, out io.Writer) int
@@ -81,7 +81,7 @@ type appWiring struct {
 type appLaunch struct {
 	resumed       sessionResume
 	fresh         bool
-	registry      *shell.Registry
+	registry      *process.Registry
 	registryErr   error
 	note          string
 	tabs          *tools.BrowserTabs
@@ -95,7 +95,7 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	registry, registryErr := shellsverb.LaunchShellRegistry(dir)
 	home, _ := os.UserHomeDir()
 	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), turnRunning: new(func() (string, bool)), stopRestoring: func() {}}
-	safe.Go(sys.Crashes(dir), "state sweep", func() {
+	recover.Go(sys.Crashes(dir), "state sweep", func() {
 		state, err := sys.ProjectStateDirAt(dir)
 		if err != nil {
 			return
@@ -103,9 +103,9 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 		sys.OncePerDay(filepath.Join(state, sweptStampName), time.Now(), func() {
 			aged := time.Now().AddDate(0, 0, -stateFileKeptDays)
 			_ = sys.RemoveUnreferencedArtifacts(filepath.Join(state, artifactsDirName), filepath.Join(state, sessionsDirName), aged)
-			_ = sys.RemoveAged(state, safe.CrashPrefix, safe.CrashSuffix, aged)
+			_ = sys.RemoveAged(state, recover.CrashPrefix, recover.CrashSuffix, aged)
 			if stateHome, err := sys.HomeConfigDir(); err == nil {
-				_ = sys.RemoveAged(stateHome, safe.CrashPrefix, safe.CrashSuffix, aged)
+				_ = sys.RemoveAged(stateHome, recover.CrashPrefix, recover.CrashSuffix, aged)
 			}
 		})
 	})
@@ -114,13 +114,13 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	}
 	_ = registry.Prune()
 	found, _ := registry.List()
-	if leftOver := len(slices.DeleteFunc(found, func(one shell.Shell) bool { return !one.LeftOver() })); leftOver > 0 {
+	if leftOver := len(slices.DeleteFunc(found, func(one process.Shell) bool { return !one.LeftOver() })); leftOver > 0 {
 		launch.note = leftOverNote + strconv.Itoa(leftOver) + leftOverFix
 	}
 	return launch
 }
 
-func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaunch, held wiring.HeldStore) tui.Options {
+func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaunch, held wiring.HeldStore) app.Options {
 	defer launch.stopRestoring()
 	places, _ := sys.ResolvePlaces(".")
 	engine := &appEngine{dir: dir, arms: arms, open: wired.open, quota: wired.quota, tabs: launch.tabs, places: places}
@@ -139,13 +139,13 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 		if wired.joins {
 			return nil
 		}
-		return turn.EndSession(context.Background(), dir, live.ID(), sessionEndExit)
+		return loop.EndSession(context.Background(), dir, live.ID(), sessionEndExit)
 	}
 	settingsStore, _ := settingspkg.OpenFor(dir)
 	shortcuts, _ := keymap.ShortcutsPath()
 	opening := live.Opening(launch.resumed.hosted())
 	if note := resumeNote(launch.resumed); note != "" {
-		opening.Chat = append(opening.Chat, tui.Event{Kind: tui.EventNote, Text: note})
+		opening.Chat = append(opening.Chat, app.Event{Kind: app.EventNote, Text: note})
 	}
 	if memoryOn(dir) {
 		shelves, err := memory.Open(dir)
@@ -153,10 +153,10 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 			shelves.Copied = append(shelves.Copied, "your memory is unreadable: "+err.Error())
 		}
 		for _, line := range shelves.Copied {
-			opening.Chat = append(opening.Chat, tui.Event{Kind: tui.EventNote, Text: line})
+			opening.Chat = append(opening.Chat, app.Event{Kind: app.EventNote, Text: line})
 		}
 	}
-	return tui.Options{
+	return app.Options{
 		Repo:         filepath.Base(dir),
 		Root:         dir,
 		Branch:       branchOf(dir),
@@ -166,7 +166,7 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 		SignIn:       func(source string) *exec.Cmd { return wiring.LoginCommand(source)() },
 		SaveKey:      loginverb.StoreKeyFor,
 		Wires:        wired.wires,
-		Models:       func() (models.Library, error) { return wiring.ModelLibrary(dir) },
+		Models:       func() (catalog.Library, error) { return wiring.ModelLibrary(dir) },
 		Providers:    held.Providers(),
 		Quota:        wired.quota,
 		Settings:     settingsStore,
@@ -176,11 +176,11 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 		Host:         live,
 		Paste:        paste.Board{Read: wired.clipboard, Dir: live.AttachmentDir, Recorded: live.Attached},
 		Paths:        appPaths(dir),
-		Sessions:     func() ([]tui.SessionRow, error) { return appSessions(live.ID()) },
+		Sessions:     func() ([]app.SessionRow, error) { return appSessions(live.ID()) },
 		Resume:       func(handle string) (string, host.Opened) { return appResume(live, handle) },
 		NewSession:   func() string { return freshSession(live) },
-		Compact:      func(focus string) string { return forkNote(live, turn.ForkCompact, focus) },
-		Fork:         func() string { return forkNote(live, turn.ForkByHand, "") },
+		Compact:      func(focus string) string { return forkNote(live, loop.ForkCompact, focus) },
+		Fork:         func() string { return forkNote(live, loop.ForkByHand, "") },
 		BranchAt:     func(message string) (string, string) { return branchLine(live, message) },
 		Undo:         func(count string) string { return undoTurns(live.ID(), count) },
 		Updates:      appUpdates(dir),
@@ -207,12 +207,12 @@ func modelsReload(dir string, reload func(context.Context, io.Writer) int) func(
 		debug.FreeOSMemory()
 		after, err := wiring.ModelLibrary(dir)
 		if err != nil {
-			return models.ReloadVerb + ": " + err.Error()
+			return catalog.ReloadVerb + ": " + err.Error()
 		}
 		var found []string
 		for _, model := range after.Models {
-			known := slices.ContainsFunc(before.Models, func(was models.Model) bool { return was.Slug() == model.Slug() })
-			if !known && model.Use != models.UseExcluded {
+			known := slices.ContainsFunc(before.Models, func(was catalog.Model) bool { return was.Slug() == model.Slug() })
+			if !known && model.Use != catalog.UseExcluded {
 				found = append(found, model.Slug())
 			}
 		}
@@ -258,9 +258,9 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	var identity sync.WaitGroup
 	var identityErr error
 	identity.Go(func() {
-		identityErr = sys.Crashed(dir, safe.Call(nil, "project identity", func() error { return sys.RecordIdentity(dir) }))
+		identityErr = sys.Crashed(dir, recover.Call(nil, "project identity", func() error { return sys.RecordIdentity(dir) }))
 	})
-	err = tui.Run(appOptions(dir, wiring.RunOpts{}, live, launch, held))
+	err = app.Run(appOptions(dir, wiring.RunOpts{}, live, launch, held))
 	identity.Wait()
 	if identityErr != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu: the git remote and root of this project were not recorded: %v\n", identityErr)
@@ -278,8 +278,8 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	return output.ExitOK
 }
 
-func leaveShells(registry *shell.Registry) {
-	if registry == nil || registry.Lifetime == shell.OutlivesTofu {
+func leaveShells(registry *process.Registry) {
+	if registry == nil || registry.Lifetime == process.OutlivesTofu {
 		return
 	}
 	for _, one := range registry.Own() {
@@ -287,7 +287,7 @@ func leaveShells(registry *shell.Registry) {
 	}
 }
 
-func sessionEndLine(registry *shell.Registry, openErr error) string {
+func sessionEndLine(registry *process.Registry, openErr error) string {
 	var running []string
 	if openErr == nil {
 		for _, one := range registry.Own() {
@@ -297,7 +297,7 @@ func sessionEndLine(registry *shell.Registry, openErr error) string {
 	if len(running) == 0 {
 		return sessionEnded
 	}
-	if registry.Lifetime == shell.OutlivesTofu {
+	if registry.Lifetime == process.OutlivesTofu {
 		return sessionEnded + leavingPrefix + strings.Join(running, ", ")
 	}
 	return sessionEnded + stoppingPrefix + strings.Join(running, ", ")
@@ -321,8 +321,8 @@ func branchOf(dir string) string {
 	return strings.TrimPrefix(strings.TrimSpace(string(head)), "ref: refs/heads/")
 }
 
-func appShells(dir string, registry *shell.Registry, openErr error) func() []shells.Entry {
-	var tails shell.Tails
+func appShells(dir string, registry *process.Registry, openErr error) func() []shells.Entry {
+	var tails process.Tails
 	return func() []shells.Entry {
 		if openErr != nil {
 			return nil
@@ -340,14 +340,14 @@ func appShells(dir string, registry *shell.Registry, openErr error) func() []she
 		for _, one := range found {
 			entry := shells.Entry{Name: one.Name, Command: one.Command, Started: one.Started, Ended: one.Ended, ExitCode: one.ExitCode, PID: one.PID, Dir: one.Dir, Owner: wiring.OwnerName(one.Owner), OneShot: one.OneShot()}
 			switch one.State {
-			case shell.Running:
+			case process.Running:
 				entry.State = shells.Running
 				if one.LeftOver() {
 					entry.State = shells.LeftOver
 				}
-			case shell.Exited:
+			case process.Exited:
 				entry.State = shells.Exited
-			case shell.Killed:
+			case process.Killed:
 				entry.State = shells.Killed
 			}
 			entry.Log, _ = tails.Tail(registry, one.Name, tail)
@@ -358,7 +358,7 @@ func appShells(dir string, registry *shell.Registry, openErr error) func() []she
 	}
 }
 
-func appKillShell(registry *shell.Registry, openErr error) func(string) error {
+func appKillShell(registry *process.Registry, openErr error) func(string) error {
 	return func(name string) error {
 		if openErr != nil {
 			return openErr
@@ -367,17 +367,17 @@ func appKillShell(registry *shell.Registry, openErr error) func(string) error {
 	}
 }
 
-func shellCommand(ctx context.Context, dir string, registry *shell.Registry, command string) (string, bool) {
-	chosen, err := turn.ResolveRunShell(settingspkg.TextSaying(dir, settingspkg.Shell, nil))
+func shellCommand(ctx context.Context, dir string, registry *process.Registry, command string) (string, bool) {
+	chosen, err := loop.ResolveRunShell(settingspkg.TextSaying(dir, settingspkg.Shell, nil))
 	if err != nil {
 		return err.Error(), false
 	}
-	bash, err := turn.NewBashToolFromShell(dir, chosen)
+	bash, err := loop.NewBashToolFromShell(dir, chosen)
 	if err != nil {
 		return err.Error(), false
 	}
 	args, _ := json.Marshal(map[string]string{"command": command})
-	result, err := bash.Run(turn.WithShellRegistry(ctx, registry), args)
+	result, err := bash.Run(loop.WithShellRegistry(ctx, registry), args)
 	if err != nil {
 		return err.Error(), false
 	}
@@ -407,7 +407,7 @@ func appResume(live *host.Host, handle string) (string, host.Opened) {
 	return "continuing " + carry.Session + ", " + strconv.Itoa(carry.Carried) + " messages from " + output.Plural(carry.Steps, "step"), opened
 }
 
-func appSessions(inUse string) ([]tui.SessionRow, error) {
+func appSessions(inUse string) ([]app.SessionRow, error) {
 	store, err := sessionstore.Open()
 	if err != nil {
 		return nil, err
@@ -418,21 +418,21 @@ func appSessions(inUse string) ([]tui.SessionRow, error) {
 		return nil, err
 	}
 	open, _ := store.Identity(inUse)
-	rows := make([]tui.SessionRow, len(report.Sessions))
+	rows := make([]app.SessionRow, len(report.Sessions))
 	for i, row := range report.Sessions {
-		rows[i] = tui.SessionRow{ID: row.ID, Name: row.Handle, Task: output.OneLine(row.Task), InUse: row.ID == inUse || (open.Family != "" && row.Family == open.Family),
+		rows[i] = app.SessionRow{ID: row.ID, Name: row.Handle, Task: output.OneLine(row.Task), InUse: row.ID == inUse || (open.Family != "" && row.Family == open.Family),
 			Facts: sessionWhen(row.At, now) + " · " + output.Plural(row.Turns, "turn") + " · " + output.Plural(row.Generations, "generation")}
 	}
 	return rows, nil
 }
 
-func imagesRefused(setting string, model models.Model, attached int) string {
+func imagesRefused(setting string, model catalog.Model, attached int) string {
 	held := strconv.Itoa(attached) + " attached image(s) stayed out of this turn"
 	switch setting {
 	case settingspkg.ImagesOff:
 		return "images is off, so " + held
 	case settingspkg.ImagesAuto:
-		if model.Vision == models.VisionBlind {
+		if model.Vision == catalog.VisionBlind {
 			return "images is auto and " + model.Slug() + " cannot see images, so " + held + "; pick a model that can, or set images to inline"
 		}
 		return ""
@@ -530,7 +530,7 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 	say, dir := hooks.Say, cmp.Or(opts.Dir, ".")
 	started := startedTurn{Prepared: host.Prepared{MaxSteps: opts.MaxSteps}}
 	prepared := &started.Prepared
-	shell, err := turn.ResolveRunShell(settingspkg.TextSaying(dir, settingspkg.Shell, say))
+	shell, err := loop.ResolveRunShell(settingspkg.TextSaying(dir, settingspkg.Shell, say))
 	if err != nil {
 		return started, err
 	}
@@ -585,7 +585,7 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 		return started, gateErr
 	case errors.As(gateErr, &unusable):
 		return started, fmt.Errorf("no turn starts while the tool gate rule is unusable: %w", unusable)
-	case jev.IsUnbound(gateErr):
+	case core.IsUnbound(gateErr):
 		sayEach, unbound := say, gateErr.Error()
 		say = func(note string) {
 			if !strings.HasSuffix(note, unbound) {
@@ -594,7 +594,7 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 		}
 	}
 	sifter, scorer, siftErr := wiring.ShellSiftOn(opts.SiftArm, places.Log, e.warm.keys.keyring())
-	var contradiction turn.RuleContradictsTheTableError
+	var contradiction loop.RuleContradictsTheTableError
 	if siftErr != nil && e.missingJudge == missingJudgeRefuses && !errors.As(siftErr, &contradiction) {
 		return started, siftErr
 	}
@@ -607,14 +607,14 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 		return started, err
 	}
 	clock.step("model catalogue")
-	opened.Held.Wrapping(func(model turn.Model, budget recall.Budget) (turn.Model, error) {
+	opened.Held.Wrapping(func(model loop.Model, budget recall.Budget) (loop.Model, error) {
 		asked, guardErr := wiring.Guarded(model, budget)
 		if guardErr != nil {
 			return nil, guardErr
 		}
 		return hooks.Lead(clock.leading(asked)), nil
 	}, budget, opts)
-	wrapSubAgent := func(model turn.Model, budget recall.Budget) (turn.Model, error) {
+	wrapSubAgent := func(model loop.Model, budget recall.Budget) (loop.Model, error) {
 		asked, guardErr := wiring.Guarded(model, budget)
 		return hooks.SubAgent(asked), guardErr
 	}
@@ -669,7 +669,7 @@ func spentAccount(held *wiring.Accounts, model string) func(int64) host.TurnAcco
 			return spent
 		}
 		rows, err := held.Store.List()
-		if at := slices.IndexFunc(rows, func(row cred.Row) bool { return row.ID == id }); err == nil && at >= 0 {
+		if at := slices.IndexFunc(rows, func(row accounts.Row) bool { return row.ID == id }); err == nil && at >= 0 {
 			spent.Login = wiring.AccountName(rows[at].Credential.Identity, false)
 		}
 		return spent

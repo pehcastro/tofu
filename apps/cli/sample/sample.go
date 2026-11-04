@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/cli/render"
 )
 
@@ -120,8 +120,8 @@ func accountsData(now time.Time) accounts {
 		Keys: []key{
 			{Role: "llm", Service: "Meta", Hint: "tofu login llm meta"},
 			{Role: "llm", Service: "OpenRouter", Hint: "tofu login llm openrouter"},
-			{Role: "classifier", Service: "TypeSafe", Key: widget.Mask("made-up-typesafe-000000003498"), Use: "bound, judges tool calls with jev-latest"},
-			{Role: "classifier", Service: "OpenRouter", Key: widget.Mask("made-up-openrouter-00000007711"), Use: "unused, the classifier is typesafe/jev-latest"},
+			{Role: "classifier", Service: "TypeSafe", Key: render.Mask("made-up-typesafe-000000003498"), Use: "bound, judges tool calls with jev-latest"},
+			{Role: "classifier", Service: "OpenRouter", Key: render.Mask("made-up-openrouter-00000007711"), Use: "unused, the classifier is typesafe/jev-latest"},
 			{Role: "search", Service: "Brave", Hint: "tofu login search brave"},
 		},
 	}
@@ -230,7 +230,7 @@ func accountsPage(page cli.Page, data accounts, now time.Time) []string {
 			for _, w := range account.Windows {
 				detail := "only " + w.Only
 				if w.Only == "" {
-					detail = "resets in " + widget.Until(w.ResetsAt.Sub(now))
+					detail = "resets in " + render.Until(w.ResetsAt.Sub(now))
 				}
 				facts = append(facts, cli.Fact{Label: w.ID, Text: page.Bar(w.Used) + cli.Gap + page.Label(detail)})
 			}

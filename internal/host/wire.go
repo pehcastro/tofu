@@ -58,7 +58,7 @@ type Identity struct {
 func (i *Identity) stamp(seq int64) { i.Seq = seq }
 
 func (i *Identity) refer() {
-	i.Ref = tools.QuoteRef(i.Item)
+	i.Ref = registry.QuoteRef(i.Item)
 	if i.Item != "" && i.Item == i.Agent {
 		i.Ref = "[&" + i.Agent + "]"
 	}
@@ -113,14 +113,14 @@ func (SaidKind) enum() []string {
 	return []string{string(SaidNote), string(SaidGateOff), string(SaidFailure)}
 }
 
-func (k SaidKind) source() llm.Source {
+func (k SaidKind) source() core.Source {
 	switch k {
 	case SaidNote:
-		return llm.SourceNotice
+		return core.SourceNotice
 	case SaidGateOff:
-		return llm.SourceGate
+		return core.SourceGate
 	case SaidFailure:
-		return llm.SourceFailure
+		return core.SourceFailure
 	}
 	panic("host: unknown said kind " + string(k))
 }
@@ -161,29 +161,29 @@ func (ApprovalDecision) enum() []string {
 	return []string{string(AllowOnce), string(AllowFor), string(AllowAlways), string(RejectOnce), string(RejectAlways), string(Cancelled), string(RememberProject), string(RememberGlobal), string(RememberUserLocal), string(RememberProjectLocal)}
 }
 
-func keptAs(decision ApprovalDecision) memory.Scope {
+func keptAs(decision ApprovalDecision) entries.Scope {
 	switch decision {
 	case RememberGlobal:
-		return memory.Global
+		return entries.Global
 	case RememberProject:
-		return memory.Project
+		return entries.Project
 	case RememberUserLocal:
-		return memory.UserLocal
+		return entries.UserLocal
 	case RememberProjectLocal:
-		return memory.ProjectLocal
+		return entries.ProjectLocal
 	}
 	return ""
 }
 
-func RememberedAs(scope memory.Scope) ApprovalDecision {
+func RememberedAs(scope entries.Scope) ApprovalDecision {
 	switch scope {
-	case memory.Global:
+	case entries.Global:
 		return RememberGlobal
-	case memory.Project:
+	case entries.Project:
 		return RememberProject
-	case memory.UserLocal:
+	case entries.UserLocal:
 		return RememberUserLocal
-	case memory.ProjectLocal:
+	case entries.ProjectLocal:
 		return RememberProjectLocal
 	}
 	panic("host: unknown memory scope " + string(scope))
@@ -263,15 +263,15 @@ type SteerQueued struct {
 	Images []MessageImage `json:"images,omitempty"`
 }
 
-type OriginKind = llm.OriginKind
+type OriginKind = core.OriginKind
 
-type OriginSub = llm.Source
+type OriginSub = core.Source
 
 const (
-	OriginPerson = llm.OriginPerson
-	OriginCron   = llm.OriginCron
-	OriginAgent  = llm.OriginAgent
-	OriginTofu   = llm.OriginTofu
+	OriginPerson = core.OriginPerson
+	OriginCron   = core.OriginCron
+	OriginAgent  = core.OriginAgent
+	OriginTofu   = core.OriginTofu
 )
 
 type Origin struct {
@@ -286,9 +286,9 @@ type Origin struct {
 	DurationMs int64      `json:"durationMs,omitempty"`
 }
 
-func wireOrigin(origin llm.Origin) Origin {
+func wireOrigin(origin core.Origin) Origin {
 	wired := Origin{Kind: origin.Kind(), Sub: origin.Source, Name: origin.Name, Shown: origin.Shown, ID: origin.ID, Schedule: origin.Schedule, Exit: origin.Exit, DurationMs: origin.Ran.Milliseconds()}
-	if origin.Source == llm.SourceCronFire {
+	if origin.Source == core.SourceCronFire {
 		wired.Job, wired.ID = origin.ID, ""
 	}
 	return wired
@@ -329,7 +329,7 @@ type TurnAccount struct {
 type AccountReason string
 
 func (AccountReason) enum() []string {
-	return []string{string(turn.AccountPicked), string(turn.AccountMoved)}
+	return []string{string(loop.AccountPicked), string(loop.AccountMoved)}
 }
 
 type TurnCompleted struct {
@@ -457,7 +457,7 @@ type ShellHolding struct {
 	HeldSince *time.Time  `json:"heldSince,omitempty"`
 }
 
-func holdingOf(one shell.Shell) ShellHolding {
+func holdingOf(one process.Shell) ShellHolding {
 	return ShellHolding{Terminal: one.Terminal, Holder: ShellHolder(one.Holder), HeldSince: one.HeldSince}
 }
 
@@ -469,19 +469,19 @@ type ShellListening struct {
 
 func (s *ShellStarted) refer() {
 	s.Identity.refer()
-	s.Ref = cmp.Or(tools.QuoteRef(s.call), s.Ref)
+	s.Ref = cmp.Or(registry.QuoteRef(s.call), s.Ref)
 }
 
 type ShellKept string
 
 func (ShellKept) enum() []string {
-	return []string{string(shell.KeptBackground), string(shell.KeptMoved)}
+	return []string{string(process.KeptBackground), string(process.KeptMoved)}
 }
 
 type ShellReady string
 
 func (ShellReady) enum() []string {
-	return []string{string(shell.ReadyPort), string(shell.ReadyLine), string(shell.ReadyWaited), string(shell.ReadyStopped)}
+	return []string{string(process.ReadyPort), string(process.ReadyLine), string(process.ReadyWaited), string(process.ReadyStopped)}
 }
 
 type ShellOutput struct {
@@ -507,7 +507,7 @@ type ShellExited struct {
 type ShellHolder string
 
 func (ShellHolder) enum() []string {
-	return []string{string(shell.HolderAgent), string(shell.HolderPerson)}
+	return []string{string(process.HolderAgent), string(process.HolderPerson)}
 }
 
 type ShellSizeParams struct {
@@ -782,14 +782,14 @@ func (QuestionOutcome) enum() []string {
 type QuestionRequest struct {
 	Identity
 	Question  string                `json:"question"`
-	Questions []turn.PersonQuestion `json:"questions"`
+	Questions []loop.PersonQuestion `json:"questions"`
 	Blocking  bool                  `json:"blocking"`
 	WaitMs    int64                 `json:"waitMs"`
 }
 
 type QuestionAnswer struct {
 	Outcome QuestionOutcome    `json:"outcome"`
-	Answers []turn.PersonReply `json:"answers"`
+	Answers []loop.PersonReply `json:"answers"`
 }
 
 type QuestionResolved struct {
@@ -871,7 +871,7 @@ type HistoryLine struct {
 
 type Compaction struct {
 	Into         string        `json:"into,omitempty"`
-	Kind         turn.ForkKind `json:"kind"`
+	Kind         loop.ForkKind `json:"kind"`
 	Results      int           `json:"results"`
 	Focus        string        `json:"focus,omitempty"`
 	Focused      int           `json:"focused,omitempty"`
@@ -942,7 +942,7 @@ type SessionBranchParams struct {
 	Preset  string           `json:"preset,omitempty"`
 	Name    string           `json:"name,omitempty"`
 	Model   string           `json:"model,omitempty"`
-	Effort  llm.Effort       `json:"effort,omitempty"`
+	Effort  core.Effort      `json:"effort,omitempty"`
 	At      *SessionBranchAt `json:"at,omitempty"`
 	Message int              `json:"message,omitempty"`
 }
@@ -964,7 +964,7 @@ type SessionBranchResult struct {
 	Preset  string        `json:"preset,omitempty"`
 	Carried int           `json:"carried"`
 	Model   string        `json:"model,omitempty"`
-	Effort  llm.Effort    `json:"effort,omitempty"`
+	Effort  core.Effort   `json:"effort,omitempty"`
 	Words   string        `json:"words,omitempty"`
 }
 
@@ -1019,9 +1019,9 @@ type SessionListed struct {
 }
 
 type ModelPick struct {
-	Wire   string     `json:"wire,omitempty"`
-	Model  string     `json:"model,omitempty"`
-	Effort llm.Effort `json:"effort,omitempty"`
+	Wire   string      `json:"wire,omitempty"`
+	Model  string      `json:"model,omitempty"`
+	Effort core.Effort `json:"effort,omitempty"`
 }
 
 type SessionSetParams struct {
@@ -1090,7 +1090,7 @@ type ShellNow struct {
 type ShellState string
 
 func (ShellState) enum() []string {
-	return []string{string(shell.Running), string(shell.Exited), string(shell.Killed)}
+	return []string{string(process.Running), string(process.Exited), string(process.Killed)}
 }
 
 type TurnSendParams struct {
@@ -1187,7 +1187,7 @@ type LedgerCall struct {
 	Session string           `json:"session"`
 	Step    int              `json:"step"`
 	Attempt int              `json:"attempt"`
-	Call    turn.ToolCallRow `json:"call"`
+	Call    loop.ToolCallRow `json:"call"`
 }
 
 type LedgerRow struct {
@@ -1387,9 +1387,9 @@ func requests() []method {
 		{name: "memory.view", params: MemoryViewParams{}, result: MemoryView{}},
 		{name: "memory.zoom", params: MemoryZoomParams{}, result: MemoryView{}},
 		{name: "memory.recall", params: MemoryRecallParams{}, result: MemoryView{}},
-		{name: "memory.add", params: MemoryAddParams{}, result: memory.Entry{}},
-		{name: "memory.edit", params: MemoryEditParams{}, result: memory.Entry{}},
-		{name: "memory.remove", params: MemoryRemoveParams{}, result: memory.Entry{}},
+		{name: "memory.add", params: MemoryAddParams{}, result: entries.Entry{}},
+		{name: "memory.edit", params: MemoryEditParams{}, result: entries.Entry{}},
+		{name: "memory.remove", params: MemoryRemoveParams{}, result: entries.Entry{}},
 		{name: "reload", params: NoParams{}, result: ReloadDiff{}},
 		{name: "models.reload", params: NoParams{}, result: ModelReload{}},
 		{name: "hooks.trust", params: NoParams{}, result: HooksTrusted{}},

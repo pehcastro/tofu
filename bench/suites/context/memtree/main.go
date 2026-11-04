@@ -16,7 +16,7 @@ const items = 10_000
 
 type arm struct {
 	name             string
-	store            *memtree.Store
+	store            *tree.Store
 	high, low        int
 	previous         string
 	unchanged, shown int
@@ -58,7 +58,7 @@ func run() error {
 		{name: "merging at every append, held at 3/4", high: budget * 3 / 4, low: budget * 3 / 4},
 	}
 	for _, a := range arms {
-		if a.store, err = memtree.Open(filepath.Join(dir, strings.Fields(a.name)[0]+".jsonl")); err != nil {
+		if a.store, err = tree.Open(filepath.Join(dir, strings.Fields(a.name)[0]+".jsonl")); err != nil {
 			return err
 		}
 		defer func() { _ = a.store.Close() }()
@@ -71,7 +71,7 @@ func run() error {
 		if random.IntN(10) < 3 {
 			size = 600 + random.IntN(2400)
 		}
-		item := memtree.Item{Kind: kinds[i%len(kinds)], Text: fmt.Sprintf("item %d ", i) + strings.Repeat("x", size)}
+		item := tree.Item{Kind: kinds[i%len(kinds)], Text: fmt.Sprintf("item %d ", i) + strings.Repeat("x", size)}
 		for at, a := range arms {
 			if err := a.store.Append(item); err != nil {
 				return err

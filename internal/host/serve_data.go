@@ -122,11 +122,11 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, func(p MemoryViewParams) (any, error) { return s.memoryRead(p.Scope, nil) })
 	case "memory.zoom":
 		return handle(raw, func(p MemoryZoomParams) (any, error) {
-			return s.memoryRead(p.Store, func(store *memtree.Store) ([]string, error) { return store.Zoom(p.ID, p.N) })
+			return s.memoryRead(p.Store, func(store *tree.Store) ([]string, error) { return store.Zoom(p.ID, p.N) })
 		})
 	case "memory.recall":
 		return handle(raw, func(p MemoryRecallParams) (any, error) {
-			return s.memoryRead(p.Store, func(store *memtree.Store) ([]string, error) { return store.Recall(p.Regex) })
+			return s.memoryRead(p.Store, func(store *tree.Store) ([]string, error) { return store.Recall(p.Regex) })
 		})
 	case "memory.add":
 		return handle(raw, s.memoryAdd)
@@ -256,15 +256,15 @@ func (s *server) docs(p DocsParams) (any, error) {
 	return DocsAnswer{Page: &page}, err
 }
 
-func (s *server) shelves(scope memory.Scope) (memory.Memory, error) {
+func (s *server) shelves(scope entries.Scope) (entries.Memory, error) {
 	if scope == "" {
-		return memory.Memory{}, &Refusal{Code: CodeBadParams, Message: "which scope? " + strings.Join(scopeNames(), ", ")}
+		return entries.Memory{}, &Refusal{Code: CodeBadParams, Message: "which scope? " + strings.Join(scopeNames(), ", ")}
 	}
-	return memory.Open(s.Dir)
+	return entries.Open(s.Dir)
 }
 
 func scopeNames() []string {
-	return []string{string(memory.UserLocal), string(memory.ProjectLocal), string(memory.Project), string(memory.Global)}
+	return []string{string(entries.UserLocal), string(entries.ProjectLocal), string(entries.Project), string(entries.Global)}
 }
 
 func (s *server) memoryAdd(p MemoryAddParams) (any, error) {
@@ -275,13 +275,13 @@ func (s *server) memoryAdd(p MemoryAddParams) (any, error) {
 	kind := p.Kind
 	switch {
 	case kind != "":
-	case p.Scope == memory.Global || p.Scope == memory.UserLocal:
-		kind = memory.KindPerson
+	case p.Scope == entries.Global || p.Scope == entries.UserLocal:
+		kind = entries.KindPerson
 	default:
-		kind = memory.KindProject
+		kind = entries.KindProject
 	}
 	focus := s.focus().host
-	added, err := shelves.Add(memory.Entry{Scope: p.Scope, Kind: kind, Text: p.Text, Said: p.Text, Session: focus.ID(), At: time.Now(), By: memory.ByPerson}, "")
+	added, err := shelves.Add(entries.Entry{Scope: p.Scope, Kind: kind, Text: p.Text, Said: p.Text, Session: focus.ID(), At: time.Now(), By: entries.ByPerson}, "")
 	if err != nil {
 		return nil, err
 	}

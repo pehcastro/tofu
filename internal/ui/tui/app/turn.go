@@ -1,4 +1,4 @@
-package tui
+package app
 
 import (
 	"cmp"
@@ -16,7 +16,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	isession "tofu/internal/store/session"
 	isettings "tofu/internal/store/settings"
 	"tofu/internal/ui/tui/chat/feed"
@@ -57,19 +57,19 @@ const (
 	messageTool        = "message"
 )
 
-func gateOffNote(why jev.Why, said string) string {
+func gateOffNote(why core.Why, said string) string {
 	switch why {
-	case jev.WhyNoFile:
+	case core.WhyNoFile:
 		return gateOffLine + " " + gateOffNoKey
-	case jev.WhyFileLacksName:
+	case core.WhyFileLacksName:
 		return gateOffLine + " " + gateOffKeyUnnamed
-	case jev.WhyUnreadable:
+	case core.WhyUnreadable:
 		return gateOffLine + " " + gateOffKeyUnread
-	case jev.WhyStoreUnreadable:
+	case core.WhyStoreUnreadable:
 		return gateOffLine + " " + gateOffStoreUnread
-	case jev.WhyUnexplained:
+	case core.WhyUnexplained:
 		return gateOffLine + " " + gateOffUnexplained
-	case jev.WhyUnbound:
+	case core.WhyUnbound:
 		return said + "."
 	}
 	panic("tui: unknown gate reason")

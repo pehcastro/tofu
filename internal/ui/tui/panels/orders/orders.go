@@ -173,7 +173,7 @@ func (m *Model) lines() []string {
 	}
 	var lines []string
 	if len(m.unreplayed) > 0 {
-		for _, line := range widget.Wrap(strings.Join(m.unreplayed, ", ")+unreplayed, width) {
+		for _, line := range render.Wrap(strings.Join(m.unreplayed, ", ")+unreplayed, width) {
 			lines = append(lines, look.Faint(line))
 		}
 		lines = append(lines, "")
@@ -184,10 +184,10 @@ func (m *Model) lines() []string {
 	}
 	kindWidth := 0
 	for _, order := range m.orders {
-		kindWidth = max(kindWidth, widget.Cells(string(order.Kind)))
+		kindWidth = max(kindWidth, render.Cells(string(order.Kind)))
 	}
 	for _, order := range m.orders {
-		head := look.Style(colour(order.Kind)).Render(widget.Pad(string(order.Kind), kindWidth)) + columnGap + look.AgentRef(order.Agent)
+		head := look.Style(colour(order.Kind)).Render(render.Pad(string(order.Kind), kindWidth)) + columnGap + look.AgentRef(order.Agent)
 		if order.Round > 1 {
 			head += look.Faint(" · round " + strconv.Itoa(order.Round))
 		}
@@ -197,12 +197,12 @@ func (m *Model) lines() []string {
 		text := strings.TrimSpace(order.Text)
 		switch {
 		case text == "":
-			lines = append(lines, widget.Fit(head, width))
-		case !strings.Contains(text, "\n") && widget.Cells(head+columnGap+text) <= width:
+			lines = append(lines, render.Fit(head, width))
+		case !strings.Contains(text, "\n") && render.Cells(head+columnGap+text) <= width:
 			lines = append(lines, head+columnGap+look.Muted(text))
 		default:
-			lines = append(lines, widget.Fit(head, width))
-			for _, line := range widget.Wrap(text, width-len(indent)) {
+			lines = append(lines, render.Fit(head, width))
+			for _, line := range render.Wrap(text, width-len(indent)) {
 				lines = append(lines, indent+look.Muted(line))
 			}
 		}

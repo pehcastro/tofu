@@ -13,7 +13,7 @@ import (
 	"tofu/apps/cli/output"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
-	testkit "tofu/internal/testkit/cli"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 )
 
@@ -56,7 +56,7 @@ func jevCases() []jevCase {
 
 func jevProject(t *testing.T) {
 	t.Helper()
-	testkit.IsolateHome(t)
+	cli.IsolateHome(t)
 	project := filepath.Join(os.Getenv("USERPROFILE"), "project")
 	files := map[string]string{
 		"probe@1.yaml": "name: probe\ndomain: dev\nquestions_version: 1\n\nquestions:\n  vague:\n    type: noul\n    instructions: \"\"\n",

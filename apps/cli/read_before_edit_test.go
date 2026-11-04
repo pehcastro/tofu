@@ -13,19 +13,19 @@ import (
 )
 
 func TestAFileReadInTurnOneIsEditedInTurnTwoWithoutARefusal(t *testing.T) {
-	dir := testkit.ScratchProject(t)
+	dir := cli.ScratchProject(t)
 	target := filepath.Join(dir, "package.json")
 	if err := os.WriteFile(target, []byte("{\n  \"name\": \"moth\"\n}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	call := func(id, name, args string) llm.Decision {
-		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{{ID: id, Name: name, Arguments: json.RawMessage(args)}}}
+	call := func(id, name, args string) core.Decision {
+		return core.Decision{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{{ID: id, Name: name, Arguments: json.RawMessage(args)}}}
 	}
-	model := &sendModel{queued: []llm.Decision{
+	model := &sendModel{queued: []core.Decision{
 		call("call-1", "read", `{"path":"package.json"}`),
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it"},
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "read it"},
 		call("call-2", "edit", `{"path":"package.json","old_string":"moth","new_string":"inky"}`),
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "renamed it"},
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "renamed it"},
 	}}
 	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil

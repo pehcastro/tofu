@@ -1,4 +1,4 @@
-package tui_test
+package app_test
 
 import (
 	"fmt"
@@ -10,7 +10,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/internal/ui/tui/app"
+	tui "tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/panels/shells"
 )
 

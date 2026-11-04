@@ -43,7 +43,7 @@ func loadKeyMask() keyMask {
 func (h *Host) emitter() *emitter { return &emitter{h: h, keyMask: h.keys()} }
 
 func (e *emitter) emit(event Event) {
-	if event.Kind == EventToolCall && event.Tool == tools.CronToolName {
+	if event.Kind == EventToolCall && event.Tool == registry.CronToolName {
 		e.h.armCron()
 	}
 	if event.Kind == EventTextDelta {

@@ -1,4 +1,4 @@
-package tui
+package app
 
 import (
 	"cmp"
@@ -119,7 +119,7 @@ func (a *App) quoteSelection() tea.Cmd {
 		return nil
 	}
 	cmd := a.show(screenChat)
-	a.view.Insert(tools.QuoteRef(selected) + " ")
+	a.view.Insert(registry.QuoteRef(selected) + " ")
 	return cmd
 }
 
@@ -257,15 +257,15 @@ func (a *App) submit() tea.Cmd {
 }
 
 func (a *App) cycleEffort() {
-	var offered []llm.Effort
+	var offered []core.Effort
 	for _, wire := range a.wires {
 		if wire.Provider == a.provider {
 			offered = wire.Efforts
 		}
 	}
 	chosen, known := a.chosenModel()
-	levels := slices.DeleteFunc([]llm.Effort{llm.EffortLow, llm.EffortMedium, llm.EffortHigh, llm.EffortXHigh, llm.EffortMax},
-		func(level llm.Effort) bool {
+	levels := slices.DeleteFunc([]core.Effort{core.EffortLow, core.EffortMedium, core.EffortHigh, core.EffortXHigh, core.EffortMax},
+		func(level core.Effort) bool {
 			return !slices.Contains(offered, level) || known && !slices.Contains(chosen.Efforts, level)
 		})
 	if len(levels) == 0 {
@@ -285,8 +285,8 @@ func (a *App) chosenModel() (library.Model, bool) {
 	return a.chosen.model, a.chosen.known
 }
 
-func (a *App) shownEffort() llm.Effort {
-	shown := cmp.Or(a.effort, llm.EffortDefault)
+func (a *App) shownEffort() core.Effort {
+	shown := cmp.Or(a.effort, core.EffortDefault)
 	if chosen, known := a.chosenModel(); known {
 		return chosen.EffortTaken(shown)
 	}

@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/models/transport"
@@ -118,21 +118,21 @@ func updateFrom(current string, release bool, args []string, out, errOut io.Writ
 	if err != nil {
 		return o.Fail(err)
 	}
-	if report.Aside, err = browser.ReplaceExecutable(target, binary); err != nil {
+	if report.Aside, err = driver.ReplaceExecutable(target, binary); err != nil {
 		return o.Fail(err)
 	}
 	report.Installed = target
 	home, err := os.UserHomeDir()
 	refreshed := false
 	if err == nil {
-		refreshed, err = browser.RefreshIfCopyOf(home, target)
+		refreshed, err = driver.RefreshIfCopyOf(home, target)
 	}
 	return o.Done(true, report, func(page cli.Page) []string {
 		switch {
 		case err != nil:
 			return append(lines(page), page.Glyph(cli.Warn)+" the copy Chrome starts was not refreshed: "+err.Error(), page.Hint("tofu browser install refreshes it"))
 		case refreshed:
-			return append(lines(page), page.Receipt(cli.Changed, "the copy Chrome starts is on this build", page.Path(browser.CopyPath(home))))
+			return append(lines(page), page.Receipt(cli.Changed, "the copy Chrome starts is on this build", page.Path(driver.CopyPath(home))))
 		}
 		return lines(page)
 	})
@@ -264,7 +264,7 @@ func (w *updateWatch) install(ctx context.Context, release latestRelease, versio
 	if err != nil {
 		return err
 	}
-	if _, err := browser.ReplaceExecutable(w.target, binary); err != nil {
+	if _, err := driver.ReplaceExecutable(w.target, binary); err != nil {
 		return err
 	}
 	installed, err := os.Stat(w.target)

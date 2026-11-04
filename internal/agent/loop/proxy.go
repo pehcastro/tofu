@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -77,7 +77,7 @@ type ProxyRow struct {
 	Note       string `json:"note,omitempty"`
 }
 
-func (p *CommandProxy) rewrite(ctx context.Context, call llm.ToolCall) (json.RawMessage, *ProxyRow) {
+func (p *CommandProxy) rewrite(ctx context.Context, call core.ToolCall) (json.RawMessage, *ProxyRow) {
 	var args bashArgs
 	if p == nil || call.Name != bashToolName || json.Unmarshal(call.Arguments, &args) != nil || strings.TrimSpace(args.Command) == "" {
 		return call.Arguments, nil

@@ -72,7 +72,7 @@ func (s Store) SaveEpic(key string, epic Epic) error {
 	epics, _ := s.Epics(key)
 	at := slices.IndexFunc(epics, func(e Epic) bool { return e.ID == epic.ID })
 	m := Managed{Local: Local{Store: s}}
-	planned := subject{event: rule.HookEpicCreate, key: key, ticket: Ticket{Front: Front{Title: epic.Title, Epic: epic.ID}}}
+	planned := subject{event: rules.HookEpicCreate, key: key, ticket: Ticket{Front: Front{Title: epic.Title, Epic: epic.ID}}}
 	if at < 0 {
 		if err := m.gate(&planned); err != nil {
 			return err
@@ -81,7 +81,7 @@ func (s Store) SaveEpic(key string, epic Epic) error {
 		if err != nil {
 			return err
 		}
-		epic.Gated = slices.ContainsFunc(hooks, func(h rule.Hook) bool { return runsCheck(h, checkEpicReady) })
+		epic.Gated = slices.ContainsFunc(hooks, func(h rules.Hook) bool { return runsCheck(h, checkEpicReady) })
 	}
 	if err := s.savePlan(key, "epics", epic.ID, epic.Text, "title", epic.Title, "done", fmt.Sprint(epic.Done), "milestone", epic.Milestone,
 		"gated", fmt.Sprint(epic.Gated), "research", epic.Research, "design", epic.Design, "first", epic.First); err != nil {
@@ -91,7 +91,7 @@ func (s Store) SaveEpic(key string, epic Epic) error {
 	case at < 0:
 		return m.after(planned)
 	case epic.Done && !epics[at].Done && epic.Milestone != "" && !slices.ContainsFunc(epics, func(e Epic) bool { return e.ID != epic.ID && e.Milestone == epic.Milestone && !e.Done }):
-		planned.event, planned.ticket.Title = rule.HookMilestoneReach, epic.Milestone
+		planned.event, planned.ticket.Title = rules.HookMilestoneReach, epic.Milestone
 		return m.after(planned)
 	}
 	return nil
@@ -172,7 +172,7 @@ func (s Store) planFiles(key, collection string) ([]planFile, error) {
 }
 
 func parsePlan(raw []byte) (planFile, error) {
-	front, body, found := skill.SplitFrontMatter(string(raw))
+	front, body, found := skills.SplitFrontMatter(string(raw))
 	if !found {
 		return planFile{}, errors.New("no front matter between two --- lines")
 	}

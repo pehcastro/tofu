@@ -173,7 +173,7 @@ func (m *Model) activityLine() string {
 			parts = append(parts, Doing(doing).drawn(count))
 		}
 	}
-	return widget.Fit(margin+strings.Join(parts, look.Muted(foldSeparator)), m.width)
+	return render.Fit(margin+strings.Join(parts, look.Muted(foldSeparator)), m.width)
 }
 
 func (m *Model) turnLines() []string {
@@ -191,12 +191,12 @@ func (m *Model) turnLines() []string {
 }
 
 func (m *Model) withNotice(line string) string {
-	room := m.width - widget.Cells(line) - widget.Cells(metaGap) - composerPadX
+	room := m.width - render.Cells(line) - render.Cells(metaGap) - composerPadX
 	if m.Notice == "" || room < 1 {
 		return line
 	}
-	notice := widget.Fit(m.Notice, room)
-	return line + strings.Repeat(" ", m.width-composerPadX-widget.Cells(line)-widget.Cells(notice)) + notice
+	notice := render.Fit(m.Notice, room)
+	return line + strings.Repeat(" ", m.width-composerPadX-render.Cells(line)-render.Cells(notice)) + notice
 }
 
 func (m *Model) settle() {
@@ -226,13 +226,13 @@ func (m *Model) requestLine() string {
 		if m.Stopping || m.LettingToolsFinish {
 			word, style = stoppingWord, look.Style(look.Amber)
 		}
-		line += look.Accent(progress.Spin(m.frame)) + " " + style.Render(word) + look.Muted(requestSeparator+widget.Until(m.phaseSince()))
+		line += look.Accent(progress.Spin(m.frame)) + " " + style.Render(word) + look.Muted(requestSeparator+render.Until(m.phaseSince()))
 		if m.requestID == "" {
 			return line
 		}
 		line, id = line+look.Muted(metaGap), m.requestID
 	case m.leadIdle():
-		line += look.Accent(progress.Spin(m.frame)) + " " + look.Style(look.Violet).Render(m.leadIdleWords()) + look.Muted(requestSeparator+widget.Until(max(m.now().Sub(m.leadIdleSince), 0))+metaGap)
+		line += look.Accent(progress.Spin(m.frame)) + " " + look.Style(look.Violet).Render(m.leadIdleWords()) + look.Muted(requestSeparator+render.Until(max(m.now().Sub(m.leadIdleSince), 0))+metaGap)
 	case m.cooked != "":
 		line, id = line+look.Muted(m.cooked+metaGap), m.cookedID
 	default:
@@ -338,7 +338,7 @@ func (m *Model) wordRows(words []string) []string {
 		switch {
 		case row == "":
 			row = word
-		case widget.Cells(row)+1+widget.Cells(word) > m.textWidth():
+		case render.Cells(row)+1+render.Cells(word) > m.textWidth():
 			rows = append(rows, row)
 			row = wrapIndent + word
 		default:

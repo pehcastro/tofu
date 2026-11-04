@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -111,7 +111,7 @@ type memoTool struct {
 
 func (t memoTool) Name() string { return t.tool.Name() }
 
-func (t memoTool) Definition() llm.Tool { return t.tool.Definition() }
+func (t memoTool) Definition() core.Tool { return t.tool.Definition() }
 
 func (t memoTool) Uncached() contract.Tool { return t.tool }
 

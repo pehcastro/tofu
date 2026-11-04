@@ -1,4 +1,4 @@
-package question
+package questions
 
 import (
 	"regexp"
@@ -148,11 +148,11 @@ func requestTokens(set Set) (stateTokens, longestQuestionTokens, totalTokens int
 			qBytes += len(o.Name)
 		}
 		totalBytes += qBytes
-		if tokens := jev.EstimateTokens(qBytes); tokens > longestQuestionTokens {
+		if tokens := core.EstimateTokens(qBytes); tokens > longestQuestionTokens {
 			longestQuestionTokens = tokens
 		}
 	}
-	return jev.EstimateTokens(stateBytes), longestQuestionTokens, jev.EstimateTokens(totalBytes)
+	return core.EstimateTokens(stateBytes), longestQuestionTokens, core.EstimateTokens(totalBytes)
 }
 
 func sorted(set map[string]bool) []string {

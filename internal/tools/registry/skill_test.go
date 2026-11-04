@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -19,7 +19,7 @@ func TestSkillToolReturnsTheBodyAndRefusesTheRest(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte("---\ndescription: d\n---\nwrite feat: subjects"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	tool := NewSkill([]skill.Skill{{Name: "commit", Description: "d", File: filepath.Join(dir, "SKILL.md"), Dir: dir}})
+	tool := NewSkill([]skills.Skill{{Name: "commit", Description: "d", File: filepath.Join(dir, "SKILL.md"), Dir: dir}})
 	if schema, _ := json.Marshal(tool.Definition().Parameters); tool.Name() != "skill" || !strings.Contains(string(schema), `"required":["name"]`) {
 		t.Fatalf("definition %+v, want skill with name required", tool.Definition())
 	}

@@ -21,13 +21,13 @@ import (
 type subAccount struct {
 	mu           sync.Mutex
 	id           int64
-	before       []llm.Decision
+	before       []core.Decision
 	limitedUntil time.Time
 	spent        bool
-	asked        []llm.Request
+	asked        []core.Request
 }
 
-func (a *subAccount) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+func (a *subAccount) Ask(_ context.Context, request core.Request) (core.Decision, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.asked = append(a.asked, request)
@@ -38,12 +38,12 @@ func (a *subAccount) Ask(_ context.Context, request llm.Request) (llm.Decision, 
 	}
 	if time.Now().Before(a.limitedUntil) {
 		a.spent = true
-		return llm.Decision{}, &transport.Error{Kind: transport.KindRateLimit, Op: "anthropic.Ask", Status: 429, Detail: "rate_limit_error"}
+		return core.Decision{}, &transport.Error{Kind: transport.KindRateLimit, Op: "anthropic.Ask", Status: 429, Detail: "rate_limit_error"}
 	}
-	return llm.Decision{Build: "stub", Outcome: llm.OutcomeMessage, Content: "done on account " + strconv.FormatInt(a.id, 10)}, nil
+	return core.Decision{Build: "stub", Outcome: core.OutcomeMessage, Content: "done on account " + strconv.FormatInt(a.id, 10)}, nil
 }
 
-func (a *subAccount) requests() []llm.Request {
+func (a *subAccount) requests() []core.Request {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return slices.Clone(a.asked)
@@ -72,19 +72,19 @@ func (e *limitedSubscriptions) Prepare(start Turn, hooks Hooks) (Prepared, error
 	e.prepared = append(e.prepared, wire)
 	e.mu.Unlock()
 	store, err := session.OpenIn(e.dir)
-	config := turn.Config{Task: start.Task, Caps: turn.Caps{MaxSteps: 6}, Inbox: hooks.Inbox, ResultBytesCap: konst.TurnResultBytesCap, Spend: turn.SpendSubscription, Wire: wire, Notify: hooks.Say}
+	config := loop.Config{Task: start.Task, Caps: loop.Caps{MaxSteps: 6}, Inbox: hooks.Inbox, ResultBytesCap: konst.TurnResultBytesCap, Spend: loop.SpendSubscription, Wire: wire, Notify: hooks.Say}
 	prepared := Prepared{Config: config, Sessions: store}
 	if wire == "codex" {
 		prepared.Config.Model = e.codex
 		return prepared, err
 	}
 	held := func(id int64) *subAccount { return e.accounts[id-1] }
-	account := func(held *subAccount) turn.Account {
-		return turn.Account{ID: held.id, Model: held, Headroom: 0.4, Window: "5h"}
+	account := func(held *subAccount) loop.Account {
+		return loop.Account{ID: held.id, Model: held, Headroom: 0.4, Window: "5h"}
 	}
-	prepared.Config.Accounts = turn.Accounts{
-		Pick: func(context.Context) (turn.Account, error) { return account(e.accounts[0]), nil },
-		Next: func(_ context.Context, pinned turn.Account) (turn.Account, bool, error) {
+	prepared.Config.Accounts = loop.Accounts{
+		Pick: func(context.Context) (loop.Account, error) { return account(e.accounts[0]), nil },
+		Next: func(_ context.Context, pinned loop.Account) (loop.Account, bool, error) {
 			pinnedAt := held(pinned.ID)
 			pinnedAt.mu.Lock()
 			spent := pinnedAt.spent
@@ -94,21 +94,21 @@ func (e *limitedSubscriptions) Prepare(start Turn, hooks Hooks) (Prepared, error
 					return account(other), true, nil
 				}
 			}
-			return turn.Account{}, false, nil
+			return loop.Account{}, false, nil
 		},
-		Resets: func(_ context.Context, pinned turn.Account) (time.Time, bool) {
+		Resets: func(_ context.Context, pinned loop.Account) (time.Time, bool) {
 			return held(pinned.ID).limitedUntil, true
 		},
 	}
 	prepared.Account = func(id int64) TurnAccount {
 		return TurnAccount{Source: "claude-sub", AccountID: id, Model: "claude-opus-5"}
 	}
-	prepared.Config.Accounts.Elsewhere = func(context.Context, []string, int) (turn.Moved, error) {
+	prepared.Config.Accounts.Elsewhere = func(context.Context, []string, int) (loop.Moved, error) {
 		if e.codex == nil {
-			return turn.Moved{}, errors.New("continuity is not set, so the work stops here")
+			return loop.Moved{}, errors.New("continuity is not set, so the work stops here")
 		}
-		return turn.Moved{From: "claude-sub", To: "codex-sub/gpt-5.6-sol", Setting: "Continue on another subscription", Account: turn.Account{Model: e.codex},
-			Wire: "codex", Spend: turn.SpendSubscription}, nil
+		return loop.Moved{From: "claude-sub", To: "codex-sub/gpt-5.6-sol", Setting: "Continue on another subscription", Account: loop.Account{Model: e.codex},
+			Wire: "codex", Spend: loop.SpendSubscription}, nil
 	}
 	return prepared, err
 }
@@ -166,7 +166,7 @@ func (r *limitRun) saw(method string) bool {
 	return slices.ContainsFunc(r.seen, func(frame string) bool { return strings.HasPrefix(frame, method+" ") })
 }
 
-func limitedFor(id int64, limit time.Duration, before ...llm.Decision) *subAccount {
+func limitedFor(id int64, limit time.Duration, before ...core.Decision) *subAccount {
 	return &subAccount{id: id, limitedUntil: time.Now().Add(limit), before: before}
 }
 
@@ -181,8 +181,8 @@ func TestRotateToTheSecondAccountWithoutAsking(t *testing.T) {
 }
 
 func TestLimitOnEveryAccountMovesToTheContinuityModelInTheSameTurn(t *testing.T) {
-	thought := llm.Decision{Build: "stub", Outcome: llm.OutcomeToolCalls, Thinking: llm.Thinking{Text: "the note first", Signature: "sig-anthropic"},
-		ToolCalls: []llm.ToolCall{{ID: "call-1", Name: "nothing", Arguments: json.RawMessage(`{}`)}}}
+	thought := core.Decision{Build: "stub", Outcome: core.OutcomeToolCalls, Thinking: core.Thinking{Text: "the note first", Signature: "sig-anthropic"},
+		ToolCalls: []core.ToolCall{{ID: "call-1", Name: "nothing", Arguments: json.RawMessage(`{}`)}}}
 	codex := &subAccount{id: 9}
 	r := startLimited(t, &limitedSubscriptions{accounts: []*subAccount{limitedFor(1, time.Hour, thought), limitedFor(2, time.Hour)}, codex: codex})
 	r.send()
@@ -198,7 +198,7 @@ func TestLimitOnEveryAccountMovesToTheContinuityModelInTheSameTurn(t *testing.T)
 	}
 	var task, call bool
 	for _, message := range requests[0].Messages {
-		task = task || message.Role == llm.RoleUser && strings.Contains(message.Content, "read the note")
+		task = task || message.Role == core.RoleUser && strings.Contains(message.Content, "read the note")
 		call = call || len(message.ToolCalls) == 1 && message.ToolCalls[0].ID == "call-1"
 		if !message.Thinking.Empty() {
 			t.Fatalf("codex was sent anthropic's thinking block %+v", message.Thinking)
@@ -255,7 +255,7 @@ func TestResumeAtTheResetWithNoInputAndEscCancelsTheWait(t *testing.T) {
 		codex := &subAccount{id: 9}
 		r := startLimited(t, &limitedSubscriptions{accounts: []*subAccount{limitedFor(1, time.Hour), limitedFor(2, time.Hour)}, codex: codex})
 		r.h.mu.Lock()
-		r.h.begin(Pick{Wire: "anthropic"}, "check the build", llm.Origin{Source: llm.SourceCronFire, ID: "c1"})
+		r.h.begin(Pick{Wire: "anthropic"}, "check the build", core.Origin{Source: core.SourceCronFire, ID: "c1"})
 		r.h.mu.Unlock()
 		r.until("note", "continues on codex-sub/gpt-5.6-sol")
 		r.until("turn.completed", `"status":"finished"`)

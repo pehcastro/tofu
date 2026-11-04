@@ -1,4 +1,4 @@
-package question
+package questions
 
 import "tofu/internal/models/classifiers/core"
 
@@ -95,19 +95,19 @@ func (s Set) Question(name string) (Question, bool) {
 	return Question{}, false
 }
 
-func (q Question) ToJev() jev.Question {
-	jq := jev.Question{ID: q.Name, Instructions: q.Instructions}
+func (q Question) ToJev() core.Question {
+	jq := core.Question{ID: q.Name, Instructions: q.Instructions}
 	switch q.Kind {
 	case KindNoul:
-		jq.Kind = jev.QuestionNoul
+		jq.Kind = core.QuestionNoul
 		jq.True, jq.False = q.True.Text, q.False.Text
 	case KindChoice:
-		jq.Kind = jev.QuestionChoice
+		jq.Kind = core.QuestionChoice
 		for _, option := range q.Options {
-			jq.Options = append(jq.Options, jev.Option{Name: option.Name, Criteria: option.Criteria.jevValue()})
+			jq.Options = append(jq.Options, core.Option{Name: option.Name, Criteria: option.Criteria.jevValue()})
 		}
 	case KindScore:
-		jq.Kind = jev.QuestionScore
+		jq.Kind = core.QuestionScore
 		for _, level := range q.Levels {
 			jq.Levels = append(jq.Levels, level.Text)
 		}

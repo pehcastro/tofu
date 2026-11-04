@@ -3,7 +3,7 @@ package questions_test
 import (
 	"testing"
 
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/library/questions"
 )
@@ -17,15 +17,15 @@ func TestBrowserStepOffersEveryOpByItsEnumName(t *testing.T) {
 	if !ok {
 		t.Fatal("the set asks no operation question")
 	}
-	offered := map[browser.Op]bool{}
+	offered := map[driver.Op]bool{}
 	for _, option := range operation.Options {
-		op, err := browser.ParseOp(option.Name)
+		op, err := driver.ParseOp(option.Name)
 		if err != nil {
 			t.Errorf("option %q: %v", option.Name, err)
 		}
 		offered[op] = true
 	}
-	for op := browser.OpClick; op <= browser.OpBlocked; op++ {
+	for op := driver.OpClick; op <= driver.OpBlocked; op++ {
 		if !offered[op] {
 			t.Errorf("the operation question does not offer %s", op)
 		}

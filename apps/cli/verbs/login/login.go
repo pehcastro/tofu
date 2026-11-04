@@ -15,7 +15,7 @@ import (
 	"github.com/mattn/go-isatty"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
@@ -79,7 +79,7 @@ func failure(what, hint string) *Refusal {
 }
 
 func refusedBy(display, hint string, err error) *Refusal {
-	var refused *models.KeyRefused
+	var refused *catalog.KeyRefused
 	var answered *transport.Error
 	what := err.Error()
 	switch {
@@ -120,7 +120,7 @@ func answerVerb(verb string, args []string, out, errOut io.Writer, now time.Time
 	if asJSON {
 		return jsonExit(out, cli.Envelope{Verb: verb, OK: true, At: now, Data: receipt.Data})
 	}
-	path, _ := cred.Path()
+	path, _ := accounts.Path()
 	page := cli.Detect(out, os.Environ())
 	if page.Print(out, []string{page.Receipt(cli.Done, receipt.Text, path)}) != nil {
 		return output.ExitVerdict
@@ -164,7 +164,7 @@ func login(args []string, in io.Reader, prompts io.Writer, now time.Time) (Recei
 
 func retiredLogin(word string) *Refusal {
 	provider := word
-	spec, err := cred.Lookup(word)
+	spec, err := accounts.Lookup(word)
 	switch {
 	case err == nil:
 		provider = string(spec.Provider)
@@ -174,21 +174,21 @@ func retiredLogin(word string) *Refusal {
 	return usageRefusal("tofu login "+word+" is now "+wiring.LoginHint(provider), wiring.LoginHint(provider))
 }
 
-func providerFor(verb string, want host.AccountRole, args []string) (cred.Spec, *Refusal) {
+func providerFor(verb string, want host.AccountRole, args []string) (accounts.Spec, *Refusal) {
 	if len(args) == 0 {
-		return cred.Spec{}, usageRefusal("no "+string(want)+" provider named", Usage)
+		return accounts.Spec{}, usageRefusal("no "+string(want)+" provider named", Usage)
 	}
 	provider := args[0]
-	spec, err := cred.Lookup(provider)
+	spec, err := accounts.Lookup(provider)
 	switch {
 	case err == nil && string(spec.Provider) != provider:
-		return cred.Spec{}, usageRefusal(provider+" is now "+string(spec.Provider), wiring.CommandFor(verb, host.RoleLLM, string(spec.Provider)))
+		return accounts.Spec{}, usageRefusal(provider+" is now "+string(spec.Provider), wiring.CommandFor(verb, host.RoleLLM, string(spec.Provider)))
 	case err == nil && want != host.RoleLLM:
-		return cred.Spec{}, usageRefusal(provider+" is under "+string(host.RoleLLM)+", not "+string(want), wiring.CommandFor(verb, host.RoleLLM, provider))
+		return accounts.Spec{}, usageRefusal(provider+" is under "+string(host.RoleLLM)+", not "+string(want), wiring.CommandFor(verb, host.RoleLLM, provider))
 	case err != nil && !keyedProvider(provider):
-		return cred.Spec{}, usageRefusal("unknown provider "+provider, Usage)
+		return accounts.Spec{}, usageRefusal("unknown provider "+provider, Usage)
 	case err != nil && !keyedUnder(want, provider):
-		return cred.Spec{}, usageRefusal(provider+" has no "+string(want)+" key", wiring.LoginHint(provider))
+		return accounts.Spec{}, usageRefusal(provider+" has no "+string(want)+" key", wiring.LoginHint(provider))
 	}
 	return spec, nil
 }
@@ -215,7 +215,7 @@ func Logout(args []string) (Receipt, *Refusal) {
 }
 
 func resolvedKey(variable string) string {
-	key, _ := jev.KeyFor(sys.CredentialFileName, variable)
+	key, _ := core.KeyFor(sys.CredentialFileName, variable)
 	return key
 }
 
@@ -236,7 +236,7 @@ func removeKey(facts wiring.KeyFacts) (Receipt, *Refusal) {
 	return Receipt{Text: facts.Name + " key " + before.Key + " removed" + tail, Data: after}, nil
 }
 
-func removeAccount(provider cred.Provider, number []string) (Receipt, *Refusal) {
+func removeAccount(provider accounts.Provider, number []string) (Receipt, *Refusal) {
 	store, err := wiring.OpenStoredCredentials()
 	if err != nil {
 		return Receipt{}, failure(err.Error(), "")
@@ -250,7 +250,7 @@ func removeAccount(provider cred.Provider, number []string) (Receipt, *Refusal) 
 	if err != nil {
 		return Receipt{}, failure(err.Error(), "")
 	}
-	rows = slices.DeleteFunc(rows, func(row cred.Row) bool { return row.Credential.Provider != provider })
+	rows = slices.DeleteFunc(rows, func(row accounts.Row) bool { return row.Credential.Provider != provider })
 	hint := wiring.CommandFor("logout", host.RoleLLM, string(provider)) + " <number>"
 	switch {
 	case len(rows) == 0:
@@ -266,7 +266,7 @@ func removeAccount(provider cred.Provider, number []string) (Receipt, *Refusal) 
 		if err != nil {
 			return Receipt{}, usageRefusal("not a credential number: "+number[0], hint)
 		}
-		rows = slices.DeleteFunc(rows, func(row cred.Row) bool { return row.ID != id })
+		rows = slices.DeleteFunc(rows, func(row accounts.Row) bool { return row.ID != id })
 		if len(rows) == 0 {
 			return Receipt{}, failure("no "+string(provider)+" account is numbered "+number[0], "tofu login --status")
 		}
@@ -294,7 +294,7 @@ func jsonExit(out io.Writer, envelope cli.Envelope) int {
 	return output.ExitOK
 }
 
-func receiptOf(row cred.Row, change string) Receipt {
+func receiptOf(row accounts.Row, change string) Receipt {
 	account := accountReceipt{ID: row.ID, Source: string(row.Credential.Provider), Account: wiring.AccountName(row.Credential.Identity, false), Change: change}
 	text := "#" + strconv.FormatInt(account.ID, 10) + " " + account.Source + " " + account.Account + " " + strings.ReplaceAll(change, "_", " ")
 	return Receipt{Text: text, Data: account}
@@ -333,23 +333,23 @@ func setCredentialAside(disable bool, number string, now time.Time) (Receipt, *R
 	return receiptOf(row, change), nil
 }
 
-func signIn(spec cred.Spec, paste bool, in io.Reader, prompts io.Writer, now time.Time) (Receipt, *Refusal) {
-	path, err := cred.Path()
+func signIn(spec accounts.Spec, paste bool, in io.Reader, prompts io.Writer, now time.Time) (Receipt, *Refusal) {
+	path, err := accounts.Path()
 	if err != nil {
 		return Receipt{}, failure(err.Error(), "")
 	}
-	store, err := cred.Open(path)
+	store, err := accounts.Open(path)
 	if err != nil {
 		return Receipt{}, failure(err.Error(), "")
 	}
 	defer func() { _ = store.Close() }()
 	name := string(spec.Provider)
-	options := cred.LoginOptions{Spec: spec, Announce: func(line string) { _, _ = io.WriteString(prompts, line+"\n") }, Open: cred.OpenBrowser}
+	options := accounts.LoginOptions{Spec: spec, Announce: func(line string) { _, _ = io.WriteString(prompts, line+"\n") }, Open: accounts.OpenBrowser}
 	if paste {
 		options.Open = nil
 		options.Paste = func() (string, error) { return promptPaste(in, prompts) }
 	}
-	credential, err := cred.Login(context.Background(), options)
+	credential, err := accounts.Login(context.Background(), options)
 	if err != nil {
 		return Receipt{}, refusedBy(name, wiring.LoginHint(name), err)
 	}
@@ -380,16 +380,16 @@ func loginKey(facts wiring.KeyFacts, in io.Reader, prompts io.Writer) (Receipt, 
 }
 
 func storeKey(ctx context.Context, stored host.KeyStatus, key string) (Receipt, *Refusal) {
-	stored.Key = widget.Mask(key)
+	stored.Key = render.Mask(key)
 	done := " checked and stored"
 	var err error
 	switch stored.Provider {
 	case wiring.BraveName, wiring.OpenRouterName:
 		done = " stored"
 	case wiring.MetaName:
-		err = models.StoreMetaKey(ctx, key)
+		err = catalog.StoreMetaKey(ctx, key)
 	default:
-		err = reachesJev(ctx, models.Provider(stored.Provider), key)
+		err = reachesJev(ctx, catalog.Provider(stored.Provider), key)
 	}
 	facts := wiring.KeyFactsOf(stored.Role, stored.Provider)
 	if err != nil {
@@ -437,30 +437,30 @@ func promptKey(in io.Reader, prompts io.Writer, name, variable string) (string, 
 	return field.Value(), nil
 }
 
-func reachesJev(ctx context.Context, provider models.Provider, key string) error {
+func reachesJev(ctx context.Context, provider catalog.Provider, key string) error {
 	library, err := wiring.ModelLibrary(".")
 	if err != nil {
 		return err
 	}
-	model, bound := library.Bound(models.RoleClassifier)
+	model, bound := library.Bound(catalog.RoleClassifier)
 	if !bound || model.Provider != provider {
-		at := slices.IndexFunc(library.Models, func(model models.Model) bool {
-			return model.Kind == models.KindClassifier && model.Provider == provider
+		at := slices.IndexFunc(library.Models, func(model catalog.Model) bool {
+			return model.Kind == catalog.KindClassifier && model.Provider == provider
 		})
 		if at < 0 {
 			return errors.New(string(provider) + " serves no classifier model in the library or .tofu/models")
 		}
 		model = library.Models[at]
 	}
-	client, err := classifier.Route{Model: model, Key: key}.Client(wiring.OneCallAtATime)
+	client, err := classifiers.Route{Model: model, Key: key}.Client(wiring.OneCallAtATime)
 	if err != nil {
 		return err
 	}
-	_, err = client.Ask(ctx, jev.Request{
+	_, err = client.Ask(ctx, core.Request{
 		State: map[string]any{"check": "tofu login " + string(provider)},
-		Questions: []jev.Question{{
+		Questions: []core.Question{{
 			ID:           "reachable",
-			Kind:         jev.QuestionNoul,
+			Kind:         core.QuestionNoul,
 			Instructions: "does `check` say this request is a login check",
 			True:         "it does",
 			False:        "it does not",

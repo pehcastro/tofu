@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -38,13 +38,13 @@ type requestTiming struct {
 	durationMS int64
 }
 
-func askCountingAttempts(ctx context.Context, model Model, request llm.Request) (llm.Decision, requestTiming, error) {
+func askCountingAttempts(ctx context.Context, model Model, request core.Request) (core.Decision, requestTiming, error) {
 	var counted requestsPerHost
 	traced := httptrace.WithClientTrace(ctx, &httptrace.ClientTrace{GetConn: counted.sending})
 	started := time.Now()
 	decision, err := model.Ask(traced, request)
 	sent := requestTiming{attempt: counted.attempt(), durationMS: time.Since(started).Milliseconds()}
-	if decision.Attempts > llm.AttemptsUnreported && int(decision.Attempts) != sent.attempt {
+	if decision.Attempts > core.AttemptsUnreported && int(decision.Attempts) != sent.attempt {
 		decision.Warnings = append(decision.Warnings,
 			"requests this process put on the wire: "+strconv.Itoa(sent.attempt)+
 				", and the wire answered on attempt "+decision.Attempts.String())

@@ -290,9 +290,9 @@ func (m Managed) callersOutside(ticket Ticket) (callerScan, error) {
 	return scanCallers(m.Store.Root, ticket)
 }
 
-func (m Managed) waive(hooks []rule.Hook, s subject, reason string) (string, string, error) {
-	held, s := m.holding(hooks, rule.WhenBefore, s)
-	at := slices.IndexFunc(held, func(h rule.Hook) bool {
+func (m Managed) waive(hooks []rules.Hook, s subject, reason string) (string, string, error) {
+	held, s := m.holding(hooks, rules.WhenBefore, s)
+	at := slices.IndexFunc(held, func(h rules.Hook) bool {
 		return runsCheck(h, checkCallersOwned) && h.Bypass != nil && slices.Contains(h.Bypass.Who, m.actorKind(s.actor))
 	})
 	if at < 0 {
@@ -333,7 +333,7 @@ func scanCallers(root string, ticket Ticket) (callerScan, error) {
 	scan := callerScan{stopped: stopped}
 	owns := rootedOwns(root, ticket.Owns)
 	owned := func(rel string) bool {
-		matched, err := subagent.Matches(rel, owns)
+		matched, err := subagents.Matches(rel, owns)
 		return matched && err == nil
 	}
 	read := func(rel string) ([]byte, error) {
@@ -343,7 +343,7 @@ func scanCallers(root string, ticket Ticket) (callerScan, error) {
 		}
 		return raw, err
 	}
-	text := ticket.Title + "\n" + ticket.Scope + "\n" + strings.Join(subagent.InForce(ticket.Acceptance), "\n")
+	text := ticket.Title + "\n" + ticket.Scope + "\n" + strings.Join(subagents.InForce(ticket.Acceptance), "\n")
 	module := goModule(root)
 	var items []callerItem
 	for _, rel := range sources {

@@ -13,11 +13,11 @@ func toolGateQuestionsPath() string {
 	return filepath.Join("..", "..", "..", "library", "questions", "tool_gate@1.yaml")
 }
 
-func mustLoadToolGateQuestions(t *testing.T) question.Set {
+func mustLoadToolGateQuestions(t *testing.T) questions.Set {
 	t.Helper()
-	set, err := question.Load(toolGateQuestionsPath())
+	set, err := questions.Load(toolGateQuestionsPath())
 	if err != nil {
-		t.Fatalf("question.Load: %v", err)
+		t.Fatalf("questions.Load: %v", err)
 	}
 	return set
 }

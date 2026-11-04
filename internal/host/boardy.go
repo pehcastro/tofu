@@ -105,7 +105,7 @@ func (s *server) watchBoardy(quit <-chan struct{}) {
 		return
 	}
 	told := make(chan boardy.Writing)
-	safe.Go(s.report, "serve boardy told", func() {
+	recover.Go(s.report, "serve boardy told", func() {
 		s.hear(quit, TopicBoardy, func(writing boardy.Writing) {
 			select {
 			case told <- writing:

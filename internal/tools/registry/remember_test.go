@@ -1,4 +1,4 @@
-package tools_test
+package registry_test
 
 import (
 	"context"
@@ -29,19 +29,19 @@ func said(t *testing.T, id, origin, text string) session.Event {
 }
 
 type chain struct {
-	tool    tools.Remember
+	tool    registry.Remember
 	picking context.Context
-	offered []tools.MemoryOffer
+	offered []registry.MemoryOffer
 }
 
-func rememberChain(t *testing.T, answer memory.Scope) *chain {
+func rememberChain(t *testing.T, answer entries.Scope) *chain {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("HOME", home)
 	store := session.NewStore(t.TempDir())
 	if err := store.Write(session.Header{ID: olderSession, Root: olderSession, At: time.Now()}, []session.Event{
-		said(t, "0f2c9b1a-1111-4aaa-8bbb-aaaaaade2201", "task", "<env>\ntoday\n</env>"+turn.TheTaskFollows+"never run cargo with more than 2 jobs, ok?"+turn.NotesAfterTheTask+"[code_rules, from the rule e2e_first]\nprove it end to end"),
+		said(t, "0f2c9b1a-1111-4aaa-8bbb-aaaaaade2201", "task", "<env>\ntoday\n</env>"+loop.TheTaskFollows+"never run cargo with more than 2 jobs, ok?"+loop.NotesAfterTheTask+"[code_rules, from the rule e2e_first]\nprove it end to end"),
 		said(t, "0f2c9b1a-1111-4aaa-8bbb-aaaaaade2202", "sub-agent report", "the agent said the build is make all"),
 	}); err != nil {
 		t.Fatal(err)
@@ -52,8 +52,8 @@ func rememberChain(t *testing.T, answer memory.Scope) *chain {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	c := &chain{tool: tools.Remember{Store: store, Session: newerSession, Project: t.TempDir(), Inbox: turn.NewInbox(), Auto: func() bool { return false }}}
-	c.picking = tools.WithMemoryPick(context.Background(), func(_ context.Context, offer tools.MemoryOffer) (memory.Scope, error) {
+	c := &chain{tool: registry.Remember{Store: store, Session: newerSession, Project: t.TempDir(), Inbox: loop.NewInbox(), Auto: func() bool { return false }}}
+	c.picking = registry.WithMemoryPick(context.Background(), func(_ context.Context, offer registry.MemoryOffer) (entries.Scope, error) {
 		c.offered = append(c.offered, offer)
 		return answer, nil
 	})
@@ -69,9 +69,9 @@ func (c *chain) remembered(t *testing.T, statement, quote, kind string) (contrac
 	return c.tool.Run(c.picking, args)
 }
 
-func (c *chain) kept(t *testing.T) memory.Memory {
+func (c *chain) kept(t *testing.T) entries.Memory {
 	t.Helper()
-	shelves, err := memory.Open(c.tool.Project)
+	shelves, err := entries.Open(c.tool.Project)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func (c *chain) kept(t *testing.T) memory.Memory {
 
 func TestRememberRefusesWordsThePersonDidNotType(t *testing.T) {
 	for _, quote := range []string{"never run cargo with more than 3 jobs", "the build is make all", "prove it end to end", "today"} {
-		c := rememberChain(t, memory.Project)
+		c := rememberChain(t, entries.Project)
 		result, err := c.remembered(t, "cargo runs with 2 jobs", quote, "person")
 		shelves := c.kept(t)
 		if err == nil || len(c.offered) != 0 || len(shelves.Global.Entries)+len(shelves.Project.Entries) != 0 {
@@ -102,7 +102,7 @@ func TestRememberTakesFragmentsOfOneMessageInTheirOrder(t *testing.T) {
 		"never run cargo ... the logs go to /tmp":     false,
 		"ok. also remember that ... the logs go to /": true,
 	} {
-		_, err := rememberChain(t, memory.Project).remembered(t, "logs go to /tmp", quote, "project")
+		_, err := rememberChain(t, entries.Project).remembered(t, "logs go to /tmp", quote, "project")
 		if takes != (err == nil) {
 			t.Errorf("quote %q: err %v, want taken %v", quote, err, takes)
 		}
@@ -110,13 +110,13 @@ func TestRememberTakesFragmentsOfOneMessageInTheirOrder(t *testing.T) {
 }
 
 func TestRememberAsksAndKeepsWordsFromAnyMessageOfTheChain(t *testing.T) {
-	c := rememberChain(t, memory.Project)
+	c := rememberChain(t, entries.Project)
 	result, err := c.remembered(t, "cargo runs with at most 2 jobs", "never run cargo with more than 2 jobs", "person")
 	shelves := c.kept(t)
 	if err != nil || len(c.offered) != 1 || len(shelves.Project.Entries) != 1 || !strings.Contains(result.Content, "[memory#m1]") || result.Command != "[memory#m1]" {
 		t.Fatalf("result %+v, err %v, asked %d, project %d: want one ask and m1 kept in the project the answer chose", result, err, len(c.offered), len(shelves.Project.Entries))
 	}
-	if entry := shelves.Project.Entries[0]; entry.Said != "never run cargo with more than 2 jobs" || entry.By != memory.ByLead {
+	if entry := shelves.Project.Entries[0]; entry.Said != "never run cargo with more than 2 jobs" || entry.By != entries.ByLead {
 		t.Errorf("kept %+v, want the quote as said and by lead", entry)
 	}
 	if _, err := c.remembered(t, "replies stay short", "and keep replies short", "project"); err != nil {
@@ -128,20 +128,20 @@ func TestRememberAsksAndKeepsWordsFromAnyMessageOfTheChain(t *testing.T) {
 }
 
 func TestRememberKeepsTheScopeThePersonPickedOnTheCard(t *testing.T) {
-	c := rememberChain(t, memory.UserLocal)
+	c := rememberChain(t, entries.UserLocal)
 	if _, err := c.remembered(t, "cargo runs with at most 2 jobs", "never run cargo with more than 2 jobs", "person"); err != nil {
 		t.Fatal(err)
 	}
 	if shelves := c.kept(t); len(shelves.UserLocal.Entries) != 1 || len(shelves.Global.Entries) != 0 {
 		t.Errorf("the person picked user-local and it went to %d user-local, %d user-global", len(shelves.UserLocal.Entries), len(shelves.Global.Entries))
 	}
-	if offer := c.offered[0]; offer.Scope != memory.Global || len(offer.Scopes) != 3 {
+	if offer := c.offered[0]; offer.Scope != entries.Global || len(offer.Scopes) != 3 {
 		t.Errorf("with no Jev the card offered %+v, want the person kind's user-global preselected and project local left out", offer)
 	}
 }
 
 func TestRememberRefusesAProjectLocalPickJevCouldNotClear(t *testing.T) {
-	c := rememberChain(t, memory.ProjectLocal)
+	c := rememberChain(t, entries.ProjectLocal)
 	result, err := c.remembered(t, "cargo runs with at most 2 jobs", "never run cargo with more than 2 jobs", "person")
 	if shelves := c.kept(t); err != nil || !strings.Contains(result.Content, "refused project local") || len(shelves.ProjectLocal.Entries) != 0 {
 		t.Errorf("a project-local pick with no Jev answer gave %q, %v, and kept %d project-local entries", result.Content, err, len(shelves.ProjectLocal.Entries))
@@ -165,15 +165,15 @@ func TestRememberKeepsNothingOnANoOrWithNobodyToAsk(t *testing.T) {
 func TestRememberWritesWithoutAskingOnceAutoMemoryIsOn(t *testing.T) {
 	c := rememberChain(t, "")
 	c.tool.Auto = func() bool { return true }
-	var told []tools.MemoryKept
-	c.picking = tools.WithMemoryKept(c.picking, func(kept tools.MemoryKept) { told = append(told, kept) })
+	var told []registry.MemoryKept
+	c.picking = registry.WithMemoryKept(c.picking, func(kept registry.MemoryKept) { told = append(told, kept) })
 	if _, err := c.remembered(t, "cargo runs with 2 jobs", "never run cargo", "person"); err != nil || len(c.offered) != 0 {
 		t.Fatalf("auto memory asked %d times, err %v", len(c.offered), err)
 	}
 	if shelves := c.kept(t); len(shelves.Global.Entries) != 1 {
 		t.Errorf("auto memory kept %d entries", len(shelves.Global.Entries))
 	}
-	if len(told) != 1 || told[0] != (tools.MemoryKept{Statement: "cargo runs with 2 jobs", Offered: memory.Global, Kept: memory.Global}) {
+	if len(told) != 1 || told[0] != (registry.MemoryKept{Statement: "cargo runs with 2 jobs", Offered: entries.Global, Kept: entries.Global}) {
 		t.Errorf("auto memory told the host %+v, want one keep of user-global offered and kept", told)
 	}
 }

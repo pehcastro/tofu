@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
@@ -99,7 +99,7 @@ func separated(blocks [][]string) []string {
 func cardFacts(page cli.Page, facts []cli.Fact) []string {
 	lines := page.Facts(facts)
 	for index := range lines {
-		lines[index] = widget.Fit(lines[index], page.Width-widget.Cells(cardInset))
+		lines[index] = render.Fit(lines[index], page.Width-render.Cells(cardInset))
 	}
 	return lines
 }
@@ -130,7 +130,7 @@ func callsText(key host.KeyStatus, now time.Time) string {
 	if key.Calls == 0 {
 		return "none yet"
 	}
-	text := output.Plural(key.Calls, "call") + " · last " + widget.Until(now.Sub(key.LastUsedAt)) + " ago"
+	text := output.Plural(key.Calls, "call") + " · last " + render.Until(now.Sub(key.LastUsedAt)) + " ago"
 	all := key.Periods[len(key.Periods)-1].KeySpend
 	switch all.CostSource {
 	case host.CostProvider:
@@ -144,7 +144,7 @@ func callsText(key host.KeyStatus, now time.Time) string {
 
 func standingFact(key host.KeyStatus, now time.Time) cli.Fact {
 	if failure := key.LastError; failure != nil && failure.At.After(key.LastUsedAt) {
-		return cli.Fact{Label: "error", Text: strconv.Itoa(failure.Status) + " " + failure.What + " · " + widget.Until(now.Sub(failure.At)) + " ago"}
+		return cli.Fact{Label: "error", Text: strconv.Itoa(failure.Status) + " " + failure.What + " · " + render.Until(now.Sub(failure.At)) + " ago"}
 	}
 	var standing []string
 	if limit := key.Limit; limit != nil {
@@ -161,7 +161,7 @@ func standingFact(key host.KeyStatus, now time.Time) cli.Fact {
 	for _, allowance := range key.Allowances {
 		text := strconv.Itoa(allowance.Remaining) + " of " + strconv.Itoa(allowance.Limit) + " " + string(allowance.Unit) + " left"
 		if !allowance.ResetsAt.IsZero() {
-			text += ", resets in " + widget.Until(allowance.ResetsAt.Sub(now))
+			text += ", resets in " + render.Until(allowance.ResetsAt.Sub(now))
 		}
 		standing = append(standing, text)
 	}
@@ -206,7 +206,7 @@ func accountCard(page cli.Page, source string, account host.AccountStatus, now t
 		case len(window.Only) > 0:
 			text += cli.Gap + page.Label("only "+strings.Join(window.Only, ", "))
 		case !window.ResetsAt.IsZero():
-			text += cli.Gap + page.Label("resets in "+widget.Until(window.ResetsAt.Sub(now)))
+			text += cli.Gap + page.Label("resets in "+render.Until(window.ResetsAt.Sub(now)))
 		}
 		facts = append(facts, cli.Fact{Label: window.ID, Text: text})
 	}

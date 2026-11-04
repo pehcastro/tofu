@@ -41,7 +41,7 @@ func askRevoked(t *testing.T, revoked ...string) (codex.Result, int32, error) {
 	if err != nil {
 		t.Fatalf("new wire: %v", err)
 	}
-	result, _, err := wire.Ask(context.Background(), codex.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "hi"}}})
+	result, _, err := wire.Ask(context.Background(), codex.Request{Messages: []core.Message{{Role: core.RoleUser, Content: "hi"}}})
 	return result, calls.Load(), err
 }
 

@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"tofu/internal/agent/loop"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
@@ -53,10 +53,10 @@ func TestTaskKindAgainstTheWordList(t *testing.T) {
 	}
 	sys.AllowLiveCredential(t)
 	project := sys.SourceRoot()
-	if _, err := classifier.Open(project, jev.ReadKeyring(), 1); err != nil {
+	if _, err := classifiers.Open(project, core.ReadKeyring(), 1); err != nil {
 		t.Fatalf("TOFU_LIVE=1 and jev cannot be asked, so nothing is measured: %v", err)
 	}
-	judge := turn.NewKindJudge(project)
+	judge := loop.NewKindJudge(project)
 	cases := len(KindCorpus())
 	for pass := 1; pass <= 2; pass++ {
 		jev, words, fellBack := KindAgainstTheWordList(judge)

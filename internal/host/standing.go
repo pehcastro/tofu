@@ -123,7 +123,7 @@ func (in standingIn) keep(standing map[string]Answer, until, given map[string]ti
 }
 
 func heldInMemoryOnly(one StandingAnswer) bool {
-	return one.Decision != RejectAlways && turn.PlacesCode(one.Target)
+	return one.Decision != RejectAlways && loop.PlacesCode(one.Target)
 }
 
 func listed(standing map[string]Answer, until, given map[string]time.Time) []StandingAnswer {

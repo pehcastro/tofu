@@ -29,7 +29,7 @@ func encodedSystemArray(system string, firstMessage string, oauth bool) ([]byte,
 	request := anthropic.Request{
 		Model:    measureModel,
 		System:   []string{system},
-		Messages: []llm.Message{{Role: llm.RoleUser, Content: firstMessage}},
+		Messages: []core.Message{{Role: core.RoleUser, Content: firstMessage}},
 	}
 	body, err := request.Encode(oauth)
 	if err != nil {

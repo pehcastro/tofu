@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -24,7 +24,7 @@ import (
 const scratchIndex = "INDEX.txt"
 
 type crossProjectReads struct {
-	ask     turn.Person
+	ask     loop.Person
 	mu      sync.Mutex
 	allowed []string
 }
@@ -34,14 +34,14 @@ type scratchTool struct {
 	reads *crossProjectReads
 }
 
-func ScratchTools(ask turn.Person) []contract.Tool {
+func ScratchTools(ask loop.Person) []contract.Tool {
 	reads := &crossProjectReads{ask: ask}
-	return []contract.Tool{scratchTool{turn.ScratchPathToolName, reads}, scratchTool{turn.ScratchShareToolName, reads}, scratchTool{turn.ScratchListToolName, reads}, scratchTool{turn.ScratchReadToolName, reads}}
+	return []contract.Tool{scratchTool{loop.ScratchPathToolName, reads}, scratchTool{loop.ScratchShareToolName, reads}, scratchTool{loop.ScratchListToolName, reads}, scratchTool{loop.ScratchReadToolName, reads}}
 }
 
 func (t scratchTool) Name() string { return t.name }
 
-func (t scratchTool) Definition() llm.Tool {
+func (t scratchTool) Definition() core.Tool {
 	text := func(description string) map[string]any {
 		return map[string]any{"type": "string", "description": description}
 	}
@@ -49,17 +49,17 @@ func (t scratchTool) Definition() llm.Tool {
 		return map[string]any{"type": "object", "properties": properties, "required": required}
 	}
 	switch t.name {
-	case turn.ScratchPathToolName:
-		return llm.Tool{Name: t.name, Description: "returns the absolute folder to use, outside the project, so you never guess one: tmp for probes and temporary files, out for what you produce, logs, shared for the notes every agent of this project reads, or cache for build caches",
+	case loop.ScratchPathToolName:
+		return core.Tool{Name: t.name, Description: "returns the absolute folder to use, outside the project, so you never guess one: tmp for probes and temporary files, out for what you produce, logs, shared for the notes every agent of this project reads, or cache for build caches",
 			Parameters: object([]string{"kind"}, map[string]any{"kind": map[string]any{"type": "string", "enum": []string{"tmp", "out", "logs", "shared", "cache"}}})}
-	case turn.ScratchShareToolName:
-		return llm.Tool{Name: t.name, Description: "copies a file from your own scratch folder into the project's shared folder with one line saying what it is, so later agents and sessions find it. only the lead shares",
+	case loop.ScratchShareToolName:
+		return core.Tool{Name: t.name, Description: "copies a file from your own scratch folder into the project's shared folder with one line saying what it is, so later agents and sessions find it. only the lead shares",
 			Parameters: object([]string{"path", "note"}, map[string]any{"path": text("the absolute path of the file in your scratch folder"), "note": text("one line on what the file is")})}
-	case turn.ScratchListToolName:
-		return llm.Tool{Name: t.name, Description: "lists the files in your own scratch folder (mine), in every agent's folder of this session (session), or in the project's shared folder (shared), with sizes and the agent that wrote each",
+	case loop.ScratchListToolName:
+		return core.Tool{Name: t.name, Description: "lists the files in your own scratch folder (mine), in every agent's folder of this session (session), or in the project's shared folder (shared), with sizes and the agent that wrote each",
 			Parameters: object([]string{"scope"}, map[string]any{"scope": map[string]any{"type": "string", "enum": []string{"mine", "session", "shared"}}})}
 	}
-	return llm.Tool{Name: t.name, Description: "reads a file another agent of this session wrote, by its path relative to the session folder as scratch_list prints it, or with project set to another project's directory, a file in that project's shared folder. reading another project asks the person once per project, through the lead",
+	return core.Tool{Name: t.name, Description: "reads a file another agent of this session wrote, by its path relative to the session folder as scratch_list prints it, or with project set to another project's directory, a file in that project's shared folder. reading another project asks the person once per project, through the lead",
 		Parameters: object([]string{"path"}, map[string]any{"path": text("the path relative to the session folder, or to the other project's shared folder"), "project": text("another project's directory, to read its shared folder")})}
 }
 
@@ -73,11 +73,11 @@ func (t scratchTool) Run(ctx context.Context, raw json.RawMessage) (contract.Res
 		return contract.Result{}, fmt.Errorf("%s: this run has no scratchpad", t.name)
 	}
 	switch t.name {
-	case turn.ScratchPathToolName:
+	case loop.ScratchPathToolName:
 		return scratchPath(place, args.Kind)
-	case turn.ScratchShareToolName:
+	case loop.ScratchShareToolName:
 		return scratchShare(ctx, place, args.Path, args.Note)
-	case turn.ScratchListToolName:
+	case loop.ScratchListToolName:
 		return scratchList(place, args.Scope)
 	}
 	return t.reads.read(ctx, place, args.Project, args.Path)
@@ -92,7 +92,7 @@ func scratchPath(place sys.ScratchPlace, kind string) (contract.Result, error) {
 }
 
 func scratchShare(ctx context.Context, place sys.ScratchPlace, path, note string) (contract.Result, error) {
-	if turn.SubAgentAsking(ctx) != "" {
+	if loop.SubAgentAsking(ctx) != "" {
 		return contract.Result{}, errors.New("scratch_share: only the lead shares: name the file and what it is in your report, and the lead shares it")
 	}
 	if !under(place.Dir(), path) || strings.TrimSpace(note) == "" {
@@ -179,18 +179,18 @@ func (c *crossProjectReads) allow(ctx context.Context, project string) error {
 		return errors.New("reading another project's shared folder asks the person, and no person is here to answer")
 	}
 	asker := "the lead"
-	if id := turn.SubAgentAsking(ctx); id != "" {
+	if id := loop.SubAgentAsking(ctx); id != "" {
 		asker = "the lead, for sub-agent " + id + ","
 	}
 	shown, err := json.Marshal(map[string]string{"project": project, "question": asker + " asks to read the shared folder of the project at " + project + ". Allow it for this session?"})
 	if err != nil {
 		return err
 	}
-	answer, err := c.ask(turn.AsTheLead(ctx), turn.GateRequest{Tool: turn.ScratchReadToolName, Args: shown}, turn.GateDecision{Verdict: ledger.VerdictAsk})
+	answer, err := c.ask(loop.AsTheLead(ctx), loop.GateRequest{Tool: loop.ScratchReadToolName, Args: shown}, loop.GateDecision{Verdict: ledger.VerdictAsk})
 	switch {
 	case err != nil:
 		return fmt.Errorf("the person could not be asked: %w", err)
-	case answer == turn.PersonDenied:
+	case answer == loop.PersonDenied:
 		return errors.New("the person refused the read of " + project + "'s shared folder")
 	}
 	c.allowed = append(c.allowed, key)

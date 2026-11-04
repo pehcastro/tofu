@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -23,8 +23,8 @@ type Recall struct {
 
 func (Recall) Name() string { return "recall" }
 
-func (Recall) Definition() llm.Tool {
-	return llm.Tool{
+func (Recall) Definition() core.Tool {
+	return core.Tool{
 		Name: "recall",
 		Description: "searches the raw items of a memory store with a regular expression and returns every item that matches, word for word, as store id+1|kind: text. " +
 			"store is episodes for the conversation, or a memory scope; left out, every store is searched. " +
@@ -76,7 +76,7 @@ func (r Recall) Run(_ context.Context, raw json.RawMessage) (contract.Result, er
 			return said, nil
 		}
 	}
-	logs, err := memory.Trees(r.Zoom.Project)
+	logs, err := entries.Trees(r.Zoom.Project)
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("recall: %w", err)
 	}
@@ -90,7 +90,7 @@ func (r Recall) Run(_ context.Context, raw json.RawMessage) (contract.Result, er
 		if !kept {
 			continue
 		}
-		lines, err := r.Zoom.open(log, func(store *memtree.Store) ([]string, error) { return store.Recall(args.Regex) })
+		lines, err := r.Zoom.open(log, func(store *tree.Store) ([]string, error) { return store.Recall(args.Regex) })
 		if err != nil {
 			return contract.Result{}, fmt.Errorf("recall: %s: %w", name, err)
 		}

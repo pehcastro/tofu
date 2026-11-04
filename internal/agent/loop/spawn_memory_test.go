@@ -1,4 +1,4 @@
-package turn_test
+package loop_test
 
 import (
 	"context"
@@ -19,14 +19,14 @@ import (
 )
 
 type recordingModel struct {
-	replies []llm.Decision
-	asked   []llm.Request
+	replies []core.Decision
+	asked   []core.Request
 }
 
-func (m *recordingModel) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+func (m *recordingModel) Ask(_ context.Context, request core.Request) (core.Decision, error) {
 	m.asked = append(m.asked, request)
 	if len(m.replies) == 0 {
-		return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: "done"}, nil
+		return core.Decision{Build: "m1", Outcome: core.OutcomeMessage, Content: "done"}, nil
 	}
 	next := m.replies[0]
 	m.replies = m.replies[1:]
@@ -38,23 +38,23 @@ func TestTheMemoryViewIsOnceInEveryRequestHeldWithinAGenerationAndFreshAtEachFor
 	if err := os.WriteFile(filepath.Join(root, "big.txt"), []byte(strings.Repeat("a line of the parser\n", 2000)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	read, err := turn.NewReadTool(root)
+	read, err := loop.NewReadTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
 	view := "remembered for you, by scope.\nuser-global:\n0+1|project: [memory#m1] Mock rule: run the linter before a commit"
 	saved := "[memory#m2-0a1f] Mock rule saved mid-session"
-	reading, done := calling("read", map[string]any{"path": "big.txt"}), llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: "done"}
+	reading, done := calling("read", map[string]any{"path": "big.txt"}), core.Decision{Build: "m1", Outcome: core.OutcomeMessage, Content: "done"}
 	model := &recordingModel{}
 	store, id := session.NewStore(t.TempDir()), session.NewEventID()
-	config := turn.Config{
+	config := loop.Config{
 		Model:          model,
-		Spend:          turn.SpendAPIKey,
-		Tools:          turn.NewRegistry(read),
+		Spend:          loop.SpendAPIKey,
+		Tools:          loop.NewRegistry(read),
 		System:         "you are tofu",
 		Memory:         view,
-		Prefix:         &turn.Prefix{},
-		Caps:           turn.Caps{MaxSteps: 4},
+		Prefix:         &loop.Prefix{},
+		Caps:           loop.Caps{MaxSteps: 4},
 		ResultBytesCap: 1 << 16,
 		Budget:         recall.Budget{}.At(12000, "a budget the second turn forks under"),
 		ArtifactDir:    filepath.Join(root, "artifacts"),
@@ -63,36 +63,36 @@ func TestTheMemoryViewIsOnceInEveryRequestHeldWithinAGenerationAndFreshAtEachFor
 		NewID:          func() string { return "turn-memory" },
 	}
 	resumed := "[memory#m3] Mock rule saved between sessions"
-	forks := func(request llm.Request) int {
-		return len(slices.DeleteFunc(slices.Clone(request.Messages), func(message llm.Message) bool { return !strings.HasPrefix(message.Content, "this is fork ") }))
+	forks := func(request core.Request) int {
+		return len(slices.DeleteFunc(slices.Clone(request.Messages), func(message core.Message) bool { return !strings.HasPrefix(message.Content, "this is fork ") }))
 	}
 	for at, next := range []struct {
 		task, memory string
-		source       hook.SessionSource
+		source       hooks.SessionSource
 	}{
 		{task: "read big.txt", memory: view},
 		{task: "now read big.txt again", memory: view + "\n" + saved},
-		{task: "read big.txt once more", memory: view + "\n" + saved + "\n" + resumed, source: hook.SessionResumed},
+		{task: "read big.txt once more", memory: view + "\n" + saved + "\n" + resumed, source: hooks.SessionResumed},
 	} {
 		opened := len(model.asked)
-		config.Task, config.Memory, config.SessionSource, model.replies = next.task, next.memory, next.source, []llm.Decision{reading, done}
-		if _, err := turn.Run(context.Background(), config); err != nil {
+		config.Task, config.Memory, config.SessionSource, model.replies = next.task, next.memory, next.source, []core.Decision{reading, done}
+		if _, err := loop.Run(context.Background(), config); err != nil {
 			t.Fatalf("running %q: %v", next.task, err)
 		}
 		events, err := store.Events(id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if config.History, err = turn.ConversationFrom(events); err != nil {
+		if config.History, err = loop.ConversationFrom(events); err != nil {
 			t.Fatal(err)
 		}
 		forkedInTheTurn := false
 		for i, request := range model.asked[opened:] {
 			number := opened + i + 1
-			if system := request.Messages[0]; system.Role != llm.RoleSystem || system.Content != "you are tofu" {
+			if system := request.Messages[0]; system.Role != core.RoleSystem || system.Content != "you are tofu" {
 				t.Errorf("request %d opens on %s %q, want the system message alone and unchanged", number, system.Role, system.Content)
 			}
-			views := slices.DeleteFunc(slices.Clone(request.Messages), func(message llm.Message) bool { return message.Origin.Source != llm.SourceMemoryView })
+			views := slices.DeleteFunc(slices.Clone(request.Messages), func(message core.Message) bool { return message.Origin.Source != core.SourceMemoryView })
 			if len(views) != 1 {
 				t.Fatalf("request %d holds %d memory views, want one", number, len(views))
 			}
@@ -116,16 +116,16 @@ func TestASubAgentOpensOnEveryMemoryEntryOnceAndItsBriefCarriesOnlyTheCitedLines
 	home, project := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	shelves, err := memory.Open(project)
+	shelves, err := entries.Open(project)
 	if err != nil {
 		t.Fatal(err)
 	}
 	lines := map[string]string{}
 	var local string
-	for _, entry := range []memory.Entry{
-		{Scope: memory.Global, Kind: memory.KindPerson, Text: "Replies stay short and plain"},
-		{Scope: memory.Project, Kind: memory.KindProject, Text: "The commit hook refuses attribution"},
-		{Scope: memory.ProjectLocal, Kind: memory.KindProject, Text: "Tickets come before code here"},
+	for _, entry := range []entries.Entry{
+		{Scope: entries.Global, Kind: entries.KindPerson, Text: "Replies stay short and plain"},
+		{Scope: entries.Project, Kind: entries.KindProject, Text: "The commit hook refuses attribution"},
+		{Scope: entries.ProjectLocal, Kind: entries.KindProject, Text: "Tickets come before code here"},
 	} {
 		added, err := shelves.Add(entry, "")
 		if err != nil {
@@ -133,7 +133,7 @@ func TestASubAgentOpensOnEveryMemoryEntryOnceAndItsBriefCarriesOnlyTheCitedLines
 		}
 		lines[added.ID], local = added.Line(), added.ID
 	}
-	leadBlock, err := memory.Block(project)
+	leadBlock, err := entries.Block(project)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,27 +153,27 @@ func TestASubAgentOpensOnEveryMemoryEntryOnceAndItsBriefCarriesOnlyTheCitedLines
 		{name: "memory unreadable", brief: "fix the hook per [memory#m2]", memory: func() (map[string]string, error) { return nil, unreadable }, refused: unreadable.Error()},
 	} {
 		t.Run(row.name, func(t *testing.T) {
-			script := &prefetchScript{brief: "fix the hook", lead: []llm.Decision{calling("spawn", map[string]any{"task": row.brief})}}
-			base := turn.Config{
+			script := &prefetchScript{brief: "fix the hook", lead: []core.Decision{calling("spawn", map[string]any{"task": row.brief})}}
+			base := loop.Config{
 				Model:          script,
-				Spend:          turn.SpendAPIKey,
-				Tools:          turn.NewRegistry(),
-				Caps:           turn.Caps{MaxSteps: 4},
+				Spend:          loop.SpendAPIKey,
+				Tools:          loop.NewRegistry(),
+				Caps:           loop.Caps{MaxSteps: 4},
 				ResultBytesCap: 4096,
 				ArtifactDir:    filepath.Join(t.TempDir(), "artifacts"),
 				NewID:          func() string { return "turn-orchestrator" },
 			}
-			spawner := turn.NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+			spawner := loop.NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
 			spawner.Project, spawner.Remembered = project, row.memory
 			if spawner.Remembered == nil {
 				spawner.Remembered = func() (map[string]string, error) { return lines, nil }
 			}
 			lead := base
-			lead.Task, lead.Tools, lead.Inbox = "hand the hook to a sub-agent", turn.NewRegistry(spawner), spawner.Inbox
+			lead.Task, lead.Tools, lead.Inbox = "hand the hook to a sub-agent", loop.NewRegistry(spawner), spawner.Inbox
 			var answered string
-			if err := turn.Lead(context.Background(), lead, nil, nil, func(ended turn.Row, _ error) {
+			if err := loop.Lead(context.Background(), lead, nil, nil, func(ended loop.Row, _ error) {
 				for _, message := range ended.Conversation {
-					if message.Role == llm.RoleTool && answered == "" {
+					if message.Role == core.RoleTool && answered == "" {
 						answered = message.Content
 					}
 				}
@@ -191,8 +191,8 @@ func TestASubAgentOpensOnEveryMemoryEntryOnceAndItsBriefCarriesOnlyTheCitedLines
 				t.Fatalf("the sub-agent was never asked; the lead read %q", answered)
 			}
 			opened := script.asked[0].Messages
-			views := slices.DeleteFunc(slices.Clone(opened), func(message llm.Message) bool { return message.Origin.Source != llm.SourceMemoryView })
-			if len(opened) < 2 || len(views) != 1 || opened[0].Origin.Source != llm.SourceMemoryView {
+			views := slices.DeleteFunc(slices.Clone(opened), func(message core.Message) bool { return message.Origin.Source != core.SourceMemoryView })
+			if len(opened) < 2 || len(views) != 1 || opened[0].Origin.Source != core.SourceMemoryView {
 				t.Fatalf("the sub-agent's first request holds %d memory views in %d messages, want one before the brief", len(views), len(opened))
 			}
 			if opened[0].Content != leadBlock {

@@ -69,14 +69,14 @@ func TestServeDataQueriesAreTypedAndMemoryReachesTheLead(t *testing.T) {
 	}
 
 	c.ask("7", "memory.add", `{"text":"prefers tabs","scope":"global"}`)
-	var added memory.Entry
+	var added entries.Entry
 	c.answer("7", &added)
 	heard := strings.Join(h.inbox.Take(), "\n")
-	if added.Scope != memory.Global || added.Kind != memory.KindPerson || !strings.Contains(heard, "prefers tabs") {
+	if added.Scope != entries.Global || added.Kind != entries.KindPerson || !strings.Contains(heard, "prefers tabs") {
 		t.Errorf("memory.add kept %+v and the lead heard %q, want a global person entry the lead hears", added, heard)
 	}
 	c.ask("8", "memory.edit", `{"scope":"global","id":"`+added.ID+`","text":"prefers spaces"}`)
-	var edited memory.Entry
+	var edited entries.Entry
 	c.answer("8", &edited)
 	if edited.ID != added.ID || edited.Text != "prefers spaces" {
 		t.Errorf("memory.edit kept %+v, want %s with the new text", edited, added.ID)
@@ -86,9 +86,9 @@ func TestServeDataQueriesAreTypedAndMemoryReachesTheLead(t *testing.T) {
 		t.Errorf("memory.remove of a global entry from the project scope answered %s", wrong.Result)
 	}
 	c.ask("10", "memory.remove", `{"scope":"global","id":"`+added.ID+`"}`)
-	var removed memory.Entry
+	var removed entries.Entry
 	c.answer("10", &removed)
-	shelves, err := memory.Open(h.dir)
+	shelves, err := entries.Open(h.dir)
 	if err != nil || removed.ID != added.ID || len(shelves.Global.Entries) != 0 {
 		t.Errorf("memory.remove answered %+v and the shelf still holds %v (%v)", removed, shelves.Global.Entries, err)
 	}
@@ -132,11 +132,11 @@ func TestServeDataRememberAnswersCarryTheScope(t *testing.T) {
 		if event.Kind == EventAwaitPerson {
 			awaited <- event.ID
 		}
-	}, h.asks, &turn.Config{})
-	ask := func(tool, args string) (chan turn.PersonAnswer, string) {
-		got := make(chan turn.PersonAnswer, 1)
+	}, h.asks, &loop.Config{})
+	ask := func(tool, args string) (chan loop.PersonAnswer, string) {
+		got := make(chan loop.PersonAnswer, 1)
 		go func() {
-			answer, _ := person(context.Background(), turn.GateRequest{Tool: tool, Args: json.RawMessage(args)}, turn.GateDecision{})
+			answer, _ := person(context.Background(), loop.GateRequest{Tool: tool, Args: json.RawMessage(args)}, loop.GateDecision{})
 			got <- answer
 		}()
 		return got, <-awaited
@@ -148,9 +148,9 @@ func TestServeDataRememberAnswersCarryTheScope(t *testing.T) {
 			picked <- event.ID
 		}
 	}, h.memoryPicks)
-	offer := tools.MemoryOffer{Statement: "tabs, not spaces", Said: "I prefer tabs", Scope: memory.UserLocal, Scopes: []memory.Scope{memory.Global, memory.UserLocal, memory.Project, memory.ProjectLocal}}
+	offer := registry.MemoryOffer{Statement: "tabs, not spaces", Said: "I prefer tabs", Scope: entries.UserLocal, Scopes: []entries.Scope{entries.Global, entries.UserLocal, entries.Project, entries.ProjectLocal}}
 	for _, answers := range [][2]string{{"remember_global", "user-global"}, {"remember_project", "project-global"}, {"remember_user_local", "user-local"}, {"remember_project_local", "project-local"}, {"allow_once", "ignored"}, {"reject_once", ""}} {
-		kept := make(chan memory.Scope, 1)
+		kept := make(chan entries.Scope, 1)
 		go func() {
 			scope, _ := pick(context.Background(), offer)
 			kept <- scope
@@ -171,7 +171,7 @@ func TestServeDataRememberAnswersCarryTheScope(t *testing.T) {
 			}
 			answers[1] = ""
 		}
-		if scope := <-kept; scope != memory.Scope(answers[1]) {
+		if scope := <-kept; scope != entries.Scope(answers[1]) {
 			t.Errorf("%s on a remember ask kept it as %q, want %q", answers[0], scope, answers[1])
 		}
 	}
@@ -187,7 +187,7 @@ func TestServeDataRememberAnswersCarryTheScope(t *testing.T) {
 	if err := s.answered(json.RawMessage(`"`+id+`"`), json.RawMessage(`{"decision":"reject_once"}`)); err != nil {
 		t.Fatal(err)
 	}
-	if answer := <-got; answer != turn.PersonDenied {
+	if answer := <-got; answer != loop.PersonDenied {
 		t.Errorf("reject_once after an ignored remember answer gave %v", answer)
 	}
 }

@@ -1,4 +1,4 @@
-package subagent
+package subagents
 
 type Tier string
 

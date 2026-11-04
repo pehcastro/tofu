@@ -26,7 +26,7 @@ const (
 
 type rule struct {
 	name string
-	gate turn.ShrinkGate
+	gate loop.ShrinkGate
 }
 
 type tally struct {
@@ -35,9 +35,9 @@ type tally struct {
 }
 
 type agent struct {
-	messages, sent []llm.Message
-	calls          []llm.ToolCall
-	results        []llm.Message
+	messages, sent []core.Message
+	calls          []core.ToolCall
+	results        []core.Message
 	target         int
 	askedAt        time.Time
 }
@@ -80,7 +80,7 @@ func run() (err error) {
 		return err
 	}
 	r := replay{store: recall.NewStore(held), preview: preview, ttl: ttl}
-	rules := []rule{{"before", turn.ShrinkWhenFull}, {"after", turn.ShrinkWhenPaid}}
+	rules := []rule{{"before", loop.ShrinkWhenFull}, {"after", loop.ShrinkWhenPaid}}
 	tallies := make([]tally, len(rules))
 	browsed := 0
 	for _, path := range paths {
@@ -153,7 +153,7 @@ func (r *replay) run(rule rule, events []session.Event, t *tally) error {
 			if err := json.Unmarshal(event.Body, &prompt); err != nil {
 				return err
 			}
-			a.messages = []llm.Message{{Role: llm.RoleSystem, Content: prompt.System}}
+			a.messages = []core.Message{{Role: core.RoleSystem, Content: prompt.System}}
 			a.sent = slices.Clone(a.messages)
 		case session.EventCompaction:
 			var compacted struct {
@@ -163,7 +163,7 @@ func (r *replay) run(rule rule, events []session.Event, t *tally) error {
 				return err
 			}
 			if compacted.Fork != nil {
-				a.messages = slices.DeleteFunc(a.messages, func(m llm.Message) bool { return m.Role != llm.RoleSystem })
+				a.messages = slices.DeleteFunc(a.messages, func(m core.Message) bool { return m.Role != core.RoleSystem })
 				a.sent = slices.Clone(a.messages)
 			}
 		case session.EventMessage:
@@ -172,30 +172,30 @@ func (r *replay) run(rule rule, events []session.Event, t *tally) error {
 				return err
 			}
 			if message.Role == session.RoleUser {
-				a.messages = append(a.messages, llm.Message{Role: llm.RoleUser, Content: message.Content})
+				a.messages = append(a.messages, core.Message{Role: core.RoleUser, Content: message.Content})
 			}
 		case session.EventToolCall:
 			var call session.CallBody
 			if err := json.Unmarshal(event.Body, &call); err != nil {
 				return err
 			}
-			a.calls = append(a.calls, llm.ToolCall{ID: event.Call, Name: call.Tool, Arguments: call.Args})
+			a.calls = append(a.calls, core.ToolCall{ID: event.Call, Name: call.Tool, Arguments: call.Args})
 		case session.EventToolResult:
 			var result session.ResultBody
 			if err := json.Unmarshal(event.Body, &result); err != nil {
 				return err
 			}
-			a.results = append(a.results, llm.Message{Role: llm.RoleTool, ToolCallID: event.Call, Content: result.Content})
+			a.results = append(a.results, core.Message{Role: core.RoleTool, ToolCallID: event.Call, Content: result.Content})
 		case session.EventRequest:
 			var step session.StepBody
 			if err := json.Unmarshal(event.Body, &step); err != nil {
 				return err
 			}
-			if err := turn.ShrinkPages(r.store, r.preview, a.messages, rule.gate); err != nil {
+			if err := loop.ShrinkPages(r.store, r.preview, a.messages, rule.gate); err != nil {
 				return err
 			}
 			r.count(a, t, event.At)
-			a.messages = append(a.messages, llm.Message{Role: llm.RoleAssistant, Content: step.AssistantText, ToolCalls: a.calls})
+			a.messages = append(a.messages, core.Message{Role: core.RoleAssistant, Content: step.AssistantText, ToolCalls: a.calls})
 			a.messages = append(a.messages, a.results...)
 			a.calls, a.results = nil, nil
 		}
@@ -213,12 +213,12 @@ func (r *replay) count(a *agent, t *tally, at time.Time) {
 		kept = 0
 	} else if kept < shared {
 		t.rewrites++
-		t.rewritten += turn.HistoryTokens(r.preview, a.messages[kept:shared])
+		t.rewritten += loop.HistoryTokens(r.preview, a.messages[kept:shared])
 	}
-	sent := turn.HistoryTokens(r.preview, a.messages)
+	sent := loop.HistoryTokens(r.preview, a.messages)
 	t.requests++
 	t.sent += sent
-	t.read += turn.HistoryTokens(r.preview, a.messages[:kept])
+	t.read += loop.HistoryTokens(r.preview, a.messages[:kept])
 	if a.target > 0 && sent > a.target {
 		t.overTarget++
 	}

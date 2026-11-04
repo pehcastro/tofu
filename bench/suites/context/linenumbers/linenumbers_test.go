@@ -21,7 +21,7 @@ func TestNoReadEverEmitsALineNumber(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "ten.txt"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	tool, err := turn.NewReadTool(root)
+	tool, err := loop.NewReadTool(root)
 	if err != nil {
 		t.Fatalf("building the read tool: %v", err)
 	}

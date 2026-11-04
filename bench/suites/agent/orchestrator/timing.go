@@ -141,7 +141,7 @@ func (t *timing) result(made session.CallBody, result resultBody, readUnchanged 
 			return
 		}
 		readUnchanged[args.Path] = false
-		if rule.LanguageOf(args.Path) == "typescript" {
+		if rules.LanguageOf(args.Path) == "typescript" {
 			t.typechecked[args.Path] = t.typechecked[args.Path] || strings.Contains(result.Content, typecheckRan)
 		}
 	case "bash":

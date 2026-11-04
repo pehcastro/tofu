@@ -16,14 +16,14 @@ import (
 	"tofu/internal/models/transport"
 )
 
-type Stop = llm.Stop
+type Stop = core.Stop
 
 const (
-	StopUnknown = llm.StopUnknown
-	StopEnd     = llm.StopEnd
-	StopLength  = llm.StopLength
-	StopToolUse = llm.StopToolUse
-	StopError   = llm.StopError
+	StopUnknown = core.StopUnknown
+	StopEnd     = core.StopEnd
+	StopLength  = core.StopLength
+	StopToolUse = core.StopToolUse
+	StopError   = core.StopError
 )
 
 type Usage struct {
@@ -44,7 +44,7 @@ type Result struct {
 	Thinking           string
 	ReasoningID        string
 	ReasoningEncrypted string
-	ToolCalls          []llm.ToolCall
+	ToolCalls          []core.ToolCall
 	Usage              Usage
 	TurnState          string
 	FirstTokenMS       int64
@@ -127,7 +127,7 @@ func ReadStream(body io.Reader, onThinking func(string)) (Result, error) {
 			}
 		}
 		if err := scanner.Err(); err != nil {
-			return nil, transport.Fail("codex.ReadStream", transport.KindProvider, fmt.Errorf("%w: %w", llm.ErrStreamBroke, err), "reading the stream")
+			return nil, transport.Fail("codex.ReadStream", transport.KindProvider, fmt.Errorf("%w: %w", core.ErrStreamBroke, err), "reading the stream")
 		}
 		return nil, io.EOF
 	}, onThinking)
@@ -135,11 +135,11 @@ func ReadStream(body io.Reader, onThinking func(string)) (Result, error) {
 
 func readEvents(next func() ([]byte, error), onThinking func(string)) (result Result, err error) {
 	state := streamState{open: map[int]*openItem{}, onThinking: onThinking}
-	defer func() { err = llm.CutAfter(result.Content, err) }()
+	defer func() { err = core.CutAfter(result.Content, err) }()
 	for !state.terminal {
 		payload, err := next()
 		if errors.Is(err, io.EOF) {
-			return state.finish(), transport.Fail("codex.ReadStream", transport.KindProvider, llm.ErrStreamBroke,
+			return state.finish(), transport.Fail("codex.ReadStream", transport.KindProvider, core.ErrStreamBroke,
 				"the codex stream drained before a terminal event, so the turn is truncated rather than complete")
 		}
 		if err != nil {
@@ -174,7 +174,7 @@ func (s *streamState) handle(event streamEvent) error {
 		case usageLimited(failed.Type) || usageLimited(failed.Code):
 			kind = transport.KindRateLimit
 		case failed.Code == "server_is_overloaded" || failed.Code == "server_error" || failed.Type == "server_error":
-			cause = llm.ErrStreamBroke
+			cause = core.ErrStreamBroke
 		}
 		refused := transport.Fail("codex.ReadStream", kind, cause,
 			"the stream carried an error: %s %s: %s", failed.Type, failed.Code, failed.Message)
@@ -186,7 +186,7 @@ func (s *streamState) handle(event streamEvent) error {
 		if event.Item.Type == "function_call" {
 			item.toolIndex = len(s.result.ToolCalls)
 			s.result.ToolCalls = append(s.result.ToolCalls,
-				llm.ToolCall{ID: event.Item.CallID, Name: event.Item.Name})
+				core.ToolCall{ID: event.Item.CallID, Name: event.Item.Name})
 		}
 		s.open[event.OutputIndex] = item
 

@@ -13,7 +13,7 @@ import (
 
 	"tofu/internal/konst"
 	isettings "tofu/internal/store/settings"
-	app "tofu/internal/ui/tui/app"
+	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/chat/session"
 	"tofu/internal/ui/tui/composer/paste"
 	"tofu/internal/ui/tui/fixture"

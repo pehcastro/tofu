@@ -9,7 +9,7 @@ import (
 	"tofu/internal/models/classifiers/core"
 )
 
-func toLedgerAnswers(wording int, in map[string]jev.Answer) []ledger.Answer {
+func toLedgerAnswers(wording int, in map[string]core.Answer) []ledger.Answer {
 	ids := make([]string, 0, len(in))
 	for id := range in {
 		ids = append(ids, id)
@@ -20,11 +20,11 @@ func toLedgerAnswers(wording int, in map[string]jev.Answer) []ledger.Answer {
 		a := in[id]
 		la := ledger.Answer{Question: id, Wording: wording}
 		switch a.Kind {
-		case jev.QuestionNoul:
+		case core.QuestionNoul:
 			la.Kind, la.Noul = ledger.AnswerNoul, a.Noul
-		case jev.QuestionChoice:
+		case core.QuestionChoice:
 			la.Kind, la.Choice, la.Dist = ledger.AnswerChoice, a.Choice, distOf(a.Probabilities)
-		case jev.QuestionScore:
+		case core.QuestionScore:
 			la.Kind, la.Score, la.Dist = ledger.AnswerScore, a.Score, distOf(a.Probabilities)
 		default:
 			panic(fmt.Sprintf("stopcheck: unknown answer kind %v", a.Kind))
@@ -47,17 +47,17 @@ func distOf(p map[string]float64) []ledger.Slice {
 	return out
 }
 
-func toJevAnswers(answers []ledger.Answer) map[string]jev.Answer {
-	out := make(map[string]jev.Answer, len(answers))
+func toJevAnswers(answers []ledger.Answer) map[string]core.Answer {
+	out := make(map[string]core.Answer, len(answers))
 	for _, a := range answers {
-		ja := jev.Answer{}
+		ja := core.Answer{}
 		switch a.Kind {
 		case ledger.AnswerNoul:
-			ja.Kind, ja.Noul = jev.QuestionNoul, a.Noul
+			ja.Kind, ja.Noul = core.QuestionNoul, a.Noul
 		case ledger.AnswerChoice:
-			ja.Kind, ja.Choice = jev.QuestionChoice, a.Choice
+			ja.Kind, ja.Choice = core.QuestionChoice, a.Choice
 		case ledger.AnswerScore:
-			ja.Kind, ja.Score = jev.QuestionScore, a.Score
+			ja.Kind, ja.Score = core.QuestionScore, a.Score
 		default:
 			panic("stopcheck: unknown answer kind " + string(a.Kind))
 		}

@@ -1,4 +1,4 @@
-package browser
+package driver
 
 import (
 	"encoding/json"
@@ -254,9 +254,9 @@ func launchChrome(dir string, headless bool) (*cdpConn, error) {
 		return nil, err
 	}
 	command := exec.Command(chrome, append(args, "about:blank")...)
-	var tracked shell.Tree
+	var tracked process.Tree
 	if headless {
-		tracked, err = shell.StartTracked(command)
+		tracked, err = process.StartTracked(command)
 	} else {
 		err = command.Start()
 	}
@@ -265,7 +265,7 @@ func launchChrome(dir string, headless bool) (*cdpConn, error) {
 	}
 	exited := make(chan error, 1)
 	report := sys.Crashes(".")
-	safe.Go(report, "chrome wait", func() { exited <- safe.Call(report, "chrome wait", command.Wait) })
+	recover.Go(report, "chrome wait", func() { exited <- recover.Call(report, "chrome wait", command.Wait) })
 	for until := time.Now().Add(konst.BrowserCallTimeoutMillis * time.Millisecond); time.Now().Before(until); {
 		if conn, err := attachChrome(dir); err == nil {
 			return conn, nil

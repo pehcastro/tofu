@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"cmp"
@@ -49,7 +49,7 @@ type Quoted struct {
 	Words   string
 }
 
-func ShortID(id string) string { return turn.ShortID(id) }
+func ShortID(id string) string { return loop.ShortID(id) }
 
 func SaidEventID(talk session.Conversation, index int) string {
 	return cmp.Or(talk.Said[index].Event, session.EventIDFor(talk.Session, "step:"+strconv.Itoa(index)))
@@ -73,8 +73,8 @@ func NewQuote(store *session.Store, recorded string) Quote {
 
 func (q Quote) Name() string { return "quote" }
 
-func (q Quote) Definition() llm.Tool {
-	return llm.Tool{
+func (q Quote) Definition() core.Tool {
+	return core.Tool{
 		Name: "quote",
 		Description: "returns what one recorded item of this session holds, named by the short id the person put in their message as [quote#abcd]. " +
 			"the item is a turn, said by the person, by the agent or returned by a tool, or a tool call: an edit, a shell command, a question asked of the person, a sub-agent spawned, or a call a sub-agent made. " +
@@ -132,7 +132,7 @@ func ResolveQuote(store *session.Store, recorded, ref string) (Quoted, error) {
 	if store == nil || recorded == "" {
 		return Quoted{}, errors.New("this turn is recording no session, so there is nothing to look up")
 	}
-	newest, err := turn.NewestOnTheLine(store, recorded)
+	newest, err := loop.NewestOnTheLine(store, recorded)
 	if errors.Is(err, fs.ErrNotExist) {
 		return Quoted{Outcome: QuoteNotFound, Hash: hash}, nil
 	}

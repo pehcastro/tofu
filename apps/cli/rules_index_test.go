@@ -13,7 +13,7 @@ import (
 	"tofu/apps/cli/output"
 	rulesverb "tofu/apps/cli/verbs/rules"
 	"tofu/internal/agent/loop"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 )
 
 func writeFixtureModule(t *testing.T, files map[string]string) string {
@@ -153,33 +153,33 @@ func TestRulesIndexFiresWhatTheComposerSendsForEveryRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	qa, err := turn.SubAgents{Defined: found.Definitions}.Named("qa")
+	qa, err := loop.SubAgents{Defined: found.Definitions}.Named("qa")
 	if err != nil {
 		t.Fatal(err)
 	}
 	type indexCase struct {
-		spec turn.ComposeSpec
+		spec loop.ComposeSpec
 		args []string
 	}
 	var cases []indexCase
 	for _, task := range []string{"fix the parser", "add tests for the parser"} {
 		for _, role := range []rule.Role{rule.RoleAny, rule.RoleOrchestrator, rule.RoleSubAgent} {
-			args := []string{"parser.go", "--task", string(turn.TaskNamed(task).Verb)}
+			args := []string{"parser.go", "--task", string(loop.TaskNamed(task).Verb)}
 			if role != rule.RoleAny {
 				args = append(args, "--role", string(role))
 			}
-			cases = append(cases, indexCase{turn.ComposeSpec{Task: task, Paths: []string{"parser.go"}, Role: role}, args})
+			cases = append(cases, indexCase{loop.ComposeSpec{Task: task, Paths: []string{"parser.go"}, Role: role}, args})
 		}
 	}
 	cases = append(cases,
-		indexCase{turn.ComposeSpec{Task: "write a ticket for the theme picker", Role: rule.RoleOrchestrator}, []string{"--role", "orchestrator"}},
-		indexCase{turn.ComposeSpec{Task: "fix the nil check in internal/turn/loop.go", Role: rule.RoleOrchestrator}, []string{"--role", "orchestrator"}},
-		indexCase{turn.ComposeSpec{Task: "write a ticket for the theme picker", Role: rule.RoleSubAgent, Agent: qa}, []string{"--role", "sub-agent", "--agent", "qa"}},
-		indexCase{turn.ComposeSpec{Task: "check the change in internal/turn/loop_test.go", Role: rule.RoleSubAgent, Agent: qa}, []string{"--agent", "qa"}},
+		indexCase{loop.ComposeSpec{Task: "write a ticket for the theme picker", Role: rule.RoleOrchestrator}, []string{"--role", "orchestrator"}},
+		indexCase{loop.ComposeSpec{Task: "fix the nil check in internal/turn/loop.go", Role: rule.RoleOrchestrator}, []string{"--role", "orchestrator"}},
+		indexCase{loop.ComposeSpec{Task: "write a ticket for the theme picker", Role: rule.RoleSubAgent, Agent: qa}, []string{"--role", "sub-agent", "--agent", "qa"}},
+		indexCase{loop.ComposeSpec{Task: "check the change in internal/turn/loop_test.go", Role: rule.RoleSubAgent, Agent: qa}, []string{"--agent", "qa"}},
 	)
 	for _, c := range cases {
 		c.spec.Environment, c.spec.ToolGuidance, c.spec.Rules = "e", "g", rules
-		composed, err := turn.Compose(c.spec)
+		composed, err := loop.Compose(c.spec)
 		if err != nil {
 			t.Fatal(err)
 		}

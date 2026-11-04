@@ -153,7 +153,7 @@ func (r *role) count(turn string, made session.CallBody, ran bool) {
 			lines = max(linesIn(args.Content), linesIn(args.Old), linesIn(args.New))
 		}
 	case "bash":
-		written, unreadable := subagent.ShellWrites(args.Command)
+		written, unreadable := subagents.ShellWrites(args.Command)
 		if unreadable != nil || slices.ContainsFunc(written, sourceFile) {
 			r.shellWrites++
 			lines = konst.OrchestratorSourceLinesPerTurn
@@ -173,7 +173,7 @@ func (r *role) count(turn string, made session.CallBody, ran bool) {
 }
 
 func sourceFile(path string) bool {
-	language := rule.LanguageOf(path)
+	language := rules.LanguageOf(path)
 	return language != "" && language != "markdown" && language != "yaml"
 }
 

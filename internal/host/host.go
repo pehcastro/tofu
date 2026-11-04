@@ -52,14 +52,14 @@ type Live struct {
 	Steering   <-chan string
 	LeadStop   <-chan struct{}
 	Answers    <-chan Answer
-	Origin     llm.Origin
+	Origin     core.Origin
 	Unattended bool
 }
 
 type Carry struct {
 	Session  string
 	Name     string
-	Messages []llm.Message
+	Messages []core.Message
 	Tasks    []string
 	Store    *session.Store
 	Keys     *sys.KeyRedactor
@@ -70,7 +70,7 @@ type Config struct {
 	Engine      Engine
 	Play        Play
 	Now         func() time.Time
-	Shells      *shell.Registry
+	Shells      *process.Registry
 	Check       cron.Checker
 	Resumed     Carry
 	ProjectTurn *sync.Mutex
@@ -83,7 +83,7 @@ type Host struct {
 	engine   Engine
 	play     Play
 	now      func() time.Time
-	shells   *shell.Registry
+	shells   *process.Registry
 	events   chan Event
 	bus      bus
 	answers  chan Answer
@@ -120,13 +120,13 @@ type Host struct {
 	previous  string
 	streaming bool
 	ticking   *time.Timer
-	checkIn   *turn.LeadCheckIn
+	checkIn   *loop.LeadCheckIn
 	checking  *time.Timer
 	id        string
-	started   hook.SessionSource
-	carried   []llm.Message
+	started   hooks.SessionSource
+	carried   []core.Message
 	carriedOn string
-	prefix    *turn.Prefix
+	prefix    *loop.Prefix
 	pending   []pendingImage
 	ran       []string
 	release   func() error
@@ -134,8 +134,8 @@ type Host struct {
 	turn      string
 	asking    AskingMode
 
-	reads   *turn.ReadLedger
-	inbox   *turn.Inbox
+	reads   *loop.ReadLedger
+	inbox   *loop.Inbox
 	settled []<-chan struct{}
 	roster  *roster.Roster
 	spent   *tokenTally
@@ -143,7 +143,7 @@ type Host struct {
 	asks    *asks
 
 	questions   *replies[answeredQuestion]
-	memoryPicks *replies[memory.Scope]
+	memoryPicks *replies[entries.Scope]
 }
 
 type pendingImage struct {
@@ -176,10 +176,10 @@ func New(cfg Config) (*Host, []string) {
 		joins:       cfg.Joins,
 		member:      MemberTUI,
 		id:          cfg.Resumed.Session,
-		started:     hook.SessionStartup,
+		started:     hooks.SessionStartup,
 		asks:        &asks{standing: map[string]Answer{}, until: map[string]time.Time{}, given: map[string]time.Time{}},
 		questions:   &replies[answeredQuestion]{},
-		memoryPicks: &replies[memory.Scope]{},
+		memoryPicks: &replies[entries.Scope]{},
 		bus:         bus{heard: map[string]Resolution{}, noted: map[string]Resolution{}},
 	}
 	h.asks.session, h.asks.unkept, h.asks.granted = h.standingIn, h.standingUnkept, h.bind
@@ -201,7 +201,7 @@ func New(cfg Config) (*Host, []string) {
 		return h, troubles
 	}
 	if !cfg.Unrecorded {
-		h.started = hook.SessionResumed
+		h.started = hooks.SessionResumed
 	}
 	if err := h.enter(h.id); err != nil {
 		return h, append(troubles, err.Error())
@@ -209,7 +209,7 @@ func New(cfg Config) (*Host, []string) {
 	if h.joins {
 		return h, troubles
 	}
-	safe.Go(h.report, "follow binding", h.followBinding)
+	recover.Go(h.report, "follow binding", h.followBinding)
 	if err := h.loadCron(h.id); err != nil {
 		return h, append(troubles, err.Error())
 	}
@@ -249,7 +249,7 @@ func (h *Host) ID() string {
 	return h.id
 }
 
-func (h *Host) Carried() []llm.Message {
+func (h *Host) Carried() []core.Message {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	return h.carried
@@ -261,7 +261,7 @@ func (h *Host) Choose(pick Pick) {
 	case f == nil:
 		h.Settle("", pick)
 	case f.chosen(pick):
-		safe.Go(h.report, "follow pick", func() { h.Settle("", pick) })
+		recover.Go(h.report, "follow pick", func() { h.Settle("", pick) })
 	}
 }
 
@@ -320,25 +320,25 @@ func (h *Host) Send(pick Pick, task string) bool {
 		return false
 	}
 	h.settle("", Pick{Wire: pick.Wire, Model: pick.Model, Effort: pick.Effort})
-	h.begin(pick, task, llm.Origin{Source: llm.SourceTask})
+	h.begin(pick, task, core.Origin{Source: core.SourceTask})
 	return true
 }
 
-func (h *Host) begin(pick Pick, task string, origin llm.Origin) {
+func (h *Host) begin(pick Pick, task string, origin core.Origin) {
 	h.dropCheckIn()
-	ctx, cancel := context.WithCancelCause(turn.WithLeadCheckIn(context.Background(), h.keepCheckIn))
+	ctx, cancel := context.WithCancelCause(loop.WithLeadCheckIn(context.Background(), h.keepCheckIn))
 	turnOver := make(chan struct{})
-	h.running, h.stopped, h.cancelled, h.stopBy, h.cancel, h.turn, h.turnOver = true, false, false, "", cancel, turn.NewID(h.now()), turnOver
-	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers, Origin: origin, Unattended: origin.Source == llm.SourceCronFire}
+	h.running, h.stopped, h.cancelled, h.stopBy, h.cancel, h.turn, h.turnOver = true, false, false, "", cancel, loop.NewID(h.now()), turnOver
+	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers, Origin: origin, Unattended: origin.Source == core.SourceCronFire}
 	h.recordUnrecorded()
 	images := shownPending(task, h.pending)
-	safe.Go(h.report, "turn", func() {
+	recover.Go(h.report, "turn", func() {
 		defer close(turnOver)
 		out := h.emitter()
 		live.Emit = out.emit
 		out.emit(Event{Kind: EventTurnStarted, ID: live.Turn, Text: task, Origin: wireOrigin(origin), Images: images, At: h.now()})
 		crashed := ""
-		_ = safe.Call(func(p safe.Panic) {
+		_ = recover.Call(func(p recover.Panic) {
 			crashed = p.Saved(h.stateDir())
 			out.emit(Event{Kind: EventFailure, Text: crashed})
 		}, "turn", func() error {
@@ -448,7 +448,7 @@ func (h *Host) trace(said string, stop *session.Stop) {
 	if id == "" {
 		return
 	}
-	event, body := session.Event{Turn: turnID, Kind: session.EventNotice}, session.StopBody{NoticeBody: session.NoticeBody{Text: said, From: turn.RecordedOrigin(llm.Origin{Source: llm.SourceNotice})}, Stop: stop}
+	event, body := session.Event{Turn: turnID, Kind: session.EventNotice}, session.StopBody{NoticeBody: session.NoticeBody{Text: said, From: loop.RecordedOrigin(core.Origin{Source: core.SourceNotice})}, Stop: stop}
 	written, err := inbox.Record(id, event, body)
 	if !written && err == nil {
 		err = appendNotice(h.dir, id, event, body)
@@ -637,7 +637,7 @@ func (h *Host) stateDir() string {
 	return dir
 }
 
-func (h *Host) report(p safe.Panic) {
+func (h *Host) report(p recover.Panic) {
 	h.note(p.Saved(h.stateDir()))
 }
 
@@ -729,10 +729,10 @@ func (h *Host) carry(resumed Carry) error {
 	if h.engine != nil {
 		h.engine.Renew()
 	}
-	h.reads, h.inbox, h.roster, h.spent = turn.NewReadLedger(), turn.NewInbox(), &roster.Roster{}, &tokenTally{}
-	h.ran, h.carried, h.carriedOn, h.prefix, h.shown = nil, resumed.Messages, "", &turn.Prefix{}, &shownResults{ids: map[string]bool{}}
+	h.reads, h.inbox, h.roster, h.spent = loop.NewReadLedger(), loop.NewInbox(), &roster.Roster{}, &tokenTally{}
+	h.ran, h.carried, h.carriedOn, h.prefix, h.shown = nil, resumed.Messages, "", &loop.Prefix{}, &shownResults{ids: map[string]bool{}}
 	for _, message := range resumed.Messages[sinceLastReply(resumed.Messages):] {
-		if message.Role == llm.RoleTool {
+		if message.Role == core.RoleTool {
 			h.shown.firstTime("", message.ToolCallID)
 		}
 	}
@@ -741,16 +741,16 @@ func (h *Host) carry(resumed Carry) error {
 	}
 	store, err := resumed.reading(h.dir)
 	if err == nil && !h.joins {
-		err = turn.RestoreSubAgents(store, resumed.Session, h.roster, h.inbox)
+		err = loop.RestoreSubAgents(store, resumed.Session, h.roster, h.inbox)
 	}
 	if err != nil {
 		return fmt.Errorf("the sub-agents of %s were not all read back: %w", resumed.Session, err)
 	}
-	if h.prefix, err = turn.HeldPrefix(store, resumed.Session, ""); err != nil {
-		h.prefix = &turn.Prefix{}
+	if h.prefix, err = loop.HeldPrefix(store, resumed.Session, ""); err != nil {
+		h.prefix = &loop.Prefix{}
 		err = fmt.Errorf("the system prompt and tools %s first sent were not read back, so the next turn sends them anew: %w", resumed.Session, err)
 		if !h.joins {
-			notice := session.StopBody{NoticeBody: session.NoticeBody{Text: err.Error(), From: turn.RecordedOrigin(llm.Origin{Source: llm.SourceNotice})}}
+			notice := session.StopBody{NoticeBody: session.NoticeBody{Text: err.Error(), From: loop.RecordedOrigin(core.Origin{Source: core.SourceNotice})}}
 			err = errors.Join(err, appendNotice(h.dir, resumed.Session, session.Event{Kind: session.EventNotice}, notice))
 		}
 		return err
@@ -762,7 +762,7 @@ func (h *Host) carry(resumed Carry) error {
 	if err != nil || !found || side.Effort == "" {
 		return err
 	}
-	effort, err := llm.ParseEffort(side.Effort)
+	effort, err := core.ParseEffort(side.Effort)
 	if err == nil {
 		h.pick.Effort = effort
 	}
@@ -868,7 +868,7 @@ func (h *Host) freshAlone() error {
 	h.letGo()
 	h.forget()
 	_ = h.carry(Carry{})
-	h.id, h.pending, h.started = "", nil, hook.SessionCleared
+	h.id, h.pending, h.started = "", nil, hooks.SessionCleared
 	return h.cron.Load("")
 }
 
@@ -895,7 +895,7 @@ func (h *Host) Resume(carry Carry) (Opened, error) {
 		return Opened{}, err
 	}
 	h.mu.Lock()
-	h.id, h.pending, h.started = carry.Session, nil, hook.SessionResumed
+	h.id, h.pending, h.started = carry.Session, nil, hooks.SessionResumed
 	restoreErr := h.carry(carry)
 	h.mu.Unlock()
 	if f := h.following.Load(); f != nil {
@@ -914,10 +914,10 @@ func (h *Host) Resume(carry Carry) (Opened, error) {
 
 func (h *Host) Opening(carry Carry) Opened { return resumedChat(carry, h.dir) }
 
-func (h *Host) Compacted(into string, messages []llm.Message) error {
+func (h *Host) Compacted(into string, messages []core.Message) error {
 	h.mu.Lock()
 	h.dropCheckIn()
-	h.id, h.carried, h.started = into, messages, hook.SessionCompact
+	h.id, h.carried, h.started = into, messages, hooks.SessionCompact
 	h.mu.Unlock()
 	if err := h.enter(into); err != nil {
 		return err
@@ -1032,15 +1032,15 @@ func (h *Host) takePending(task string) []pendingImage {
 	return wanted
 }
 
-func (h *Host) takePendingImages(task string) ([]llm.Image, error) {
+func (h *Host) takePendingImages(task string) ([]core.Image, error) {
 	wanted := h.takePending(task)
-	images := make([]llm.Image, 0, len(wanted))
+	images := make([]core.Image, 0, len(wanted))
 	for _, image := range wanted {
 		data, err := os.ReadFile(image.Path)
 		if err != nil {
 			return nil, err
 		}
-		images = append(images, llm.Image{MediaType: imageMediaType(image.Path), Data: data}.Fitted())
+		images = append(images, core.Image{MediaType: imageMediaType(image.Path), Data: data}.Fitted())
 	}
 	return images, nil
 }

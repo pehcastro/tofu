@@ -473,7 +473,7 @@ func TestOpenPartQuotesWhatJevChose(t *testing.T) {
 		{0.97, "none", reason, true},
 		{0.49, "part_1", "", false},
 	} {
-		answers := map[string]jev.Answer{"open": {Kind: jev.QuestionNoul, Noul: c.open}, "part": {Kind: jev.QuestionChoice, Choice: c.choice}}
+		answers := map[string]core.Answer{"open": {Kind: core.QuestionNoul, Noul: c.open}, "part": {Kind: core.QuestionChoice, Choice: c.choice}}
 		quoted, refused := openPart(answers, reason, parts, 0.5)
 		if quoted != c.quoted || refused != c.refused {
 			t.Errorf("open %.2f choosing %s: quoted %q refused %v, want %q %v", c.open, c.choice, quoted, refused, c.quoted, c.refused)

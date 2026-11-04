@@ -34,7 +34,7 @@ const (
 
 type Form struct {
 	ID        string
-	questions []turn.PersonQuestion
+	questions []loop.PersonQuestion
 	wait      time.Duration
 	opened    time.Time
 	at        int
@@ -44,7 +44,7 @@ type Form struct {
 	done      []bool
 }
 
-func Open(id string, questions []turn.PersonQuestion, wait time.Duration, now time.Time) *Form {
+func Open(id string, questions []loop.PersonQuestion, wait time.Duration, now time.Time) *Form {
 	f := &Form{ID: id, questions: questions, wait: wait, opened: now,
 		focus: make([]int, len(questions)), picked: make([][]bool, len(questions)), typed: make([]string, len(questions)), done: make([]bool, len(questions))}
 	for i, q := range questions {
@@ -78,7 +78,7 @@ func (f *Form) Key(key, composer string) (Action, bool) {
 	case "shift+tab":
 		f.at = (f.at + len(f.questions) - 1) % len(f.questions)
 	case "space":
-		if q.Type != turn.QuestionMulti || f.onOther() {
+		if q.Type != loop.QuestionMulti || f.onOther() {
 			return Kept, false
 		}
 		f.picked[f.at][f.focus[f.at]] = !f.picked[f.at][f.focus[f.at]]
@@ -90,7 +90,7 @@ func (f *Form) Key(key, composer string) (Action, bool) {
 			return Kept, false
 		}
 		f.focus[f.at] = at - 1
-		if q.Type == turn.QuestionMulti {
+		if q.Type == loop.QuestionMulti {
 			f.picked[f.at][at-1] = !f.picked[f.at][at-1]
 			return Kept, true
 		}
@@ -106,7 +106,7 @@ func (f *Form) confirm(typed string) Action {
 		return Kept
 	case f.onOther():
 		f.typed[f.at] = typed
-	case q.Type != turn.QuestionMulti || !slices.Contains(f.picked[f.at], true):
+	case q.Type != loop.QuestionMulti || !slices.Contains(f.picked[f.at], true):
 		clear(f.picked[f.at])
 		f.picked[f.at][f.focus[f.at]] = true
 	}
@@ -118,10 +118,10 @@ func (f *Form) confirm(typed string) Action {
 	return Submitted
 }
 
-func (f *Form) Replies() []turn.PersonReply {
-	replies := make([]turn.PersonReply, len(f.questions))
+func (f *Form) Replies() []loop.PersonReply {
+	replies := make([]loop.PersonReply, len(f.questions))
 	for i, q := range f.questions {
-		replies[i] = turn.PersonReply{ID: q.ID, Chosen: []string{}, Text: f.typed[i]}
+		replies[i] = loop.PersonReply{ID: q.ID, Chosen: []string{}, Text: f.typed[i]}
 		for at, picked := range f.picked[i] {
 			if picked && f.typed[i] == "" {
 				replies[i].Chosen = append(replies[i].Chosen, q.Options[at].Label)
@@ -135,18 +135,18 @@ func (f *Form) Lines(width int, now time.Time) []string {
 	q := f.questions[f.at]
 	inner := width - 2*padX
 	head := look.Style(look.Amber).Render("? "+q.Header) + look.Muted("  "+strconv.Itoa(f.at+1)+" of "+strconv.Itoa(len(f.questions)))
-	lines := []string{widget.Fit(head, inner)}
+	lines := []string{render.Fit(head, inner)}
 	if waiting := f.countdown(now); waiting != "" {
-		lines = append(lines, widget.Fit(look.Style(look.Amber).Render(waiting), inner))
+		lines = append(lines, render.Fit(look.Style(look.Amber).Render(waiting), inner))
 	}
-	lines = append(lines, widget.Fit(look.Title(q.Question), inner))
+	lines = append(lines, render.Fit(look.Title(q.Question), inner))
 	for at, o := range q.Options {
 		mark := restMark
 		if at == f.focus[f.at] {
 			mark = look.Accent(focusMark)
 		}
 		box := ""
-		if q.Type == turn.QuestionMulti {
+		if q.Type == loop.QuestionMulti {
 			box = unpicked
 			if f.picked[f.at][at] {
 				box = pickedMark
@@ -156,10 +156,10 @@ func (f *Form) Lines(width int, now time.Time) []string {
 		if q.Recommended != nil && *q.Recommended == at {
 			label += " (recommended)"
 		}
-		lines = append(lines, widget.Fit(mark+box+look.Style(look.Text).Render(label)+look.Muted("  "+o.Description), inner))
+		lines = append(lines, render.Fit(mark+box+look.Style(look.Text).Render(label)+look.Muted("  "+o.Description), inner))
 		if at == f.focus[f.at] && o.Preview != "" {
 			for _, row := range strings.Split(o.Preview, "\n") {
-				lines = append(lines, widget.Fit(look.Faint(previewMark+row), inner))
+				lines = append(lines, render.Fit(look.Faint(previewMark+row), inner))
 			}
 		}
 	}
@@ -167,12 +167,12 @@ func (f *Form) Lines(width int, now time.Time) []string {
 	if f.onOther() {
 		mark = look.Accent(focusMark)
 	}
-	lines = append(lines, widget.Fit(mark+strconv.Itoa(len(q.Options)+1)+". "+otherLabel+look.Muted("  "+otherHint), inner))
+	lines = append(lines, render.Fit(mark+strconv.Itoa(len(q.Options)+1)+". "+otherLabel+look.Muted("  "+otherHint), inner))
 	keys := keysChoice
-	if q.Type == turn.QuestionMulti {
+	if q.Type == loop.QuestionMulti {
 		keys = keysMulti
 	}
-	lines = append(lines, widget.Fit(look.Faint(keys), inner))
+	lines = append(lines, render.Fit(look.Faint(keys), inner))
 	return strings.Split(look.Surface(width, len(lines), look.Panel, padX, strings.Join(lines, "\n")), "\n")
 }
 
@@ -184,5 +184,5 @@ func (f *Form) countdown(now time.Time) string {
 	case left <= 0:
 		return "no answer yet; the lead was told none came, and answering still reaches it"
 	}
-	return "no answer yet; the lead hears in " + widget.Until(left) + " that none came, and picks nothing"
+	return "no answer yet; the lead hears in " + render.Until(left) + " that none came, and picks nothing"
 }

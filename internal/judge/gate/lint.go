@@ -32,7 +32,7 @@ func (f Finding) String() string {
 	return fmt.Sprintf("%s: %s: %s: %s", f.File, where, f.Check, f.Detail)
 }
 
-func Lint(r Rule, set question.Set) []Finding {
+func Lint(r Rule, set questions.Set) []Finding {
 	var out []Finding
 	add := func(check Check, field, detail string) {
 		out = append(out, Finding{Check: check, Rule: r.Name, Field: field, File: r.File, Detail: detail})
@@ -43,14 +43,14 @@ func Lint(r Rule, set question.Set) []Finding {
 	if r.QuestionsVersion != set.QuestionsVersion {
 		add(CheckVersionMismatch, "questions_version", fmt.Sprintf("the rule expects questions_version %d and the set declares %d", r.QuestionsVersion, set.QuestionsVersion))
 	}
-	lintQuestion(&out, r, set, "risk_question", r.RiskQuestion, question.KindScore)
-	lintQuestion(&out, r, set, "approval_question", r.ApprovalQuestion, question.KindNoul)
-	lintQuestion(&out, r, set, "user_requested_question", r.UserRequestedQuestion, question.KindNoul)
-	lintQuestion(&out, r, set, "from_untrusted_question", r.FromUntrustedQuestion, question.KindNoul)
+	lintQuestion(&out, r, set, "risk_question", r.RiskQuestion, questions.KindScore)
+	lintQuestion(&out, r, set, "approval_question", r.ApprovalQuestion, questions.KindNoul)
+	lintQuestion(&out, r, set, "user_requested_question", r.UserRequestedQuestion, questions.KindNoul)
+	lintQuestion(&out, r, set, "from_untrusted_question", r.FromUntrustedQuestion, questions.KindNoul)
 	return out
 }
 
-func lintQuestion(out *[]Finding, r Rule, set question.Set, field, name string, want question.Kind) {
+func lintQuestion(out *[]Finding, r Rule, set questions.Set, field, name string, want questions.Kind) {
 	add := func(check Check, detail string) {
 		*out = append(*out, Finding{Check: check, Rule: r.Name, Field: field, File: r.File, Detail: detail})
 	}
@@ -73,7 +73,7 @@ func LintFile(rulePath, libraryDir string) (Rule, []Finding, error) {
 		return r, nil, nil
 	}
 	questionsPath := filepath.Join(libraryDir, "questions", fmt.Sprintf("%s@%d.yaml", r.Questions, r.QuestionsVersion))
-	set, err := question.Load(questionsPath)
+	set, err := questions.Load(questionsPath)
 	if err != nil {
 		return r, nil, err
 	}

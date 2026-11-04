@@ -167,7 +167,7 @@ type TraceCall struct {
 	DurationMS int64           `json:"duration_ms,omitempty"`
 	Refused    bool            `json:"refused,omitempty"`
 	Gate       string          `json:"gate,omitempty"`
-	Hooks      []turn.HookRun  `json:"hooks,omitempty"`
+	Hooks      []loop.HookRun  `json:"hooks,omitempty"`
 	RecordedIn string          `json:"recorded_in,omitempty"`
 }
 
@@ -176,7 +176,7 @@ type TraceHook struct {
 	Turn  string `json:"turn"`
 	Call  string `json:"call,omitempty"`
 	Tool  string `json:"tool,omitempty"`
-	hook.Run
+	hooks.Run
 }
 
 type TraceMessage struct {

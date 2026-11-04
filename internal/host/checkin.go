@@ -7,7 +7,7 @@ import (
 	"tofu/internal/models/llm/core"
 )
 
-func (h *Host) keepCheckIn(armed *turn.LeadCheckIn) {
+func (h *Host) keepCheckIn(armed *loop.LeadCheckIn) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.checkIn = armed
@@ -43,7 +43,7 @@ func (h *Host) armCheckIn() {
 		}
 		h.dropCheckIn()
 		if due {
-			h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort}, text, llm.Origin{Source: llm.SourceSlots})
+			h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort}, text, core.Origin{Source: core.SourceSlots})
 		}
 	})
 }

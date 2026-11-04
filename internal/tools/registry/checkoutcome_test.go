@@ -1,4 +1,4 @@
-package tools_test
+package registry_test
 
 import (
 	"context"
@@ -22,25 +22,25 @@ func checkedProject(t *testing.T, files map[string]string) string {
 	return dir
 }
 
-func checkTools(t *testing.T, dir string) (tools.Typecheck, tools.Test) {
+func checkTools(t *testing.T, dir string) (registry.Typecheck, registry.Test) {
 	t.Helper()
-	checkers, runners := turn.NewTypecheckers(), turn.NewTestRunners()
+	checkers, runners := loop.NewTypecheckers(), loop.NewTestRunners()
 	t.Cleanup(checkers.Close)
 	t.Cleanup(runners.Close)
-	typecheck, err := tools.NewTypecheck(dir, checkers)
+	typecheck, err := registry.NewTypecheck(dir, checkers)
 	if err != nil {
 		t.Fatal(err)
 	}
-	test, err := tools.NewTest(dir, runners)
+	test, err := registry.NewTest(dir, runners)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return typecheck, test
 }
 
-func pathCall(tool, path string) llm.ToolCall {
+func pathCall(tool, path string) core.ToolCall {
 	raw, _ := json.Marshal(map[string]string{"path": path})
-	return llm.ToolCall{ID: tool + " " + path, Name: tool, Arguments: raw}
+	return core.ToolCall{ID: tool + " " + path, Name: tool, Arguments: raw}
 }
 
 func TestATypecheckOrTestThatFindsAFailureRecordsItAndACleanOneDoesNot(t *testing.T) {
@@ -63,20 +63,20 @@ func TestATypecheckOrTestThatFindsAFailureRecordsItAndACleanOneDoesNot(t *testin
 		t.Skipf("vitest could not be installed from the bun cache: %v\n%s", err, out)
 	}
 	typecheck, test := checkTools(t, dir)
-	model := &recordingModel{calls: []llm.ToolCall{
+	model := &recordingModel{calls: []core.ToolCall{
 		pathCall("typecheck", "src/broken.ts"), pathCall("typecheck", "src/sum.ts"),
 		pathCall("test", "src/broken.test.ts"), pathCall("test", "src/sum.test.ts"),
 	}}
-	row, err := turn.Run(context.Background(), turn.Config{
+	row, err := loop.Run(context.Background(), loop.Config{
 		Model:          model,
-		Spend:          turn.SpendSubscription,
-		Tools:          turn.NewRegistry(typecheck, test),
+		Spend:          loop.SpendSubscription,
+		Tools:          loop.NewRegistry(typecheck, test),
 		Task:           "check the project",
 		ResultBytesCap: konst.TurnResultBytesCap,
 		ArtifactDir:    t.TempDir(),
 	})
 	if err != nil {
-		t.Fatalf("turn.Run: %v", err)
+		t.Fatalf("loop.Run: %v", err)
 	}
 	rows := loggedRows(t, row)
 	if len(rows) != 4 {

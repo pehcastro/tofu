@@ -94,7 +94,7 @@ func (s Store) runs(key string, listed []Group) (map[string]run, error) {
 	var reading sync.WaitGroup
 	for id, agents := range bySession {
 		reading.Go(func() {
-			_ = safe.Call(s.crashed, "boardy rows session "+id, func() error { return agentsIn(sessions, id, agents) })
+			_ = recover.Call(s.crashed, "boardy rows session "+id, func() error { return agentsIn(sessions, id, agents) })
 		})
 	}
 	reading.Wait()

@@ -181,11 +181,11 @@ func (h *Host) carrySteers(out *emitter) []string {
 		texts = append(texts, entry.text)
 	}
 	if len(unread) > 0 {
-		h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort}, strings.Join(texts, "\n\n"), llm.Origin{Source: llm.SourceTyped})
+		h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort}, strings.Join(texts, "\n\n"), core.Origin{Source: core.SourceTyped})
 	}
 	h.mu.Unlock()
 	for _, entry := range unread {
-		out.emit(Event{Kind: EventSteered, ID: entry.id, Text: entry.text, Step: 1, Origin: wireOrigin(llm.Origin{Source: llm.SourceTyped})})
+		out.emit(Event{Kind: EventSteered, ID: entry.id, Text: entry.text, Step: 1, Origin: wireOrigin(core.Origin{Source: core.SourceTyped})})
 	}
 	return texts
 }

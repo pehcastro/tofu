@@ -228,7 +228,7 @@ func TestReplaceBinaryPassesACopyStillRunning(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = running.Close() }()
-	aside, err := browser.ReplaceExecutable(target, []byte("new tofu"))
+	aside, err := driver.ReplaceExecutable(target, []byte("new tofu"))
 	if err != nil {
 		t.Fatalf("a held set-aside copy blocked the install: %v", err)
 	}

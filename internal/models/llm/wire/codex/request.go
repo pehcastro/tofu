@@ -24,10 +24,10 @@ type Sampling struct {
 type Request struct {
 	Model            string
 	Instructions     string
-	Messages         []llm.Message
-	Tools            []llm.Tool
+	Messages         []core.Message
+	Tools            []core.Tool
 	ToolChoice       string
-	Effort           llm.Effort
+	Effort           core.Effort
 	SummaryOff       bool
 	ReasoningContext string
 	Verbosity        string
@@ -182,7 +182,7 @@ func (r Request) reasoning() (*wireReasoning, error) {
 	if !slices.Contains(ReasoningEfforts(), r.Effort) {
 		return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
 			"%q is not a codex reasoning effort; this wire takes %s",
-			r.Effort, llm.EffortList(ReasoningEfforts()))
+			r.Effort, core.EffortList(ReasoningEfforts()))
 	}
 	reasoning := &wireReasoning{Effort: string(r.Effort), Context: r.ReasoningContext}
 	if !r.SummaryOff {
@@ -213,21 +213,21 @@ func (r Request) RefusedControls() []string {
 	return refused
 }
 
-func encodeInput(messages []llm.Message) ([]inputItem, error) {
+func encodeInput(messages []core.Message) ([]inputItem, error) {
 	items := make([]inputItem, 0, len(messages))
 	for index, message := range messages {
 		switch message.Role {
-		case llm.RoleSystem:
+		case core.RoleSystem:
 			return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
 				"message %d is a system message; codex carries those in instructions", index)
 
-		case llm.RoleUser:
-			if llm.BlankText(message.Content) && len(message.Images) == 0 {
+		case core.RoleUser:
+			if core.BlankText(message.Content) && len(message.Images) == 0 {
 				return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
 					"message %d is a user message with no content", index)
 			}
 			var parts []inputPart
-			if !llm.BlankText(message.Content) {
+			if !core.BlankText(message.Content) {
 				parts = append(parts, inputPart{Type: "input_text", Text: message.Sent()})
 			}
 			role := "user"
@@ -236,7 +236,7 @@ func encodeInput(messages []llm.Message) ([]inputItem, error) {
 			}
 			items = append(items, inputItem{Role: role, Content: append(parts, pictureParts(message.Images)...)})
 
-		case llm.RoleTool:
+		case core.RoleTool:
 			if message.ToolCallID == "" {
 				return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
 					"message %d is a tool result with no tool call id", index)
@@ -247,11 +247,11 @@ func encodeInput(messages []llm.Message) ([]inputItem, error) {
 			}
 			items = append(items, inputItem{Type: "function_call_output", CallID: message.ToolCallID, Output: output})
 
-		case llm.RoleAssistant:
+		case core.RoleAssistant:
 			if id, encrypted, ok := DecodeReasoning(message.Thinking.Signature); ok && len(message.ToolCalls) > 0 {
 				items = append(items, inputItem{Type: "reasoning", ID: id, EncryptedContent: encrypted, Summary: []inputPart{}})
 			}
-			if !llm.BlankText(message.Content) {
+			if !core.BlankText(message.Content) {
 				items = append(items, inputItem{Type: "message", Role: "assistant",
 					Content: []inputPart{{Type: "output_text", Text: message.Content}}})
 			}
@@ -268,7 +268,7 @@ func encodeInput(messages []llm.Message) ([]inputItem, error) {
 					CallID: call.ID, Name: call.Name, Arguments: arguments})
 			}
 
-		case llm.RoleUnknown:
+		case core.RoleUnknown:
 			return nil, transport.Fail("codex.Encode", transport.KindBadRequest, nil,
 				"message %d has an unknown role", index)
 		}
@@ -276,7 +276,7 @@ func encodeInput(messages []llm.Message) ([]inputItem, error) {
 	return items, nil
 }
 
-func pictureParts(images []llm.Image) []inputPart {
+func pictureParts(images []core.Image) []inputPart {
 	parts := make([]inputPart, len(images))
 	for i, image := range images {
 		parts[i] = inputPart{Type: "input_image", Detail: imageDetail, ImageURL: image.Fitted().DataURL()}
@@ -284,7 +284,7 @@ func pictureParts(images []llm.Image) []inputPart {
 	return parts
 }
 
-func encodeTools(tools []llm.Tool) ([]wireTool, error) {
+func encodeTools(tools []core.Tool) ([]wireTool, error) {
 	if len(tools) == 0 {
 		return nil, nil
 	}

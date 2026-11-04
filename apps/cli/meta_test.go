@@ -22,7 +22,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/sys"
-	testkit "tofu/internal/testkit/cli"
+	"tofu/internal/testkit/cli"
 )
 
 const (
@@ -88,7 +88,7 @@ func metaStub(t *testing.T, answer func(heardMeta, http.ResponseWriter)) *[]hear
 		answer(request, w)
 	}))
 	t.Cleanup(server.Close)
-	t.Setenv(models.MetaBaseURLVariable, server.URL)
+	t.Setenv(catalog.MetaBaseURLVariable, server.URL)
 	return heard
 }
 
@@ -211,7 +211,7 @@ func TestABoundMetaOrchestratorRunsOnMetaWithNoModelAndTheAppListsItsWire(t *tes
 	if err := sys.SaveKey(sys.MetaMuseKeyName, madeUpMetaKey); err != nil {
 		t.Fatal(err)
 	}
-	if err := models.BindRole(sys.StateDir(project), models.RoleOrchestrator, "meta/muse-spark-1.3-contributor"); err != nil {
+	if err := catalog.BindRole(sys.StateDir(project), catalog.RoleOrchestrator, "meta/muse-spark-1.3-contributor"); err != nil {
 		t.Fatal(err)
 	}
 	heard := metaStub(t, func(_ heardMeta, w http.ResponseWriter) {
@@ -246,7 +246,7 @@ func TestAMetaTurnWithNoKeySaysHowToStoreOne(t *testing.T) {
 
 func TestAMetaSlugPicksItsOwnWireAndRefusesAnother(t *testing.T) {
 	opts, err := parseRunArgs([]string{"--dir", ".", "--model", "meta/muse-spark-1.3-contributor", "task"})
-	if err != nil || opts.Wire != wiring.WireMeta || wiring.WireSpend(opts.Wire) != turn.SpendAPIKey {
+	if err != nil || opts.Wire != wiring.WireMeta || wiring.WireSpend(opts.Wire) != loop.SpendAPIKey {
 		t.Fatalf("meta/muse-spark-1.3-contributor parsed to wire %q spend %q (%v)", opts.Wire, wiring.WireSpend(opts.Wire), err)
 	}
 	if bound, err := boundSubAgent(opts); bound != "" || err != nil {
@@ -329,7 +329,7 @@ func TestModelsListsTheFiveMetaModelsWithTheirWindowAndTheContributorNotice(t *t
 		}
 		meta := map[string]host.ModelReport{}
 		for _, model := range envelope.Data.Models {
-			if model.Provider == string(models.Meta) {
+			if model.Provider == string(catalog.Meta) {
 				meta[model.Slug] = model
 			}
 		}
@@ -354,6 +354,6 @@ func TestModelsListsTheFiveMetaModelsWithTheirWindowAndTheContributorNotice(t *t
 		}
 	}
 	check("with the shipped table")
-	testkit.WriteFile(t, home, ".tofu/model-windows.json", homeRegistryOfOneWindow)
+	cli.WriteFile(t, home, ".tofu/model-windows.json", homeRegistryOfOneWindow)
 	check("after a reload wrote a table with no meta row")
 }

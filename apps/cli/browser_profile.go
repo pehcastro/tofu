@@ -41,43 +41,43 @@ func (o browserOutput) profile(args []string) int {
 	}
 	switch verb {
 	case "list":
-		profiles, err := browser.Profiles(home)
+		profiles, err := driver.Profiles(home)
 		if err != nil {
 			return o.fail(err)
 		}
-		rows := make([]cli.Row, len(profiles))
+		rows := make([]page.Row, len(profiles))
 		for i, profile := range profiles {
-			rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{profile.Name, "stopped", o.page.Path(profile.Dir)}}
+			rows[i] = page.Row{Mark: page.Idle, Cells: []string{profile.Name, "stopped", o.page.Path(profile.Dir)}}
 			if profile.Running {
-				rows[i].Mark, rows[i].Cells[1] = cli.Active, "running"
+				rows[i].Mark, rows[i].Cells[1] = page.Active, "running"
 			}
 		}
-		lines := append(o.page.Title("Browser profiles", []string{fmt.Sprint(len(profiles)) + " profiles", o.page.Path(browser.ProfilesDir(home))}, cli.Verdict{Mark: cli.Done, Text: "listed"}), "")
+		lines := append(o.page.Title("Browser profiles", []string{fmt.Sprint(len(profiles)) + " profiles", o.page.Path(driver.ProfilesDir(home))}, page.Verdict{Mark: page.Done, Text: "listed"}), "")
 		if len(profiles) == 0 {
-			lines = append(lines, cli.Indent(o.page.Label("tofu browser profile new <name> makes one; browserProfile picks it"))...)
+			lines = append(lines, page.Indent(o.page.Label("tofu browser profile new <name> makes one; browserProfile picks it"))...)
 		}
 		return o.show(struct {
-			Folder   string            `json:"folder"`
-			Profiles []browser.Profile `json:"profiles"`
-		}{browser.ProfilesDir(home), append([]browser.Profile{}, profiles...)}, append(lines, cli.Indent(o.page.Rows(rows)...)...))
+			Folder   string           `json:"folder"`
+			Profiles []driver.Profile `json:"profiles"`
+		}{driver.ProfilesDir(home), append([]driver.Profile{}, profiles...)}, append(lines, page.Indent(o.page.Rows(rows)...)...))
 	case "new":
-		profile, err := browser.NewProfile(home, name)
+		profile, err := driver.NewProfile(home, name)
 		if err != nil {
 			return o.fail(err)
 		}
-		return o.show(done{Profile: name, Dir: profile.Dir}, []string{o.page.Receipt(cli.Added, "made browser profile "+name, o.page.Path(profile.Dir))})
+		return o.show(done{Profile: name, Dir: profile.Dir}, []string{o.page.Receipt(page.Added, "made browser profile "+name, o.page.Path(profile.Dir))})
 	case "login":
-		url := browser.LoginURL
+		url := driver.LoginURL
 		if len(args) == 3 {
 			url = args[2]
 		}
-		if err := browser.LoginProfile(home, name, url); err != nil {
+		if err := driver.LoginProfile(home, name, url); err != nil {
 			return o.fail(err)
 		}
-		lines := []string{o.page.Receipt(cli.Added, "opened Chrome on browser profile "+name, url), ""}
-		return o.show(done{Profile: name, URL: url}, append(lines, cli.Indent(o.page.Hint("sign in, then close that window: an agent cannot start this profile while it is open"))...))
+		lines := []string{o.page.Receipt(page.Added, "opened Chrome on browser profile "+name, url), ""}
+		return o.show(done{Profile: name, URL: url}, append(lines, page.Indent(o.page.Hint("sign in, then close that window: an agent cannot start this profile while it is open"))...))
 	case "stop":
-		running, err := browser.StopProfile(home, name)
+		running, err := driver.StopProfile(home, name)
 		if err != nil {
 			return o.fail(err)
 		}
@@ -85,10 +85,10 @@ func (o browserOutput) profile(args []string) int {
 		if running {
 			said = "stopped the Chrome on browser profile " + name
 		}
-		return o.show(done{Profile: name, Running: running}, []string{o.page.Glyph(cli.Removed) + " " + said})
+		return o.show(done{Profile: name, Running: running}, []string{o.page.Glyph(page.Removed) + " " + said})
 	}
-	if err := browser.RemoveProfile(home, name); err != nil {
+	if err := driver.RemoveProfile(home, name); err != nil {
 		return o.fail(err)
 	}
-	return o.show(done{Profile: name}, []string{o.page.Glyph(cli.Removed) + " removed browser profile " + name})
+	return o.show(done{Profile: name}, []string{o.page.Glyph(page.Removed) + " removed browser profile " + name})
 }

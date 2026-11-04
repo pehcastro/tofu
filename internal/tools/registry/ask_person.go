@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"cmp"
@@ -68,22 +68,22 @@ type askResult struct {
 }
 
 type personReply struct {
-	replies []turn.PersonReply
+	replies []loop.PersonReply
 	err     error
 }
 
 type AskPerson struct {
-	Person turn.Person
+	Person loop.Person
 	Auto   func() bool
 	Wait   time.Duration
-	Judge  *subagent.AskJudge
-	Inbox  *turn.Inbox
+	Judge  *subagents.AskJudge
+	Inbox  *loop.Inbox
 	Log    string
 }
 
-func (AskPerson) Name() string { return turn.AskPersonToolName }
+func (AskPerson) Name() string { return loop.AskPersonToolName }
 
-func (AskPerson) Definition() llm.Tool {
+func (AskPerson) Definition() core.Tool {
 	option := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -99,15 +99,15 @@ func (AskPerson) Definition() llm.Tool {
 			"id":          map[string]any{"type": "string"},
 			"header":      map[string]any{"type": "string", "description": "1 to " + strconv.Itoa(konst.AskPersonHeaderWordsMost) + " words"},
 			"question":    map[string]any{"type": "string", "description": "one sentence"},
-			"type":        map[string]any{"type": "string", "enum": []string{string(turn.QuestionChoice), string(turn.QuestionMulti), string(turn.QuestionText), string(turn.QuestionYesNo)}},
+			"type":        map[string]any{"type": "string", "enum": []string{string(loop.QuestionChoice), string(loop.QuestionMulti), string(loop.QuestionText), string(loop.QuestionYesNo)}},
 			"options":     map[string]any{"type": "array", "items": option, "minItems": konst.AskPersonOptionsLeast, "maxItems": konst.AskPersonOptionsMost, "description": "for choice and multi; yesno is yes then no; text has none"},
 			"recommended": map[string]any{"type": "integer", "description": "the index of the option you would take; required for every type but text"},
 			"reversible":  map[string]any{"type": "boolean", "description": "true only when the recommended option can be undone later at little cost; leave it out otherwise"},
 		},
 		"required": []string{"id", "header", "question", "type"},
 	}
-	return llm.Tool{
-		Name: turn.AskPersonToolName,
+	return core.Tool{
+		Name: loop.AskPersonToolName,
 		Description: "puts a decision only the person can make to them: a choice between libraries or designs, a matter of taste, spending money, something that cannot be undone. " +
 			"never for permission to run a tool; the gate asks that. one call at a time, 1 to " + strconv.Itoa(konst.AskPersonQuestionsMost) + " questions, each with options and the one you recommend. " +
 			"tofu adds a free-text other to every choice, so never write one. the answer says the outcome and, for each question, its status and what was chosen. " +
@@ -124,14 +124,14 @@ func (AskPerson) Definition() llm.Tool {
 func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Questions []struct {
-			turn.PersonQuestion
+			loop.PersonQuestion
 			Reversible bool `json:"reversible"`
 		} `json:"questions"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("ask_person: arguments are not the expected shape: %w", err)
 	}
-	questions, reversible := make([]turn.PersonQuestion, len(args.Questions)), true
+	questions, reversible := make([]loop.PersonQuestion, len(args.Questions)), true
 	for i, q := range args.Questions {
 		questions[i], reversible = q.PersonQuestion, reversible && q.Reversible && q.Recommended != nil
 	}
@@ -142,7 +142,7 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 		questions[i].Options = optionsOf(questions[i])
 	}
 	auto := a.Auto()
-	if blocks, decided := turn.QuestionsBlockFrom(ctx); decided {
+	if blocks, decided := loop.QuestionsBlockFrom(ctx); decided {
 		auto = !blocks
 	}
 	recorded, report := make(chan []string, 1), sys.Crashes(".")
@@ -159,16 +159,16 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 		}
 		recorded <- ids
 	} else {
-		safe.Go(report, "ask record", func() {
+		recover.Go(report, "ask record", func() {
 			var ids []string
 			defer func() { recorded <- ids }()
 			ids = a.recordShadow(context.WithoutCancel(ctx), questions)
 		})
 	}
 	replied := make(chan personReply, 1)
-	safe.Go(report, "ask reply", func() {
+	recover.Go(report, "ask reply", func() {
 		var reply personReply
-		if err := safe.Call(report, "ask reply", func() error {
+		if err := recover.Call(report, "ask reply", func() error {
 			reply = a.reply(ctx, raw, questions, auto)
 			return nil
 		}); err != nil {
@@ -183,12 +183,12 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 		return contract.Result{Content: string(shown)}, err
 	}
 	open := a.Inbox.Open(pollOf(questions))
-	safe.Go(report, "ask answer", func() { a.answerLater(open, replied, recorded, questions) })
+	recover.Go(report, "ask answer", func() { a.answerLater(open, replied, recorded, questions) })
 	return contract.Result{Content: askedAndWorking}, nil
 }
 
-func (a AskPerson) reply(ctx context.Context, raw json.RawMessage, questions []turn.PersonQuestion, auto bool) personReply {
-	if form := turn.PersonFormFrom(ctx); form != nil {
+func (a AskPerson) reply(ctx context.Context, raw json.RawMessage, questions []loop.PersonQuestion, auto bool) personReply {
+	if form := loop.PersonFormFrom(ctx); form != nil {
 		wait := time.Duration(0)
 		if auto {
 			wait = a.Wait
@@ -197,27 +197,27 @@ func (a AskPerson) reply(ctx context.Context, raw json.RawMessage, questions []t
 		return personReply{replies, err}
 	}
 	if a.Person == nil {
-		return personReply{err: turn.QuestionUndelivered{Why: "no person can answer here"}}
+		return personReply{err: loop.QuestionUndelivered{Why: "no person can answer here"}}
 	}
-	answer, err := a.Person(ctx, turn.GateRequest{Tool: turn.AskPersonToolName, Args: raw}, turn.GateDecision{Verdict: ledger.VerdictAsk})
+	answer, err := a.Person(ctx, loop.GateRequest{Tool: loop.AskPersonToolName, Args: raw}, loop.GateDecision{Verdict: ledger.VerdictAsk})
 	if err != nil {
 		return personReply{err: err}
 	}
-	accepted := answer == turn.PersonAllowedOnce || answer == turn.PersonAlwaysHere
-	var replies []turn.PersonReply
+	accepted := answer == loop.PersonAllowedOnce || answer == loop.PersonAlwaysHere
+	var replies []loop.PersonReply
 	for _, q := range questions {
 		switch {
-		case accepted && q.Type == turn.QuestionText:
+		case accepted && q.Type == loop.QuestionText:
 		case accepted:
-			replies = append(replies, turn.PersonReply{ID: q.ID, Chosen: recommendedOf(q)})
+			replies = append(replies, loop.PersonReply{ID: q.ID, Chosen: recommendedOf(q)})
 		default:
-			replies = append(replies, turn.PersonReply{ID: q.ID})
+			replies = append(replies, loop.PersonReply{ID: q.ID})
 		}
 	}
 	return personReply{replies: replies}
 }
 
-func (a AskPerson) answerLater(open *turn.Asked, replied <-chan personReply, recorded <-chan []string, questions []turn.PersonQuestion) {
+func (a AskPerson) answerLater(open *loop.Asked, replied <-chan personReply, recorded <-chan []string, questions []loop.PersonQuestion) {
 	defer open.Close()
 	ids := make([]string, len(questions))
 	for i, q := range questions {
@@ -235,7 +235,7 @@ func (a AskPerson) answerLater(open *turn.Asked, replied <-chan personReply, rec
 			none.Answers = append(none.Answers, askAnswer{ID: q.ID, Status: askUnanswered, Chosen: []string{}})
 		}
 		told, _ := json.Marshal(none)
-		open.Answer("no answer yet to your "+turn.AskPersonToolName+" question: "+string(told), llm.Origin{Source: llm.SourceNoAnswer, Name: asked, Shown: shownToPerson(noAnswerHead, none, questions)})
+		open.Answer("no answer yet to your "+loop.AskPersonToolName+" question: "+string(told), core.Origin{Source: core.SourceNoAnswer, Name: asked, Shown: shownToPerson(noAnswerHead, none, questions)})
 		late, reply = true, <-replied
 	}
 	if errors.Is(reply.err, context.Canceled) {
@@ -244,25 +244,25 @@ func (a AskPerson) answerLater(open *turn.Asked, replied <-chan personReply, rec
 	result := answered(reply, questions)
 	said, _ := json.Marshal(result)
 	from, intro, head := postedAs(result.Outcome, late)
-	open.Answer(intro+string(said), llm.Origin{Source: from, Name: asked, Shown: shownToPerson(head, result, questions)})
+	open.Answer(intro+string(said), core.Origin{Source: from, Name: asked, Shown: shownToPerson(head, result, questions)})
 }
 
-func postedAs(outcome askOutcome, late bool) (llm.Source, string, string) {
-	yours := "your " + turn.AskPersonToolName + " question"
+func postedAs(outcome askOutcome, late bool) (core.Source, string, string) {
+	yours := "your " + loop.AskPersonToolName + " question"
 	switch {
 	case outcome == askSubmitted && late:
-		return llm.SourceLateAnswer, "the answer to " + yours + ", which came after you were told none had: ", "you answered"
+		return core.SourceLateAnswer, "the answer to " + yours + ", which came after you were told none had: ", "you answered"
 	case outcome == askSubmitted:
-		return llm.SourceAnswer, "the answer to " + yours + ": ", "you answered"
+		return core.SourceAnswer, "the answer to " + yours + ": ", "you answered"
 	case outcome == askCancelled:
-		return llm.SourceDismissed, "the person dismissed " + yours + ": ", "the question was dismissed, so the recommended option stands"
+		return core.SourceDismissed, "the person dismissed " + yours + ": ", "the question was dismissed, so the recommended option stands"
 	case outcome == askUndelivered:
-		return llm.SourceUnasked, yours + " could not be put to the person: ", "the question could not be asked, so the recommended option stands"
+		return core.SourceUnasked, yours + " could not be put to the person: ", "the question could not be asked, so the recommended option stands"
 	}
 	panic("ask_person: no answer is posted for outcome " + string(outcome))
 }
 
-func shownToPerson(head string, result askResult, questions []turn.PersonQuestion) string {
+func shownToPerson(head string, result askResult, questions []loop.PersonQuestion) string {
 	lines := []string{head}
 	for at, q := range questions {
 		given := result.Answers[at]
@@ -281,7 +281,7 @@ func (a AskPerson) backfill(ids []string, outcome askOutcome) {
 	}
 }
 
-func pollOf(questions []turn.PersonQuestion) string {
+func pollOf(questions []loop.PersonQuestion) string {
 	polls := make([]string, len(questions))
 	for i, q := range questions {
 		polls[i] = q.Header + ": " + q.Question
@@ -295,11 +295,11 @@ func pollOf(questions []turn.PersonQuestion) string {
 	return strings.Join(polls, "\n")
 }
 
-func answered(reply personReply, questions []turn.PersonQuestion) askResult {
+func answered(reply personReply, questions []loop.PersonQuestion) askResult {
 	switch {
 	case errors.Is(reply.err, context.Canceled):
 		return resolved(askCancelled, questions, "the question was withdrawn when the turn stopped")
-	case errors.As(reply.err, &turn.QuestionDismissed{}):
+	case errors.As(reply.err, &loop.QuestionDismissed{}):
 		return resolved(askCancelled, questions, "the person dismissed the question, so the recommended option stands")
 	case reply.err != nil:
 		return resolved(askUndelivered, questions, "the person could not be asked: "+reply.err.Error())
@@ -307,7 +307,7 @@ func answered(reply personReply, questions []turn.PersonQuestion) askResult {
 	result := askResult{Outcome: askSubmitted, Next: takeTheRecommended}
 	for _, q := range questions {
 		answer := askAnswer{ID: q.ID, Status: askUnanswered, Chosen: []string{}, Note: nothingTyped}
-		if at := slices.IndexFunc(reply.replies, func(r turn.PersonReply) bool { return r.ID == q.ID }); at >= 0 {
+		if at := slices.IndexFunc(reply.replies, func(r loop.PersonReply) bool { return r.ID == q.ID }); at >= 0 {
 			given := reply.replies[at]
 			answer.Status, answer.Note, answer.Text = askSkipped, "the person chose no option and typed nothing", given.Text
 			if len(given.Chosen) > 0 || given.Text != "" {
@@ -320,11 +320,11 @@ func answered(reply personReply, questions []turn.PersonQuestion) askResult {
 	return result
 }
 
-func resolved(outcome askOutcome, questions []turn.PersonQuestion, why string) askResult {
+func resolved(outcome askOutcome, questions []loop.PersonQuestion, why string) askResult {
 	result := askResult{Outcome: outcome, Next: takeTheRecommended}
 	for _, q := range questions {
 		answer := askAnswer{ID: q.ID, Status: askUnanswered, Chosen: recommendedOf(q), Note: why}
-		if q.Type == turn.QuestionText {
+		if q.Type == loop.QuestionText {
 			answer.Note = nothingTyped
 		}
 		result.Answers = append(result.Answers, answer)
@@ -332,18 +332,18 @@ func resolved(outcome askOutcome, questions []turn.PersonQuestion, why string) a
 	return result
 }
 
-func (a AskPerson) recordShadow(ctx context.Context, questions []turn.PersonQuestion) []string {
+func (a AskPerson) recordShadow(ctx context.Context, questions []loop.PersonQuestion) []string {
 	if a.Judge == nil {
 		return nil
 	}
 	var ids []string
 	for _, q := range questions {
-		state := subagent.AskState{Asker: subagent.AskerLead, Question: q.Question, Options: []subagent.AskOption{}}
+		state := subagents.AskState{Asker: subagents.AskerLead, Question: q.Question, Options: []subagents.AskOption{}}
 		if q.Recommended != nil {
 			state.Recommended = q.Options[*q.Recommended].Label
 		}
 		for _, o := range q.Options {
-			state.Options = append(state.Options, subagent.AskOption{Label: o.Label, Description: o.Description})
+			state.Options = append(state.Options, subagents.AskOption{Label: o.Label, Description: o.Description})
 		}
 		if id, err := a.Judge.Record(ctx, state); err == nil {
 			ids = append(ids, id)
@@ -362,29 +362,29 @@ func proceeds(log string, ids []string, asked int) bool {
 		if err != nil || !found || row.Verdict != ledger.VerdictAllow || len(row.Answers) == 0 {
 			return false
 		}
-		judged, err := subagent.DecideAsk(row.Answers[0].Choice, row.Reason.Value, row.Reason.Threshold)
-		if err != nil || judged.Effective != subagent.ActionProceed {
+		judged, err := subagents.DecideAsk(row.Answers[0].Choice, row.Reason.Value, row.Reason.Threshold)
+		if err != nil || judged.Effective != subagents.ActionProceed {
 			return false
 		}
 	}
 	return true
 }
 
-func optionsOf(q turn.PersonQuestion) []turn.PersonOption {
-	if q.Type == turn.QuestionYesNo {
-		return []turn.PersonOption{{Label: "yes"}, {Label: "no"}}
+func optionsOf(q loop.PersonQuestion) []loop.PersonOption {
+	if q.Type == loop.QuestionYesNo {
+		return []loop.PersonOption{{Label: "yes"}, {Label: "no"}}
 	}
 	return q.Options
 }
 
-func recommendedOf(q turn.PersonQuestion) []string {
+func recommendedOf(q loop.PersonQuestion) []string {
 	if q.Recommended == nil {
 		return []string{}
 	}
 	return []string{optionsOf(q)[*q.Recommended].Label}
 }
 
-func checkQuestions(questions []turn.PersonQuestion) error {
+func checkQuestions(questions []loop.PersonQuestion) error {
 	if len(questions) < 1 || len(questions) > konst.AskPersonQuestionsMost {
 		return fmt.Errorf("asks %d questions, and a call asks 1 to %d", len(questions), konst.AskPersonQuestionsMost)
 	}
@@ -396,7 +396,7 @@ func checkQuestions(questions []turn.PersonQuestion) error {
 		case slices.Contains(ids, q.ID):
 			return fmt.Errorf("the id %q is used twice", q.ID)
 		}
-		if err := memory.WordsAtMost(fmt.Sprintf("the header %q", q.Header), q.Header, konst.AskPersonHeaderWordsMost); err != nil {
+		if err := entries.WordsAtMost(fmt.Sprintf("the header %q", q.Header), q.Header, konst.AskPersonHeaderWordsMost); err != nil {
 			return fmt.Errorf("%s: %w", q.ID, err)
 		}
 		ids = append(ids, q.ID)
@@ -407,18 +407,18 @@ func checkQuestions(questions []turn.PersonQuestion) error {
 	return nil
 }
 
-func checkOptions(q turn.PersonQuestion) error {
+func checkOptions(q loop.PersonQuestion) error {
 	switch q.Type {
-	case turn.QuestionText:
+	case loop.QuestionText:
 		if len(q.Options) > 0 || q.Recommended != nil {
 			return errors.New("a text question takes no options and no recommended")
 		}
 		return nil
-	case turn.QuestionYesNo:
+	case loop.QuestionYesNo:
 		if len(q.Options) > 0 {
 			return errors.New("a yesno question is yes then no, so it takes no options")
 		}
-	case turn.QuestionChoice, turn.QuestionMulti:
+	case loop.QuestionChoice, loop.QuestionMulti:
 		if len(q.Options) < konst.AskPersonOptionsLeast || len(q.Options) > konst.AskPersonOptionsMost {
 			return fmt.Errorf("offers %d options, and a choice offers %d to %d", len(q.Options), konst.AskPersonOptionsLeast, konst.AskPersonOptionsMost)
 		}
@@ -432,7 +432,7 @@ func checkOptions(q turn.PersonQuestion) error {
 		case strings.EqualFold(strings.TrimSpace(o.Label), "other"):
 			return errors.New("tofu adds other to every choice, so the options never name one")
 		}
-		if err := memory.WordsAtMost(fmt.Sprintf("the label %q", o.Label), o.Label, konst.AskPersonLabelWordsMost); err != nil {
+		if err := entries.WordsAtMost(fmt.Sprintf("the label %q", o.Label), o.Label, konst.AskPersonLabelWordsMost); err != nil {
 			return err
 		}
 	}

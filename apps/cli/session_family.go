@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/konst"
@@ -198,7 +198,7 @@ func paceOf(store *session.Store, id string) generationPace {
 func sessionFamilyLines(page cli.Page, report sessionFamilyReport, now time.Time) []string {
 	head := report.Generations[len(report.Generations)-1]
 	facts := []string{output.Plural(len(report.Generations), "generation"), "started " + sessionWhen(report.Started, now),
-		"active " + widget.Until(time.Duration(report.ActiveMS)*time.Millisecond)}
+		"active " + render.Until(time.Duration(report.ActiveMS)*time.Millisecond)}
 	lines := append(page.Title(report.Handle, facts, cli.Verdict{Mark: cli.Active, Text: cmp.Or(head.Outcome, "open")}), "")
 	rows := make([]cli.Row, len(report.Generations))
 	for i, generation := range report.Generations {
@@ -207,7 +207,7 @@ func sessionFamilyLines(page cli.Page, report sessionFamilyReport, now time.Time
 			kind += " · was " + generation.Name
 		}
 		rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{"." + strconv.Itoa(generation.Generation), sessionWhen(generation.At, now), output.Plural(generation.Steps, "step"),
-			widget.Until(time.Duration(generation.ActiveMS) * time.Millisecond), widget.Size(int(generation.Bytes)), kind}}
+			render.Until(time.Duration(generation.ActiveMS) * time.Millisecond), render.Size(int(generation.Bytes)), kind}}
 	}
 	rows[len(rows)-1].Mark = cli.Active
 	lines = append(append(lines, page.Section("generations", cli.Verdict{})), cli.Indent(page.Rows(rows)...)...)

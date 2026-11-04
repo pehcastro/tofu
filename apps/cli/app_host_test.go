@@ -17,12 +17,12 @@ const cancelledAt = "cancelled at"
 type appSession struct {
 	*host.Host
 	engine     *appEngine
-	answers    <-chan tui.Answer
+	answers    <-chan app.Answer
 	dir        string
 	warmClosed sync.Once
 }
 
-func newAppSession(dir string, open wiring.Opener, answers <-chan tui.Answer, now func() time.Time, resumed sessionResume) *appSession {
+func newAppSession(dir string, open wiring.Opener, answers <-chan app.Answer, now func() time.Time, resumed sessionResume) *appSession {
 	engine := &appEngine{dir: dir, open: open}
 	live, _ := host.New(host.Config{Dir: dir, Engine: engine, Now: now, Check: shellsverb.CronChecker(dir), Resumed: resumed.hosted()})
 	return &appSession{Host: live, engine: engine, answers: answers, dir: dir}
@@ -35,7 +35,7 @@ func (s *appSession) Close() {
 
 func (s *appSession) closeWarm() { s.warmClosed.Do(func() { s.engine.warm.Close() }) }
 
-func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {
+func (s *appSession) run(ctx context.Context, pick app.Pick, task string, emit app.CalledFromInsideTheTurnAndNeverAfterItReturns) {
 	if !s.Send(pick, task) {
 		panic("a turn is already running on this host")
 	}
@@ -57,7 +57,7 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 			case answer := <-s.answers:
 				s.Answer(event.ID, answer)
 			default:
-				s.Answer(event.ID, tui.Denied)
+				s.Answer(event.ID, app.Denied)
 			}
 		default:
 			emit(event)
@@ -66,14 +66,14 @@ func (s *appSession) run(ctx context.Context, pick tui.Pick, task string, emit t
 }
 
 func (s *appSession) end() []string {
-	return turn.EndSession(context.Background(), s.dir, s.ID(), sessionEndExit)
+	return loop.EndSession(context.Background(), s.dir, s.ID(), sessionEndExit)
 }
 
 func (s *appSession) startFresh() string { return freshSession(s.Host) }
 
-func (s *appSession) resume(handle string) (string, []tui.Event) {
+func (s *appSession) resume(handle string) (string, []app.Event) {
 	note, opened := appResume(s.Host, handle)
 	return note, opened.Chat
 }
 
-func (s *appSession) compact() string { return forkNote(s.Host, turn.ForkCompact, "") }
+func (s *appSession) compact() string { return forkNote(s.Host, loop.ForkCompact, "") }

@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	Name     = llm.WireOpenRouter
+	Name     = core.WireOpenRouter
 	Endpoint = "https://openrouter.ai/api/v1/chat/completions"
 )
 
@@ -55,23 +55,23 @@ func (w *Wire) Name() string { return Name }
 
 func (w *Wire) Model() string { return w.model }
 
-func (w *Wire) Post(ctx context.Context, body []byte) (llm.Raw, error) {
+func (w *Wire) Post(ctx context.Context, body []byte) (core.Raw, error) {
 	marked, err := MarkStablePrefix(body)
 	if err != nil {
-		return llm.Raw{}, err
+		return core.Raw{}, err
 	}
 	return w.send(ctx, marked)
 }
 
-func Headers(key string) []llm.Header {
-	return []llm.Header{
+func Headers(key string) []core.Header {
+	return []core.Header{
 		{Name: "Authorization", Value: "Bearer " + key},
 		{Name: "Content-Type", Value: "application/json"},
 		{Name: "Accept", Value: "application/json"},
 	}
 }
 
-func (w *Wire) send(ctx context.Context, body []byte) (llm.Raw, error) {
+func (w *Wire) send(ctx context.Context, body []byte) (core.Raw, error) {
 	header := http.Header{}
 	for _, pair := range Headers(w.key) {
 		header.Set(pair.Name, pair.Value)
@@ -85,9 +85,9 @@ func (w *Wire) send(ctx context.Context, body []byte) (llm.Raw, error) {
 	})
 	w.tally(response, err)
 	if err != nil {
-		return llm.Raw{}, err
+		return core.Raw{}, err
 	}
-	return llm.Raw{
+	return core.Raw{
 		Body:      response.Body,
 		RequestID: response.RequestID,
 		Attempts:  response.Attempts,
@@ -107,7 +107,7 @@ func (w *Wire) tally(response transport.Response, err error) {
 	case err != nil:
 		return
 	default:
-		accounted, err := llm.Accounted(response.Body)
+		accounted, err := core.Accounted(response.Body)
 		if err != nil {
 			return
 		}

@@ -16,7 +16,7 @@ import (
 
 	shellsverb "tofu/apps/cli/verbs/shells"
 	settingspkg "tofu/internal/store/settings"
-	testkit "tofu/internal/testkit/cli"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/tools/shell/process"
 	"tofu/internal/ui/tui/panels/shells"
 )
@@ -51,7 +51,7 @@ func runShellsHelperIfAsked() {
 		_, err = registry.Start(dir, name, os.Getenv(shellsCommandVar), "")
 	}
 	for deadline := time.Now().Add(15 * time.Second); err == nil && time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
-		log, _ := registry.Tail(name, shell.DefaultTail)
+		log, _ := registry.Tail(name, process.DefaultTail)
 		if _, addr, found := strings.Cut(log, listeningPrefix); found {
 			fmt.Println(strings.Fields(addr)[0])
 			_, _ = io.Copy(io.Discard, os.Stdin)
@@ -65,7 +65,7 @@ func runShellsHelperIfAsked() {
 
 func shellsProject(t *testing.T, keep bool) string {
 	t.Helper()
-	testkit.EmptyHome(t)
+	cli.EmptyHome(t)
 	dir := t.TempDir()
 	if keep {
 		store, err := settingspkg.OpenFor(dir)

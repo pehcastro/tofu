@@ -13,14 +13,14 @@ var questionFiles embed.FS
 
 const questionSet = "learn_window"
 
-func Questions() (question.Set, error) {
-	sets, errs := question.LoadAll(questionFiles, ".")
+func Questions() (questions.Set, error) {
+	sets, errs := questions.LoadAll(questionFiles, ".")
 	if err := errors.Join(errs...); err != nil {
-		return question.Set{}, err
+		return questions.Set{}, err
 	}
-	at := slices.IndexFunc(sets, func(s question.Set) bool { return s.Name == questionSet })
+	at := slices.IndexFunc(sets, func(s questions.Set) bool { return s.Name == questionSet })
 	if at < 0 {
-		return question.Set{}, errors.New("learn: no " + questionSet + " question set")
+		return questions.Set{}, errors.New("learn: no " + questionSet + " question set")
 	}
 	return sets[at], nil
 }

@@ -1,4 +1,4 @@
-package hook
+package hooks
 
 import (
 	"bytes"
@@ -155,7 +155,7 @@ func (e *Engine) Fire(ctx context.Context, in Input) Verdict {
 	report := sys.Crashes(e.project)
 	for i, hook := range chosen {
 		running.Go(func() {
-			if err := safe.Call(report, "hook", func() error {
+			if err := recover.Call(report, "hook", func() error {
 				results[i] = e.run(ctx, hook, stdin)
 				return nil
 			}); err != nil {
@@ -346,7 +346,7 @@ func (e *Engine) run(ctx context.Context, hook Hook, stdin []byte) (result Resul
 	var stdout, stderr cappedOutput
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = bytes.NewReader(stdin), &stdout, &stderr
 	cmd.WaitDelay = konst.HookKillWaitMillis * time.Millisecond
-	tracked, err := shell.StartTracked(cmd)
+	tracked, err := process.StartTracked(cmd)
 	if err != nil {
 		result.Problem = "it did not start: " + err.Error()
 		return result
@@ -368,26 +368,26 @@ func (e *Engine) run(ctx context.Context, hook Hook, stdin []byte) (result Resul
 	return result
 }
 
-func (e *Engine) shellFor(hook Hook) (shell.Choice, string) {
+func (e *Engine) shellFor(hook Hook) (process.Choice, string) {
 	if hook.Shell == "powershell" {
 		for _, name := range []string{"pwsh", "powershell"} {
 			if path, err := exec.LookPath(name); err == nil {
-				return shell.Choice{Path: path, Label: name}, ""
+				return process.Choice{Path: path, Label: name}, ""
 			}
 		}
-		return shell.Choice{}, "it asks for powershell, and neither pwsh nor powershell is on PATH"
+		return process.Choice{}, "it asks for powershell, and neither pwsh nor powershell is on PATH"
 	}
 	e.resolve.Do(func() {
 		if e.bash.Path == "" {
-			e.bash, e.bashErr = shell.Resolve("")
+			e.bash, e.bashErr = process.Resolve("")
 		}
 	})
 	if e.bashErr != nil {
-		return shell.Choice{}, "it needs bash, and no shell resolved: " + e.bashErr.Error()
+		return process.Choice{}, "it needs bash, and no shell resolved: " + e.bashErr.Error()
 	}
 	switch name := strings.TrimSuffix(strings.ToLower(filepath.Base(e.bash.Path)), ".exe"); name {
 	case "pwsh", "powershell":
-		return shell.Choice{}, "it needs bash, and this machine resolved " + name + `: set "shell": "powershell" on the hook, or install Git for Windows`
+		return process.Choice{}, "it needs bash, and this machine resolved " + name + `: set "shell": "powershell" on the hook, or install Git for Windows`
 	}
 	return e.bash, ""
 }

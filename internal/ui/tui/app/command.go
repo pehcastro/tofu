@@ -1,4 +1,4 @@
-package tui
+package app
 
 import (
 	"errors"
@@ -210,30 +210,30 @@ func (a *App) openSide() tea.Cmd {
 	}
 	opened := "a side chat beside " + side.Header.BranchedFrom.Session + " opened, with " + a.text(isettings.SideChatAccess) + " access. the session it sits beside keeps running"
 	if side.NoTask {
-		opened += ". " + turn.SideNoTask
+		opened += ". " + loop.SideNoTask
 	}
 	a.view.Append(session.Entry{Kind: session.Note, Body: opened})
 	return a.resumeTo(side.Header.ID)
 }
 
-func (a *App) branchSide() (turn.SideOpened, error) {
+func (a *App) branchSide() (loop.SideOpened, error) {
 	store, id, trouble := a.recordedSession()
 	if trouble != "" {
-		return turn.SideOpened{}, errors.New(trouble)
+		return loop.SideOpened{}, errors.New(trouble)
 	}
 	parent, err := store.Header(id)
 	if err != nil {
-		return turn.SideOpened{}, err
+		return loop.SideOpened{}, err
 	}
-	access, err := turn.AccessOf(a.text(isettings.SideChatAccess))
+	access, err := loop.AccessOf(a.text(isettings.SideChatAccess))
 	if err != nil {
-		return turn.SideOpened{}, err
+		return loop.SideOpened{}, err
 	}
 	var chosen *isession.Chosen
 	if model, known := a.chosenModel(); known {
 		chosen = &isession.Chosen{Wire: a.wire, Model: model.Slug()}
 	}
-	return turn.BranchSide(store, parent, turn.SideBranch{Access: access, Seed: turn.SeedSummary, Chosen: chosen, Effort: a.effort}, a.options.Now())
+	return loop.BranchSide(store, parent, loop.SideBranch{Access: access, Seed: loop.SeedSummary, Chosen: chosen, Effort: a.effort}, a.options.Now())
 }
 
 type recordedDialog struct {

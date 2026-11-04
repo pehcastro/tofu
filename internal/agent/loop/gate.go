@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -37,7 +37,7 @@ type GateRequest struct {
 	Args   json.RawMessage
 	Asked  json.RawMessage
 	Call   string
-	Code   *subagent.InlineCode
+	Code   *subagents.InlineCode
 	Reason string
 }
 
@@ -335,8 +335,8 @@ func codeRefusal(ctx context.Context, person Person, request GateRequest) string
 
 func (t *SpawnTool) askLead(ctx context.Context, held *heldSubAgent, site spawnSite, request GateRequest, asked string) (bool, error) {
 	id := held.agent.ID
-	t.roster.Reached(id, subagent.WaitingAnswer, "asks to run "+request.Tool)
-	defer t.roster.Reached(id, subagent.Working, "")
+	t.roster.Reached(id, subagents.WaitingAnswer, "asks to run "+request.Tool)
+	defer t.roster.Reached(id, subagents.Working, "")
 	site.notice(id, asked)
 	started := t.clock()
 	allowed, err := t.Inbox.awaitLead(ctx, held, t.Inbox.ask(held, asked), asked, konst.SubAgentGateAnswerMillis*time.Millisecond)
@@ -398,7 +398,7 @@ func (t *SpawnTool) orchestratorAnswers(held *heldSubAgent, site spawnSite) Pers
 	}
 }
 
-func keepsToScratch(boundary *subagent.Boundary, request GateRequest) bool {
+func keepsToScratch(boundary *subagents.Boundary, request GateRequest) bool {
 	var args struct{ Command string }
 	if json.Unmarshal(request.Args, &args) != nil {
 		return false
@@ -413,7 +413,7 @@ func keepsToScratch(boundary *subagent.Boundary, request GateRequest) bool {
 	return false
 }
 
-func keepsToOwns(boundary *subagent.Boundary, request GateRequest) bool {
+func keepsToOwns(boundary *subagents.Boundary, request GateRequest) bool {
 	var args struct{ Command string }
 	if json.Unmarshal(request.written(), &args) != nil {
 		return false
@@ -423,7 +423,7 @@ func keepsToOwns(boundary *subagent.Boundary, request GateRequest) bool {
 			return true
 		}
 		literal := !strings.ContainsAny(target, "$`~%") && !path.IsAbs(target) && !filepath.IsAbs(target)
-		return literal && subagent.Allow(target, boundary.Owns()) == nil
+		return literal && subagents.Allow(target, boundary.Owns()) == nil
 	}
 	switch request.Tool {
 	case "write", "edit":
@@ -431,7 +431,7 @@ func keepsToOwns(boundary *subagent.Boundary, request GateRequest) bool {
 		return err == nil && !slices.ContainsFunc(paths, func(target string) bool { return !owned(target) })
 	case bashToolName:
 		touched := 0
-		for _, step := range subagent.ShellSteps(args.Command) {
+		for _, step := range subagents.ShellSteps(args.Command) {
 			if !slices.Contains(localFilePrograms(), step.Program) || slices.ContainsFunc(step.Changes, func(changed string) bool { return !owned(changed) }) {
 				return false
 			}
@@ -448,7 +448,7 @@ func localFilePrograms() []string {
 
 func (s spawnSite) notice(agent, text string) {
 	if s.log != nil {
-		_, _ = s.log.Append(session.Event{Turn: s.turn, Agent: agent, Kind: session.EventNotice}, session.NoticeBody{Text: text, From: RecordedOrigin(llm.Origin{Source: llm.SourceGate})})
+		_, _ = s.log.Append(session.Event{Turn: s.turn, Agent: agent, Kind: session.EventNotice}, session.NoticeBody{Text: text, From: RecordedOrigin(core.Origin{Source: core.SourceGate})})
 	}
 }
 
@@ -515,27 +515,27 @@ func PlacesCode(place string) bool {
 	return strings.HasPrefix(after, codePlace)
 }
 
-func codeAsked(tools Registry, call llm.ToolCall) (subagent.InlineCode, bool) {
+func codeAsked(tools Registry, call core.ToolCall) (subagents.InlineCode, bool) {
 	checked, checks := tools.byName[call.Name].(bounded)
-	var asks subagent.CodeAskError
+	var asks subagents.CodeAskError
 	return asks.Code, checks && errors.As(checked.refusal(call.Arguments), &asks)
 }
 
-func CodeSum(code subagent.InlineCode) string {
+func CodeSum(code subagents.InlineCode) string {
 	body, _ := json.Marshal(struct {
-		Code subagent.InlineCode
+		Code subagents.InlineCode
 		Env  string
-	}{code, shell.CodeEnvProfile})
+	}{code, process.CodeEnvProfile})
 	sum := sha256.Sum256(body)
 	return hex.EncodeToString(sum[:])
 }
 
-func CodeShown(code subagent.InlineCode) string {
+func CodeShown(code subagents.InlineCode) string {
 	lines := []string{
 		"interpreter: " + strings.Join(append([]string{code.Program}, codeFlags(code)...), " "),
 		"cwd: " + code.Cwd,
 		"sha256: " + CodeSum(code),
-		"environment: " + shell.CodeEnvProfile + ", names that look like secrets left out",
+		"environment: " + process.CodeEnvProfile + ", names that look like secrets left out",
 		"network and file reads stay open: no sandbox holds this code",
 	}
 	if code.Script != "" {
@@ -586,7 +586,7 @@ func (a CodeAnswer) verdict() ledger.Verdict {
 
 type CodeEntry struct {
 	Turn   string
-	Code   subagent.InlineCode
+	Code   subagents.InlineCode
 	By     string
 	Answer CodeAnswer
 	Exit   *int
@@ -602,7 +602,7 @@ func (e CodeEntry) Record(log string) {
 		phase = "run"
 	}
 	body, err := ledger.Canonical(map[string]any{"phase": phase, "sha256": CodeSum(e.Code), "interpreter": e.Code.Program, "flags": codeFlags(e.Code),
-		"script": e.Code.Script, "code": e.Code.Code, "args": e.Code.Args, "cwd": e.Code.Cwd, "env": shell.CodeEnvProfile,
+		"script": e.Code.Script, "code": e.Code.Code, "args": e.Code.Args, "cwd": e.Code.Cwd, "env": process.CodeEnvProfile,
 		"answered_by": e.By, "answer": e.Answer, "exit_code": e.Exit, "duration_ms": e.Took.Milliseconds()})
 	if err != nil {
 		return
@@ -656,8 +656,8 @@ func readOnlyPrograms() []string {
 }
 
 func shellChangesTheHarness(project, command string) bool {
-	written, unparsed := subagent.ShellWrites(command)
-	steps, dir, literalDir := subagent.ShellSteps(command), "", true
+	written, unparsed := subagents.ShellWrites(command)
+	steps, dir, literalDir := subagents.ShellSteps(command), "", true
 	for _, step := range steps {
 		program, args := step.Program, step.Args
 		if program == "rtk" && len(args) > 0 {
@@ -674,7 +674,7 @@ func shellChangesTheHarness(project, command string) bool {
 			return true
 		case tofu && slices.Contains(args, "settings") && slices.Contains(args, "set") && (len(steps) > 1 || !setsInAThrowawayHome(project, command, args)):
 			return true
-		case !slices.Contains(readOnlyPrograms(), program) && (program != "find" || subagent.FindActs(args)) && slices.ContainsFunc(args, handed):
+		case !slices.Contains(readOnlyPrograms(), program) && (program != "find" || subagents.FindActs(args)) && slices.ContainsFunc(args, handed):
 			return true
 		}
 		written = append(written, step.Changes...)

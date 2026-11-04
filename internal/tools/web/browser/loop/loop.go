@@ -1,4 +1,4 @@
-package jevloop
+package loop
 
 import (
 	"context"
@@ -11,12 +11,12 @@ import (
 )
 
 type Browser struct {
-	Snapshot func(ctx context.Context) (browser.Page, error)
-	Act      func(ctx context.Context, page browser.Page, action browser.Action) (browser.Stale, error)
+	Snapshot func(ctx context.Context) (driver.Page, error)
+	Act      func(ctx context.Context, page driver.Page, action driver.Action) (driver.Stale, error)
 	Tab      func() int
 }
 
-type Writer func(ctx context.Context, goal string, page browser.Page, field browser.Element) (string, error)
+type Writer func(ctx context.Context, goal string, page driver.Page, field driver.Element) (string, error)
 
 type Loop struct {
 	Browser Browser
@@ -46,7 +46,7 @@ type Step struct {
 	Choice
 	Label   string
 	Changed bool
-	Stale   browser.Stale
+	Stale   driver.Stale
 	Opened  int
 }
 
@@ -55,11 +55,11 @@ type Result struct {
 	Reason    string
 	Steps     []Step
 	Decisions int
-	Page      browser.Page
-	Pages     []browser.Page
+	Page      driver.Page
+	Pages     []driver.Page
 }
 
-func empty(page browser.Page) bool {
+func empty(page driver.Page) bool {
 	return page.URL == "about:blank" || len(page.Elements) == 0 && page.Text == ""
 }
 
@@ -82,7 +82,7 @@ func (l Loop) Run(ctx context.Context, goal string) Result {
 			return err
 		}
 		result.Page = page
-		if !empty(page) && !slices.ContainsFunc(result.Pages, func(seen browser.Page) bool { return seen.URL == page.URL && seen.Text == page.Text }) {
+		if !empty(page) && !slices.ContainsFunc(result.Pages, func(seen driver.Page) bool { return seen.URL == page.URL && seen.Text == page.Text }) {
 			result.Pages = append(result.Pages, page)
 			result.Pages = result.Pages[max(0, len(result.Pages)-konst.BrowserRecentSteps):]
 		}
@@ -100,7 +100,7 @@ func (l Loop) Run(ctx context.Context, goal string) Result {
 				return stop("the page stayed empty after %d waits", waited)
 			}
 			waited++
-			if _, err := l.Browser.Act(ctx, result.Page, browser.Action{Op: browser.OpWait}); err != nil {
+			if _, err := l.Browser.Act(ctx, result.Page, driver.Action{Op: driver.OpWait}); err != nil {
 				return stop("no wait on the empty page: %v", err)
 			}
 			if err := see(); err != nil {
@@ -125,9 +125,9 @@ func (l Loop) Run(ctx context.Context, goal string) Result {
 			label = element.Label
 		}
 		switch {
-		case op == browser.OpBlocked:
+		case op == driver.OpBlocked:
 			return stop("the chooser chose BLOCKED")
-		case op == browser.OpDone:
+		case op == driver.OpDone:
 			if err := see(); err != nil {
 				return stop("no snapshot to confirm DONE: %v", err)
 			}
@@ -138,7 +138,7 @@ func (l Loop) Run(ctx context.Context, goal string) Result {
 			continue
 		case acted >= budget:
 			return stop("the action budget of %d ran out", budget)
-		case op == browser.OpTypeText:
+		case op == driver.OpTypeText:
 			text, err := l.Write(ctx, goal, page, element)
 			if err != nil {
 				return stop("nothing typed into %q: %v", label, err)
@@ -146,7 +146,7 @@ func (l Loop) Run(ctx context.Context, goal string) Result {
 			choice.Action.Value = text
 		}
 		from := l.tab()
-		var stale browser.Stale
+		var stale driver.Stale
 		for retried := false; ; retried = true {
 			if stale, err = l.Browser.Act(ctx, page, choice.Action); err != nil {
 				return stop("%s on %q failed: %v", op, label, err)
@@ -154,8 +154,8 @@ func (l Loop) Run(ctx context.Context, goal string) Result {
 			if err := see(); err != nil {
 				return stop("no snapshot after %s on %q: %v", op, label, err)
 			}
-			same := slices.DeleteFunc(slices.Clone(result.Page.Elements), func(e browser.Element) bool { return e.Role != element.Role || e.Label != element.Label })
-			if retried || stale != browser.StaleChanged || len(same) != 1 {
+			same := slices.DeleteFunc(slices.Clone(result.Page.Elements), func(e driver.Element) bool { return e.Role != element.Role || e.Label != element.Label })
+			if retried || stale != driver.StaleChanged || len(same) != 1 {
 				break
 			}
 			page, choice.Action.Element = result.Page, same[0].Index
@@ -165,7 +165,7 @@ func (l Loop) Run(ctx context.Context, goal string) Result {
 			step.Opened, step.Changed = to, true
 		}
 		result.Steps = append(result.Steps, step)
-		if stale != browser.StaleNone {
+		if stale != driver.StaleNone {
 			if refusedOn != choice.Action.Element {
 				refused, refusedOn = 0, choice.Action.Element
 			}
@@ -177,7 +177,7 @@ func (l Loop) Run(ctx context.Context, goal string) Result {
 		refused = 0
 		acted++
 		unchanged++
-		if step.Changed || op == browser.OpWait {
+		if step.Changed || op == driver.OpWait {
 			unchanged = 0
 		}
 		if unchanged == konst.BrowserNoChangeStop {

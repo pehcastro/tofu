@@ -18,7 +18,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/tools/registry"
@@ -43,13 +43,13 @@ func TestTheGateOffEventCarriesTheReasonTheKeyLookupFound(t *testing.T) {
 	for _, state := range []struct {
 		name string
 		path string
-		want jev.Why
+		want core.Why
 	}{
-		{"no file", filepath.Join(dir, "gone", ".env"), jev.WhyNoFile},
-		{"a file without the name in it", unnamed, jev.WhyFileLacksName},
-		{"a file that will not read", unreadable, jev.WhyUnreadable},
+		{"no file", filepath.Join(dir, "gone", ".env"), core.WhyNoFile},
+		{"a file without the name in it", unnamed, core.WhyFileLacksName},
+		{"a file that will not read", unreadable, core.WhyUnreadable},
 	} {
-		_, err := jev.KeyFor(state.path, jev.OpenRouterVariable)
+		_, err := core.KeyFor(state.path, core.OpenRouterVariable)
 		if err == nil {
 			t.Fatalf("%s was accepted as a key", state.name)
 		}
@@ -63,9 +63,9 @@ func TestTheGateOffEventCarriesTheReasonTheKeyLookupFound(t *testing.T) {
 	}
 }
 
-func recordedGateDecision() turn.GateDecision {
+func recordedGateDecision() loop.GateDecision {
 	modeReason := "the rule came from the library as tool_gate@3.yaml"
-	return turn.GateDecision{
+	return loop.GateDecision{
 		ID:      "2026-09-19-6f1c",
 		Verdict: ledger.VerdictAsk,
 		Answers: []ledger.Answer{
@@ -174,7 +174,7 @@ func TestAResultSaysSomethingOrSaysNothing(t *testing.T) {
 }
 
 func TestAnOversizeResultNeverPutsTheModelsHandleOnTheScreen(t *testing.T) {
-	artifacts, err := turn.NewArtifacts(filepath.Join(t.TempDir(), "artifacts"), true)
+	artifacts, err := loop.NewArtifacts(filepath.Join(t.TempDir(), "artifacts"), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -287,7 +287,7 @@ func TestThePlaceAGrantCoversIsTheToolAndItsSubject(t *testing.T) {
 		{"bash", `{"command":"rm -rf build"}`, "bash rm -rf build"},
 		{"glob", `{"pattern":"*.go"}`, `glob {"pattern":"*.go"}`},
 	} {
-		got := askedPlace(turn.GateRequest{Tool: one.tool, Args: json.RawMessage(one.args)})
+		got := askedPlace(loop.GateRequest{Tool: one.tool, Args: json.RawMessage(one.args)})
 		if got != one.place {
 			t.Errorf("%s %s is the place %q, want %q", one.tool, one.args, got, one.place)
 		}
@@ -295,19 +295,19 @@ func TestThePlaceAGrantCoversIsTheToolAndItsSubject(t *testing.T) {
 }
 
 func TestEveryOutcomeClosesTheTurnInWordsAndNeverInItsEnumName(t *testing.T) {
-	want := map[turn.Outcome]string{
-		turn.OutcomeUnset:               "finished in",
-		turn.OutcomeForked:              "finished in",
-		turn.OutcomeStopped:             "cooked for",
-		turn.OutcomeStepCap:             "stopped at the step cap after",
-		turn.OutcomeDecisionCap:         "stopped at the decision cap after",
-		turn.OutcomeError:               "failed after",
-		turn.OutcomeTruncated:           "stopped on a reply it could not finish, after",
-		turn.OutcomeRetiredCostCap:      "stopped at a cap this build no longer sets, after",
-		turn.OutcomeRetiredWallClockCap: "stopped at the wall clock cap after",
-		turn.OutcomeLoopGuard:           loopGuardWords(nil) + ", after",
-		turn.OutcomeCancelled:           "cancelled at",
-		turn.OutcomeForkStop:            "stopped forking after",
+	want := map[loop.Outcome]string{
+		loop.OutcomeUnset:               "finished in",
+		loop.OutcomeForked:              "finished in",
+		loop.OutcomeStopped:             "cooked for",
+		loop.OutcomeStepCap:             "stopped at the step cap after",
+		loop.OutcomeDecisionCap:         "stopped at the decision cap after",
+		loop.OutcomeError:               "failed after",
+		loop.OutcomeTruncated:           "stopped on a reply it could not finish, after",
+		loop.OutcomeRetiredCostCap:      "stopped at a cap this build no longer sets, after",
+		loop.OutcomeRetiredWallClockCap: "stopped at the wall clock cap after",
+		loop.OutcomeLoopGuard:           loopGuardWords(nil) + ", after",
+		loop.OutcomeCancelled:           "cancelled at",
+		loop.OutcomeForkStop:            "stopped forking after",
 	}
 	for _, outcome := range session.AllOutcomes() {
 		expected, named := want[outcome]
@@ -382,10 +382,10 @@ func TestAwaitPersonWritesTheAnswerOntoTheRowAsAnOutcome(t *testing.T) {
 		if event.Kind == EventAwaitPerson {
 			book.grant(event.ID, AllowedOnce, time.Time{}, nil)
 		}
-	}, book, &turn.Config{})
+	}, book, &loop.Config{})
 
-	answer, err := person(context.Background(), turn.GateRequest{Tool: "write"}, turn.GateDecision{ID: row.ID})
-	if err != nil || answer != turn.PersonAllowedOnce {
+	answer, err := person(context.Background(), loop.GateRequest{Tool: "write"}, loop.GateDecision{ID: row.ID})
+	if err != nil || answer != loop.PersonAllowedOnce {
 		t.Fatalf("person returned %v, %v", answer, err)
 	}
 
@@ -393,18 +393,18 @@ func TestAwaitPersonWritesTheAnswerOntoTheRowAsAnOutcome(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("reading the row back: ok=%v err=%v", ok, err)
 	}
-	if read.Outcome == nil || read.Outcome.Kind != turn.OutcomeKindGateAnswer || read.Outcome.Detail != "allow" {
-		t.Fatalf("the row's outcome is %+v, want kind %q detail allow", read.Outcome, turn.OutcomeKindGateAnswer)
+	if read.Outcome == nil || read.Outcome.Kind != loop.OutcomeKindGateAnswer || read.Outcome.Detail != "allow" {
+		t.Fatalf("the row's outcome is %+v, want kind %q detail allow", read.Outcome, loop.OutcomeKindGateAnswer)
 	}
 }
 
 func TestAwaitPersonUnderAnAlreadyGrantedRuleWritesNoOutcome(t *testing.T) {
 	dir, row := gateRowFixture(t)
-	request := turn.GateRequest{Tool: "write", Args: json.RawMessage(`{"path":"a.txt"}`)}
-	person := awaitPerson(func(Event) {}, &asks{standing: map[string]Answer{askedPlace(request): AlwaysHere}}, &turn.Config{})
+	request := loop.GateRequest{Tool: "write", Args: json.RawMessage(`{"path":"a.txt"}`)}
+	person := awaitPerson(func(Event) {}, &asks{standing: map[string]Answer{askedPlace(request): AlwaysHere}}, &loop.Config{})
 
-	answer, err := person(context.Background(), request, turn.GateDecision{ID: row.ID})
-	if err != nil || answer != turn.PersonAlwaysHere {
+	answer, err := person(context.Background(), request, loop.GateDecision{ID: row.ID})
+	if err != nil || answer != loop.PersonAlwaysHere {
 		t.Fatalf("person returned %v, %v", answer, err)
 	}
 
@@ -418,7 +418,7 @@ func TestAwaitPersonUnderAnAlreadyGrantedRuleWritesNoOutcome(t *testing.T) {
 }
 
 func TestARuleQuestionIsAskedEveryTimeAndNeverFillsTheAlwaysHereCache(t *testing.T) {
-	request := turn.GateRequest{Tool: tools.RuleOverride{}.Name(), Args: json.RawMessage(`{"rule":"no_unit_test_after_code","change":"off","question":"A rule stops me: no_unit_test_after_code."}`)}
+	request := loop.GateRequest{Tool: registry.RuleOverride{}.Name(), Args: json.RawMessage(`{"rule":"no_unit_test_after_code","change":"off","question":"A rule stops me: no_unit_test_after_code."}`)}
 	book := &asks{standing: map[string]Answer{askedPlace(request): AlwaysHere}}
 	next := Denied
 	var shown []Event
@@ -427,13 +427,13 @@ func TestARuleQuestionIsAskedEveryTimeAndNeverFillsTheAlwaysHereCache(t *testing
 		if event.Kind == EventAwaitPerson {
 			book.grant(event.ID, next, time.Time{}, nil)
 		}
-	}, book, &turn.Config{})
-	if got, err := person(context.Background(), request, turn.GateDecision{Verdict: ledger.VerdictAsk}); err != nil || got != turn.PersonDenied {
+	}, book, &loop.Config{})
+	if got, err := person(context.Background(), request, loop.GateDecision{Verdict: ledger.VerdictAsk}); err != nil || got != loop.PersonDenied {
 		t.Fatalf("a rule question under a granted place answered %v, %v, want the person's no", got, err)
 	}
 	clear(book.standing)
 	next = AlwaysHere
-	if got, err := person(context.Background(), request, turn.GateDecision{Verdict: ledger.VerdictAsk}); err != nil || got != turn.PersonAlwaysHere || len(book.standing) > 0 {
+	if got, err := person(context.Background(), request, loop.GateDecision{Verdict: ledger.VerdictAsk}); err != nil || got != loop.PersonAlwaysHere || len(book.standing) > 0 {
 		t.Fatalf("everywhere answered %v, %v and left the cache %v, want everywhere and an empty cache", got, err, book.standing)
 	}
 	asked := slices.ContainsFunc(shown, func(event Event) bool {
@@ -460,11 +460,11 @@ func TestTheLeadsLogCloseErrorReachesTheChatOnceAndATurnsErrorIsNotRepeated(t *t
 }
 
 func TestEveryPlanStateTheToolHasIsDrawable(t *testing.T) {
-	drawn := statedPlan([]tools.PlanItem{
-		{Text: "pending", State: tools.PlanPending},
-		{Text: "running", State: tools.PlanRunning},
-		{Text: "done", State: tools.PlanDone},
-		{Text: "dropped", State: tools.PlanDropped},
+	drawn := statedPlan([]registry.PlanItem{
+		{Text: "pending", State: registry.PlanPending},
+		{Text: "running", State: registry.PlanRunning},
+		{Text: "done", State: registry.PlanDone},
+		{Text: "dropped", State: registry.PlanDropped},
 	})
 	want := []PlanItem{
 		{Text: "pending", State: PlanPending},
@@ -478,13 +478,13 @@ func TestEveryPlanStateTheToolHasIsDrawable(t *testing.T) {
 }
 
 func TestDrawnPlanStateNamesEveryToolPlanState(t *testing.T) {
-	want := map[tools.PlanState]PlanState{
-		tools.PlanPending: PlanPending,
-		tools.PlanRunning: PlanRunning,
-		tools.PlanDone:    PlanDone,
-		tools.PlanDropped: PlanDropped,
+	want := map[registry.PlanState]PlanState{
+		registry.PlanPending: PlanPending,
+		registry.PlanRunning: PlanRunning,
+		registry.PlanDone:    PlanDone,
+		registry.PlanDropped: PlanDropped,
 	}
-	for _, state := range []tools.PlanState{tools.PlanPending, tools.PlanRunning, tools.PlanDone, tools.PlanDropped} {
+	for _, state := range []registry.PlanState{registry.PlanPending, registry.PlanRunning, registry.PlanDone, registry.PlanDropped} {
 		expected, named := want[state]
 		if !named {
 			t.Fatalf("%s carries no expected drawn state, so a new plan state can reach drawnPlanState untested", state)

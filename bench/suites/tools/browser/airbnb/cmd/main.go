@@ -51,9 +51,9 @@ func main() {
 
 func closeTofuTabs() (int, error) {
 	home, err := os.UserHomeDir()
-	var client *browser.Client
+	var client *driver.Client
 	if err == nil {
-		client, err = browser.Dial(home)
+		client, err = driver.Dial(home)
 	}
 	if err != nil {
 		return 0, err
@@ -85,13 +85,13 @@ func tofuCapped(tofu, project string, log io.Writer, maxWall time.Duration, args
 	command := exec.CommandContext(ctx, tofu, args...)
 	command.Dir, command.Stdout, command.Stderr = project, io.MultiWriter(os.Stdout, log), io.MultiWriter(os.Stderr, log)
 	command.WaitDelay = pipesDrainAfterTheTreeEnds
-	var tree shell.Tree
+	var tree process.Tree
 	endTree := sync.OnceFunc(func() { tree.Release() })
 	command.Cancel = func() error {
 		endTree()
 		return nil
 	}
-	tree, err := shell.StartTracked(command)
+	tree, err := process.StartTracked(command)
 	if err != nil {
 		return false, err
 	}

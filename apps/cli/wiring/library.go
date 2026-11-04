@@ -10,45 +10,45 @@ import (
 	shipped "tofu/library"
 )
 
-func ModelLibrary(dir string) (models.Library, error) {
-	layers, err := models.Layers(shipped.Files(), dir)
+func ModelLibrary(dir string) (catalog.Library, error) {
+	layers, err := catalog.Layers(shipped.Files(), dir)
 	if err != nil {
-		return models.Library{}, err
+		return catalog.Library{}, err
 	}
-	library, _ := models.Load(layers)
+	library, _ := catalog.Load(layers)
 	return library, nil
 }
 
-func OutsideTheLibrary(library models.Library, wire string) error {
+func OutsideTheLibrary(library catalog.Library, wire string) error {
 	return fmt.Errorf(
 		"the model library covers the subscriptions reached by --wire %s, and --wire %s spends an api key, which is money rather than a window",
 		strings.Join(library.Wires(), " and --wire "), wire)
 }
 
-func SelectModel(wire, want string) (models.Model, error) {
+func SelectModel(wire, want string) (catalog.Model, error) {
 	library, err := ModelLibrary("")
 	if err != nil {
-		return models.Model{}, err
+		return catalog.Model{}, err
 	}
 	spec, carried := library.ForWire(wire)
 	if !carried {
-		return models.Model{}, OutsideTheLibrary(library, wire)
+		return catalog.Model{}, OutsideTheLibrary(library, wire)
 	}
 	if want == "" {
 		return library.Default(spec.ID)
 	}
 	model, err := library.Select(want)
 	if err != nil {
-		return models.Model{}, err
+		return catalog.Model{}, err
 	}
 	if model.Subscription != spec.ID {
-		return models.Model{}, fmt.Errorf("%s belongs to the %s subscription, and --wire %s reaches %s",
+		return catalog.Model{}, fmt.Errorf("%s belongs to the %s subscription, and --wire %s reaches %s",
 			model.Slug(), model.Subscription, wire, spec.ID)
 	}
 	return model, nil
 }
 
-func BoundRoles(wire, dir string) (models.Bindings, error) {
+func BoundRoles(wire, dir string) (catalog.Bindings, error) {
 	library, err := ModelLibrary(dir)
 	if err != nil {
 		return nil, err
@@ -60,8 +60,8 @@ func BoundRoles(wire, dir string) (models.Bindings, error) {
 	return library.Bind(spec.ID)
 }
 
-func DefaultEffort(offered []llm.Effort) llm.Effort {
-	floor := slices.Index(llm.Efforts(), llm.EffortLow)
-	at := slices.IndexFunc(offered, func(effort llm.Effort) bool { return slices.Index(llm.Efforts(), effort) >= floor })
+func DefaultEffort(offered []core.Effort) core.Effort {
+	floor := slices.Index(core.Efforts(), core.EffortLow)
+	at := slices.IndexFunc(offered, func(effort core.Effort) bool { return slices.Index(core.Efforts(), effort) >= floor })
 	return offered[max(at, 0)]
 }

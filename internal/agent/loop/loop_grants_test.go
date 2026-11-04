@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 
 func TestASubAgentWhoseGrantsShrinkMidRunRecordsEachNewAskAndRunsOn(t *testing.T) {
 	const writer = "write other/x.txt and then far/y.txt"
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey: {
 			spawnCall("call-a", writer, "mine/**"),
 			messageDoing("grant", "sub-1", "grant", "other/**"),

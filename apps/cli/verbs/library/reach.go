@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
 	"tofu/internal/librarian/rules"
@@ -118,7 +118,7 @@ func reachVerb(o output.Verb, args []string, now time.Time) int {
 		report.Never = true
 	}
 	files, _, _ := wiring.LibrarySource()
-	domains, err := rule.LoadDomains(files, wiring.LibraryRoot)
+	domains, err := rules.LoadDomains(files, wiring.LibraryRoot)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -130,7 +130,7 @@ func reachVerb(o output.Verb, args []string, now time.Time) int {
 		for _, name := range domain.References {
 			tally.item(wiring.LibraryWhatReference, name)
 		}
-		for kind, docs := range map[string][]rule.Document{wiring.LibraryWhatSkill: domain.Skills, wiring.LibraryWhatAgent: domain.Agents} {
+		for kind, docs := range map[string][]rules.Document{wiring.LibraryWhatSkill: domain.Skills, wiring.LibraryWhatAgent: domain.Agents} {
 			for _, doc := range docs {
 				tally.item(kind, strings.TrimSuffix(path.Base(doc.File), path.Ext(doc.File)))
 			}
@@ -194,7 +194,7 @@ func reachLines(page cli.Page, report reach, now time.Time) []string {
 				said = append(said, output.Plural(row.Calls, "call"))
 			}
 			if !row.LastAt.IsZero() {
-				said = append(said, "last "+widget.Until(now.Sub(row.LastAt))+" ago")
+				said = append(said, "last "+render.Until(now.Sub(row.LastAt))+" ago")
 			}
 			rows = append(rows, cli.Row{Mark: mark, Cells: []string{row.Name}, Detail: strings.Join(said, " · ")})
 		}

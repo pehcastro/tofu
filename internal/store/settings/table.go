@@ -262,7 +262,7 @@ func checkTable(specs []Spec) error {
 
 func subscriptionSources() []string {
 	var sources []string
-	for _, source := range models.AllSubscriptions() {
+	for _, source := range catalog.AllSubscriptions() {
 		sources = append(sources, string(source))
 	}
 	return sources
@@ -370,10 +370,10 @@ func Default() []Spec {
 			Choices: DoneReviews()},
 		{Key: AgentSources, Label: "Agent folders", Description: "The project folders sub-agents are read from, in order: tofu, agents and claude", Category: "Turn", Kind: Text, DefaultText: "tofu,agents,claude",
 			ListOf: []string{"tofu", "agents", "claude"}},
-		{Key: subagent.TierGenius.Setting(), Label: "Genius tier", Description: "the model @genius names, and opus in a shared agent file; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
-		{Key: subagent.TierSmart.Setting(), Label: "Smart tier", Description: "the model @smart names, and sonnet in a shared agent file; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
-		{Key: subagent.TierWorker.Setting(), Label: "Worker tier", Description: "the model @worker names, and haiku in a shared agent file; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
-		{Key: subagent.TierDumb.Setting(), Label: "Dumb tier", Description: "the model @dumb names; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
+		{Key: subagents.TierGenius.Setting(), Label: "Genius tier", Description: "the model @genius names, and opus in a shared agent file; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
+		{Key: subagents.TierSmart.Setting(), Label: "Smart tier", Description: "the model @smart names, and sonnet in a shared agent file; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
+		{Key: subagents.TierWorker.Setting(), Label: "Worker tier", Description: "the model @worker names, and haiku in a shared agent file; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
+		{Key: subagents.TierDumb.Setting(), Label: "Dumb tier", Description: "the model @dumb names; empty runs the orchestrator's model", Category: "Turn", Kind: Text},
 		{Key: boardy.ManagementSetting, Label: "Boardy", Description: "boardy runs the lead and its sub-agents from board tickets. off keeps owns a grant per spawn", Category: "Projects", Kind: Text, DefaultText: string(boardy.ManagementOff),
 			Choices: []string{string(boardy.ManagementOff), string(boardy.ManagementBoardy)}},
 		{Key: boardy.FlowSetting, Label: "Boardy flow", Description: "The words tofu boardy uses. jira says ticket and sprint, linear says issue and cycle", Category: "Projects", Kind: Text, DefaultText: string(boardy.Jira),

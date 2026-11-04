@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"os"
@@ -9,7 +9,7 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 	shipped "tofu/library"
 )
 
@@ -156,7 +156,7 @@ func TestToolPickReachesTheLeadAndASubAgentInTheCachedHeadUnderToolGuidance(t *t
 	}
 	for name, one := range map[string]ComposeSpec{
 		"lead":      {Role: rule.RoleOrchestrator},
-		"sub-agent": {Agent: subagent.Definition{Name: "go-dev", Origin: "library", Domain: rule.DomainDev, Language: "go", Instructions: "write go"}},
+		"sub-agent": {Agent: subagents.Definition{Name: "go-dev", Origin: "library", Domain: rule.DomainDev, Language: "go", Instructions: "write go"}},
 	} {
 		one.Task, one.Environment, one.ToolGuidance, one.Rules = "fix the failing test", "<env/>", "every path is relative", rules
 		composed, err := Compose(one)
@@ -249,7 +249,7 @@ func TestASubAgentOwningAMonorepoAppGetsThatAppsFrameworkRules(t *testing.T) {
 		{[]string{"apps/docs/**"}, []string{"vue"}, false, true},
 	} {
 		agents := SubAgents{Root: root, Prompt: ComposeSpec{Environment: "e", ToolGuidance: "g", Rules: rules, Frameworks: c.lead}}
-		system, _, _, err := agents.prompt(Config{}, subagent.Definition{}, "write the page", c.owns)
+		system, _, _, err := agents.prompt(Config{}, subagents.Definition{}, "write the page", c.owns)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -263,7 +263,7 @@ func TestASubAgentOwningAMonorepoAppGetsThatAppsFrameworkRules(t *testing.T) {
 }
 
 func TestEveryLibraryAgentGetsEachSkillItNamesWhole(t *testing.T) {
-	found := subagent.Definitions(subagent.Scan{Library: shipped.Files()})
+	found := subagents.Definitions(subagents.Scan{Library: shipped.Files()})
 	if len(found.Broken) > 0 {
 		t.Fatalf("library agents do not read: %+v", found.Broken)
 	}
@@ -318,7 +318,7 @@ func TestALibraryAgentsSkillsFailLoudly(t *testing.T) {
 		{name: "none named"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			text, err := librarySkills(library, subagent.Definition{Name: "x", Origin: "library", Skills: c.skills})
+			text, err := librarySkills(library, subagents.Definition{Name: "x", Origin: "library", Skills: c.skills})
 			if c.fails != "" {
 				if err == nil || !strings.Contains(err.Error(), c.fails) {
 					t.Fatalf("want a failure naming %q, got %v with %q", c.fails, err, text)

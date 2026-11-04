@@ -17,7 +17,7 @@ import (
 const quietTestIdle = 100 * time.Millisecond
 
 func saidHi() Request {
-	return Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "hi"}}}
+	return Request{Messages: []core.Message{{Role: core.RoleUser, Content: "hi"}}}
 }
 
 func quietThenWhole(t *testing.T) (*httptest.Server, *atomic.Int32) {
@@ -67,7 +67,7 @@ func TestAStreamThatGoesQuietAfterOneDeltaFailsAsRetryableWithinTheIdleTimeout(t
 	started := time.Now()
 	_, _, err := quietWire(t, server.URL, 0).Ask(context.Background(), saidHi())
 	took := time.Since(started)
-	if !errors.Is(err, llm.ErrStreamIdle) {
+	if !errors.Is(err, core.ErrStreamIdle) {
 		t.Fatalf("a stream quiet for longer than %s ended with %v, not the idle failure", quietTestIdle, err)
 	}
 	if transport.KindOf(err).Fatal() {

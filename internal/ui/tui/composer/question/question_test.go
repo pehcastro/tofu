@@ -18,15 +18,15 @@ func one() *int {
 	return &at
 }
 
-func asked() []turn.PersonQuestion {
-	return []turn.PersonQuestion{
-		{ID: "lib", Header: "HTTP client", Question: "Which HTTP client should the fetcher use?", Type: turn.QuestionChoice, Recommended: zero(),
-			Options: []turn.PersonOption{{Label: "net/http", Description: "standard library, no dependency"}, {Label: "resty", Description: "retries built in, one dependency", Preview: "client := resty.New().SetRetryCount(3)"}}},
-		{ID: "extras", Header: "Extras", Question: "Which extras should it carry?", Type: turn.QuestionMulti, Recommended: zero(),
-			Options: []turn.PersonOption{{Label: "retries", Description: "three tries"}, {Label: "tracing", Description: "spans per request"}, {Label: "caching", Description: "etag cache"}}},
-		{ID: "push", Header: "Push", Question: "Push the branch when done?", Type: turn.QuestionYesNo, Recommended: one(),
-			Options: []turn.PersonOption{{Label: "yes"}, {Label: "no"}}},
-		{ID: "name", Header: "Name", Question: "What is the module called?", Type: turn.QuestionText},
+func asked() []loop.PersonQuestion {
+	return []loop.PersonQuestion{
+		{ID: "lib", Header: "HTTP client", Question: "Which HTTP client should the fetcher use?", Type: loop.QuestionChoice, Recommended: zero(),
+			Options: []loop.PersonOption{{Label: "net/http", Description: "standard library, no dependency"}, {Label: "resty", Description: "retries built in, one dependency", Preview: "client := resty.New().SetRetryCount(3)"}}},
+		{ID: "extras", Header: "Extras", Question: "Which extras should it carry?", Type: loop.QuestionMulti, Recommended: zero(),
+			Options: []loop.PersonOption{{Label: "retries", Description: "three tries"}, {Label: "tracing", Description: "spans per request"}, {Label: "caching", Description: "etag cache"}}},
+		{ID: "push", Header: "Push", Question: "Push the branch when done?", Type: loop.QuestionYesNo, Recommended: one(),
+			Options: []loop.PersonOption{{Label: "yes"}, {Label: "no"}}},
+		{ID: "name", Header: "Name", Question: "What is the module called?", Type: loop.QuestionText},
 	}
 }
 

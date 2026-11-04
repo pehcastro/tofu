@@ -44,10 +44,10 @@ func TestALeadSessionActsForThePersonAndItsSubAgentDoesNot(t *testing.T) {
 	if _, err := m.Move(ticket.ID, Done, "", sub); err == nil {
 		t.Error("a sub-agent moved its own ticket to done")
 	}
-	if m.actorKind(lead) != rule.ActorPerson {
+	if m.actorKind(lead) != rules.ActorPerson {
 		t.Error("a lead's move is not by the person")
 	}
-	if m.actorKind(sub) == rule.ActorPerson {
+	if m.actorKind(sub) == rules.ActorPerson {
 		t.Error("a sub-agent's move is by the person")
 	}
 

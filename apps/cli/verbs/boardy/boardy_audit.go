@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/project/boardy"
 )
@@ -72,7 +72,7 @@ func (c boardyCall) auditLines(page cli.Page, audit boardy.Audit) []string {
 	return append(page.Title(audit.Board+" audit", []string{output.Plural(audit.Tickets, c.words.Ticket), strconv.Itoa(audit.Live) + " live"}, cli.Verdict{}), page.Facts(facts)...)
 }
 
-func minutes(count int) string { return widget.Until(time.Duration(count) * time.Minute) }
+func minutes(count int) string { return render.Until(time.Duration(count) * time.Minute) }
 
 func idRuns(ids []string) []string {
 	var runs []string

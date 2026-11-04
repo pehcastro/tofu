@@ -10,10 +10,10 @@ import (
 )
 
 func TestAPictureAToolReturnedTravelsInItsFunctionCallOutput(t *testing.T) {
-	items, err := encodeInput([]llm.Message{
-		{Role: llm.RoleUser, Content: "look at a.png"},
-		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"a.png"}`)}}},
-		{Role: llm.RoleTool, ToolCallID: "call-1", Content: "a.png is a png", Images: []llm.Image{{MediaType: "image/png", Data: []byte("made-up png")}}},
+	items, err := encodeInput([]core.Message{
+		{Role: core.RoleUser, Content: "look at a.png"},
+		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"a.png"}`)}}},
+		{Role: core.RoleTool, ToolCallID: "call-1", Content: "a.png is a png", Images: []core.Image{{MediaType: "image/png", Data: []byte("made-up png")}}},
 	})
 	if err != nil {
 		t.Fatalf("a tool result with a picture was refused: %v", err)
@@ -46,18 +46,18 @@ func TestTheModelFileShapesTextAndReasoningAndLeftOutSendsTodaysBody(t *testing.
 		want    string
 	}{
 		{name: "nothing set keeps today's body", request: Request{}, want: `"include"`},
-		{name: "effort alone keeps today's reasoning", request: Request{Effort: llm.EffortMedium},
+		{name: "effort alone keeps today's reasoning", request: Request{Effort: core.EffortMedium},
 			want: `"reasoning":{"effort":"medium","summary":"auto"}`},
 		{name: "verbosity rides in text", request: Request{Verbosity: "low"}, want: `"text":{"verbosity":"low"}`},
-		{name: "context rides beside effort and summary", request: Request{Effort: llm.EffortMedium, ReasoningContext: "all_turns"},
+		{name: "context rides beside effort and summary", request: Request{Effort: core.EffortMedium, ReasoningContext: "all_turns"},
 			want: `"reasoning":{"effort":"medium","summary":"auto","context":"all_turns"}`},
-		{name: "context survives a summary turned off", request: Request{Effort: llm.EffortLow, SummaryOff: true, ReasoningContext: "all_turns"},
+		{name: "context survives a summary turned off", request: Request{Effort: core.EffortLow, SummaryOff: true, ReasoningContext: "all_turns"},
 			want: `"reasoning":{"effort":"low","context":"all_turns"}`},
 		{name: "context survives no effort", request: Request{ReasoningContext: "all_turns"}, want: `"reasoning":{"context":"all_turns"}`},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			c.request.Model = "m"
-			c.request.Messages = []llm.Message{{Role: llm.RoleUser, Content: "hi"}}
+			c.request.Messages = []core.Message{{Role: core.RoleUser, Content: "hi"}}
 			body, err := c.request.Encode(nil)
 			if err != nil {
 				t.Fatal(err)
@@ -76,22 +76,22 @@ func TestTheModelFileShapesTextAndReasoningAndLeftOutSendsTodaysBody(t *testing.
 }
 
 func TestAReplyWithReasoningTextAndACallIsSentBackInTheOrderItArrived(t *testing.T) {
-	call := llm.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"note.txt"}`)}
-	reasoning := llm.Thinking{Signature: EncodeReasoning("rs_1", "sealed")}
+	call := core.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"note.txt"}`)}
+	reasoning := core.Thinking{Signature: EncodeReasoning("rs_1", "sealed")}
 	for _, c := range []struct {
 		name  string
-		reply llm.Message
+		reply core.Message
 		want  []string
 	}{
-		{name: "reasoning, text and a call", reply: llm.Message{Role: llm.RoleAssistant, Content: "reading the note first", ToolCalls: []llm.ToolCall{call}, Thinking: reasoning},
+		{name: "reasoning, text and a call", reply: core.Message{Role: core.RoleAssistant, Content: "reading the note first", ToolCalls: []core.ToolCall{call}, Thinking: reasoning},
 			want: []string{"reasoning", "message", "function_call"}},
-		{name: "text of only whitespace", reply: llm.Message{Role: llm.RoleAssistant, Content: " \n\t", ToolCalls: []llm.ToolCall{call}, Thinking: reasoning},
+		{name: "text of only whitespace", reply: core.Message{Role: core.RoleAssistant, Content: " \n\t", ToolCalls: []core.ToolCall{call}, Thinking: reasoning},
 			want: []string{"reasoning", "function_call"}},
-		{name: "text and a call with no reasoning", reply: llm.Message{Role: llm.RoleAssistant, Content: "reading the note first", ToolCalls: []llm.ToolCall{call}},
+		{name: "text and a call with no reasoning", reply: core.Message{Role: core.RoleAssistant, Content: "reading the note first", ToolCalls: []core.ToolCall{call}},
 			want: []string{"message", "function_call"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			items, err := encodeInput([]llm.Message{{Role: llm.RoleUser, Content: "read the note"}, c.reply})
+			items, err := encodeInput([]core.Message{{Role: core.RoleUser, Content: "read the note"}, c.reply})
 			if err != nil {
 				t.Fatal(err)
 			}

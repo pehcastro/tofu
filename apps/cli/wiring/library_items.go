@@ -36,11 +36,11 @@ func LibraryItem(part session.PromptPart) (string, string) {
 	switch {
 	case part.Rule != "":
 		return LibraryWhatRule, part.Rule
-	case part.Kind == string(rule.ConcernIdentity) && (part.Agent != "" || part.File != ""):
+	case part.Kind == string(rules.ConcernIdentity) && (part.Agent != "" || part.File != ""):
 		return LibraryWhatAgent, cmp.Or(part.Agent, "unnamed")
-	case part.Kind == string(turn.ConcernSkills) && part.Name != "":
+	case part.Kind == string(loop.ConcernSkills) && part.Name != "":
 		return LibraryWhatSkill, part.Name
-	case part.Kind == string(turn.ConcernReferences):
+	case part.Kind == string(loop.ConcernReferences):
 		return LibraryWhatReference, part.Name
 	}
 	return "", ""
@@ -48,7 +48,7 @@ func LibraryItem(part session.PromptPart) (string, string) {
 
 func LibraryLoad(call session.CallBody) (string, string) {
 	var named struct{ Name string }
-	what := map[string]string{turn.SkillToolName: LibraryWhatSkill, turn.ReferenceToolName: LibraryWhatReference}[call.Tool]
+	what := map[string]string{loop.SkillToolName: LibraryWhatSkill, loop.ReferenceToolName: LibraryWhatReference}[call.Tool]
 	if what == "" || json.Unmarshal(call.Args, &named) != nil {
 		return "", ""
 	}

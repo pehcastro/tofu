@@ -1,4 +1,4 @@
-package shell
+package process
 
 import (
 	"cmp"
@@ -62,7 +62,7 @@ func dialLoopbacks(port int, dial time.Duration) []Address {
 	died := make([]error, len(addresses))
 	for i := range addresses {
 		dialing.Go(func() {
-			died[i] = safe.Call(nil, "port dial", func() error {
+			died[i] = recover.Call(nil, "port dial", func() error {
 				addresses[i].Open = PortOpen(addresses[i].Host, port, dial)
 				return nil
 			})

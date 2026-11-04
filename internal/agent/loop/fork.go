@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -23,12 +23,12 @@ const (
 )
 
 const (
-	episodeOfPerson = memtree.KindPerson
-	episodeOfLead   = memtree.KindLead
-	episodeOfReport = memtree.KindWork
+	episodeOfPerson = tree.KindPerson
+	episodeOfLead   = tree.KindLead
+	episodeOfReport = tree.KindWork
 )
 
-type RecordedAsk func(ctx context.Context, why, wire string, model Model, request llm.Request) (llm.Decision, error)
+type RecordedAsk func(ctx context.Context, why, wire string, model Model, request core.Request) (core.Decision, error)
 
 type episodeKeeper interface {
 	Episodes(budget int, saidElsewhere []string) (string, error)
@@ -36,15 +36,15 @@ type episodeKeeper interface {
 	Compact(ctx context.Context, ask RecordedAsk) error
 }
 
-func standsAtTheHead(message llm.Message) bool {
-	return message.Role == llm.RoleSystem || message.Origin.Source == llm.SourceMemoryView || message.Origin.Source == llm.SourceEpisodes
+func standsAtTheHead(message core.Message) bool {
+	return message.Role == core.RoleSystem || message.Origin.Source == core.SourceMemoryView || message.Origin.Source == core.SourceEpisodes
 }
 
-func isReport(origin llm.Origin) bool {
-	return origin.Source == llm.SourceReport || origin.Source == llm.SourceReportFor
+func isReport(origin core.Origin) bool {
+	return origin.Source == core.SourceReport || origin.Source == core.SourceReportFor
 }
 
-func episodeKind(origin llm.Origin) string {
+func episodeKind(origin core.Origin) string {
 	switch {
 	case isReport(origin):
 		return episodeOfReport
@@ -54,19 +54,19 @@ func episodeKind(origin llm.Origin) string {
 	return ""
 }
 
-func withoutEpisodes(messages []llm.Message) []llm.Message {
-	return slices.DeleteFunc(messages, func(message llm.Message) bool { return message.Origin.Source == llm.SourceEpisodes })
+func withoutEpisodes(messages []core.Message) []core.Message {
+	return slices.DeleteFunc(messages, func(message core.Message) bool { return message.Origin.Source == core.SourceEpisodes })
 }
 
-func withEpisodes(messages []llm.Message, view string) []llm.Message {
+func withEpisodes(messages []core.Message, view string) []core.Message {
 	if view == "" {
 		return messages
 	}
-	at := slices.IndexFunc(messages, func(message llm.Message) bool { return !standsAtTheHead(message) })
+	at := slices.IndexFunc(messages, func(message core.Message) bool { return !standsAtTheHead(message) })
 	if at < 0 {
 		at = len(messages)
 	}
-	return slices.Insert(messages, at, llm.Message{Role: llm.RoleUser, Content: view, Origin: llm.Origin{Source: llm.SourceEpisodes}})
+	return slices.Insert(messages, at, core.Message{Role: core.RoleUser, Content: view, Origin: core.Origin{Source: core.SourceEpisodes}})
 }
 
 type quietAskKey struct{}
@@ -84,9 +84,9 @@ func forkStateAsk() string {
 		"answer with the working state and nothing else, in at most " + strconv.Itoa(konst.ForkStateWords) + " words."
 }
 
-func carryState(fork *Fork, begun []llm.Message, state, session string) {
-	at := slices.IndexFunc(begun, func(message llm.Message) bool {
-		return message.Origin.Source == llm.SourceForkCarry && message.Content == fork.Carry.Text
+func carryState(fork *Fork, begun []core.Message, state, session string) {
+	at := slices.IndexFunc(begun, func(message core.Message) bool {
+		return message.Origin.Source == core.SourceForkCarry && message.Content == fork.Carry.Text
 	})
 	if state != "" {
 		fork.Carry = fork.Carry.WithoutFiles()
@@ -103,24 +103,24 @@ func carryState(fork *Fork, begun []llm.Message, state, session string) {
 	begun[at].Content = fork.Carry.Text
 }
 
-func picturesLeftOut(before, after []llm.Message) []recall.Drop {
+func picturesLeftOut(before, after []core.Message) []recall.Drop {
 	pictured := map[string]bool{}
 	for _, message := range after {
-		if message.Role == llm.RoleTool && len(message.Images) > 0 {
+		if message.Role == core.RoleTool && len(message.Images) > 0 {
 			pictured[message.ToolCallID] = true
 		}
 	}
-	calls := map[string]llm.ToolCall{}
+	calls := map[string]core.ToolCall{}
 	var drops []recall.Drop
 	step := 0
 	for _, message := range before {
-		if message.Role == llm.RoleAssistant {
+		if message.Role == core.RoleAssistant {
 			step++
 		}
 		for _, call := range message.ToolCalls {
 			calls[call.ID] = call
 		}
-		if message.Role != llm.RoleTool || len(message.Images) == 0 || pictured[message.ToolCallID] {
+		if message.Role != core.RoleTool || len(message.Images) == 0 || pictured[message.ToolCallID] {
 			continue
 		}
 		drops = append(drops, pictureDrop(step, calls[message.ToolCallID], message, len(message.Images)*konst.ImageTokens))
@@ -135,8 +135,8 @@ type lookupTool struct {
 
 func (lookupTool) Name() string { return LookupToolName }
 
-func (lookupTool) Definition() llm.Tool {
-	return llm.Tool{
+func (lookupTool) Definition() core.Tool {
+	return core.Tool{
 		Name: LookupToolName,
 		Description: "returns one earlier tool call and its result whole, by the call id a fork carry names. " +
 			"session defaults to this one, and a call from an earlier session of the same line is found from the newer one too",

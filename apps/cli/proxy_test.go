@@ -153,7 +153,7 @@ func projectWithProxySheet(t *testing.T, sheet string) string {
 	return project
 }
 
-func runOneBashCall(t *testing.T, project string) turn.ToolCallRow {
+func runOneBashCall(t *testing.T, project string) loop.ToolCallRow {
 	t.Helper()
 	opts, err := parseRunArgs([]string{"--dir", project, "run one command"})
 	if err != nil {
@@ -163,16 +163,16 @@ func runOneBashCall(t *testing.T, project string) turn.ToolCallRow {
 	if err != nil {
 		t.Skipf("this machine cannot build the run tools, so no command can be run at all: %v", err)
 	}
-	model := &queuedModel{decisions: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+	model := &queuedModel{decisions: []core.Decision{
+		{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
 			{ID: "call-1", Name: "bash", Arguments: json.RawMessage(`{"command":"echo hi"}`)},
 		}},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "ran it"},
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "ran it"},
 	}}
-	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription})
-	row, err := turn.Run(context.Background(), config)
+	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: loop.SpendSubscription})
+	row, err := loop.Run(context.Background(), config)
 	if err != nil {
-		t.Fatalf("turn.Run: %v", err)
+		t.Fatalf("loop.Run: %v", err)
 	}
 	if len(row.Steps) == 0 || len(row.Steps[0].ToolCalls) != 1 {
 		t.Fatalf("the turn never made the one bash call: %+v", row.Steps)
@@ -281,7 +281,7 @@ func TestLibraryNamesARefusedProxyFileAndTheFieldThatFailed(t *testing.T) {
 type libraryEnvelope struct {
 	OK       bool               `json:"ok"`
 	Data     libraryverb.Report `json:"data"`
-	Problems []cli.Problem      `json:"problems"`
+	Problems []page.Problem     `json:"problems"`
 }
 
 func libraryJSON(t *testing.T) (int, libraryEnvelope, string) {

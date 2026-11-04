@@ -9,7 +9,7 @@ import (
 	"tofu/internal/models/llm/core"
 )
 
-type Header = llm.Header
+type Header = core.Header
 
 type HeaderOptions struct {
 	Token        string

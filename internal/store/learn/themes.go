@@ -53,7 +53,7 @@ func localFindings(said []Said, sent requests) []Finding {
 		f.Title = "You corrected the lead about " + strings.Join(f.words[:min(len(f.words), ShownWords)], ", ")
 		f.Reason = "you corrected how the lead behaved; grouped by shared words, with no model"
 		rule := directive(f)
-		if _, named := memory.PersonIn(rule); lineFault(rule) == "" && !named && len(words.Stems(rule)) >= words.StrongSharedWords {
+		if _, named := entries.PersonIn(rule); lineFault(rule) == "" && !named && len(words.Stems(rule)) >= words.StrongSharedWords {
 			f.Rule = strings.ToUpper(rule[:1]) + rule[1:] + "."
 		}
 		found = append(found, f)
@@ -172,7 +172,7 @@ func ruleFault(text string, quotes []Quote) string {
 	if fault := lineFault(text); fault != "" {
 		return fault
 	}
-	if who, named := memory.PersonIn(text); named {
+	if who, named := entries.PersonIn(text); named {
 		return "it names " + strings.TrimSpace(who)
 	}
 	said := words.Tokens(text)

@@ -1,4 +1,4 @@
-package cred_test
+package accounts_test
 
 import (
 	"context"
@@ -59,12 +59,12 @@ func (g *grantLog) grants() []string {
 	return slices.Clone(g.sent)
 }
 
-func keptStore(t *testing.T, endpoint http.Handler) *cred.Store {
+func keptStore(t *testing.T, endpoint http.Handler) *accounts.Store {
 	t.Helper()
 	server := httptest.NewServer(endpoint)
 	t.Cleanup(server.Close)
-	t.Setenv(cred.ClaudeTokenURLVariable, server.URL)
-	store, err := cred.Open(filepath.Join(t.TempDir(), "credentials.db"))
+	t.Setenv(accounts.ClaudeTokenURLVariable, server.URL)
+	store, err := accounts.Open(filepath.Join(t.TempDir(), "credentials.db"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -72,11 +72,11 @@ func keptStore(t *testing.T, endpoint http.Handler) *cred.Store {
 	return store
 }
 
-func account(t *testing.T, store *cred.Store, key, refresh string, expires, refreshed time.Time) int64 {
+func account(t *testing.T, store *accounts.Store, key, refresh string, expires, refreshed time.Time) int64 {
 	t.Helper()
-	credential := cred.Credential{Provider: cred.ClaudeSub, Kind: cred.KindOAuth, Access: "access-" + key, Refresh: refresh,
+	credential := accounts.Credential{Provider: accounts.ClaudeSub, Kind: accounts.KindOAuth, Access: "access-" + key, Refresh: refresh,
 		Expires: expires, Refreshed: refreshed, Authorized: time.Now().Add(-40 * 24 * time.Hour),
-		Identity: cred.Identity{AccountID: key, Email: key + "@example.com"}}
+		Identity: accounts.Identity{AccountID: key, Email: key + "@example.com"}}
 	if err := store.Save(credential, time.Now()); err != nil {
 		t.Fatalf("save: %v", err)
 	}
@@ -87,7 +87,7 @@ func account(t *testing.T, store *cred.Store, key, refresh string, expires, refr
 	return rows[len(rows)-1].ID
 }
 
-func rowOf(t *testing.T, store *cred.Store, id int64) cred.Row {
+func rowOf(t *testing.T, store *accounts.Store, id int64) accounts.Row {
 	t.Helper()
 	row, found, err := store.RowByID(id)
 	if err != nil || !found {
@@ -96,10 +96,10 @@ func rowOf(t *testing.T, store *cred.Store, id int64) cred.Row {
 	return row
 }
 
-func sweep(t *testing.T, store *cred.Store) []string {
+func sweep(t *testing.T, store *accounts.Store) []string {
 	t.Helper()
 	var notes []string
-	cred.NewKeeper(store, func(line string) { notes = append(notes, line) }).Sweep(context.Background(), time.Now())
+	accounts.NewKeeper(store, func(line string) { notes = append(notes, line) }).Sweep(context.Background(), time.Now())
 	return notes
 }
 
@@ -186,7 +186,7 @@ func TestOneAccountsFailureDoesNotStopTheSweep(t *testing.T) {
 	}
 }
 
-func peerWrites(t *testing.T, store *cred.Store, endpoint *grantLog, id int64, refresh string, expires time.Time) {
+func peerWrites(t *testing.T, store *accounts.Store, endpoint *grantLog, id int64, refresh string, expires time.Time) {
 	t.Helper()
 	endpoint.before = func(sent string) {
 		if sent != "refresh-0" {
@@ -210,7 +210,7 @@ func TestARefusalAfterAPeerRotatedUsesThePeersToken(t *testing.T) {
 	id := account(t, store, "peer", "refresh-0", time.Now().Add(-time.Minute), time.Now().Add(-time.Hour))
 	peerWrites(t, store, endpoint, id, "refresh-peer", time.Now().Add(time.Hour))
 
-	token, err := cred.NewAccountManager(store, mustSpec(t), id).Access(context.Background())
+	token, err := accounts.NewAccountManager(store, mustSpec(t), id).Access(context.Background())
 	if err != nil || token != "access-peer" {
 		t.Fatalf("after a peer rotated the token the refused refresh gave %q, %v", token, err)
 	}
@@ -228,7 +228,7 @@ func TestARefusalAfterAPeerRotatedToAStaleTokenRetriesOnce(t *testing.T) {
 	id := account(t, store, "peer", "refresh-0", time.Now().Add(-time.Minute), time.Now().Add(-time.Hour))
 	peerWrites(t, store, endpoint, id, "refresh-peer", time.Now().Add(-time.Minute))
 
-	token, err := cred.NewAccountManager(store, mustSpec(t), id).Access(context.Background())
+	token, err := accounts.NewAccountManager(store, mustSpec(t), id).Access(context.Background())
 	if err != nil || token != "access-2" {
 		t.Fatalf("a refused refresh after a stale peer rotation gave %q, %v", token, err)
 	}
@@ -243,7 +243,7 @@ func TestASecondRefusalAfterTheReloadSetsTheAccountAsideAndStops(t *testing.T) {
 	id := account(t, store, "peer", "refresh-0", time.Now().Add(-time.Minute), time.Now().Add(-time.Hour))
 	peerWrites(t, store, endpoint, id, "refresh-peer", time.Now().Add(-time.Minute))
 
-	if _, err := cred.NewAccountManager(store, mustSpec(t), id).Access(context.Background()); err == nil {
+	if _, err := accounts.NewAccountManager(store, mustSpec(t), id).Access(context.Background()); err == nil {
 		t.Fatal("two refusals produced a token")
 	}
 	if got := endpoint.grants(); !slices.Equal(got, []string{"refresh-0", "refresh-peer"}) {
@@ -274,7 +274,7 @@ func TestEachRefusalNamesItsOwnReason(t *testing.T) {
 			endpoint := &grantLog{refuse: map[string]refusal{"refresh-0": c.given}}
 			store := keptStore(t, endpoint)
 			id := account(t, store, "refused", "refresh-0", time.Now().Add(-time.Minute), time.Now().Add(-time.Hour))
-			if _, err := cred.NewAccountManager(store, mustSpec(t), id).Access(context.Background()); err == nil {
+			if _, err := accounts.NewAccountManager(store, mustSpec(t), id).Access(context.Background()); err == nil {
 				t.Fatal("a refusal produced a token")
 			}
 			cause := rowOf(t, store, id).DisabledCause
@@ -291,9 +291,9 @@ func TestEachRefusalNamesItsOwnReason(t *testing.T) {
 
 func TestAServerRefreshExpiryWarnsOnlyWhenNear(t *testing.T) {
 	now := time.Now()
-	far := cred.Row{Credential: cred.Credential{Provider: cred.ClaudeSub, RefreshExpires: now.Add(60 * 24 * time.Hour)}}
-	near := cred.Row{Credential: cred.Credential{Provider: cred.ClaudeSub, RefreshExpires: now.Add(2 * 24 * time.Hour)}}
-	gone := cred.Row{Credential: cred.Credential{Provider: cred.ClaudeSub, RefreshExpires: now.Add(-time.Hour)}}
+	far := accounts.Row{Credential: accounts.Credential{Provider: accounts.ClaudeSub, RefreshExpires: now.Add(60 * 24 * time.Hour)}}
+	near := accounts.Row{Credential: accounts.Credential{Provider: accounts.ClaudeSub, RefreshExpires: now.Add(2 * 24 * time.Hour)}}
+	gone := accounts.Row{Credential: accounts.Credential{Provider: accounts.ClaudeSub, RefreshExpires: now.Add(-time.Hour)}}
 	if _, dated := far.ReloginBy(now); dated {
 		t.Fatal("a refresh token good for 60 days already warns")
 	}
@@ -305,9 +305,9 @@ func TestAServerRefreshExpiryWarnsOnlyWhenNear(t *testing.T) {
 	}
 }
 
-func mustSpec(t *testing.T) cred.Spec {
+func mustSpec(t *testing.T) accounts.Spec {
 	t.Helper()
-	spec, err := cred.Lookup(string(cred.ClaudeSub))
+	spec, err := accounts.Lookup(string(accounts.ClaudeSub))
 	if err != nil {
 		t.Fatalf("lookup: %v", err)
 	}

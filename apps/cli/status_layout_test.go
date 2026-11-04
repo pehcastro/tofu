@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/colorprofile"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	loginverb "tofu/apps/cli/verbs/login"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/host"
@@ -159,8 +159,8 @@ func TestLogoutWithTwoAccountsNamesBothAndRemovesOnlyTheOneNumbered(t *testing.T
 	if want := "✓ #2 claude-sub lin.marsh@example.org signed out  ~/.tofu/agent.db\n"; out.String() != want {
 		t.Fatalf("logout printed %q, want %q", out.String(), want)
 	}
-	path, _ := cred.Path()
-	store, err := cred.Open(path)
+	path, _ := accounts.Path()
+	store, err := accounts.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,17 +177,17 @@ func savedAccount(t *testing.T) {
 
 func savedAccountAs(t *testing.T, email string) {
 	t.Helper()
-	path, err := cred.Path()
+	path, err := accounts.Path()
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := cred.Open(path)
+	store, err := accounts.Open(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = store.Close() }()
-	credential := cred.Credential{Provider: cred.ClaudeSub, Kind: "oauth", Access: "made-up-access", Refresh: "made-up-refresh",
-		Expires: fixtureMoment().Add(time.Hour), Authorized: fixtureMoment(), Identity: cred.Identity{Email: email}}
+	credential := accounts.Credential{Provider: accounts.ClaudeSub, Kind: "oauth", Access: "made-up-access", Refresh: "made-up-refresh",
+		Expires: fixtureMoment().Add(time.Hour), Authorized: fixtureMoment(), Identity: accounts.Identity{Email: email}}
 	if err := store.Save(credential, fixtureMoment()); err != nil {
 		t.Fatal(err)
 	}

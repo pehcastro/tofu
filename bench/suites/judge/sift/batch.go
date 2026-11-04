@@ -57,13 +57,13 @@ type BatchState struct {
 }
 
 type Batch struct {
-	Request        jev.Request
+	Request        core.Request
 	Indexes        []int
 	RequestTokens  int
 	QuestionTokens int
 }
 
-func BuildBatch(arm Arm, shipped jev.Question, model string, shell sift.Shell, units []sift.Unit, task string) (Batch, error) {
+func BuildBatch(arm Arm, shipped core.Question, model string, shell sift.Shell, units []sift.Unit, task string) (Batch, error) {
 	state := BatchState{Task: task, Command: shell.Command, ExitCode: shell.ExitCode}
 	for _, unit := range units {
 		state.Chunks = append(state.Chunks, BatchChunk{Stream: unit.Stream, Text: strings.TrimRight(unit.Text, "\n")})
@@ -71,17 +71,17 @@ func BuildBatch(arm Arm, shipped jev.Question, model string, shell sift.Shell, u
 	if arm == ArmBatchedRubric {
 		state.Rubric = &Rubric{Instructions: shipped.Instructions, True: shipped.True, False: shipped.False}
 	}
-	batch := Batch{Request: jev.Request{State: state}}
+	batch := Batch{Request: core.Request{State: state}}
 	for _, unit := range units {
 		if unit.Held != sift.NotHeld {
 			continue
 		}
 		question := chunkQuestion(arm, shipped, unit.Index)
-		alone, err := jev.Request{State: state, Questions: []jev.Question{question}}.Encode(model)
+		alone, err := core.Request{State: state, Questions: []core.Question{question}}.Encode(model)
 		if err != nil {
 			return Batch{}, err
 		}
-		batch.QuestionTokens = max(batch.QuestionTokens, jev.EstimateTokens(len(alone)))
+		batch.QuestionTokens = max(batch.QuestionTokens, core.EstimateTokens(len(alone)))
 		batch.Request.Questions = append(batch.Request.Questions, question)
 		batch.Indexes = append(batch.Indexes, unit.Index)
 	}
@@ -92,16 +92,16 @@ func BuildBatch(arm Arm, shipped jev.Question, model string, shell sift.Shell, u
 	if err != nil {
 		return Batch{}, err
 	}
-	batch.RequestTokens = jev.EstimateTokens(len(body))
+	batch.RequestTokens = core.EstimateTokens(len(body))
 	if batch.RequestTokens > konst.JudgeRequestTokenCeiling || batch.QuestionTokens > konst.JudgeStateTokenCeiling {
 		return Batch{}, fmt.Errorf("%q: the request is about %d tokens and its largest question %d, over %d and %d", shell.Command, batch.RequestTokens, batch.QuestionTokens, konst.JudgeRequestTokenCeiling, konst.JudgeStateTokenCeiling)
 	}
 	return batch, nil
 }
 
-func chunkQuestion(arm Arm, shipped jev.Question, index int) jev.Question {
+func chunkQuestion(arm Arm, shipped core.Question, index int) core.Question {
 	chunk := fmt.Sprintf("chunks[%d]", index)
-	question := jev.Question{ID: fmt.Sprintf("%s_%d", sift.NeededQuestion, index), Kind: jev.QuestionNoul}
+	question := core.Question{ID: fmt.Sprintf("%s_%d", sift.NeededQuestion, index), Kind: core.QuestionNoul}
 	switch arm {
 	case ArmBatched:
 		question.Instructions = shipped.Instructions + " The chunk this question asks about is " + chunk + " in the state; the other chunks are there for context only."

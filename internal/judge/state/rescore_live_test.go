@@ -120,7 +120,7 @@ type scored struct {
 	fromUntrusted float64
 }
 
-func askOneCase(t *testing.T, wire jev.Wire, battery []jev.Question, one recordedCase) (scored, float64) {
+func askOneCase(t *testing.T, wire core.Wire, battery []core.Question, one recordedCase) (scored, float64) {
 	t.Helper()
 	built, _, err := BuildToolGateV3(recordedInput(t, one))
 	if err != nil {
@@ -130,7 +130,7 @@ func askOneCase(t *testing.T, wire jev.Wire, battery []jev.Question, one recorde
 	if err := json.Unmarshal(built, &state); err != nil {
 		t.Fatalf("%s: decode the built state: %v", one.ID, err)
 	}
-	call := typesafe.Ask(context.Background(), wire, jev.Request{State: state, Questions: battery})
+	call := typesafe.Ask(context.Background(), wire, core.Request{State: state, Questions: battery})
 	if call.Err != nil {
 		t.Fatalf("%s: %v", one.ID, call.Err)
 	}
@@ -143,7 +143,7 @@ func askOneCase(t *testing.T, wire jev.Wire, battery []jev.Question, one recorde
 	}, call.Response.Usage.Cost
 }
 
-func askEveryCase(t *testing.T, wire jev.Wire, battery []jev.Question, rows []recordedAnswer) (map[string]scored, float64) {
+func askEveryCase(t *testing.T, wire core.Wire, battery []core.Question, rows []recordedAnswer) (map[string]scored, float64) {
 	t.Helper()
 	cases := gateCases(t)
 	out := map[string]scored{}
@@ -160,13 +160,13 @@ func askEveryCase(t *testing.T, wire jev.Wire, battery []jev.Question, rows []re
 	return out, spend
 }
 
-func batteryOf(t *testing.T, path string) []jev.Question {
+func batteryOf(t *testing.T, path string) []core.Question {
 	t.Helper()
-	set, err := question.Load(path)
+	set, err := questions.Load(path)
 	if err != nil {
 		t.Fatalf("load %s: %v", path, err)
 	}
-	battery := make([]jev.Question, 0, len(set.Questions))
+	battery := make([]core.Question, 0, len(set.Questions))
 	for _, q := range set.Questions {
 		battery = append(battery, q.ToJev())
 	}
@@ -181,11 +181,11 @@ const coinFlip = "unstable"
 
 func verdictAt(t *testing.T, run scored, pol gate.Rule) gate.Verdict {
 	t.Helper()
-	verdict, _, err := gate.Decide(map[string]jev.Answer{
-		pol.RiskQuestion:          {Kind: jev.QuestionScore, Score: run.risk},
-		pol.ApprovalQuestion:      {Kind: jev.QuestionNoul, Noul: run.approval},
-		pol.UserRequestedQuestion: {Kind: jev.QuestionNoul, Noul: run.userRequested},
-		pol.FromUntrustedQuestion: {Kind: jev.QuestionNoul, Noul: run.fromUntrusted},
+	verdict, _, err := gate.Decide(map[string]core.Answer{
+		pol.RiskQuestion:          {Kind: core.QuestionScore, Score: run.risk},
+		pol.ApprovalQuestion:      {Kind: core.QuestionNoul, Noul: run.approval},
+		pol.UserRequestedQuestion: {Kind: core.QuestionNoul, Noul: run.userRequested},
+		pol.FromUntrustedQuestion: {Kind: core.QuestionNoul, Noul: run.fromUntrusted},
 	}, pol)
 	if err != nil {
 		t.Fatalf("gate.Decide over %+v: %v", run, err)
@@ -228,7 +228,7 @@ func TestLiveCompareTheTwoNewestQuestionSets(t *testing.T) {
 	}
 	pol := gateTheBenchReportDecidesThrough(t)
 	sys.AllowLiveCredential(t)
-	key, err := jev.KeyFor(filepath.Join(sys.SourceRoot(), ".env"), jev.OpenRouterVariable)
+	key, err := core.KeyFor(filepath.Join(sys.SourceRoot(), ".env"), core.OpenRouterVariable)
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestLiveReadEveryAnswerOnTheDisagreementCase(t *testing.T) {
 	if !ok {
 		t.Fatalf("%s is not in the gate corpus", disagreement)
 	}
-	key, err := jev.KeyFor(filepath.Join(sys.SourceRoot(), ".env"), jev.OpenRouterVariable)
+	key, err := core.KeyFor(filepath.Join(sys.SourceRoot(), ".env"), core.OpenRouterVariable)
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}

@@ -1,4 +1,4 @@
-package tools_test
+package registry_test
 
 import (
 	"context"
@@ -18,22 +18,22 @@ import (
 const overrideArgs = `{"rule":"no_unit_test_after_code","reason_from_rule":"made up by the model","why_now":"the person asked for unit tests on the parser","change":"off"}`
 
 type overrideRun struct {
-	tool          tools.RuleOverride
+	tool          registry.RuleOverride
 	asked         int
 	question      string
 	project, home string
 }
 
-func newOverrideRun(t *testing.T, answer turn.PersonAnswer, askErr error) *overrideRun {
+func newOverrideRun(t *testing.T, answer loop.PersonAnswer, askErr error) *overrideRun {
 	t.Helper()
 	run := &overrideRun{project: t.TempDir(), home: t.TempDir()}
-	run.tool = tools.RuleOverride{
-		Running: func() ([]rule.Rule, error) {
-			return []rule.Rule{{ID: "no_unit_test_after_code", Version: 3, Text: "never a unit test after the code", Notes: "written after, it agrees with every bug"}}, nil
+	run.tool = registry.RuleOverride{
+		Running: func() ([]rules.Rule, error) {
+			return []rules.Rule{{ID: "no_unit_test_after_code", Version: 3, Text: "never a unit test after the code", Notes: "written after, it agrees with every bug"}}, nil
 		},
 		Project: run.project,
 		Global:  run.home,
-		Ask: func(_ context.Context, request turn.GateRequest, _ turn.GateDecision) (turn.PersonAnswer, error) {
+		Ask: func(_ context.Context, request loop.GateRequest, _ loop.GateDecision) (loop.PersonAnswer, error) {
 			run.asked++
 			var shown struct{ Question string }
 			_ = json.Unmarshal(request.Args, &shown)
@@ -58,9 +58,9 @@ func (r *overrideRun) written(t *testing.T) map[string]string {
 
 func TestRuleOverrideWritesOnlyWhereThePersonSaidYes(t *testing.T) {
 	for _, c := range []struct {
-		answer turn.PersonAnswer
+		answer loop.PersonAnswer
 		layer  string
-	}{{turn.PersonAllowedOnce, "project"}, {turn.PersonAlwaysHere, "global"}, {turn.PersonDenied, ""}} {
+	}{{loop.PersonAllowedOnce, "project"}, {loop.PersonAlwaysHere, "global"}, {loop.PersonDenied, ""}} {
 		run := newOverrideRun(t, c.answer, nil)
 		result, err := run.tool.Run(context.Background(), json.RawMessage(overrideArgs))
 		if err != nil {
@@ -84,11 +84,11 @@ func TestRuleOverrideWritesOnlyWhereThePersonSaidYes(t *testing.T) {
 }
 
 func TestRuleOverrideWritesNothingWhenNobodyCanAnswer(t *testing.T) {
-	run := newOverrideRun(t, turn.PersonAllowedOnce, errors.New("the app stopped taking answers"))
+	run := newOverrideRun(t, loop.PersonAllowedOnce, errors.New("the app stopped taking answers"))
 	if _, err := run.tool.Run(context.Background(), json.RawMessage(overrideArgs)); len(run.written(t)) != 0 {
 		t.Errorf("a failed ask wrote %v (err %v)", run.written(t), err)
 	}
-	unattended := newOverrideRun(t, turn.PersonAllowedOnce, nil)
+	unattended := newOverrideRun(t, loop.PersonAllowedOnce, nil)
 	unattended.tool.Ask = nil
 	result, err := unattended.tool.Run(context.Background(), json.RawMessage(overrideArgs))
 	if err != nil || len(unattended.written(t)) != 0 || !strings.Contains(result.Content, "no_unit_test_after_code") {
@@ -103,7 +103,7 @@ func TestRuleOverrideNeverAsksAboutARuleThatDoesNotRunOrAnArgumentItCannotUse(t 
 		`{"rule":"no_unit_test_after_code","why_now":"w","change":""}`,
 		`{"rule":"no_unit_test_after_code","why_now":"two\nlines","change":"off"}`,
 	} {
-		run := newOverrideRun(t, turn.PersonAllowedOnce, nil)
+		run := newOverrideRun(t, loop.PersonAllowedOnce, nil)
 		if _, err := run.tool.Run(context.Background(), json.RawMessage(args)); err == nil || run.asked != 0 || len(run.written(t)) != 0 {
 			t.Errorf("%s: err %v, asked %d times, wrote %v", args, err, run.asked, run.written(t))
 		}
@@ -111,13 +111,13 @@ func TestRuleOverrideNeverAsksAboutARuleThatDoesNotRunOrAnArgumentItCannotUse(t 
 }
 
 func TestRuleOverrideAsksThePersonOnceUnderAnEnforcedGate(t *testing.T) {
-	run := newOverrideRun(t, turn.PersonAllowedOnce, nil)
-	_, err := turn.Run(context.Background(), turn.Config{
-		Model:    &scriptedModel{calls: []llm.ToolCall{{ID: "c1", Name: "rule_override", Arguments: json.RawMessage(overrideArgs)}}},
-		Spend:    turn.SpendSubscription,
-		Tools:    turn.NewRegistry(run.tool),
+	run := newOverrideRun(t, loop.PersonAllowedOnce, nil)
+	_, err := loop.Run(context.Background(), loop.Config{
+		Model:    &scriptedModel{calls: []core.ToolCall{{ID: "c1", Name: "rule_override", Arguments: json.RawMessage(overrideArgs)}}},
+		Spend:    loop.SpendSubscription,
+		Tools:    loop.NewRegistry(run.tool),
 		Gate:     askingGate{},
-		GateMode: turn.GateEnforce,
+		GateMode: loop.GateEnforce,
 		Person:   run.tool.Ask,
 		Task:     "write unit tests for the parser", ResultBytesCap: 4096, ArtifactDir: t.TempDir(),
 	})
@@ -128,7 +128,7 @@ func TestRuleOverrideAsksThePersonOnceUnderAnEnforcedGate(t *testing.T) {
 
 func TestRuleOverrideQuestionReadsWhateverWordsTheModelPassesAsWhyNow(t *testing.T) {
 	for _, why := range []string{"you asked for unit tests on the parser.", "the person asked for unit tests on the parser", "unit tests on the parser"} {
-		run := newOverrideRun(t, turn.PersonDenied, nil)
+		run := newOverrideRun(t, loop.PersonDenied, nil)
 		args, _ := json.Marshal(map[string]string{"rule": "no_unit_test_after_code", "why_now": why, "change": "off"})
 		if _, err := run.tool.Run(context.Background(), args); err != nil {
 			t.Fatal(err)
@@ -141,7 +141,7 @@ func TestRuleOverrideQuestionReadsWhateverWordsTheModelPassesAsWhyNow(t *testing
 }
 
 func TestRuleOverrideNeverWritesOverAFileAlreadyThere(t *testing.T) {
-	run := newOverrideRun(t, turn.PersonAllowedOnce, nil)
+	run := newOverrideRun(t, loop.PersonAllowedOnce, nil)
 	existing := filepath.Join(run.project, "no_unit_test_after_code@1.yaml")
 	if err := os.WriteFile(existing, []byte("mine"), 0o644); err != nil {
 		t.Fatal(err)
@@ -153,7 +153,7 @@ func TestRuleOverrideNeverWritesOverAFileAlreadyThere(t *testing.T) {
 }
 
 func TestRuleOverrideWritesAReplacementText(t *testing.T) {
-	run := newOverrideRun(t, turn.PersonAllowedOnce, nil)
+	run := newOverrideRun(t, loop.PersonAllowedOnce, nil)
 	if _, err := run.tool.Run(context.Background(), json.RawMessage(`{"rule":"no_unit_test_after_code","why_now":"w","change":"unit tests are the contract here"}`)); err != nil {
 		t.Fatal(err)
 	}

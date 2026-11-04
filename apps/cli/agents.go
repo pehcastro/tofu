@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/render"
@@ -49,18 +49,18 @@ func agentsVerb(args []string, out, errOut io.Writer) int {
 		func(page cli.Page) []string { return agentsPage(page, found) })
 }
 
-func discoverAgents() (subagent.Found, error) {
+func discoverAgents() (subagents.Found, error) {
 	dir, err := os.Getwd()
 	if err != nil {
-		return subagent.Found{}, err
+		return subagents.Found{}, err
 	}
 	return agentsIn(dir)
 }
 
-func agentsIn(dir string) (subagent.Found, error) {
-	named, _, err := assembleRunTools(dir, toolSetFull, nil, nil, &turn.BashTool{})
+func agentsIn(dir string) (subagents.Found, error) {
+	named, _, err := assembleRunTools(dir, toolSetFull, nil, nil, &loop.BashTool{})
 	if err != nil {
-		return subagent.Found{}, err
+		return subagents.Found{}, err
 	}
 	return scanSubAgents(dir, named), nil
 }
@@ -75,17 +75,17 @@ func agentSource(origin string) string {
 	return "project"
 }
 
-func agentsPage(page cli.Page, found subagent.Found) []string {
+func agentsPage(page cli.Page, found subagents.Found) []string {
 	rows := make([]cli.Row, len(found.Definitions))
 	refused := 0
 	for i, definition := range found.Definitions {
 		rows[i] = cli.Row{Cells: []string{definition.Name, string(definition.Runs), agentSource(definition.Origin)}, Detail: definition.Description}
 		switch definition.Runs {
-		case subagent.RunsModel:
+		case subagents.RunsModel:
 			rows[i].Mark, rows[i].Cells[1] = cli.Active, definition.Model
-		case subagent.RunsInherit, subagent.RunsDisabled:
+		case subagents.RunsInherit, subagents.RunsDisabled:
 			rows[i].Mark = cli.Idle
-		case subagent.RunsRefused:
+		case subagents.RunsRefused:
 			rows[i].Mark = cli.Fail
 			refused++
 		default:
@@ -131,13 +131,13 @@ func agentsPage(page cli.Page, found subagent.Found) []string {
 	return lines
 }
 
-func agentFacts(definition subagent.Definition) []cli.Fact {
+func agentFacts(definition subagents.Definition) []cli.Fact {
 	facts := []cli.Fact{{Label: "tools", Text: strings.Join(definition.Tools, ", ")}}
 	if definition.From != "file" {
 		facts = append(facts, cli.Fact{Label: "from", Text: definition.From})
 	}
 	for _, reference := range definition.References {
-		facts = append(facts, cli.Fact{Label: "reference", Text: reference.Name + cli.Gap + widget.Size(len(reference.Text))})
+		facts = append(facts, cli.Fact{Label: "reference", Text: reference.Name + cli.Gap + render.Size(len(reference.Text))})
 	}
 	facts = append(facts, cli.Fact{Label: "cut", Text: strings.Join(definition.Cut, ", ")}, cli.Fact{Label: "ignores", Text: strings.Join(definition.IgnoredTools, ", ")})
 	for _, reason := range definition.Refused {

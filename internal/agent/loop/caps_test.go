@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -13,13 +13,13 @@ import (
 	"tofu/internal/tools/contract"
 )
 
-func readCall(index int) llm.Decision {
-	return toolCallDecision(llm.ToolCall{ID: "call-" + strconv.Itoa(index), Name: "read", Arguments: json.RawMessage(`{"path":"` + strconv.Itoa(index) + `.txt"}`)})
+func readCall(index int) core.Decision {
+	return toolCallDecision(core.ToolCall{ID: "call-" + strconv.Itoa(index), Name: "read", Arguments: json.RawMessage(`{"path":"` + strconv.Itoa(index) + `.txt"}`)})
 }
 
-func lastUserText(request llm.Request) string {
+func lastUserText(request core.Request) string {
 	for i := len(request.Messages) - 1; i >= 0; i-- {
-		if request.Messages[i].Role == llm.RoleUser {
+		if request.Messages[i].Role == core.RoleUser {
 			return request.Messages[i].Content
 		}
 	}
@@ -27,12 +27,12 @@ func lastUserText(request llm.Request) string {
 }
 
 func TestATurnCappedAtFiveStepsIsWarnedOnItsFourthRequestAndAnswersOnItsFifth(t *testing.T) {
-	for _, last := range []llm.Decision{
+	for _, last := range []core.Decision{
 		claimDecision("read four of five; the fifth is left"),
-		{Build: "m1", Outcome: llm.OutcomeToolCalls, Content: "read four of five; the fifth is left", ToolCalls: []llm.ToolCall{{ID: "call-5", Name: "read", Arguments: json.RawMessage(`{"path":"5.txt"}`)}}},
+		{Build: "m1", Outcome: core.OutcomeToolCalls, Content: "read four of five; the fifth is left", ToolCalls: []core.ToolCall{{ID: "call-5", Name: "read", Arguments: json.RawMessage(`{"path":"5.txt"}`)}}},
 	} {
 		read := &stubTool{name: "read", result: contract.Result{Content: "a note"}, varying: true}
-		model := &stubModel{decisions: []llm.Decision{readCall(1), readCall(2), readCall(3), readCall(4), last}}
+		model := &stubModel{decisions: []core.Decision{readCall(1), readCall(2), readCall(3), readCall(4), last}}
 		row, err := Run(context.Background(), Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(read), Task: "read the five notes",
 			Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096, ArtifactDir: t.TempDir()})
 		if err != nil {
@@ -67,8 +67,8 @@ type sleepingTool time.Duration
 
 func (sleepingTool) Name() string { return "bash" }
 
-func (sleepingTool) Definition() llm.Tool {
-	return llm.Tool{Name: "bash", Parameters: map[string]any{"type": "object"}}
+func (sleepingTool) Definition() core.Tool {
+	return core.Tool{Name: "bash", Parameters: map[string]any{"type": "object"}}
 }
 
 func (s sleepingTool) Run(context.Context, json.RawMessage) (contract.Result, error) {
@@ -77,13 +77,13 @@ func (s sleepingTool) Run(context.Context, json.RawMessage) (contract.Result, er
 }
 
 func TestASubAgentPastItsWallClockFinishesItsStepAndAnswersOnceRetired(t *testing.T) {
-	model := &stubModel{decisions: []llm.Decision{
-		toolCallDecision(llm.ToolCall{ID: "call-sleep", Name: "bash", Arguments: json.RawMessage(`{"command":"sleep 3"}`)}),
+	model := &stubModel{decisions: []core.Decision{
+		toolCallDecision(core.ToolCall{ID: "call-sleep", Name: "bash", Arguments: json.RawMessage(`{"command":"sleep 3"}`)}),
 		claimDecision("slept once; the build is not started"),
 	}}
 	config := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(sleepingTool(3 * time.Second)), ResultBytesCap: 4096,
 		ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }}
-	spawn := NewSpawnTool("turn-orchestrator", config, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-orchestrator", config, &subagents.Roster{})
 	spawn.Limits = func() SubAgentLimits { return SubAgentLimits{Running: 1, Depth: 1, WallClock: 2 * time.Second} }
 	if _, err := spawn.Run(context.Background(), json.RawMessage(`{"task":"sleep, then build","owns":["build/**"]}`)); err != nil {
 		t.Fatal(err)
@@ -96,7 +96,7 @@ func TestASubAgentPastItsWallClockFinishesItsStepAndAnswersOnceRetired(t *testin
 	if !strings.Contains(report, OutcomeRetiredWallClockCap.String()) || !strings.Contains(report, "\n> slept once; the build is not started") {
 		t.Errorf("the report does not carry the wall clock outcome and the last answer")
 	}
-	if tool := model.requests[1].Messages[len(model.requests[1].Messages)-2]; tool.Role != llm.RoleTool || WithoutToolRef(tool.Content) != "slept" {
+	if tool := model.requests[1].Messages[len(model.requests[1].Messages)-2]; tool.Role != core.RoleTool || WithoutToolRef(tool.Content) != "slept" {
 		t.Errorf("the step running when the clock passed did not finish: %+v", tool)
 	}
 }

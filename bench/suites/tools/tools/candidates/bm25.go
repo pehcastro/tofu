@@ -56,7 +56,7 @@ func Bm25Alone(files []shortlist.File, q toolscorpus.Asked) tools.Outcome {
 	return tools.Outcome{Version: "bm25 alone", Hit: hit, Bytes: bytes, Calls: 0, Elapsed: elapsed}
 }
 
-func Bm25ThenJevReranks(ctx context.Context, client *jev.Client, files []shortlist.File, q toolscorpus.Asked) tools.Outcome {
+func Bm25ThenJevReranks(ctx context.Context, client *core.Client, files []shortlist.File, q toolscorpus.Asked) tools.Outcome {
 	started := time.Now()
 	ranked := shortlist.BM25Rank(q.Text, files)
 	short := shortlist.Shortlist(files, ranked, shortlist.ShortlistSize)

@@ -1,4 +1,4 @@
-package classifier
+package classifiers
 
 import (
 	"context"
@@ -28,51 +28,51 @@ type provider struct {
 	key      string
 	build    func(string, providers.Config) (*providers.Wire, error)
 	alias    func(string) (string, error)
-	checkPin func(context.Context, string, providers.Config, *transport.Client) (jev.PinCheck, jev.Pin)
-	serves   func(jev.Pin, string) bool
+	checkPin func(context.Context, string, providers.Config, *transport.Client) (core.PinCheck, core.Pin)
+	serves   func(core.Pin, string) bool
 }
 
-func providerOf(of models.Provider) (provider, bool) {
+func providerOf(of catalog.Provider) (provider, bool) {
 	switch of {
-	case models.TypeSafe:
+	case catalog.TypeSafe:
 		return provider{key: sys.TypeSafeKeyName, build: typesafe.New, alias: typesafe.Model, serves: typesafe.Serves,
-			checkPin: func(ctx context.Context, bound string, config providers.Config, _ *transport.Client) (jev.PinCheck, jev.Pin) {
+			checkPin: func(ctx context.Context, bound string, config providers.Config, _ *transport.Client) (core.PinCheck, core.Pin) {
 				return typesafe.CheckPin(ctx, bound, config)
 			}}, true
-	case models.OpenRouter:
+	case catalog.OpenRouter:
 		return provider{key: sys.OpenRouterClassifierKeyName, build: openrouter.New, alias: openrouter.Model, serves: openrouter.Serves, checkPin: openrouter.CheckPin}, true
-	case models.Anthropic, models.OpenAI, models.Meta:
+	case catalog.Anthropic, catalog.OpenAI, catalog.Meta:
 		return provider{}, false
 	}
 	panic("classifier: unknown provider " + string(of))
 }
 
 type Route struct {
-	Model models.Model
+	Model catalog.Model
 	Key   string
 }
 
-func KeyName(of models.Provider) string {
+func KeyName(of catalog.Provider) string {
 	served, _ := providerOf(of)
 	return served.key
 }
 
-func Bound(dir string, keys jev.Keyring) (models.Model, error) {
-	layers, err := models.Layers(shipped.Files(), dir)
+func Bound(dir string, keys core.Keyring) (catalog.Model, error) {
+	layers, err := catalog.Layers(shipped.Files(), dir)
 	if err != nil {
-		return models.Model{}, err
+		return catalog.Model{}, err
 	}
-	loaded, err := models.Load(layers)
-	var broken *models.BrokenLibrary
+	loaded, err := catalog.Load(layers)
+	var broken *catalog.BrokenLibrary
 	if err != nil && !errors.As(err, &broken) {
-		return models.Model{}, err
+		return catalog.Model{}, err
 	}
-	if model, bound := loaded.Bound(models.RoleClassifier); bound {
+	if model, bound := loaded.Bound(catalog.RoleClassifier); bound {
 		return model, nil
 	}
 	var stored []string
 	for _, model := range loaded.Models {
-		if model.Kind != models.KindClassifier {
+		if model.Kind != catalog.KindClassifier {
 			continue
 		}
 		name := KeyName(model.Provider)
@@ -81,17 +81,17 @@ func Bound(dir string, keys jev.Keyring) (models.Model, error) {
 		}
 	}
 	if len(stored) == 0 {
-		return models.Model{}, jev.Unbound(unset)
+		return catalog.Model{}, core.Unbound(unset)
 	}
 	verb := " is"
 	if len(stored) > 1 {
 		verb = " are"
 	}
-	return models.Model{}, jev.Unbound("the gate is off because no classifier is bound, though " + strings.Join(stored, " and ") + verb +
+	return catalog.Model{}, core.Unbound("the gate is off because no classifier is bound, though " + strings.Join(stored, " and ") + verb +
 		" stored: pick the classifier in Models or run tofu models bind classifier provider/model")
 }
 
-func Resolve(dir string, keys jev.Keyring) (Route, error) {
+func Resolve(dir string, keys core.Keyring) (Route, error) {
 	model, err := Bound(dir, keys)
 	if err != nil {
 		return Route{}, err
@@ -105,7 +105,7 @@ func Resolve(dir string, keys jev.Keyring) (Route, error) {
 	return route, err
 }
 
-func Open(dir string, keys jev.Keyring, concurrency int) (*jev.Client, error) {
+func Open(dir string, keys core.Keyring, concurrency int) (*core.Client, error) {
 	route, err := Resolve(dir, keys)
 	if err != nil {
 		return nil, err
@@ -134,7 +134,7 @@ func (r Route) served() (provider, error) {
 	return served, nil
 }
 
-func (r Route) Client(concurrency int) (*jev.Client, error) {
+func (r Route) Client(concurrency int) (*core.Client, error) {
 	served, err := r.served()
 	if err != nil {
 		return nil, err
@@ -143,7 +143,7 @@ func (r Route) Client(concurrency int) (*jev.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return jev.NewClient(jev.Config{Wire: built, Key: served.key})
+	return core.NewClient(core.Config{Wire: built, Key: served.key})
 }
 
 func (r Route) Alias() (string, error) {
@@ -154,15 +154,15 @@ func (r Route) Alias() (string, error) {
 	return served.alias(r.Model.Requested())
 }
 
-func (r Route) CheckPin(ctx context.Context, listing *transport.Client) (jev.PinCheck, jev.Pin) {
+func (r Route) CheckPin(ctx context.Context, listing *transport.Client) (core.PinCheck, core.Pin) {
 	served, err := r.served()
 	if err != nil {
-		return jev.PinCheck{Skipped: "the pin stays", Error: err.Error()}, jev.Pin{}
+		return core.PinCheck{Skipped: "the pin stays", Error: err.Error()}, core.Pin{}
 	}
 	return served.checkPin(ctx, r.Model.Requested(), r.config(1), listing)
 }
 
-func (r Route) Serves(pin jev.Pin, build string) bool {
+func (r Route) Serves(pin core.Pin, build string) bool {
 	served, err := r.served()
 	return err == nil && served.serves(pin, build)
 }

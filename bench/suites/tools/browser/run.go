@@ -31,15 +31,15 @@ type Answer struct {
 }
 
 type Recording struct {
-	Conditions Conditions   `json:"conditions"`
-	Model      string       `json:"model"`
-	Caps       jev.WireCaps `json:"caps"`
-	Answers    []Answer     `json:"answers"`
+	Conditions Conditions    `json:"conditions"`
+	Model      string        `json:"model"`
+	Caps       core.WireCaps `json:"caps"`
+	Answers    []Answer      `json:"answers"`
 }
 
 type Reading struct {
 	Case     Case
-	Got      browser.Action
+	Got      driver.Action
 	Correct  bool
 	Wall     time.Duration
 	Latency  time.Duration
@@ -55,17 +55,17 @@ func (r Reading) Dollars() float64 {
 	return float64(r.Input) * jevDollarsPerMillionInput / 1e6
 }
 
-func Questions() (question.Set, error) {
-	set, _, err := question.Resolve("browser_step@1", []question.Layer{{Name: "library", Origin: "library/questions", FS: libraryquestions.Files()}})
+func Questions() (questions.Set, error) {
+	set, _, err := questions.Resolve("browser_step@1", []questions.Layer{{Name: "library", Origin: "library/questions", FS: libraryquestions.Files()}})
 	return set, err
 }
 
 type recorder struct {
-	jev.Wire
-	raw jev.Raw
+	core.Wire
+	raw core.Raw
 }
 
-func (r *recorder) Post(ctx context.Context, body []byte) (jev.Raw, error) {
+func (r *recorder) Post(ctx context.Context, body []byte) (core.Raw, error) {
 	raw, err := r.Wire.Post(ctx, body)
 	r.raw = raw
 	return raw, err
@@ -73,27 +73,27 @@ func (r *recorder) Post(ctx context.Context, body []byte) (jev.Raw, error) {
 
 type replayer struct {
 	model string
-	caps  jev.WireCaps
-	raw   jev.Raw
+	caps  core.WireCaps
+	raw   core.Raw
 }
 
-func (r replayer) Caps() jev.WireCaps { return r.caps }
+func (r replayer) Caps() core.WireCaps { return r.caps }
 
 func (r replayer) Model() string { return r.model }
 
-func (r replayer) Post(context.Context, []byte) (jev.Raw, error) { return r.raw, nil }
+func (r replayer) Post(context.Context, []byte) (core.Raw, error) { return r.raw, nil }
 
-func choose(ctx context.Context, wire jev.Wire, set question.Set, c Case) (jevloop.Choice, time.Duration, error) {
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+func choose(ctx context.Context, wire core.Wire, set questions.Set, c Case) (loop.Choice, time.Duration, error) {
+	client, err := core.NewClient(core.Config{Wire: wire})
 	if err != nil {
-		return jevloop.Choice{}, 0, err
+		return loop.Choice{}, 0, err
 	}
 	started := time.Now()
-	choice, err := jevloop.Jev{Client: client, Set: set}.Choose(ctx, c.Goal, c.Page, nil)
+	choice, err := loop.Jev{Client: client, Set: set}.Choose(ctx, c.Goal, c.Page, nil)
 	return choice, time.Since(started), err
 }
 
-func Record(ctx context.Context, wire jev.Wire, set question.Set, cases []Case, conditions Conditions) Recording {
+func Record(ctx context.Context, wire core.Wire, set questions.Set, cases []Case, conditions Conditions) Recording {
 	recording := Recording{Conditions: conditions, Model: wire.Model(), Caps: wire.Caps()}
 	for _, c := range cases {
 		tape := &recorder{Wire: wire}
@@ -109,7 +109,7 @@ func Record(ctx context.Context, wire jev.Wire, set question.Set, cases []Case, 
 	return recording
 }
 
-func Replay(set question.Set, cases []Case, recording Recording) ([]Reading, error) {
+func Replay(set questions.Set, cases []Case, recording Recording) ([]Reading, error) {
 	answers := map[string]Answer{}
 	for _, answer := range recording.Answers {
 		answers[answer.ID] = answer
@@ -122,7 +122,7 @@ func Replay(set question.Set, cases []Case, recording Recording) ([]Reading, err
 		}
 		reading := Reading{Case: c, Wall: answer.Wall, Latency: answer.Latency, Attempts: answer.Attempts, Error: answer.Error}
 		if answer.Error == "" {
-			tape := replayer{model: recording.Model, caps: recording.Caps, raw: jev.Raw{Body: answer.Body, Attempts: answer.Attempts, Latency: answer.Latency}}
+			tape := replayer{model: recording.Model, caps: recording.Caps, raw: core.Raw{Body: answer.Body, Attempts: answer.Attempts, Latency: answer.Latency}}
 			choice, _, err := choose(context.Background(), tape, set, c)
 			if err != nil {
 				return nil, fmt.Errorf("%s no longer replays against its recorded answer: %w", c.ID, err)

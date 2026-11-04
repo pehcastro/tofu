@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -95,8 +95,8 @@ func (t *SpawnTool) watch(held *heldSubAgent, check *checkIn) func() {
 	}
 	t.Inbox.attach(held, check)
 	stop, report := make(chan struct{}), sys.Crashes(t.Project)
-	safe.Go(report, "check-in watch", func() {
-		safe.Loop(report, "check-in watch", stop, func() {
+	recover.Go(report, "check-in watch", func() {
+		recover.Loop(report, "check-in watch", stop, func() {
 			ticker := time.NewTicker(every)
 			defer ticker.Stop()
 			for {
@@ -260,7 +260,7 @@ func freeTodo(store boardy.Store, keys []string) []string {
 	for _, ticket := range todo {
 		if slices.ContainsFunc(held, func(other boardy.Front) bool {
 			return ticket.Parent != other.ID && other.Parent != ticket.ID && slices.ContainsFunc(ticket.Owns, func(glob string) bool {
-				return slices.ContainsFunc(other.Owns, func(theirs string) bool { return subagent.Overlap(glob, theirs) })
+				return slices.ContainsFunc(other.Owns, func(theirs string) bool { return subagents.Overlap(glob, theirs) })
 			})
 		}) {
 			continue
@@ -283,7 +283,7 @@ func (w leadWork) asks(opening, review string) string {
 		"and spawn free todo up to the limit in this reply, or say in one line why not.", opening, w.running, w.limit, listed(w.free), review)
 }
 
-func (w leadWork) quietBecause(messages []llm.Message, byThePerson bool, said string) string {
+func (w leadWork) quietBecause(messages []core.Message, byThePerson bool, said string) string {
 	words := strings.FieldsFunc(said, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-' })
 	ids := append(slices.Collect(maps.Keys(w.status)), w.free...)
 	if byThePerson && !slices.ContainsFunc(words, func(word string) bool { return slices.Contains(ids, strings.TrimRight(word, "-")) }) {
@@ -291,11 +291,11 @@ func (w leadWork) quietBecause(messages []llm.Message, byThePerson bool, said st
 	}
 	asked := w.asks(leadEndedOpening, listed(w.review))
 	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Origin.Source != llm.SourceSlots || !strings.HasPrefix(messages[i].Content, leadEndedOpening+" with ") {
+		if messages[i].Origin.Source != core.SourceSlots || !strings.HasPrefix(messages[i].Content, leadEndedOpening+" with ") {
 			continue
 		}
-		if messages[i].Content == asked && slices.ContainsFunc(messages[i+1:], func(reply llm.Message) bool {
-			return reply.Role == llm.RoleAssistant && !llm.BlankText(reply.Content)
+		if messages[i].Content == asked && slices.ContainsFunc(messages[i+1:], func(reply core.Message) bool {
+			return reply.Role == core.RoleAssistant && !core.BlankText(reply.Content)
 		}) {
 			return "the running, free and review sets are as they were at its last ask, and the lead gave its reason then"
 		}

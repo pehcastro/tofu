@@ -68,7 +68,7 @@ func (s *server) branch(p SessionBranchParams) (any, error) {
 
 func (s *server) branchMain(p SessionBranchParams) (any, error) {
 	from := cmp.Or(p.Session, s.focus().host.ID())
-	branched, err := s.handFork(p.Session, HandFork{Kind: turn.ForkBranch, By: s.asker("session.branch"), Message: p.Message})
+	branched, err := s.handFork(p.Session, HandFork{Kind: loop.ForkBranch, By: s.asker("session.branch"), Message: p.Message})
 	if err != nil {
 		return nil, err
 	}
@@ -235,9 +235,9 @@ func (s *server) shellsNow() []ShellNow {
 	}
 	found, _ := s.Shells.List()
 	mask := sys.LoadKeyRedactor().Redact
-	for _, one := range slices.DeleteFunc(found, shell.Shell.OneShot) {
+	for _, one := range slices.DeleteFunc(found, process.Shell.OneShot) {
 		now = append(now, ShellNow{Shell: one.Name, Session: one.Session, Command: mask(one.Command), PID: one.PID, State: ShellState(one.State), StartedAt: one.Started, ExitCode: one.ExitCode, EndedAt: one.Ended,
-			Kept: ShellKept(one.Kept), Dir: one.Dir, Port: one.Port, Ready: ShellReady(one.Ready), LeftOver: one.LeftOver(), Ref: tools.QuoteRef(one.Call), ShellHolding: holdingOf(one)})
+			Kept: ShellKept(one.Kept), Dir: one.Dir, Port: one.Port, Ready: ShellReady(one.Ready), LeftOver: one.LeftOver(), Ref: registry.QuoteRef(one.Call), ShellHolding: holdingOf(one)})
 	}
 	return now
 }
@@ -303,7 +303,7 @@ func (s *server) chosen(pick Pick, asked ModelPick) (Pick, error) {
 		asked.Wire = wire
 	}
 	if asked.Effort != "" {
-		if _, err := llm.ParseEffort(string(asked.Effort)); err != nil {
+		if _, err := core.ParseEffort(string(asked.Effort)); err != nil {
 			return pick, &Refusal{Code: CodeBadParams, Message: err.Error()}
 		}
 	}

@@ -38,7 +38,7 @@ func rowByID(t *testing.T, id string) ledger.Row {
 
 func checkCommand(t *testing.T, rulePath, command string) ledger.Row {
 	t.Helper()
-	client, err := jev.NewClient(jev.Config{Wire: &stubWire{reply: askReply}})
+	client, err := core.NewClient(core.Config{Wire: &stubWire{reply: askReply}})
 	if err != nil {
 		t.Fatalf("client: %v", err)
 	}
@@ -84,11 +84,11 @@ func gateAndCheckRows(t *testing.T) (gated, checked ledger.Row) {
 	checked = rowByID(t, checkCommand(t, rulePath, forcePush).ID)
 	time.Sleep(2 * time.Millisecond)
 
-	gate, err := toolGateOn(dir, logHere(t), jev.ReadKeyring())
+	gate, err := toolGateOn(dir, logHere(t), core.ReadKeyring())
 	if err != nil {
 		t.Fatalf("toolGateOn:%v", err)
 	}
-	decision, err := gate.Decide(t.Context(), turn.GateRequest{
+	decision, err := gate.Decide(t.Context(), loop.GateRequest{
 		TurnID: "turn-precedent",
 		Task:   "push the branch the owner asked for",
 		Tool:   "bash",
@@ -130,10 +130,10 @@ func TestACheckedDecisionIsAPrecedentForTheSameCommandJudgedLater(t *testing.T) 
 
 func TestAReplayedRowCarriesTheFingerprintOfTheRowItReplays(t *testing.T) {
 	t.Chdir(t.TempDir())
-	set := wiring.Battery{SetName: "stub_battery", QuestionsVersion: 1, Kinds: map[string]question.Kind{"approval": question.KindNoul}}
-	req := jev.Request{
+	set := wiring.Battery{SetName: "stub_battery", QuestionsVersion: 1, Kinds: map[string]questions.Kind{"approval": questions.KindNoul}}
+	req := core.Request{
 		State:     map[string]string{"command": forcePush},
-		Questions: []jev.Question{{ID: "approval", Kind: jev.QuestionNoul, Instructions: "?", True: "t", False: "f"}},
+		Questions: []core.Question{{ID: "approval", Kind: core.QuestionNoul, Instructions: "?", True: "t", False: "f"}},
 	}
 	answers := []ledger.Answer{{Question: "approval", Wording: 1, Kind: ledger.AnswerNoul, Noul: 0.11}}
 
@@ -156,7 +156,7 @@ func TestAReplayedRowCarriesTheFingerprintOfTheRowItReplays(t *testing.T) {
 	}
 
 	wire := &stubWire{reply: askReply}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+	client, err := core.NewClient(core.Config{Wire: wire})
 	if err != nil {
 		t.Fatalf("client: %v", err)
 	}
@@ -191,7 +191,7 @@ func TestAReplayedRowCarriesTheFingerprintOfTheRowItReplays(t *testing.T) {
 
 func TestARowAtAPointThatDefinesNoFingerprintWritesAndReadsBack(t *testing.T) {
 	t.Chdir(t.TempDir())
-	set := wiring.Battery{SetName: "stop_check", QuestionsVersion: 1, Kinds: map[string]question.Kind{"work_remains": question.KindNoul}}
+	set := wiring.Battery{SetName: "stop_check", QuestionsVersion: 1, Kinds: map[string]questions.Kind{"work_remains": questions.KindNoul}}
 	written, err := wiring.AppendRow(map[string]string{"task": "write the note"}, set, wiring.RowInput{
 		TurnID:       "turn-no-fingerprint",
 		StateBuilder: "stop_check@1",
@@ -234,13 +234,13 @@ type stubWire struct {
 	reply string
 }
 
-func (s *stubWire) Caps() jev.WireCaps {
-	return jev.WireCaps{MaxRequestBytes: 90000, MaxChoiceOptions: 255, MaxScoreLevels: 10, ReturnsConfidence: true}
+func (s *stubWire) Caps() core.WireCaps {
+	return core.WireCaps{MaxRequestBytes: 90000, MaxChoiceOptions: 255, MaxScoreLevels: 10, ReturnsConfidence: true}
 }
 
 func (s *stubWire) Model() string { return stubModel }
 
-func (s *stubWire) Post(_ context.Context, _ []byte) (jev.Raw, error) {
+func (s *stubWire) Post(_ context.Context, _ []byte) (core.Raw, error) {
 	s.calls++
-	return jev.Raw{Body: []byte(s.reply), RequestID: "req-stub", Attempts: 1}, nil
+	return core.Raw{Body: []byte(s.reply), RequestID: "req-stub", Attempts: 1}, nil
 }

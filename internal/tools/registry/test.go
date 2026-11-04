@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -12,18 +12,18 @@ import (
 
 type Test struct {
 	root    contract.Root
-	runners *turn.TestRunners
+	runners *loop.TestRunners
 }
 
-func NewTest(dir string, runners *turn.TestRunners) (Test, error) {
+func NewTest(dir string, runners *loop.TestRunners) (Test, error) {
 	root, err := contract.NewRoot(dir)
 	return Test{root: root, runners: runners}, err
 }
 
 func (Test) Name() string { return "test" }
 
-func (Test) Definition() llm.Tool {
-	return llm.Tool{
+func (Test) Definition() core.Tool {
+	return core.Tool{
 		Name: "test",
 		Description: "runs the vitest tests for one file and returns each test file's pass and fail counts and its failures. " +
 			"path is a test file, or a source file whose tests then run: the files beside it named <stem>.test.* or <stem>.spec.*, and none if it has none. " +

@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"fmt"
@@ -29,7 +29,7 @@ const ContractAddendum = "if you were spawned as a sub-agent, your last message 
 	"an empty output is still a pass when the command ran and printed nothing, such as a formatter finding nothing to complain about. " +
 	"the shape is at library/general/references/contract.md."
 
-func SubAgentList(defined []subagent.Definition) string {
+func SubAgentList(defined []subagents.Definition) string {
 	enabled := enabledSubAgents(defined)
 	if len(enabled) == 0 {
 		return ""
@@ -43,11 +43,11 @@ func SubAgentList(defined []subagent.Definition) string {
 
 const LeadAloneMostNamedFiles = 5
 
-func LeadWorksAlone(dir, task string, defined []subagent.Definition) bool {
+func LeadWorksAlone(dir, task string, defined []subagents.Definition) bool {
 	words := strings.FieldsFunc(strings.ToLower(task), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-' && r != '_' })
 	asksForSubAgents := slices.ContainsFunc(words, func(word string) bool {
 		return strings.HasPrefix(word, "sub-agent") || strings.HasPrefix(word, "subagent") || strings.HasPrefix(word, "spawn") ||
-			slices.ContainsFunc(defined, func(definition subagent.Definition) bool { return strings.EqualFold(definition.Name, word) })
+			slices.ContainsFunc(defined, func(definition subagents.Definition) bool { return strings.EqualFold(definition.Name, word) })
 	})
 	if asksForSubAgents {
 		return false
@@ -145,7 +145,7 @@ func ProjectInstructionsInOrder(dir, home string, capBytes int, choice string) (
 	if home != "" {
 		files = append(files, instructionFile{"your ~/.tofu/AGENTS.md", readInstructions(filepath.Join(sys.StateDir(home), "AGENTS.md"))})
 	}
-	folders := skill.ProjectFolders(dir, home)
+	folders := skills.ProjectFolders(dir, home)
 	chosenIn := map[string]string{}
 	for _, name := range settings.InstructionFiles(choice) {
 		at := slices.IndexFunc(folders, func(folder string) bool { return isFile(filepath.Join(folder, name)) })

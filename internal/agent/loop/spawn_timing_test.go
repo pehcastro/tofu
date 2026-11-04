@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -20,9 +20,9 @@ func TestASpawnWritesHowLongEachStepBeforeItRanTookIntoTheLeadsTrace(t *testing.
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = log.Close() })
-	base := Config{Model: &stubModel{decisions: []llm.Decision{claimDecision("done")}}, Spend: SpendAPIKey, Tools: NewRegistry(),
+	base := Config{Model: &stubModel{decisions: []core.Decision{claimDecision("done")}}, Spend: SpendAPIKey, Tools: NewRegistry(),
 		Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096, ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" }}
-	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	ctx := context.WithValue(context.Background(), spawnSiteKey{}, spawnSite{log: log, turn: "turn-lead", agent: "turn-lead", call: "call-spawn"})
 	if _, err := spawn.Run(ctx, json.RawMessage(`{"task":"say done","owns":["piece/**"]}`)); err != nil {
 		t.Fatal(err)

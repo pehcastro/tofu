@@ -278,25 +278,25 @@ func (DoctorVerdict) enum() []string {
 }
 
 type DoctorReport struct {
-	Version     string               `json:"version"`
-	Verdict     DoctorVerdict        `json:"verdict"`
-	Blockers    []DoctorBlocker      `json:"blockers,omitempty"`
-	Credentials []CredentialReport   `json:"credentials"`
-	Store       string               `json:"credential_store"`
-	Gate        DoctorGate           `json:"gate"`
-	Library     DoctorLibrary        `json:"library"`
-	Rules       []DoctorRule         `json:"rules"`
-	Overrides   []OverrideListing    `json:"overrides,omitempty"`
-	Unreadable  string               `json:"overrides_unreadable,omitempty"`
-	Calibration string               `json:"calibration"`
-	Ledger      string               `json:"ledger"`
-	SpendLimit  string               `json:"spend_limit"`
-	Wires       []DoctorWire         `json:"wires"`
-	Proxy       DoctorProxy          `json:"proxy"`
-	Browser     []browser.NativeHost `json:"browser"`
-	Root        string               `json:"root"`
-	Go          string               `json:"go"`
-	OS          string               `json:"os"`
+	Version     string              `json:"version"`
+	Verdict     DoctorVerdict       `json:"verdict"`
+	Blockers    []DoctorBlocker     `json:"blockers,omitempty"`
+	Credentials []CredentialReport  `json:"credentials"`
+	Store       string              `json:"credential_store"`
+	Gate        DoctorGate          `json:"gate"`
+	Library     DoctorLibrary       `json:"library"`
+	Rules       []DoctorRule        `json:"rules"`
+	Overrides   []OverrideListing   `json:"overrides,omitempty"`
+	Unreadable  string              `json:"overrides_unreadable,omitempty"`
+	Calibration string              `json:"calibration"`
+	Ledger      string              `json:"ledger"`
+	SpendLimit  string              `json:"spend_limit"`
+	Wires       []DoctorWire        `json:"wires"`
+	Proxy       DoctorProxy         `json:"proxy"`
+	Browser     []driver.NativeHost `json:"browser"`
+	Root        string              `json:"root"`
+	Go          string              `json:"go"`
+	OS          string              `json:"os"`
 }
 
 type DoctorBlocker struct {

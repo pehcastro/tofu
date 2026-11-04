@@ -11,9 +11,9 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/host"
-	"tofu/internal/store/memory/entries"
+	memory "tofu/internal/store/memory/entries"
 )
 
 const Usage = `tofu memory [list] [--json], tofu memory add [--scope user-local|project-local|project-global|user-global] [--kind person|project|reference] [--said "<your words>"] [--replace <id>] "<statement>", tofu memory remove [--scope <scope>] <id>, each with [--dir project]`

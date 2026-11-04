@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -18,18 +18,18 @@ func TestASubAgentsBackgroundShellIsOneTheLeadReachesByTheNameInItsReport(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	registry := shell.OpenAt(t.TempDir())
+	registry := process.OpenAt(t.TempDir())
 	ctx := WithShellRegistry(context.Background(), registry)
 	if _, err := bash.Run(ctx, json.RawMessage(`{"command":"echo the lead ran this first"}`)); err != nil {
 		t.Fatal(err)
 	}
-	model := &stubModel{decisions: []llm.Decision{
-		toolCallDecision(llm.ToolCall{ID: "b", Name: "bash", Arguments: json.RawMessage(`{"command":"sleep 60","background":true}`)}),
+	model := &stubModel{decisions: []core.Decision{
+		toolCallDecision(core.ToolCall{ID: "b", Name: "bash", Arguments: json.RawMessage(`{"command":"sleep 60","background":true}`)}),
 		claimDecision("started the sleep in the background"),
 	}}
 	config := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(bash), Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096,
 		ArtifactDir: t.TempDir(), NewID: func() string { return "turn-lead" }}
-	spawn := NewSpawnTool("turn-lead", config, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-lead", config, &subagents.Roster{})
 	if _, err := spawn.Run(ctx, json.RawMessage(`{"task":"start a sleep in the background","owns":["piece/**"]}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestASubAgentsBackgroundShellIsOneTheLeadReachesByTheNameInItsReport(t *tes
 		t.Errorf("the report does not say %q:\n%s", stopped, report)
 	}
 	held, err := registry.Read(name[1])
-	if err != nil || held.State == shell.Running || held.Owner != "sub-1" || held.Kept != shell.KeptBackground {
+	if err != nil || held.State == process.Running || held.Owner != "sub-1" || held.Kept != process.KeptBackground {
 		t.Fatalf("the lead reads %s as %+v (%v), want stopped once sub-1 ended, owned by sub-1 and kept as background", name[1], held, err)
 	}
 }

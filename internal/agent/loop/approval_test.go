@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -46,7 +46,7 @@ func (w writeRun) do(t *testing.T) (ToolCallRow, string, bool) {
 	if ctx == nil {
 		ctx = t.Context()
 	}
-	model := &leadAndSubAgent{lead: []llm.Decision{called("write", map[string]any{"path": w.path, "content": "a note"}), claimDecision("done")}}
+	model := &leadAndSubAgent{lead: []core.Decision{called("write", map[string]any{"path": w.path, "content": "a note"}), claimDecision("done")}}
 	row, err := Run(ctx, Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write), Caps: Caps{MaxSteps: 4}, ResultBytesCap: 4096, Project: root,
 		ArtifactDir: filepath.Join(root, "artifacts"), Gate: w.gate, GateMode: w.mode, Person: w.person, Task: "write a note"})
 	if err != nil {
@@ -198,7 +198,7 @@ func TestALeadStopWithdrawsThePersonsWaitAndTheCallIsRefused(t *testing.T) {
 func TestASubAgentsWaitForTheLeadPausesWhileTheLeadWaitsOnThePerson(t *testing.T) {
 	const wait = 150 * time.Millisecond
 	inbox := NewInbox()
-	held := &heldSubAgent{agent: subagent.SubAgent{ID: "sub-1"}}
+	held := &heldSubAgent{agent: subagents.SubAgent{ID: "sub-1"}}
 	inbox.held["sub-1"] = held
 	release := make(chan struct{})
 	personHolds := inbox.LeadAsks(func(context.Context, GateRequest, GateDecision) (PersonAnswer, error) {

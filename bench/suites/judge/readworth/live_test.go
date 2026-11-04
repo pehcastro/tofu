@@ -20,13 +20,13 @@ import (
 
 var repoRoot = sys.SourceRoot()
 
-func liveClient(t *testing.T) (*jev.Client, question.Set) {
+func liveClient(t *testing.T) (*core.Client, questions.Set) {
 	t.Helper()
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
 	sys.AllowLiveCredential(t)
-	key, err := jev.TypeSafeKey(filepath.Join(repoRoot, ".env"))
+	key, err := core.TypeSafeKey(filepath.Join(repoRoot, ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
@@ -34,12 +34,12 @@ func liveClient(t *testing.T) (*jev.Client, question.Set) {
 	if err != nil {
 		t.Fatalf("NewWire: %v", err)
 	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+	client, err := core.NewClient(core.Config{Wire: wire})
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
-	layers := []question.Layer{{Name: "library", Origin: "library/questions", FS: libraryquestions.Files()}}
-	set, _, err := question.Resolve(Point, layers)
+	layers := []questions.Layer{{Name: "library", Origin: "library/questions", FS: libraryquestions.Files()}}
+	set, _, err := questions.Resolve(Point, layers)
 	if err != nil {
 		t.Fatalf("resolve %s: %v", Point, err)
 	}

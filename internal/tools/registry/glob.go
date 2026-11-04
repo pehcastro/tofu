@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"cmp"
@@ -40,8 +40,8 @@ func (g Glob) Name() string { return "glob" }
 const ignoredWalkDescription = "it skips node_modules, .git, .tofu and every path a .gitignore excludes, but always lists AGENTS.md and CLAUDE.md; " +
 	"include_ignored true walks everything"
 
-func (g Glob) Definition() llm.Tool {
-	return llm.Tool{
+func (g Glob) Definition() core.Tool {
+	return core.Tool{
 		Name: "glob",
 		Description: "lists the files under the turn's working directory whose path matches a shell pattern. " +
 			"the pattern is matched against the whole path relative to the working directory and against the file name alone, " +
@@ -418,9 +418,9 @@ func (w *walk) readAhead(dir string) {
 	listed := make(chan dirListing, 1)
 	w.ahead[dir] = listed
 	report := sys.Crashes(string(w.root))
-	safe.Go(report, "glob read ahead", func() {
+	recover.Go(report, "glob read ahead", func() {
 		var read dirListing
-		read.err = safe.Call(report, "glob read ahead", func() (err error) {
+		read.err = recover.Call(report, "glob read ahead", func() (err error) {
 			w.readers <- struct{}{}
 			defer func() { <-w.readers }()
 			read.entries, err = os.ReadDir(dir)

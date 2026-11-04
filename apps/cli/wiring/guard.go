@@ -9,23 +9,23 @@ import (
 )
 
 type windowGuard struct {
-	inner  turn.Model
+	inner  loop.Model
 	budget recall.Budget
 	cfg    recall.Config
 }
 
-func (g windowGuard) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (g windowGuard) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	tokens := 0
 	for _, message := range request.Messages {
 		tokens += g.cfg.MessageTokens(message.Content)
 	}
 	if err := g.budget.RefuseOverWindow(tokens); err != nil {
-		return llm.Decision{}, err
+		return core.Decision{}, err
 	}
 	return g.inner.Ask(ctx, request)
 }
 
-func Guarded(model turn.Model, budget recall.Budget) (turn.Model, error) {
+func Guarded(model loop.Model, budget recall.Budget) (loop.Model, error) {
 	cfg, err := recall.LoadConfig()
 	if err != nil {
 		return nil, err

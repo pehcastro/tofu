@@ -106,10 +106,10 @@ func counted(outlived []traceOutlived, call traceOutlived) []traceOutlived {
 	return outlived
 }
 
-func outlivedRows(outlived []traceOutlived) []cli.Row {
-	rows := make([]cli.Row, len(outlived))
+func outlivedRows(outlived []traceOutlived) []page.Row {
+	rows := make([]page.Row, len(outlived))
 	for i, run := range outlived {
-		rows[i] = cli.Row{Mark: cli.Idle, Cells: []string{run.Agent, output.Plural(run.Calls, "call"), "recorded in " + run.RecordedIn}, Detail: "while the lead was in " + run.LeadIn}
+		rows[i] = page.Row{Mark: page.Idle, Cells: []string{run.Agent, output.Plural(run.Calls, "call"), "recorded in " + run.RecordedIn}, Detail: "while the lead was in " + run.LeadIn}
 	}
 	return rows
 }

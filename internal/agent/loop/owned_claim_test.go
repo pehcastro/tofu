@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"encoding/json"
@@ -84,7 +84,7 @@ func TestASideChatsHeldPathsHoldAgainstTheLeadsBash(t *testing.T) {
 
 func TestASideChatsHeldPathsHoldAgainstSpawnGrantAndARunningSubAgent(t *testing.T) {
 	const writer = "write the plan"
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey: {
 			spawnCall("spawn-tree", writer, "**"),
 			spawnCall("spawn-notes", "write notes", "**/*.md"),
@@ -113,7 +113,7 @@ func TestASideChatsHeldPathsHoldAgainstSpawnGrantAndARunningSubAgent(t *testing.
 	store := session.OpenAt(t.TempDir())
 	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write, bash), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
 		ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" }, Sessions: store, Session: "lead"}
-	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	lead := base
 	lead.Task, lead.Tools, lead.Inbox, lead.Sessions = "hand the work to sub-agents", NewRegistry(write, spawn), spawn.Inbox, nil
 	typed := make(chan string, 1)
@@ -137,7 +137,7 @@ func TestASideChatsHeldPathsHoldAgainstSpawnGrantAndARunningSubAgent(t *testing.
 	answered := map[string]string{}
 	for _, request := range model.requests(writer) {
 		for _, message := range request.Messages {
-			if message.Role == llm.RoleTool {
+			if message.Role == core.RoleTool {
 				answered[message.ToolCallID] = message.Content
 			}
 		}
@@ -164,11 +164,11 @@ func TestASideChatSendsItsParentsSystemBytesAndItsOwnInstructionsAfterTheHead(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	model := newCrew(map[string][]llm.Decision{leadKey: {claimDecision("parent"), spawnCall("side-spawn", "do the work", "**"), claimDecision("side"),
+	model := newCrew(map[string][]core.Decision{leadKey: {claimDecision("parent"), spawnCall("side-spawn", "do the work", "**"), claimDecision("side"),
 		claimDecision("side again"), claimDecision("lone side")}})
 	store := session.OpenAt(t.TempDir())
 	base := Config{Model: model, Spend: SpendAPIKey, Caps: Caps{MaxSteps: 4}, ResultBytesCap: 4096, ArtifactDir: filepath.Join(root, "artifacts")}
-	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	opened := func(id string) string {
 		t.Helper()
 		log, err := store.Open(session.Header{ID: id})
@@ -209,8 +209,8 @@ func TestASideChatSendsItsParentsSystemBytesAndItsOwnInstructionsAfterTheHead(t 
 		}
 		return branched.Header.ID
 	}
-	system := func(request llm.Request) string { return request.Messages[0].Content }
-	afterTheHead := func(request llm.Request) string {
+	system := func(request core.Request) string { return request.Messages[0].Content }
+	afterTheHead := func(request core.Request) string {
 		if at := slices.IndexFunc(request.Messages, promptChange); at > 0 {
 			return request.Messages[at].Content
 		}
@@ -226,7 +226,7 @@ func TestASideChatSendsItsParentsSystemBytesAndItsOwnInstructionsAfterTheHead(t 
 	if system(first) != system(parent) || system(again) != system(parent) {
 		t.Errorf("the side chat's system differs from its parent's, so it reads none of the parent's cache:\nparent %q\nfirst  %q\nagain  %q", system(parent), system(first), system(again))
 	}
-	tools := func(request llm.Request) string {
+	tools := func(request core.Request) string {
 		sent, err := json.Marshal(request.Tools)
 		if err != nil {
 			t.Fatal(err)

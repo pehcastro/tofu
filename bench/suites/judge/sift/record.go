@@ -16,7 +16,7 @@ const BenchName = "sift"
 
 const stateShapeDigits = 8
 
-func (a Asker) record(state json.RawMessage, decision jev.Decision) error {
+func (a Asker) record(state json.RawMessage, decision core.Decision) error {
 	if a.Ledger == nil {
 		return nil
 	}
@@ -64,7 +64,7 @@ func stateShape(state json.RawMessage) (string, error) {
 	return Point + "." + hex.EncodeToString(sum[:])[:stateShapeDigits], nil
 }
 
-func recordedAnswers(wording int, answers map[string]jev.Answer) ([]ledger.Answer, error) {
+func recordedAnswers(wording int, answers map[string]core.Answer) ([]ledger.Answer, error) {
 	ids := make([]string, 0, len(answers))
 	for id := range answers {
 		ids = append(ids, id)
@@ -73,7 +73,7 @@ func recordedAnswers(wording int, answers map[string]jev.Answer) ([]ledger.Answe
 	recorded := make([]ledger.Answer, 0, len(ids))
 	for _, id := range ids {
 		answer := answers[id]
-		if answer.Kind != jev.QuestionNoul {
+		if answer.Kind != core.QuestionNoul {
 			return nil, fmt.Errorf("sift: %s answers %q with a %s, and this bench asks nouls only", Point, id, answer.Kind)
 		}
 		recorded = append(recorded, ledger.Answer{Question: id, Wording: wording, Kind: ledger.AnswerNoul, Noul: answer.Noul})

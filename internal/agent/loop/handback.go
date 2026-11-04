@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"strings"

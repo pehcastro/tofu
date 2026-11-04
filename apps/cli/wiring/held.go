@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/models/classifiers"
@@ -28,8 +28,8 @@ const (
 	JevName          = "jev"
 )
 
-func OpenStoredCredentials() (*cred.Store, error) {
-	path, err := cred.Path()
+func OpenStoredCredentials() (*accounts.Store, error) {
+	path, err := accounts.Path()
 	if err != nil {
 		return nil, err
 	}
@@ -37,21 +37,21 @@ func OpenStoredCredentials() (*cred.Store, error) {
 	if err != nil || !present {
 		return nil, err
 	}
-	return cred.Open(path)
+	return accounts.Open(path)
 }
 
 type HeldStore struct {
-	Store *cred.Store
+	Store *accounts.Store
 	Path  string
 	Err   error
 }
 
 func HoldStore() HeldStore {
-	path, err := cred.Path()
+	path, err := accounts.Path()
 	if err != nil {
 		return HeldStore{Err: err}
 	}
-	store, err := cred.Open(path)
+	store, err := accounts.Open(path)
 	return HeldStore{Store: store, Path: path, Err: err}
 }
 
@@ -61,12 +61,12 @@ func (h HeldStore) Close() {
 	}
 }
 
-func (h HeldStore) Keys() jev.Keyring {
+func (h HeldStore) Keys() core.Keyring {
 	if h.Err != nil {
-		return jev.ReadKeyring()
+		return core.ReadKeyring()
 	}
 	stored, err := h.Store.Keys()
-	return jev.Keyring{Stored: stored, Path: h.Path, ReadErr: err}
+	return core.Keyring{Stored: stored, Path: h.Path, ReadErr: err}
 }
 
 func LoginCommand(provider string) func() *exec.Cmd {
@@ -75,27 +75,27 @@ func LoginCommand(provider string) func() *exec.Cmd {
 	}
 }
 
-func (h HeldStore) Wires() []tui.Wire {
+func (h HeldStore) Wires() []app.Wire {
 	library, err := ModelLibrary("")
 	if h.Err != nil || err != nil {
 		return nil
 	}
 	now := time.Now()
-	var wires []tui.Wire
+	var wires []app.Wire
 	for _, spec := range library.Subscriptions {
-		row, present, err := h.Store.RowAt(cred.Provider(spec.ID), now)
+		row, present, err := h.Store.RowAt(accounts.Provider(spec.ID), now)
 		if err != nil || !present || row.Unusable(now) != "" {
 			continue
 		}
 		if selected, err := library.Default(spec.ID); err == nil {
-			wires = append(wires, tui.Wire{Name: spec.Wire, Model: selected.ID, Provider: string(spec.ID), Efforts: WireEfforts(spec.Wire)})
+			wires = append(wires, app.Wire{Name: spec.Wire, Model: selected.ID, Provider: string(spec.ID), Efforts: WireEfforts(spec.Wire)})
 		}
 	}
-	if _, err := h.Keys().KeyFor(sys.CredentialFileName, models.Meta.KeyName()); err != nil {
+	if _, err := h.Keys().KeyFor(sys.CredentialFileName, catalog.Meta.KeyName()); err != nil {
 		return wires
 	}
-	if chosen, err := library.Default(models.Subscription(models.Meta)); err == nil {
-		wires = append(wires, tui.Wire{Name: WireMeta, Model: chosen.ID, Provider: string(models.Meta), Efforts: chosen.Efforts})
+	if chosen, err := library.Default(catalog.Subscription(catalog.Meta)); err == nil {
+		wires = append(wires, app.Wire{Name: WireMeta, Model: chosen.ID, Provider: string(catalog.Meta), Efforts: chosen.Efforts})
 	}
 	return wires
 }
@@ -106,7 +106,7 @@ type StartStep struct {
 	What    string
 	Command string
 	Done    string
-	Choices []tui.Choice
+	Choices []app.Choice
 }
 
 func (h HeldStore) StartSteps() []StartStep {
@@ -114,11 +114,11 @@ func (h HeldStore) StartSteps() []StartStep {
 }
 
 func (h HeldStore) OrchestratorStep() StartStep {
-	step := StartStep{Label: string(models.RoleOrchestrator), Step: ModelStep}
+	step := StartStep{Label: string(catalog.RoleOrchestrator), Step: ModelStep}
 	library, _ := ModelLibrary(".")
-	orchestrator, bound := library.Bound(models.RoleOrchestrator)
+	orchestrator, bound := library.Bound(catalog.RoleOrchestrator)
 	wires := h.Wires()
-	signed := slices.ContainsFunc(wires, func(wire tui.Wire) bool { return wire.Provider == orchestrator.Source() })
+	signed := slices.ContainsFunc(wires, func(wire app.Wire) bool { return wire.Provider == orchestrator.Source() })
 	switch {
 	case bound && signed:
 		step.Done = orchestrator.Source() + " · " + orchestrator.ID
@@ -128,35 +128,35 @@ func (h HeldStore) OrchestratorStep() StartStep {
 	case len(wires) == 0:
 		step.What, step.Command = NoCredential, CommandFor("login", host.RoleLLM, "<source>")
 	default:
-		step.What, step.Command = models.RoleOrchestrator.Unset().Error(), "tofu models bind orchestrator <provider/model>"
+		step.What, step.Command = catalog.RoleOrchestrator.Unset().Error(), "tofu models bind orchestrator <provider/model>"
 	}
 	for _, wire := range wires {
 		slug := wire.Provider + "/" + wire.Model
-		step.Choices = append(step.Choices, tui.Choice{Label: "bind " + slug, Run: func() *exec.Cmd {
-			return exec.Command(os.Args[0], "models", "bind", string(models.RoleOrchestrator), slug)
+		step.Choices = append(step.Choices, app.Choice{Label: "bind " + slug, Run: func() *exec.Cmd {
+			return exec.Command(os.Args[0], "models", "bind", string(catalog.RoleOrchestrator), slug)
 		}})
 	}
 	for _, spec := range library.Subscriptions {
-		if !slices.ContainsFunc(wires, func(wire tui.Wire) bool { return wire.Provider == string(spec.ID) }) {
-			step.Choices = append(step.Choices, tui.Choice{Label: string(spec.ID) + ", signs in through the browser", Run: LoginCommand(string(spec.ID))})
+		if !slices.ContainsFunc(wires, func(wire app.Wire) bool { return wire.Provider == string(spec.ID) }) {
+			step.Choices = append(step.Choices, app.Choice{Label: string(spec.ID) + ", signs in through the browser", Run: LoginCommand(string(spec.ID))})
 		}
 	}
-	if !slices.ContainsFunc(wires, func(wire tui.Wire) bool { return wire.Name == WireMeta }) {
-		step.Choices = append(step.Choices, tui.Choice{Label: models.Meta.Display() + " API key", Key: sys.MetaMuseKeyName})
+	if !slices.ContainsFunc(wires, func(wire app.Wire) bool { return wire.Name == WireMeta }) {
+		step.Choices = append(step.Choices, app.Choice{Label: catalog.Meta.Display() + " API key", Key: sys.MetaMuseKeyName})
 	}
 	return step
 }
 
-func ClassifierStepOf(keys jev.Keyring) StartStep {
+func ClassifierStepOf(keys core.Keyring) StartStep {
 	step := StartStep{Label: JevName, Step: ClassifierStep}
-	route, err := classifier.Resolve(".", keys)
-	if jev.IsUnbound(err) {
+	route, err := classifiers.Resolve(".", keys)
+	if core.IsUnbound(err) {
 		step.What, step.Command = err.Error(), "tofu models bind classifier <provider/model>"
 		library, _ := ModelLibrary(".")
 		for _, model := range library.Models {
-			if model.Kind == models.KindClassifier && model.Use != models.UseExcluded {
-				step.Choices = append(step.Choices, tui.Choice{Label: "bind " + model.Slug(), Run: func() *exec.Cmd {
-					return exec.Command(os.Args[0], "models", "bind", string(models.RoleClassifier), model.Slug())
+			if model.Kind == catalog.KindClassifier && model.Use != catalog.UseExcluded {
+				step.Choices = append(step.Choices, app.Choice{Label: "bind " + model.Slug(), Run: func() *exec.Cmd {
+					return exec.Command(os.Args[0], "models", "bind", string(catalog.RoleClassifier), model.Slug())
 				}})
 			}
 		}
@@ -169,15 +169,15 @@ func ClassifierStepOf(keys jev.Keyring) StartStep {
 	}
 	step.What = "there is no " + string(provider) + " key, so jev judges no tool call"
 	step.Command = CommandFor("login", host.RoleClassifier, string(provider))
-	step.Choices = []tui.Choice{{Label: provider.Display() + " key", Key: classifier.KeyName(provider)}}
+	step.Choices = []app.Choice{{Label: provider.Display() + " key", Key: classifiers.KeyName(provider)}}
 	if err == nil {
-		step.Done = provider.Display() + " key " + widget.Mask(route.Key)
+		step.Done = provider.Display() + " key " + render.Mask(route.Key)
 	}
 	return step
 }
 
 func GateOffSaid(err error) string {
-	if jev.IsUnbound(err) {
+	if core.IsUnbound(err) {
 		return err.Error()
 	}
 	return GateOffNote
@@ -187,11 +187,11 @@ func (h HeldStore) StartBlockers() []StartStep {
 	return slices.DeleteFunc(h.StartSteps(), func(step StartStep) bool { return step.Done != "" })
 }
 
-func (h HeldStore) Requirements() []tui.Requirement {
+func (h HeldStore) Requirements() []app.Requirement {
 	steps := h.StartSteps()
-	needed := make([]tui.Requirement, 0, len(steps))
+	needed := make([]app.Requirement, 0, len(steps))
 	for _, step := range steps {
-		needed = append(needed, tui.Requirement{Step: step.Step, What: step.What, Fix: step.Command, Done: step.Done, Choices: step.Choices})
+		needed = append(needed, app.Requirement{Step: step.Step, What: step.What, Fix: step.Command, Done: step.Done, Choices: step.Choices})
 	}
 	return needed
 }
@@ -200,12 +200,12 @@ func (h HeldStore) Providers() []settings.Provider {
 	library, _ := ModelLibrary("")
 	var rows []settings.Provider
 	for _, spec := range library.Subscriptions {
-		rows = append(rows, h.SubscriptionProvider(cred.Provider(spec.ID)))
+		rows = append(rows, h.SubscriptionProvider(accounts.Provider(spec.ID)))
 	}
 	return append(rows, OpenRouterProvider(h.Keys()), JevProvider(h.Keys()))
 }
 
-func (h HeldStore) SubscriptionProvider(provider cred.Provider) settings.Provider {
+func (h HeldStore) SubscriptionProvider(provider accounts.Provider) settings.Provider {
 	row := settings.Provider{Name: string(provider), Source: h.Path}
 	if h.Err != nil {
 		row.Fix = UnreadableSource + h.Err.Error()
@@ -226,22 +226,22 @@ func (h HeldStore) SubscriptionProvider(provider cred.Provider) settings.Provide
 	return row
 }
 
-func OpenRouterProvider(keys jev.Keyring) settings.Provider {
-	located, err := keys.LocateFor(sys.CredentialFileName, jev.OpenRouterVariable)
+func OpenRouterProvider(keys core.Keyring) settings.Provider {
+	located, err := keys.LocateFor(sys.CredentialFileName, core.OpenRouterVariable)
 	row := settings.Provider{Name: OpenRouterName, Source: located.Path}
-	if located.Source == jev.SourceEnvironment {
+	if located.Source == core.SourceEnvironment {
 		row.Source = located.Name + " in the environment"
 	}
-	key, keyErr := keys.KeyFor(sys.CredentialFileName, jev.OpenRouterVariable)
+	key, keyErr := keys.KeyFor(sys.CredentialFileName, core.OpenRouterVariable)
 	if err != nil || keyErr != nil {
 		row.Fix = OpenRouterFix
 		return row
 	}
-	row.Key = widget.Mask(key)
+	row.Key = render.Mask(key)
 	return row
 }
 
-func JevProvider(keys jev.Keyring) settings.Provider {
+func JevProvider(keys core.Keyring) settings.Provider {
 	dir, err := sys.LogDir()
 	if err != nil {
 		return settings.Provider{Name: JevName, Fix: UnreadableSource + err.Error()}
@@ -249,7 +249,7 @@ func JevProvider(keys jev.Keyring) settings.Provider {
 	row := settings.Provider{Name: JevName, Source: dir}
 	key, keyErr := GateKeyFrom(keys)
 	if keyErr == nil {
-		row.Key = widget.Mask(key)
+		row.Key = render.Mask(key)
 	}
 	current, err := CurrentBuild(dir, "")
 	switch {

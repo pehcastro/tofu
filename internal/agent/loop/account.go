@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -100,7 +100,7 @@ func (a Accounts) elsewhere(ctx context.Context, left []string, conversationToke
 	return moved, "", true
 }
 
-func (a Accounts) limited(ctx context.Context, wire string, tried []Account, attempts []llm.Attempt, now time.Time, cause error) *RateLimited {
+func (a Accounts) limited(ctx context.Context, wire string, tried []Account, attempts []core.Attempt, now time.Time, cause error) *RateLimited {
 	limited := &RateLimited{Wire: wire, Cause: cause}
 	for _, account := range tried {
 		if account.ID != 0 {

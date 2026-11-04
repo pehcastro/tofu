@@ -15,13 +15,13 @@ import (
 	"tofu/internal/agent/hooks"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
-	testkit "tofu/internal/testkit/cli"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/tools/shell/process"
 )
 
 func sessionHooks(t *testing.T, project string) string {
 	t.Helper()
-	if choice, err := shell.Resolve(""); err != nil || strings.Contains(choice.Label, "powershell") {
+	if choice, err := process.Resolve(""); err != nil || strings.Contains(choice.Label, "powershell") {
 		t.Skip("no bash resolved on this machine")
 	}
 	logged := `{"type":"command","command":"cat >> session.log; echo >> session.log"}`
@@ -29,8 +29,8 @@ func sessionHooks(t *testing.T, project string) string {
 	if err := sys.WriteFile(filepath.Join(project, ".claude", "settings.json"), []byte(settings), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	engine := hook.Load(project, shell.Choice{})
-	if err := engine.Answer(engine.Untrusted(), hook.AnswerAlways); err != nil {
+	engine := hooks.Load(project, process.Choice{})
+	if err := engine.Answer(engine.Untrusted(), hooks.AnswerAlways); err != nil {
 		t.Fatal(err)
 	}
 	return filepath.Join(project, "session.log")
@@ -59,7 +59,7 @@ func sessionEvents(t *testing.T, logged string) []string {
 }
 
 func TestHooksRunFiresSessionStartFirstAndSessionEndWhenItsLeadReturns(t *testing.T) {
-	testkit.IsolateHome(t)
+	cli.IsolateHome(t)
 	project := t.TempDir()
 	logged := sessionHooks(t, project)
 	deck := filepath.Join(t.TempDir(), "deck.jsonl")
@@ -79,11 +79,11 @@ func TestHooksRunFiresSessionStartFirstAndSessionEndWhenItsLeadReturns(t *testin
 }
 
 func TestHooksTheAppFiresSessionStartForStartupClearAndResumeAndSessionEndAtExit(t *testing.T) {
-	logged := sessionHooks(t, testkit.ScratchProject(t))
+	logged := sessionHooks(t, cli.ScratchProject(t))
 	dir, _ := os.Getwd()
 	model := &sendModel{}
 	for range 4 {
-		model.queued = append(model.queued, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "seen"})
+		model.queued = append(model.queued, core.Decision{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "seen"})
 	}
 	live := newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) { return wireOn(model), nil }, nil, time.Now, sessionResume{})
 	var events eventLog
@@ -108,7 +108,7 @@ func TestHooksTheAppFiresSessionStartForStartupClearAndResumeAndSessionEndAtExit
 }
 
 func TestHooksListsEverySourceWithItsTrustAndTrustTrustsTheProjectsOnce(t *testing.T) {
-	testkit.IsolateHome(t)
+	cli.IsolateHome(t)
 	t.Setenv("NO_COLOR", "1")
 	home, project := os.Getenv("USERPROFILE"), t.TempDir()
 	t.Chdir(project)

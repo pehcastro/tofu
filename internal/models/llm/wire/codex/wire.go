@@ -16,12 +16,12 @@ import (
 	"tofu/internal/models/transport"
 )
 
-const Name = llm.WireCodex
+const Name = core.WireCodex
 
 type Config struct {
 	BaseURL        string
 	Model          string
-	Token          llm.TokenSource
+	Token          core.TokenSource
 	HTTP           *http.Client
 	Transport      transport.Config
 	Account        transport.Account
@@ -69,7 +69,7 @@ func New(config Config) (*Wire, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Wire{config: config, http: llm.StreamingClient(config.HTTP, config.Transport, config.StreamIdle),
+	return &Wire{config: config, http: core.StreamingClient(config.HTTP, config.Transport, config.StreamIdle),
 		threadID: threadID, windowID: windowID, routes: map[string]turnRoute{}, socket: socket{url: socketURL()}}, nil
 }
 
@@ -102,7 +102,7 @@ func (w *Wire) keepTurnState(turn, state string) {
 }
 
 type Dump struct {
-	llm.Dump
+	core.Dump
 	Subscription bool
 	Plan         string
 }
@@ -134,7 +134,7 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 			"the token source returned nothing")
 	}
 	result, dump, err := w.send(ctx, request, token)
-	renewed, err := llm.Renewed(ctx, err, token, w.config.Token)
+	renewed, err := core.Renewed(ctx, err, token, w.config.Token)
 	if renewed != "" {
 		result, dump, err = w.send(ctx, request, renewed)
 	}
@@ -166,7 +166,7 @@ func (w *Wire) send(ctx context.Context, request Request, token string) (Result,
 	dump := Dump{
 		Subscription: subscription,
 		Plan:         claims.PlanType,
-		Dump: llm.Dump{
+		Dump: core.Dump{
 			Method: http.MethodPost,
 			URL:    w.endpoint(subscription),
 			Headers: Headers(HeaderOptions{
@@ -193,13 +193,13 @@ func (w *Wire) send(ctx context.Context, request Request, token string) (Result,
 	}
 
 	sent := time.Now()
-	result, err := llm.RetryQuiet(ctx, w.config.Transport, request.OnRetry, func() (Result, error) {
+	result, err := core.RetryQuiet(ctx, w.config.Transport, request.OnRetry, func() (Result, error) {
 		if result, err := w.overSocket(ctx, dump, request.OnThinking); !errors.Is(err, errNoSocket) {
 			return result, err
 		}
 		return w.post(ctx, dump, request.OnThinking)
 	})
-	result.FirstTokenMS = llm.MillisSince(sent, result.firstDelta)
+	result.FirstTokenMS = core.MillisSince(sent, result.firstDelta)
 	var refused *transport.Error
 	if errors.As(err, &refused) {
 		refused.Account = w.config.Account
@@ -264,7 +264,7 @@ func (w *Wire) post(ctx context.Context, dump Dump, onThinking func(string)) (Re
 		return Result{}, refused
 	}
 
-	body := llm.WatchIdle(response.Body, w.config.StreamIdle)
+	body := core.WatchIdle(response.Body, w.config.StreamIdle)
 	defer func() { _ = body.Close() }()
 	result, err := ReadStream(body, onThinking)
 	if turnState := response.Header.Get(HeaderTurnState); turnState != "" {

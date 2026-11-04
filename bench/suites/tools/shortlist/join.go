@@ -50,7 +50,7 @@ func (c JoinCounts) UnofferedRate() float64 {
 	return float64(c.Unoffered) / float64(actedOn)
 }
 
-func rowFromHit(turnID, task string, link turn.SearchLink, results map[string]string) Row {
+func rowFromHit(turnID, task string, link loop.SearchLink, results map[string]string) Row {
 	bodies := unitBodies(results[link.SearchCallID])
 	files := make([]File, 0, len(link.Offered))
 	for _, offered := range link.Offered {
@@ -81,27 +81,27 @@ func BuildJoinCorpus(sessionsDir string) ([]Row, JoinCounts, error) {
 		if err != nil {
 			return nil, JoinCounts{}, err
 		}
-		conversation, err := turn.ConversationFrom(events)
+		conversation, err := loop.ConversationFrom(events)
 		if err != nil {
 			return nil, JoinCounts{}, err
 		}
 		results := make(map[string]string)
 		for _, message := range conversation {
-			if message.Role == llm.RoleTool && message.ToolCallID != "" {
+			if message.Role == core.RoleTool && message.ToolCallID != "" {
 				results[message.ToolCallID] = message.Content
 			}
 		}
-		for _, link := range turn.SearchLinksOf(conversation) {
+		for _, link := range loop.SearchLinksOf(conversation) {
 			counts.Searches++
 			switch link.Kind {
-			case turn.SearchLinkHit:
+			case loop.SearchLinkHit:
 				counts.Hits++
-			case turn.SearchLinkUnoffered:
+			case loop.SearchLinkUnoffered:
 				counts.Unoffered++
-			case turn.SearchLinkNone:
+			case loop.SearchLinkNone:
 				counts.None++
 			}
-			if link.Kind != turn.SearchLinkHit {
+			if link.Kind != loop.SearchLinkHit {
 				continue
 			}
 			task := strings.TrimSpace(header.Task)

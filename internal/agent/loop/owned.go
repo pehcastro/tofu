@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -12,12 +12,12 @@ import (
 
 type ownedTool struct {
 	tool     contract.Tool
-	boundary *subagent.Boundary
+	boundary *subagents.Boundary
 }
 
 func (t ownedTool) Name() string { return t.tool.Name() }
 
-func (t ownedTool) Definition() llm.Tool {
+func (t ownedTool) Definition() core.Tool {
 	definition := t.tool.Definition()
 	definition.Description += ", and only inside the paths your first message says you hold, or your scratch folder"
 	return definition
@@ -27,7 +27,7 @@ type bounded interface {
 	refusal(raw json.RawMessage) error
 }
 
-func boundaryRefusal(tools Registry, call llm.ToolCall) string {
+func boundaryRefusal(tools Registry, call core.ToolCall) string {
 	if checked, checks := tools.byName[call.Name].(bounded); checks {
 		if err := checked.refusal(call.Arguments); err != nil {
 			return err.Error()
@@ -72,12 +72,12 @@ func (e ReadOnlyError) Error() string {
 
 type ownedShell struct {
 	tool     contract.Tool
-	boundary *subagent.Boundary
+	boundary *subagents.Boundary
 }
 
 func (t ownedShell) Name() string { return t.tool.Name() }
 
-func (t ownedShell) Definition() llm.Tool {
+func (t ownedShell) Definition() core.Tool {
 	definition := t.tool.Definition()
 	if t.boundary.HoldsTheTree() {
 		definition.Description += ", and you hold the whole tree, so a command may write anywhere in it. A source file still changes with edit or write, never through a redirect, tee, cp, mv or sed -i, and go test all is the orchestrator's. " +
@@ -102,11 +102,11 @@ func (t ownedShell) Definition() llm.Tool {
 	return definition
 }
 
-func (t ownedShell) grammars() []subagent.Grammar {
+func (t ownedShell) grammars() []subagents.Grammar {
 	if bash, found := underlyingBash(t.tool); found {
-		return []subagent.Grammar{subagent.GrammarOf(bash.choice.Path)}
+		return []subagents.Grammar{subagents.GrammarOf(bash.choice.Path)}
 	}
-	return []subagent.Grammar{subagent.POSIX, subagent.PowerShell}
+	return []subagents.Grammar{subagents.POSIX, subagents.PowerShell}
 }
 
 func underlyingBash(tool contract.Tool) (*BashTool, bool) {

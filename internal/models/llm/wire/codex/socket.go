@@ -66,7 +66,7 @@ func (w *Wire) overSocket(ctx context.Context, dump Dump, onThinking func(string
 	if w.socket.failed {
 		return Result{}, errNoSocket
 	}
-	note := llm.Record(ctx, llm.Attempt{At: time.Now(), URL: w.socket.url, Status: http.StatusSwitchingProtocols})
+	note := core.Record(ctx, core.Attempt{At: time.Now(), URL: w.socket.url, Status: http.StatusSwitchingProtocols})
 	properties, input, err := w.sendFrame(ctx, dump, note)
 	if err != nil {
 		return Result{}, err
@@ -81,11 +81,11 @@ func (w *Wire) overSocket(ctx context.Context, dump Dump, onThinking func(string
 		_, payload, err := conn.ReadMessage()
 		note.Received(len(payload), err)
 		if err != nil {
-			return nil, transport.Fail("codex.Ask", transport.KindProvider, errors.Join(llm.ErrStreamBroke, cmp.Or(ctx.Err(), err)), "reading the socket")
+			return nil, transport.Fail("codex.Ask", transport.KindProvider, errors.Join(core.ErrStreamBroke, cmp.Or(ctx.Err(), err)), "reading the socket")
 		}
 		if !heard {
 			heard = true
-			note.Change(func(attempt *llm.Attempt) { attempt.HeadersMS = time.Since(attempt.At).Milliseconds() })
+			note.Change(func(attempt *core.Attempt) { attempt.HeadersMS = time.Since(attempt.At).Milliseconds() })
 		}
 		return payload, w.socketEvent(payload, note)
 	}, onThinking)
@@ -101,7 +101,7 @@ func (w *Wire) overSocket(ctx context.Context, dump Dump, onThinking func(string
 	return Result{}, errNoSocket
 }
 
-func (w *Wire) sendFrame(ctx context.Context, dump Dump, note llm.Note) (map[string]json.RawMessage, []json.RawMessage, error) {
+func (w *Wire) sendFrame(ctx context.Context, dump Dump, note core.Note) (map[string]json.RawMessage, []json.RawMessage, error) {
 	for {
 		fresh := w.socket.conn == nil
 		if fresh {
@@ -113,7 +113,7 @@ func (w *Wire) sendFrame(ctx context.Context, dump Dump, note llm.Note) (map[str
 		if err != nil {
 			return nil, nil, err
 		}
-		note.Change(func(attempt *llm.Attempt) { attempt.Body = frame })
+		note.Change(func(attempt *core.Attempt) { attempt.Body = frame })
 		_ = w.socket.conn.SetWriteDeadline(time.Now().Add(w.config.StreamIdle))
 		err = w.socket.conn.WriteMessage(websocket.TextMessage, frame)
 		if err == nil {
@@ -125,13 +125,13 @@ func (w *Wire) sendFrame(ctx context.Context, dump Dump, note llm.Note) (map[str
 		}
 		if fresh {
 			w.socket.failed = true
-			note.Change(func(attempt *llm.Attempt) { attempt.Error = "sending over the socket: " + err.Error() })
+			note.Change(func(attempt *core.Attempt) { attempt.Error = "sending over the socket: " + err.Error() })
 			return nil, nil, errNoSocket
 		}
 	}
 }
 
-func (w *Wire) dial(ctx context.Context, dump Dump, note llm.Note) error {
+func (w *Wire) dial(ctx context.Context, dump Dump, note core.Note) error {
 	header := http.Header{}
 	for _, sent := range dump.Headers {
 		switch sent.Name {
@@ -144,7 +144,7 @@ func (w *Wire) dial(ctx context.Context, dump Dump, note llm.Note) error {
 	}
 	dialer := websocket.Dialer{Proxy: http.ProxyFromEnvironment, HandshakeTimeout: w.config.StreamIdle, EnableCompression: true}
 	conn, response, err := dialer.DialContext(ctx, w.socket.url, header)
-	note.Change(func(attempt *llm.Attempt) {
+	note.Change(func(attempt *core.Attempt) {
 		attempt.Status = 0
 		if response != nil {
 			attempt.Status = response.StatusCode
@@ -159,7 +159,7 @@ func (w *Wire) dial(ctx context.Context, dump Dump, note llm.Note) error {
 		w.socket.conn = conn
 		return nil
 	}
-	note.Change(func(attempt *llm.Attempt) { attempt.Error = "opening the socket: " + err.Error() })
+	note.Change(func(attempt *core.Attempt) { attempt.Error = "opening the socket: " + err.Error() })
 	if response != nil && (response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusTooManyRequests) {
 		detail, _ := io.ReadAll(io.LimitReader(response.Body, konst.TransportErrorDetailBytes))
 		return Refusal(response.StatusCode, response.Header, detail)
@@ -231,14 +231,14 @@ func (s *socket) added(properties map[string]json.RawMessage, input []json.RawMe
 	return added
 }
 
-func (w *Wire) socketEvent(payload []byte, note llm.Note) error {
+func (w *Wire) socketEvent(payload []byte, note core.Note) error {
 	var failure socketFailure
 	if json.Unmarshal(payload, &failure) == nil && failure.Type == "error" {
 		if failure.Error.Code == "previous_response_not_found" || failure.Error.Code == "websocket_connection_limit_reached" {
-			return transport.Fail("codex.Ask", transport.KindProvider, llm.ErrStreamBroke, "the socket asked for a fresh start: %s", failure.Error.Code)
+			return transport.Fail("codex.Ask", transport.KindProvider, core.ErrStreamBroke, "the socket asked for a fresh start: %s", failure.Error.Code)
 		}
 		if status := cmp.Or(failure.Status, failure.Code); status >= http.StatusBadRequest {
-			note.Change(func(attempt *llm.Attempt) {
+			note.Change(func(attempt *core.Attempt) {
 				attempt.Status, attempt.ErrorBody, attempt.RetryAfter = status, string(payload), failure.Header["retry-after"]
 			})
 			return Refusal(status, http.Header{transport.RetryAfterHeader: {failure.Header["retry-after"]}}, payload)

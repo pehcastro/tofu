@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"tofu/internal/agent/loop"
-	"tofu/internal/librarian/skills"
+	skill "tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
 	shipped "tofu/library"
@@ -18,11 +18,11 @@ type Skill struct {
 
 func NewSkill(skills []skill.Skill) Skill { return Skill{skills: skills} }
 
-func (s Skill) Name() string { return turn.SkillToolName }
+func (s Skill) Name() string { return loop.SkillToolName }
 
-func (s Skill) Definition() llm.Tool {
-	return llm.Tool{
-		Name: turn.SkillToolName,
+func (s Skill) Definition() core.Tool {
+	return core.Tool{
+		Name: loop.SkillToolName,
 		Description: "loads a skill the system prompt lists, by name, and returns its SKILL.md without the front matter. " +
 			"path reads another file inside that skill's folder, relative to it, when the skill's body names one",
 		Parameters: map[string]any{
@@ -52,5 +52,5 @@ func (s Skill) Run(_ context.Context, raw json.RawMessage) (contract.Result, err
 	if args.Path != "" {
 		command += "/" + args.Path
 	}
-	return contract.Result{Content: body, Command: command, Origin: llm.Origin{Source: llm.SourceSkillLoad, Name: args.Name, ID: args.Path}}, nil
+	return contract.Result{Content: body, Command: command, Origin: core.Origin{Source: core.SourceSkillLoad, Name: args.Name, ID: args.Path}}, nil
 }

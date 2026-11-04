@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -37,7 +37,7 @@ func TestEditKeepsTheLineEndingsAndBOMOfTheFile(t *testing.T) {
 			if err := os.WriteFile(path, []byte(row.file), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			ledger := turn.NewReadLedger()
+			ledger := loop.NewReadLedger()
 			ledger.Mark(context.Background(), "f.txt", []byte(row.file))
 			editor, err := NewEdit(dir)
 			if err != nil {

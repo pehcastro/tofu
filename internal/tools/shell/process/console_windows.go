@@ -1,6 +1,6 @@
 //go:build windows
 
-package shell
+package process
 
 import (
 	"io"
@@ -42,7 +42,7 @@ func (d device) resize(size Size) error {
 	return windows.ResizePseudoConsole(d.console, windows.Coord{X: int16(size.cols), Y: int16(size.rows)})
 }
 
-func startConsole(cmd *exec.Cmd, out io.Writer, lifetime Lifetime, typed bool, report safe.Report) (tree, <-chan error, *terminal, error) {
+func startConsole(cmd *exec.Cmd, out io.Writer, lifetime Lifetime, typed bool, report recover.Report) (tree, <-chan error, *terminal, error) {
 	var inRead, inWrite, outRead, outWrite, console windows.Handle
 	if err := windows.CreatePipe(&inRead, &inWrite, nil, 0); err != nil {
 		return tree{}, nil, nil, err
@@ -66,15 +66,15 @@ func startConsole(cmd *exec.Cmd, out io.Writer, lifetime Lifetime, typed bool, r
 	}
 	sink, term := readerFor(out, typed, device{input: inWrite, console: console})
 	drained := make(chan struct{})
-	safe.Go(report, "shell output", func() {
+	recover.Go(report, "shell output", func() {
 		defer close(drained)
 		rendered := os.NewFile(uintptr(outRead), "console")
 		defer func() { _ = rendered.Close() }()
 		pipeOut(report, sink, rendered)
 	})
 	waited := make(chan error, 1)
-	safe.Go(report, "shell wait", func() {
-		waited <- safe.Call(report, "shell wait", func() error {
+	recover.Go(report, "shell wait", func() {
+		waited <- recover.Call(report, "shell wait", func() error {
 			state, err := cmd.Process.Wait()
 			if term != nil {
 				term.end()

@@ -34,7 +34,7 @@ type (
 )
 
 func Model(bound string) (string, error) {
-	pin, err := jev.LoadPin()
+	pin, err := core.LoadPin()
 	if err != nil || pin.Model == "" {
 		return bound, err
 	}
@@ -61,12 +61,12 @@ func on(model string, config Config) (*Wire, error) {
 	return providers.New(providers.Spec{Name: Name, Endpoint: Endpoint, Model: model, FailOp: "openrouter.New", RequestIDHeader: RequestIDHeader}, config)
 }
 
-func CheckPin(ctx context.Context, bound string, config Config, client *transport.Client) (jev.PinCheck, jev.Pin) {
-	pin, err := jev.LoadPin()
+func CheckPin(ctx context.Context, bound string, config Config, client *transport.Client) (core.PinCheck, core.Pin) {
+	pin, err := core.LoadPin()
 	if err != nil {
-		return jev.PinCheck{From: bound, Skipped: "the pin is unreadable, it stays", Error: err.Error()}, jev.Pin{}
+		return core.PinCheck{From: bound, Skipped: "the pin is unreadable, it stays", Error: err.Error()}, core.Pin{}
 	}
-	check := jev.PinCheck{From: cmp.Or(pin.Model, bound)}
+	check := core.PinCheck{From: cmp.Or(pin.Model, bound)}
 	seed := pin.Model
 	if seed == "" {
 		answering, err := on(bound, config)
@@ -75,24 +75,24 @@ func CheckPin(ctx context.Context, bound string, config Config, client *transpor
 		}
 		if err != nil {
 			check.Skipped, check.Error = "nothing is pinned and "+bound+" did not answer, so there is no build to look past", err.Error()
-			return check, jev.Pin{}
+			return check, core.Pin{}
 		}
 	}
 	var major, minor int
 	if _, err := fmt.Sscanf(listed(seed), modelPattern, &major, &minor); err != nil {
 		check.Skipped, check.Error = "the pin names no jev version, it stays at "+check.From, err.Error()
-		return check, jev.Pin{}
+		return check, core.Pin{}
 	}
-	var newest jev.Pin
+	var newest core.Pin
 	for _, next := range [][2]int{{major, minor}, {major, minor + 1}, {major + 1, 0}} {
 		model := fmt.Sprintf(modelPattern, next[0], next[1])
 		build, err := listedBuild(ctx, client, model)
 		if err != nil {
 			check.Skipped, check.Error = "unreachable, the pin stays at "+check.From, err.Error()
-			return check, jev.Pin{}
+			return check, core.Pin{}
 		}
 		if build != "" {
-			newest = jev.Pin{Model: model, Build: build}
+			newest = core.Pin{Model: model, Build: build}
 		}
 	}
 	check.Found = newest.Build
@@ -105,7 +105,7 @@ func CheckPin(ctx context.Context, bound string, config Config, client *transpor
 	return check, newest
 }
 
-func Serves(pin jev.Pin, build string) bool {
+func Serves(pin core.Pin, build string) bool {
 	version := strings.TrimPrefix(listed(pin.Model), vendorPrefix)
 	return strings.Contains(build, version+"-") || strings.Contains(build, version+".")
 }

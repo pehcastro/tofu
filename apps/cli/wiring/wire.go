@@ -7,8 +7,8 @@ import (
 
 type Wire struct {
 	Held     *Accounts
-	Spend    turn.Spend
-	Selected models.Model
+	Spend    loop.Spend
+	Selected catalog.Model
 }
 
 type Opener func(RunOpts) (Wire, error)

@@ -18,7 +18,7 @@ import (
 	"tofu/internal/konst"
 	sessionstore "tofu/internal/store/session"
 	"tofu/internal/sys"
-	testkit "tofu/internal/testkit/cli"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 )
 
@@ -72,7 +72,7 @@ func gateAnswers(risk, approval, requested, untrusted float64) []ledger.Answer {
 
 func whyLedger(t *testing.T) {
 	t.Helper()
-	testkit.IsolateHome(t)
+	cli.IsolateHome(t)
 	t.Setenv("NO_COLOR", "")
 	t.Setenv("CLICOLOR_FORCE", "")
 	project := filepath.Join(os.Getenv("USERPROFILE"), "project")

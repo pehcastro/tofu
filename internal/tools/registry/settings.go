@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -19,11 +19,11 @@ func NewSettings(global, project string) Settings {
 	return Settings{global: global, project: project}
 }
 
-func (Settings) Name() string { return turn.SettingsToolName }
+func (Settings) Name() string { return loop.SettingsToolName }
 
-func (Settings) Definition() llm.Tool {
-	return llm.Tool{
-		Name: turn.SettingsToolName,
+func (Settings) Definition() core.Tool {
+	return core.Tool{
+		Name: loop.SettingsToolName,
 		Description: "asks the person to change one of their settings, and only " + settings.SubAgentsPerTurn + " or " + settings.SubAgentDepth +
 			". the person answers yes or no before anything is written; on yes the global settings file changes and the next spawn in this turn reads the new value",
 		Parameters: map[string]any{

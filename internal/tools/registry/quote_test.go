@@ -1,4 +1,4 @@
-package tools_test
+package registry_test
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
@@ -33,16 +33,16 @@ func spoke(t *testing.T, id, role, text string, calls ...session.MessageToolCall
 	return session.Event{ID: id, Attempt: session.FirstAttempt, Kind: session.EventMessage, Body: body}
 }
 
-func recordedQuote(t *testing.T, events ...session.Event) tools.Quote {
+func recordedQuote(t *testing.T, events ...session.Event) registry.Quote {
 	t.Helper()
 	store := session.NewStore(t.TempDir())
 	if err := store.Write(session.Header{ID: recordedID, Root: recordedID, At: time.Now()}, events); err != nil {
 		t.Fatalf("recording %s: %v", recordedID, err)
 	}
-	return tools.NewQuote(store, recordedID)
+	return registry.NewQuote(store, recordedID)
 }
 
-func quoted(t *testing.T, tool tools.Quote, id string) (string, error) {
+func quoted(t *testing.T, tool registry.Quote, id string) (string, error) {
 	t.Helper()
 	args, err := json.Marshal(map[string]string{"id": id})
 	if err != nil {
@@ -54,7 +54,7 @@ func quoted(t *testing.T, tool tools.Quote, id string) (string, error) {
 
 func shortOf(id string) string { return "#" + id[len(id)-6:] }
 
-func threeTurns(t *testing.T) tools.Quote {
+func threeTurns(t *testing.T) registry.Quote {
 	t.Helper()
 	return recordedQuote(t,
 		spoke(t, "0f2c9b1a-1111-4aaa-8bbb-aaaaaade2233", session.RoleUser, "read the policy before the wire\nthen say so"),
@@ -114,12 +114,12 @@ func TestQuoteReadsATurnFromEitherSideOfAFork(t *testing.T) {
 		{child, "#aa0001", "never create .bak copies", parent},
 		{parent, "#bb0002", "change the port to 9090", child},
 	} {
-		content, err := quoted(t, tools.NewQuote(store, c.held), c.id)
+		content, err := quoted(t, registry.NewQuote(store, c.held), c.id)
 		if err != nil || !strings.Contains(content, c.want) || !strings.Contains(content, c.in) {
 			t.Fatalf("quoting %s from %s gave %v:\n%s", c.id, c.held, err, content)
 		}
 	}
-	if _, err := quoted(t, tools.NewQuote(store, child), "#000000"); !errors.Is(err, session.ErrEventHashNotFound) {
+	if _, err := quoted(t, registry.NewQuote(store, child), "#000000"); !errors.Is(err, session.ErrEventHashNotFound) {
 		t.Fatalf("an id no session in the chain carries came back as %v", err)
 	}
 }
@@ -150,7 +150,7 @@ func TestEveryPreEventIDTurnRecordedUnderThisRepositoryResolves(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		tool := tools.NewQuote(store, header.ID)
+		tool := registry.NewQuote(store, header.ID)
 		counted := 0
 		for index, one := range talk.Said {
 			if one.Event != "" {
@@ -222,7 +222,7 @@ func shippedQuoteRule(t *testing.T) rule.Rule {
 }
 
 func TestTheShippedQuoteRuleNamesTheToolThatResolvesTheReference(t *testing.T) {
-	var registered contract.Tool = tools.NewQuote(nil, "")
+	var registered contract.Tool = registry.NewQuote(nil, "")
 	defined := registered.Definition()
 	if defined.Name != registered.Name() {
 		t.Fatalf("the registry keys the tool as %q and the model is told %q", registered.Name(), defined.Name)
@@ -244,7 +244,7 @@ func TestTheQuoteRuleReachesTheModelWhileItsModeSaysShadow(t *testing.T) {
 	if quote.Mode != rule.ModeShadow {
 		t.Fatalf("the shipped rule is %s, and every shipped rule is %s until a ticket promotes the whole library", quote.Mode, rule.ModeShadow)
 	}
-	composed, err := turn.Compose(turn.ComposeSpec{
+	composed, err := loop.Compose(loop.ComposeSpec{
 		Task:         "say what you meant in [quote#de2233]",
 		Environment:  "windows, one repository",
 		ToolGuidance: "read before you write",
@@ -334,7 +334,7 @@ func TestATurnAndACallEndingAlikeAreAmbiguousAndAMessageIsCountedOnce(t *testing
 }
 
 func TestQuoteWithNoRecordedSessionSaysThereIsNothingToQuote(t *testing.T) {
-	if _, err := quoted(t, tools.NewQuote(nil, ""), "#de2233"); err == nil {
+	if _, err := quoted(t, registry.NewQuote(nil, ""), "#de2233"); err == nil {
 		t.Fatal("a turn recording no session still answered a quote")
 	}
 }

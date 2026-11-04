@@ -31,7 +31,7 @@ func restoring(out io.Writer, carry sessionResume) func() {
 	}
 	label := "restoring " + carry.Handle
 	stop, stopped := make(chan struct{}), make(chan struct{})
-	safe.Go(wiring.CrashTold(".", func(said string) { _, _ = io.WriteString(out, "\rtofu: "+said+"\n") }), "restoring spinner", func() {
+	recover.Go(wiring.CrashTold(".", func(said string) { _, _ = io.WriteString(out, "\rtofu: "+said+"\n") }), "restoring spinner", func() {
 		defer close(stopped)
 		tick := time.NewTicker(progress.TickInterval)
 		defer tick.Stop()
@@ -39,7 +39,7 @@ func restoring(out io.Writer, carry sessionResume) func() {
 			_, _ = io.WriteString(out, "\r"+progress.Spin(frame)+" "+label)
 			select {
 			case <-stop:
-				_, _ = io.WriteString(out, "\r"+strings.Repeat(" ", widget.Cells(label)+2)+"\r")
+				_, _ = io.WriteString(out, "\r"+strings.Repeat(" ", render.Cells(label)+2)+"\r")
 				return
 			case <-tick.C:
 			}

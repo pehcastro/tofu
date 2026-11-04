@@ -22,7 +22,7 @@ func TestAnUnsetTierStaysOutOfTheChatAndARefusedDefinitionStillShows(t *testing.
 	if err := os.WriteFile(filepath.Join(agents, "refused.md"), []byte("Do nothing, and carry no front matter.\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	unset := slices.ContainsFunc(scanSubAgents(project, nil).Definitions, func(definition subagent.Definition) bool {
+	unset := slices.ContainsFunc(scanSubAgents(project, nil).Definitions, func(definition subagents.Definition) bool {
 		return slices.ContainsFunc(definition.Notices, func(notice string) bool { return strings.Contains(notice, "is not set, so") })
 	})
 	if !unset {

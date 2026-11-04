@@ -79,12 +79,12 @@ func LoadShots(dir string) (Shots, map[string][]byte, error) {
 	return shots, images, nil
 }
 
-func postImages(ctx context.Context, key string, body []byte) (jev.Raw, error) {
+func postImages(ctx context.Context, key string, body []byte) (core.Raw, error) {
 	ctx, cancel := context.WithTimeout(ctx, imageCallLimit)
 	defer cancel()
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, typesafe.Endpoint, bytes.NewReader(body))
 	if err != nil {
-		return jev.Raw{}, err
+		return core.Raw{}, err
 	}
 	request.Header.Set("Authorization", "Bearer "+key)
 	request.Header.Set("Content-Type", "application/json")
@@ -92,7 +92,7 @@ func postImages(ctx context.Context, key string, body []byte) (jev.Raw, error) {
 	started := time.Now()
 	response, err := http.DefaultClient.Do(request)
 	if err != nil {
-		return jev.Raw{}, err
+		return core.Raw{}, err
 	}
 	defer func() { _ = response.Body.Close() }()
 	raw, err := io.ReadAll(response.Body)
@@ -100,7 +100,7 @@ func postImages(ctx context.Context, key string, body []byte) (jev.Raw, error) {
 	if err == nil && response.StatusCode != http.StatusOK {
 		err = fmt.Errorf("typesafe answered %d: %s", response.StatusCode, strings.Join(strings.Fields(string(raw)), " "))
 	}
-	return jev.Raw{Body: raw, Attempts: 1, Latency: elapsed, RequestID: response.Header.Get(typesafe.RequestIDHeader)}, err
+	return core.Raw{Body: raw, Attempts: 1, Latency: elapsed, RequestID: response.Header.Get(typesafe.RequestIDHeader)}, err
 }
 
 func assets(image []byte) map[string]any {
@@ -128,15 +128,15 @@ func withShot(body, image []byte) ([]byte, error) {
 }
 
 type shotWire struct {
-	jev.Wire
+	core.Wire
 	key   string
 	image []byte
 }
 
-func (w shotWire) Post(ctx context.Context, body []byte) (jev.Raw, error) {
+func (w shotWire) Post(ctx context.Context, body []byte) (core.Raw, error) {
 	pictured, err := withShot(body, w.image)
 	if err != nil {
-		return jev.Raw{}, err
+		return core.Raw{}, err
 	}
 	return postImages(ctx, w.key, pictured)
 }
@@ -157,11 +157,11 @@ type ImageRecording struct {
 	Boxes      []Boxed    `json:"boxes"`
 }
 
-func boxInstructions(c Case, target browser.Element) string {
+func boxInstructions(c Case, target driver.Element) string {
 	return fmt.Sprintf("the %s labelled %q in `screenshot` that a person acts on for this goal: %s", target.Role, target.Label, c.Goal)
 }
 
-func RecordImages(ctx context.Context, wire jev.Wire, key string, set question.Set, cases []Case, images map[string][]byte, shotsFile string, conditions Conditions) (ImageRecording, error) {
+func RecordImages(ctx context.Context, wire core.Wire, key string, set questions.Set, cases []Case, images map[string][]byte, shotsFile string, conditions Conditions) (ImageRecording, error) {
 	recording := ImageRecording{Conditions: conditions, Shots: shotsFile, Pictured: Recording{Conditions: conditions, Model: wire.Model(), Caps: wire.Caps()}, BoxModel: BoxModel}
 	for _, c := range cases {
 		image, shot := images[c.ID]
@@ -282,7 +282,7 @@ func WriteImages(w io.Writer, shots Shots, before, text, pictured []Reading, bef
 		if r.Inside {
 			inside++
 		}
-		if r.Case.Want.Op == browser.OpClick {
+		if r.Case.Want.Op == driver.OpClick {
 			clicks++
 			if r.Inside {
 				clicksInside++

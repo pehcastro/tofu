@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
@@ -78,7 +78,7 @@ func credentialStatus(now time.Time, redact bool, urls map[quota.Provider]string
 	if len(results) > 0 && results[0].RecordErr != nil {
 		problems = append(problems, cli.Problem{What: wiring.QuotaReadingNotWritten + results[0].RecordErr.Error()})
 	}
-	var providers []cred.Provider
+	var providers []accounts.Provider
 	for _, row := range rows {
 		if !slices.Contains(providers, row.Credential.Provider) {
 			providers = append(providers, row.Credential.Provider)
@@ -102,7 +102,7 @@ func credentialStatus(now time.Time, redact bool, urls map[quota.Provider]string
 	return data, problems, nil
 }
 
-func statusCandidates(provider cred.Provider, rows []cred.Row, results []wiring.PollResult, now time.Time) []quota.Candidate {
+func statusCandidates(provider accounts.Provider, rows []accounts.Row, results []wiring.PollResult, now time.Time) []quota.Candidate {
 	candidates := make([]quota.Candidate, 0, len(rows))
 	for index, row := range rows {
 		if row.Credential.Provider == provider && row.Unusable(now) == "" {
@@ -112,10 +112,10 @@ func statusCandidates(provider cred.Provider, rows []cred.Row, results []wiring.
 	return candidates
 }
 
-func accountOf(row cred.Row, result wiring.PollResult, attempts []cred.Attempt, chosen, redact bool, library models.Library, now time.Time) host.AccountStatus {
+func accountOf(row accounts.Row, result wiring.PollResult, attempts []accounts.Attempt, chosen, redact bool, library catalog.Library, now time.Time) host.AccountStatus {
 	refreshed := "not refreshed yet"
 	if !row.Credential.Refreshed.IsZero() {
-		refreshed = "refreshed " + widget.Until(now.Sub(row.Credential.Refreshed)) + " ago"
+		refreshed = "refreshed " + render.Until(now.Sub(row.Credential.Refreshed)) + " ago"
 	}
 	account := host.AccountStatus{
 		ID:      row.ID,
@@ -132,7 +132,7 @@ func accountOf(row cred.Row, result wiring.PollResult, attempts []cred.Attempt, 
 	}
 	if lastRefreshFailed(account) && (account.State == host.AccountRefreshFailed || account.State == host.AccountRefused) {
 		last := attempts[len(attempts)-1]
-		account.Login = "refresh failed " + widget.Until(now.Sub(last.At)) + " ago · " + last.Said()
+		account.Login = "refresh failed " + render.Until(now.Sub(last.At)) + " ago · " + last.Said()
 	}
 	account.ReloginBy, _ = row.ReloginBy(now)
 	for _, window := range result.Report.Windows {
@@ -141,7 +141,7 @@ func accountOf(row cred.Row, result wiring.PollResult, attempts []cred.Attempt, 
 		}
 		shown := host.WindowStatus{ID: window.ID, Used: window.Used.Fraction, ResetsAt: window.ResetsAt}
 		for _, model := range library.Models {
-			if model.Use != models.UseExcluded && !window.Binds(nil) && window.Binds(model.Windows) {
+			if model.Use != catalog.UseExcluded && !window.Binds(nil) && window.Binds(model.Windows) {
 				shown.Only = append(shown.Only, model.ID)
 			}
 		}
@@ -150,7 +150,7 @@ func accountOf(row cred.Row, result wiring.PollResult, attempts []cred.Attempt, 
 	return account
 }
 
-func stateOf(row cred.Row, result wiring.PollResult, chosen bool, now time.Time) host.AccountState {
+func stateOf(row accounts.Row, result wiring.PollResult, chosen bool, now time.Time) host.AccountState {
 	switch {
 	case row.DisabledCause == setAsideCause:
 		return host.AccountSetAside

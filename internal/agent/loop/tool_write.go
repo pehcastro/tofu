@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"strings"
 
 	"tofu/internal/konst"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
@@ -54,8 +54,8 @@ func (t *WriteTool) Ruling(rules []rule.Rule) *WriteTool {
 
 func (t *WriteTool) Name() string { return "write" }
 
-func (t *WriteTool) Definition() llm.Tool {
-	return llm.Tool{
+func (t *WriteTool) Definition() core.Tool {
+	return core.Tool{
 		Name: "write",
 		Description: "writes a file inside the turn's working directory, replacing it whole. " +
 			"the result says the file was created when it was not there before, " +

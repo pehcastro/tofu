@@ -98,7 +98,7 @@ func readDebts(file string) ([]debt, error) {
 	return held, nil
 }
 
-func area(r rule.Rule) string {
+func area(r rules.Rule) string {
 	switch {
 	case strings.HasSuffix(r.ID, "schema_edit"):
 		return schemaArea
@@ -108,12 +108,12 @@ func area(r rule.Rule) string {
 	return "apps/desk/crates"
 }
 
-func watched(r rule.Rule, path string) bool {
-	r.Pattern, r.Mode = regexp.MustCompile(`(?s).+`), rule.ModeEnforced
-	return rule.CheckWrite([]rule.Rule{r}, path, "", "x") != nil
+func watched(r rules.Rule, path string) bool {
+	r.Pattern, r.Mode = regexp.MustCompile(`(?s).+`), rules.ModeEnforced
+	return rules.CheckWrite([]rules.Rule{r}, path, "", "x") != nil
 }
 
-func clean(root string, r rule.Rule, count, size int, held []debt) (taken, owed []cut, err error) {
+func clean(root string, r rules.Rule, count, size int, held []debt) (taken, owed []cut, err error) {
 	under := area(r)
 	listed, err := git(root, "ls-tree", "-r", "--name-only", "HEAD", under)
 	if err != nil {
@@ -148,7 +148,7 @@ func clean(root string, r rule.Rule, count, size int, held []debt) (taken, owed 
 	return taken, owed, nil
 }
 
-func window(root string, r rule.Rule, path string, size int, held []debt) (cut, error) {
+func window(root string, r rules.Rule, path string, size int, held []debt) (cut, error) {
 	content, err := git(root, "show", "HEAD:"+path)
 	if err != nil {
 		return cut{}, err
@@ -157,7 +157,7 @@ func window(root string, r rule.Rule, path string, size int, held []debt) (cut, 
 	from := max(0, len(lines)/2-size/2)
 	to := min(len(lines), from+size)
 	c := cut{write: write{rule: r.ID, path: path, before: strings.Join(lines[:from], "") + strings.Join(lines[to:], ""), after: content}, window: fmt.Sprintf("%s:%d-%d", path, from+1, to)}
-	for _, f := range rule.CheckWrite([]rule.Rule{r}, path, c.before, c.after) {
+	for _, f := range rules.CheckWrite([]rules.Rule{r}, path, c.before, c.after) {
 		for _, finding := range f.Findings {
 			if at := slices.IndexFunc(held, func(d debt) bool { return d.rule == r.ID && d.target == finding.Target }); at >= 0 {
 				c.debts = append(c.debts, finding.Target+": "+held[at].reason)

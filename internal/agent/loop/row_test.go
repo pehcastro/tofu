@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 )
 
 func TestASubAgentWritingAfterTheLeadForksKeepsEveryEventInTheSessionLog(t *testing.T) {
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey: {besideARead(spawnCall("call-spawn", usersRoute, "src/users.ts")), claimDecision("goal: add the users route"), claimDecision("sub-1 is on it"),
 			claimDecision("goal: add the users route, sub-1 is on it"), claimDecision("sub-1 is done")},
 		usersRoute: {claimDecision("the users route is added")},

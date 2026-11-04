@@ -31,7 +31,7 @@ func gateRule(root, file string) (gate.Rule, gate.Resolution, error) {
 	return resolution.Rule, resolution, nil
 }
 
-func decide(answers map[string]jev.Answer, pol gate.Rule) (Verdict, gate.Reason, error) {
+func decide(answers map[string]core.Answer, pol gate.Rule) (Verdict, gate.Reason, error) {
 	verdict, reason, err := gate.Decide(answers, pol)
 	if err != nil {
 		return "", gate.Reason{}, err
@@ -49,16 +49,16 @@ type gateAnswers struct {
 	FromUntrusted float64
 }
 
-func answerMap(pol gate.Rule, answers gateAnswers) map[string]jev.Answer {
-	return map[string]jev.Answer{
-		pol.RiskQuestion:          {Kind: jev.QuestionScore, Score: answers.Risk},
-		pol.ApprovalQuestion:      {Kind: jev.QuestionNoul, Noul: answers.Approval},
-		pol.UserRequestedQuestion: {Kind: jev.QuestionNoul, Noul: answers.UserRequested},
-		pol.FromUntrustedQuestion: {Kind: jev.QuestionNoul, Noul: answers.FromUntrusted},
+func answerMap(pol gate.Rule, answers gateAnswers) map[string]core.Answer {
+	return map[string]core.Answer{
+		pol.RiskQuestion:          {Kind: core.QuestionScore, Score: answers.Risk},
+		pol.ApprovalQuestion:      {Kind: core.QuestionNoul, Noul: answers.Approval},
+		pol.UserRequestedQuestion: {Kind: core.QuestionNoul, Noul: answers.UserRequested},
+		pol.FromUntrustedQuestion: {Kind: core.QuestionNoul, Noul: answers.FromUntrusted},
 	}
 }
 
-func rowAnswers(pol gate.Rule, row AnswerRow) (map[string]jev.Answer, bool) {
+func rowAnswers(pol gate.Rule, row AnswerRow) (map[string]core.Answer, bool) {
 	if !row.AnswersKnown || row.Risk == nil || row.FromUntrusted == nil {
 		return nil, false
 	}

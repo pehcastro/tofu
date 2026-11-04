@@ -17,7 +17,7 @@ const (
 	withoutSteps
 )
 
-func (s Settings) shown(events []Event, depth viewDepth, report safe.Report) ([]Event, error) {
+func (s Settings) shown(events []Event, depth viewDepth, report recover.Report) ([]Event, error) {
 	calls := map[string]Event{}
 	asked := map[string][]string{}
 	madeBy := map[string][]string{}
@@ -120,7 +120,7 @@ func (s Settings) shown(events []Event, depth viewDepth, report safe.Report) ([]
 	var all sync.WaitGroup
 	for part := range ways {
 		all.Go(func() {
-			failures[part] = safe.Call(report, "session view", func() (err error) {
+			failures[part] = recover.Call(report, "session view", func() (err error) {
 				parts[part], err = showPart(events[part*len(events)/ways : (part+1)*len(events)/ways])
 				return err
 			})

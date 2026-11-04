@@ -136,7 +136,7 @@ func siftedShell() sift.Shell {
 
 func TestTheRunAttachesAScorerBuiltOverTheJevClient(t *testing.T) {
 	assumesTheRuleIsOutOfShadow(t)
-	testkit.ChdirTemp(t)
+	cli.ChdirTemp(t)
 	stubRecordedJudgedReplies(t)
 	bindTypeSafe(t)
 
@@ -148,13 +148,13 @@ func TestTheRunAttachesAScorerBuiltOverTheJevClient(t *testing.T) {
 		t.Fatalf("the table names %s for %s and the run built sifter %v scorer %v",
 			method.Judged, sift.ShellSchema, sifter, scorer)
 	}
-	if sifter.Scores != turn.ShellScores(scorer) {
+	if sifter.Scores != loop.ShellScores(scorer) {
 		t.Fatalf("the sieve scores through %#v, not the scorer the run built", sifter.Scores)
 	}
 	opts := armOpts(t)
-	config, _ := mustConfig(t, opts, nil, runtime{spend: turn.SpendSubscription, sift: sifter, scorer: scorer})
+	config, _ := mustConfig(t, opts, nil, runtime{spend: loop.SpendSubscription, sift: sifter, scorer: scorer})
 	if config.Sift != sifter {
-		t.Fatalf("turn.Config carries %v, not the sieve the run built", config.Sift)
+		t.Fatalf("loop.Config carries %v, not the sieve the run built", config.Sift)
 	}
 	if scorer.TurnID == "" {
 		t.Fatal("the scorer writes ledger rows against no turn")
@@ -167,19 +167,19 @@ type bashingModel struct {
 	asked   int
 }
 
-func (m *bashingModel) Ask(context.Context, llm.Request) (llm.Decision, error) {
+func (m *bashingModel) Ask(context.Context, core.Request) (core.Decision, error) {
 	m.asked++
 	if m.asked == 1 {
-		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+		return core.Decision{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
 			{ID: "call-1", Name: "bash", Arguments: json.RawMessage(`{"command":` + strconv.Quote(m.command) + `}`)},
 		}}, nil
 	}
-	return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it"}, nil
+	return core.Decision{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "read it"}, nil
 }
 
 func TestABashResultReachesTheModelSmallerThanTheOutputItRan(t *testing.T) {
 	assumesTheRuleIsOutOfShadow(t)
-	dir := testkit.ChdirTemp(t)
+	dir := cli.ChdirTemp(t)
 	stubRecordedJudgedReplies(t)
 	bindTypeSafe(t)
 
@@ -199,15 +199,15 @@ func TestABashResultReachesTheModelSmallerThanTheOutputItRan(t *testing.T) {
 		t.Fatalf("buildShellSift: %v", err)
 	}
 	model := &bashingModel{command: "cat " + filepath.ToSlash(path)}
-	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, sift: sifter, scorer: scorer})
+	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: loop.SpendSubscription, sift: sifter, scorer: scorer})
 
-	row, err := turn.Run(context.Background(), config)
+	row, err := loop.Run(context.Background(), config)
 	if err != nil {
-		t.Fatalf("turn.Run: %v", err)
+		t.Fatalf("loop.Run: %v", err)
 	}
 	var messages []string
 	for _, message := range row.Conversation {
-		if message.Role == llm.RoleTool {
+		if message.Role == core.RoleTool {
 			messages = append(messages, message.Content)
 		}
 	}
@@ -238,7 +238,7 @@ func lastLine(message string) string {
 
 func TestTheThreeStatesOfTheShellSiftCountedInBytes(t *testing.T) {
 	assumesTheRuleIsOutOfShadow(t)
-	testkit.ChdirTemp(t)
+	cli.ChdirTemp(t)
 	stubRecordedJudgedReplies(t)
 	bindTypeSafe(t)
 	shell := siftedShell()
@@ -255,9 +255,9 @@ func TestTheThreeStatesOfTheShellSiftCountedInBytes(t *testing.T) {
 	if freeScorer != nil {
 		t.Fatal("the free arm built a jev client")
 	}
-	unattached, err := turn.NewShellSift(nil)
+	unattached, err := loop.NewShellSift(nil)
 	if err != nil {
-		t.Fatalf("turn.NewShellSift(nil): %v", err)
+		t.Fatalf("loop.NewShellSift(nil): %v", err)
 	}
 
 	cutJudged, err := judged.Cut(t.Context(), shell, "find the line that says what failed")
@@ -368,7 +368,7 @@ func bashResultsIn(t *testing.T, body, session, task string) []recordedShell {
 	for scanner.Scan() {
 		var event struct {
 			Kind string          `json:"kind"`
-			Body turn.MessageRow `json:"body"`
+			Body loop.MessageRow `json:"body"`
 		}
 		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil || event.Kind != "message" {
 			continue
@@ -397,7 +397,7 @@ func TestWhatTheJudgedSiftSavesAndCostsOverEveryRecordedSession(t *testing.T) {
 		t.Skip("skipped, and counted: no recorded session carries a bash result")
 	}
 	assumesTheRuleIsOutOfShadow(t)
-	testkit.ChdirTemp(t)
+	cli.ChdirTemp(t)
 	stubRecordedJudgedReplies(t)
 	bindTypeSafe(t)
 
@@ -472,7 +472,7 @@ func logHere(t *testing.T) string {
 
 func TestEveryShellSiftDecisionIsWrittenToTheLedger(t *testing.T) {
 	assumesTheRuleIsOutOfShadow(t)
-	testkit.ChdirTemp(t)
+	cli.ChdirTemp(t)
 	stubRecordedJudgedReplies(t)
 	bindTypeSafe(t)
 	sifter, scorer, err := wiring.BuildShellSift(wiring.SiftFollowsTheTable, logHere(t))

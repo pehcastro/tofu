@@ -53,13 +53,13 @@ func pinnedNames() map[reflect.Type]string {
 			boardy.RulesRequest{}, boardy.Tally{}, boardy.Ticket{}, boardy.TicketAnswer{}, boardy.TriageAnswer{},
 			boardy.TriageRequest{}, boardy.Unacted{}, boardy.View{}, boardy.Words{},
 		},
-		"browser": {browser.NativeHost{}},
+		"browser": {driver.NativeHost{}},
 		"command": {commands.Command{}},
 		"drain": {
 			drain.Agent{}, drain.Finding{}, drain.Line{}, drain.Rebuild{}, drain.Resident{}, drain.Spend{},
 			drain.Tokens{}, drain.Weights{},
 		},
-		"hook": {hook.Hook{}, hook.Result{}},
+		"hook": {hooks.Hook{}, hooks.Result{}},
 		"learn": {
 			learn.Check{}, learn.Finding{}, learn.Job{}, learn.JobRun{}, learn.Label{}, learn.Quote{},
 			learn.Read{}, learn.Run{}, learn.Said{}, learn.Sent{}, learn.Summary{},
@@ -68,7 +68,7 @@ func pinnedNames() map[reflect.Type]string {
 			ledger.Answer{}, ledger.Charge{}, ledger.Outcome{}, ledger.PointSummary{}, ledger.Reason{},
 			ledger.Row{}, ledger.Slice{}, ledger.StateElision{}, ledger.Threshold{}, ledger.Usage{},
 		},
-		"memory": {memory.Entry{}, memory.Weight{}},
+		"memory": {entries.Entry{}, entries.Weight{}},
 		"quota":  {quota.Burn{}},
 		"recall": {recall.Item{}},
 		"session": {
@@ -79,17 +79,17 @@ func pinnedNames() map[reflect.Type]string {
 			session.UsageTotals{},
 		},
 		"settings": {settings.RaisedVersion{}},
-		"skill":    {skill.Skill{}},
+		"skill":    {skills.Skill{}},
 		"snapshot": {snapshot.Refusal{}, snapshot.Report{}},
 		"state":    {state.Subject{}},
 		"subagent": {
-			subagent.Broken{}, subagent.Definition{}, subagent.Found{}, subagent.Reference{},
-			subagent.Transition{},
+			subagents.Broken{}, subagents.Definition{}, subagents.Found{}, subagents.Reference{},
+			subagents.Transition{},
 		},
 		"sys": {sys.ScratchFolder{}, sys.ScratchReport{}},
 		"turn": {
-			turn.HookRun{}, turn.LoopGuardStop{}, turn.PersonOption{}, turn.PersonQuestion{}, turn.PersonReply{},
-			turn.ProxyRow{}, turn.ToolCallRow{},
+			loop.HookRun{}, loop.LoopGuardStop{}, loop.PersonOption{}, loop.PersonQuestion{}, loop.PersonReply{},
+			loop.ProxyRow{}, loop.ToolCallRow{},
 		},
 	} {
 		for _, value := range values {

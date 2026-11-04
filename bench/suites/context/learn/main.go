@@ -142,11 +142,11 @@ func askJev(windows []window) ([]labels, float64, string, error) {
 	if err != nil {
 		return nil, 0, "", err
 	}
-	var questions []jev.Question
+	var questions []core.Question
 	for _, q := range set.Questions {
 		questions = append(questions, q.ToJev())
 	}
-	key, err := jev.TypeSafeKey(sys.CredentialFileName)
+	key, err := core.TypeSafeKey(sys.CredentialFileName)
 	if err != nil {
 		return nil, 0, "", err
 	}
@@ -159,14 +159,14 @@ func askJev(windows []window) ([]labels, float64, string, error) {
 	if err != nil {
 		return nil, 0, "", err
 	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+	client, err := core.NewClient(core.Config{Wire: wire})
 	if err != nil {
 		return nil, 0, "", err
 	}
 	got := make([]labels, len(windows))
 	cost, build := 0.0, ""
 	for i, w := range windows {
-		decision, err := client.Ask(context.Background(), jev.Request{State: w.State, Questions: questions})
+		decision, err := client.Ask(context.Background(), core.Request{State: w.State, Questions: questions})
 		if err != nil {
 			return nil, 0, "", fmt.Errorf("window %s: %w", w.Key, err)
 		}

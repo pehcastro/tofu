@@ -16,7 +16,7 @@ const (
 )
 
 func BoardyIdentity(as string) (actor, lead string) {
-	if session := os.Getenv(subagent.SessionEnv); session != "" {
+	if session := os.Getenv(subagents.SessionEnv); session != "" {
 		if boardy.SubAgentActor(session) {
 			return session, ""
 		}

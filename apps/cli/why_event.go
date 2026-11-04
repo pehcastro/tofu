@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/render"
 	sessionstore "tofu/internal/store/session"
@@ -15,7 +15,7 @@ type recordedCall struct {
 	Session string           `json:"session"`
 	Step    int              `json:"step"`
 	Attempt int              `json:"attempt"`
-	Call    turn.ToolCallRow `json:"call"`
+	Call    loop.ToolCallRow `json:"call"`
 }
 
 func recordedCallByHash(hash string) (recordedCall, bool, error) {
@@ -39,7 +39,7 @@ func recordedCallByHash(hash string) (recordedCall, bool, error) {
 			if event.Kind != sessionstore.EventStep {
 				continue
 			}
-			var step turn.StepRow
+			var step loop.StepRow
 			if err := json.Unmarshal(event.Body, &step); err != nil {
 				continue
 			}
@@ -55,7 +55,7 @@ func recordedCallByHash(hash string) (recordedCall, bool, error) {
 
 func callLines(page cli.Page, found recordedCall) []string {
 	call := found.Call
-	verdict := cli.Verdict{Mark: cli.Done, Text: widget.Size(call.ResultBytes) + " in " + strconv.FormatInt(call.DurationMS, 10) + " ms"}
+	verdict := cli.Verdict{Mark: cli.Done, Text: render.Size(call.ResultBytes) + " in " + strconv.FormatInt(call.DurationMS, 10) + " ms"}
 	if call.Error != "" {
 		verdict = cli.Verdict{Mark: cli.Fail, Text: "failed"}
 	}

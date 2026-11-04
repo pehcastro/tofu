@@ -76,17 +76,17 @@ func TestAResumedChatDrawsEachSubAgentReportAsAReportAndNeverAsSomethingThePerso
 			reported("research-1", roster.Finished, again, forked.Add(4*time.Minute)),
 			asked(joined, "sub-agent report and typed by the person"),
 			asked(noted, "sub-agent report"))...)
-	spawn := func(call, task string) llm.ToolCall {
+	spawn := func(call, task string) core.ToolCall {
 		args, _ := json.Marshal(map[string]string{"agent": "research", "task": task})
-		return llm.ToolCall{ID: call, Name: "spawn", Arguments: args}
+		return core.ToolCall{ID: call, Name: "spawn", Arguments: args}
 	}
-	carry := Carry{Session: child, Messages: []llm.Message{
-		{Role: llm.RoleUser, Content: env + early},
-		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{spawn("call-2", "read the shaders"), spawn("call-3", "still running at quit")}},
-		{Role: llm.RoleTool, ToolCallID: "call-2", Content: "research-2 is running in the background"},
-		{Role: llm.RoleTool, ToolCallID: "call-3", Content: "research-3 is running in the background"},
-		{Role: llm.RoleUser, Content: joined, Origin: llm.LegacyOrigin("sub-agent report and typed by the person")},
-		{Role: llm.RoleUser, Content: noted, Origin: llm.LegacyOrigin("sub-agent report")},
+	carry := Carry{Session: child, Messages: []core.Message{
+		{Role: core.RoleUser, Content: env + early},
+		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{spawn("call-2", "read the shaders"), spawn("call-3", "still running at quit")}},
+		{Role: core.RoleTool, ToolCallID: "call-2", Content: "research-2 is running in the background"},
+		{Role: core.RoleTool, ToolCallID: "call-3", Content: "research-3 is running in the background"},
+		{Role: core.RoleUser, Content: joined, Origin: core.LegacyOrigin("sub-agent report and typed by the person")},
+		{Role: core.RoleUser, Content: noted, Origin: core.LegacyOrigin("sub-agent report")},
 	}}
 
 	chat := resumedChat(carry, project).Chat

@@ -348,19 +348,19 @@ func panicOf(call func()) (message string) {
 }
 
 func TestEndReasonOfNamesEveryTurnOutcome(t *testing.T) {
-	readBefore := map[turn.Outcome]EndReason{
-		turn.OutcomeUnset:               EndReasonCrash,
-		turn.OutcomeStopped:             EndReasonDone,
-		turn.OutcomeStepCap:             EndReasonTurnCap,
-		turn.OutcomeRetiredCostCap:      EndReasonCrash,
-		turn.OutcomeRetiredWallClockCap: EndReasonWallClock,
-		turn.OutcomeDecisionCap:         EndReasonTurnCap,
-		turn.OutcomeForked:              EndReasonCrash,
-		turn.OutcomeError:               EndReasonCrash,
-		turn.OutcomeTruncated:           EndReasonTruncated,
-		turn.OutcomeLoopGuard:           EndReasonTurnCap,
-		turn.OutcomeCancelled:           EndReasonCrash,
-		turn.OutcomeForkStop:            EndReasonTurnCap,
+	readBefore := map[loop.Outcome]EndReason{
+		loop.OutcomeUnset:               EndReasonCrash,
+		loop.OutcomeStopped:             EndReasonDone,
+		loop.OutcomeStepCap:             EndReasonTurnCap,
+		loop.OutcomeRetiredCostCap:      EndReasonCrash,
+		loop.OutcomeRetiredWallClockCap: EndReasonWallClock,
+		loop.OutcomeDecisionCap:         EndReasonTurnCap,
+		loop.OutcomeForked:              EndReasonCrash,
+		loop.OutcomeError:               EndReasonCrash,
+		loop.OutcomeTruncated:           EndReasonTruncated,
+		loop.OutcomeLoopGuard:           EndReasonTurnCap,
+		loop.OutcomeCancelled:           EndReasonCrash,
+		loop.OutcomeForkStop:            EndReasonTurnCap,
 	}
 	outcomes := sessionstore.AllOutcomes()
 	if len(outcomes) < len(readBefore) {
@@ -373,7 +373,7 @@ func TestEndReasonOfNamesEveryTurnOutcome(t *testing.T) {
 			continue
 		}
 		var reason EndReason
-		raised := panicOf(func() { reason, _ = endReasonOf(turn.Row{ID: "turn-1", Outcome: outcome}) })
+		raised := panicOf(func() { reason, _ = endReasonOf(loop.Row{ID: "turn-1", Outcome: outcome}) })
 		if raised != "" {
 			t.Errorf("outcome %s has no case in endReasonOf: %s", outcome, raised)
 			continue
@@ -386,16 +386,16 @@ func TestEndReasonOfNamesEveryTurnOutcome(t *testing.T) {
 
 func TestARecordedRowCarryingTruncatedReadsToAnEndReason(t *testing.T) {
 	dir := t.TempDir()
-	writeSessionFile(t, dir, turn.Row{
-		ID: "turn-truncated", Schema: turn.SchemaVersion, At: time.Now().Add(-time.Hour),
-		Task: "a task", Spend: turn.SpendSubscription, Outcome: turn.OutcomeTruncated,
-		Steps: []turn.StepRow{{Index: 1, StopReason: "max_tokens"}},
+	writeSessionFile(t, dir, loop.Row{
+		ID: "turn-truncated", Schema: loop.SchemaVersion, At: time.Now().Add(-time.Hour),
+		Task: "a task", Spend: loop.SpendSubscription, Outcome: loop.OutcomeTruncated,
+		Steps: []loop.StepRow{{Index: 1, StopReason: "max_tokens"}},
 	})
 	row, err := LoadSession(filepath.Join(dir, "turn-truncated.json"))
 	if err != nil {
 		t.Fatalf("LoadSession: %v", err)
 	}
-	if row.Outcome != turn.OutcomeTruncated {
+	if row.Outcome != loop.OutcomeTruncated {
 		t.Fatalf("the recorded row read back as %s, so it never carried truncated and this test is not the one it claims to be", row.Outcome)
 	}
 	reason, gap := endReasonOf(row)
@@ -404,7 +404,7 @@ func TestARecordedRowCarryingTruncatedReadsToAnEndReason(t *testing.T) {
 	}
 }
 
-func writeSessionFile(t *testing.T, dir string, row turn.Row) {
+func writeSessionFile(t *testing.T, dir string, row loop.Row) {
 	t.Helper()
 	body, err := json.Marshal(row)
 	if err != nil {
@@ -418,15 +418,15 @@ func writeSessionFile(t *testing.T, dir string, row turn.Row) {
 func forkedChain(t *testing.T, dir string) time.Time {
 	t.Helper()
 	start := time.Now().Add(-time.Hour)
-	writeSessionFile(t, dir, turn.Row{
-		ID: "turn-chain", Schema: turn.SchemaVersion, At: start, Task: "a task", Spend: turn.SpendAPIKey,
-		Outcome: turn.OutcomeForked, ForkedInto: "turn-chain-f2",
-		Steps: []turn.StepRow{{Index: 1}, {Index: 2}},
+	writeSessionFile(t, dir, loop.Row{
+		ID: "turn-chain", Schema: loop.SchemaVersion, At: start, Task: "a task", Spend: loop.SpendAPIKey,
+		Outcome: loop.OutcomeForked, ForkedInto: "turn-chain-f2",
+		Steps: []loop.StepRow{{Index: 1}, {Index: 2}},
 	})
-	writeSessionFile(t, dir, turn.Row{
-		ID: "turn-chain-f2", Schema: turn.SchemaVersion, At: start.Add(time.Minute), Task: "a task", Spend: turn.SpendAPIKey,
-		Outcome: turn.OutcomeStopped, ForkedFrom: "turn-chain", ForkKind: turn.ForkContinuation,
-		Steps: []turn.StepRow{{Index: 3}},
+	writeSessionFile(t, dir, loop.Row{
+		ID: "turn-chain-f2", Schema: loop.SchemaVersion, At: start.Add(time.Minute), Task: "a task", Spend: loop.SpendAPIKey,
+		Outcome: loop.OutcomeStopped, ForkedFrom: "turn-chain", ForkKind: loop.ForkContinuation,
+		Steps: []loop.StepRow{{Index: 3}},
 	})
 	return start
 }

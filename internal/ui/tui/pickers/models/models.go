@@ -76,7 +76,7 @@ type Group struct {
 	Source  string
 	Display string
 	Rows    []Row
-	Efforts []llm.Effort
+	Efforts []core.Effort
 	Key     string
 	KeySet  bool
 }
@@ -93,7 +93,7 @@ func (g Group) label() string {
 
 type Source struct {
 	ID      library.Subscription
-	Efforts []llm.Effort
+	Efforts []core.Effort
 }
 
 type Keys struct {
@@ -136,7 +136,7 @@ type Intent struct {
 	Role    library.RoleID
 	Agent   string
 	Setting string
-	Effort  llm.Effort
+	Effort  core.Effort
 }
 
 type Model struct {
@@ -155,7 +155,7 @@ type Model struct {
 	cursor      int
 	inUse       []string
 	assign      *Target
-	effort      llm.Effort
+	effort      core.Effort
 	width       int
 	height      int
 }
@@ -189,7 +189,7 @@ func Build(loaded library.Library, sources []Source, keys Keys, targets []Target
 	filter.Prompt, filter.Placeholder = filterPrompt, filterHint
 	filter.SetStyles(look.FilterStyles())
 	filter.Focus()
-	built := Model{Groups: groups, classifiers: classifiers, sources: sources, keys: keys, drawn: &drawn{}, targets: targets, filter: filter, effort: llm.EffortDefault}
+	built := Model{Groups: groups, classifiers: classifiers, sources: sources, keys: keys, drawn: &drawn{}, targets: targets, filter: filter, effort: core.EffortDefault}
 	built.settle()
 	return built
 }
@@ -325,7 +325,7 @@ func (m *Model) home() {
 	}
 }
 
-func (m Model) Effort() llm.Effort { return m.effort }
+func (m Model) Effort() core.Effort { return m.effort }
 
 func (m *Model) Key(key string) Intent {
 	if m.entry.name != "" {
@@ -478,7 +478,7 @@ func (m *Model) step(by int) {
 	m.effort = offered[at+by]
 }
 
-func (m Model) offered() []llm.Effort {
+func (m Model) offered() []core.Effort {
 	row, picked := m.Picked()
 	if !picked {
 		return nil
@@ -490,8 +490,8 @@ func (m *Model) settle() {
 	offered := m.offered()
 	switch {
 	case slices.Contains(offered, m.effort):
-	case slices.Contains(offered, llm.EffortDefault):
-		m.effort = llm.EffortDefault
+	case slices.Contains(offered, core.EffortDefault):
+		m.effort = core.EffortDefault
 	case len(offered) > 0:
 		m.effort = offered[0]
 	default:

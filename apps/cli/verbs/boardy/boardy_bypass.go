@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/konst"
 	"tofu/internal/project/boardy"
 )

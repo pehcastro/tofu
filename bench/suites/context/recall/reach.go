@@ -108,17 +108,17 @@ func WalkCorpusReach(sessionsDir string, recordedBy time.Time) (CorpusReach, err
 	return reach, nil
 }
 
-func readSteps(store *session.Store, id string) ([]turn.StepRow, error) {
+func readSteps(store *session.Store, id string) ([]loop.StepRow, error) {
 	events, err := store.Body(id)
 	if err != nil {
 		return nil, err
 	}
-	var steps []turn.StepRow
+	var steps []loop.StepRow
 	for _, event := range events {
 		if event.Kind != session.EventStep {
 			continue
 		}
-		var step turn.StepRow
+		var step loop.StepRow
 		if err := json.Unmarshal(event.Body, &step); err != nil {
 			return nil, err
 		}
@@ -127,7 +127,7 @@ func readSteps(store *session.Store, id string) ([]turn.StepRow, error) {
 	return steps, nil
 }
 
-func peakOccupancy(steps []turn.StepRow) (peak, target int, found bool) {
+func peakOccupancy(steps []loop.StepRow) (peak, target int, found bool) {
 	for _, step := range steps {
 		if step.Occupancy == nil {
 			continue

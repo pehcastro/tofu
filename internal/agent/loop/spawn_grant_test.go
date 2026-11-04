@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -16,20 +16,20 @@ import (
 	"tofu/internal/tools/contract"
 )
 
-func messageDoing(id, to, do string, owns ...string) llm.Decision {
+func messageDoing(id, to, do string, owns ...string) core.Decision {
 	args, err := json.Marshal(map[string]any{"to": to, "do": do, "owns": owns})
 	if err != nil {
 		panic(err)
 	}
-	return toolCallDecision(llm.ToolCall{ID: id, Name: "message", Arguments: args})
+	return toolCallDecision(core.ToolCall{ID: id, Name: "message", Arguments: args})
 }
 
-func writeCall(id, path string) llm.Decision {
+func writeCall(id, path string) core.Decision {
 	args, err := json.Marshal(map[string]string{"path": path, "content": "x"})
 	if err != nil {
 		panic(err)
 	}
-	return toolCallDecision(llm.ToolCall{ID: id, Name: "write", Arguments: args})
+	return toolCallDecision(core.ToolCall{ID: id, Name: "write", Arguments: args})
 }
 
 func writingCrew(t *testing.T, model *crew) (Config, string) {
@@ -41,7 +41,7 @@ func writingCrew(t *testing.T, model *crew) (Config, string) {
 	}
 	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
 		ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" }}
-	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	lead := base
 	lead.Task, lead.Tools, lead.Inbox = "hand the work to sub-agents", NewRegistry(write, spawn), spawn.Inbox
 	return lead, root
@@ -49,7 +49,7 @@ func writingCrew(t *testing.T, model *crew) (Config, string) {
 
 func TestTheLeadGrantsARefusedPathAndTheWriteRuns(t *testing.T) {
 	const writer, holder = "write other/x.txt", "hold theirs"
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey: {
 			toolCallDecision(spawnCall("call-a", writer, "mine/**").ToolCalls[0], spawnCall("call-b", holder, "theirs/**").ToolCalls[0]),
 			messageDoing("grant-held", "sub-1", "grant", "theirs/**"),
@@ -99,7 +99,7 @@ func TestTheLeadGrantsARefusedPathAndTheWriteRuns(t *testing.T) {
 
 func TestTheLeadRevokesAPathAndALaterWriteThereIsRefused(t *testing.T) {
 	const holder, taker = "hold a and b", "take b"
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey: {
 			spawnCall("call-a", holder, "a/**", "b/**"),
 			messageDoing("revoke", "sub-1", "revoke", "b/**"),
@@ -130,21 +130,21 @@ func TestTheLeadRevokesAPathAndALaterWriteThereIsRefused(t *testing.T) {
 
 type scratchCrew struct {
 	mu       sync.Mutex
-	lead     []llm.Decision
+	lead     []core.Decision
 	leadSaw  []string
 	subSteps int
-	command  func(scratch string, step int) llm.Decision
+	command  func(scratch string, step int) core.Decision
 }
 
 var scratchNamed = regexp.MustCompile(`scratch folder is (\S+?),`)
 
-func (m *scratchCrew) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (m *scratchCrew) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if SubAgentAsking(ctx) == "" {
 		m.leadSaw = append(m.leadSaw, request.Messages[len(request.Messages)-1].Content)
 		if len(m.lead) == 0 {
-			return llm.Decision{}, errors.New("the lead has no decision left")
+			return core.Decision{}, errors.New("the lead has no decision left")
 		}
 		next := m.lead[0]
 		m.lead = m.lead[1:]
@@ -172,8 +172,8 @@ func TestASubAgentWritesAndDeletesInItsScratchWithNoAsk(t *testing.T) {
 	}
 	var seen string
 	model := &scratchCrew{
-		lead: []llm.Decision{spawnCall("call-spawn", "probe and clean up"), claimDecision("sub-1 cleaned up")},
-		command: func(scratch string, step int) llm.Decision {
+		lead: []core.Decision{spawnCall("call-spawn", "probe and clean up"), claimDecision("sub-1 cleaned up")},
+		command: func(scratch string, step int) core.Decision {
 			seen, scratch = scratch, filepath.ToSlash(scratch)
 			switch step {
 			case 1:
@@ -192,7 +192,7 @@ func TestASubAgentWritesAndDeletesInItsScratchWithNoAsk(t *testing.T) {
 			asked++
 			return PersonDenied, nil
 		}}
-	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	spawn.Project = root
 	lead := base
 	lead.Task, lead.Tools, lead.Inbox = "hand the probe to a sub-agent", NewRegistry(write, bash, spawn), spawn.Inbox

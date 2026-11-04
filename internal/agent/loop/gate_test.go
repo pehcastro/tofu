@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -20,12 +20,12 @@ import (
 
 type leadAndSubAgent struct {
 	mu       sync.Mutex
-	lead     []llm.Decision
-	subAgent []llm.Decision
+	lead     []core.Decision
+	subAgent []core.Decision
 	leadSaw  []string
 }
 
-func (m *leadAndSubAgent) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (m *leadAndSubAgent) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	queue := &m.subAgent
@@ -34,7 +34,7 @@ func (m *leadAndSubAgent) Ask(ctx context.Context, request llm.Request) (llm.Dec
 		m.leadSaw = append(m.leadSaw, request.Messages[len(request.Messages)-1].Content)
 	}
 	if len(*queue) == 0 {
-		return llm.Decision{}, errors.New("no more decisions queued")
+		return core.Decision{}, errors.New("no more decisions queued")
 	}
 	next := (*queue)[0]
 	*queue = (*queue)[1:]
@@ -58,13 +58,13 @@ func TestASubAgentsAskReachesTheLeadAndTheLeadsAllowRunsTheCall(t *testing.T) {
 		t.Fatal(err)
 	}
 	model := &leadAndSubAgent{
-		lead: []llm.Decision{
+		lead: []core.Decision{
 			spawnCall("call-spawn", "write the note under mine/", "mine/**"),
 			called("message", map[string]any{"to": "sub-1", "answer": "allow"}),
 			claimDecision("allowed sub-1's write"),
 			claimDecision("sub-1 wrote the note"),
 		},
-		subAgent: []llm.Decision{
+		subAgent: []core.Decision{
 			called("write", map[string]any{"path": "mine/note.txt", "content": "a note"}),
 			claimDecision("wrote mine/note.txt"),
 		},
@@ -77,7 +77,7 @@ func TestASubAgentsAskReachesTheLeadAndTheLeadsAllowRunsTheCall(t *testing.T) {
 			personAsked++
 			return PersonDenied, nil
 		}}
-	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	lead := base
 	lead.Task, lead.Tools, lead.Inbox = "hand the note to a sub-agent", NewRegistry(write, spawn), spawn.Inbox
 	startLead(t.Context(), lead, nil).wait(t)
@@ -110,21 +110,21 @@ func TestASubAgentsAskCarriesItsArgumentsCutToTheCapAndNamesTheCall(t *testing.T
 		t.Fatal(err)
 	}
 	model := &leadAndSubAgent{
-		lead: []llm.Decision{
+		lead: []core.Decision{
 			spawnCall("call-spawn", "write the big file under mine/", "mine/**"),
 			called("message", map[string]any{"to": "sub-1", "answer": "allow"}),
 			claimDecision("allowed sub-1's write"),
 			claimDecision("sub-1 wrote it"),
 		},
-		subAgent: []llm.Decision{
-			toolCallDecision(llm.ToolCall{ID: "call-big", Name: "write", Arguments: args}),
+		subAgent: []core.Decision{
+			toolCallDecision(core.ToolCall{ID: "call-big", Name: "write", Arguments: args}),
 			claimDecision("wrote mine/big.txt"),
 		},
 	}
 	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
 		ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" },
 		Gate: asksForSubAgents{}, GateMode: GateEnforce}
-	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	lead := base
 	lead.Task, lead.Tools, lead.Inbox = "hand the big file to a sub-agent", NewRegistry(write, spawn), spawn.Inbox
 	startLead(t.Context(), lead, nil).wait(t)
@@ -179,7 +179,7 @@ func TestAnAskThatRunsNamesWhatAllowedIt(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			model := &leadAndSubAgent{lead: []llm.Decision{called("write", map[string]any{"path": "note.txt", "content": "a note"}), claimDecision("wrote note.txt")}}
+			model := &leadAndSubAgent{lead: []core.Decision{called("write", map[string]any{"path": "note.txt", "content": "a note"}), claimDecision("wrote note.txt")}}
 			row, err := Run(t.Context(), Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write), Caps: Caps{MaxSteps: 4}, ResultBytesCap: 4096,
 				ArtifactDir: filepath.Join(root, "artifacts"), Gate: asksWithReason{reason: case_.reason}, GateMode: GateEnforce, Person: case_.person, Task: "write a note"})
 			if err != nil {
@@ -202,7 +202,7 @@ func TestAnAskThatRunsNamesWhatAllowedIt(t *testing.T) {
 
 func TestReadAndBackupOfARunningSubAgentCarryItsConversationSoFar(t *testing.T) {
 	const task = "read the note and say what it holds"
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey: {spawnCall("call-spawn", task, "notes/**"), claimDecision("sub-1 is on it"), claimDecision("sub-1 is done")},
 		task:    {called("read", map[string]any{"path": "note.txt"}), claimDecision("the note says hello")},
 	})
@@ -246,13 +246,13 @@ func TestReadAndBackupOfARunningSubAgentCarryItsConversationSoFar(t *testing.T) 
 func TestASubAgentsPreToolUseAskReachesTheLeadAndTheLeadsAllowRunsTheCall(t *testing.T) {
 	project, bash := hookedProject(t, `{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"ask\",\"permissionDecisionReason\":\"a write under mine needs a yes\"}}'"}]}]}`)
 	model := &leadAndSubAgent{
-		lead: []llm.Decision{
+		lead: []core.Decision{
 			spawnCall("call-spawn", "note the run under mine/", "mine/**"),
 			called("message", map[string]any{"to": "sub-1", "answer": "allow"}),
 			claimDecision("allowed sub-1's bash"),
 			claimDecision("sub-1 noted the run"),
 		},
-		subAgent: []llm.Decision{
+		subAgent: []core.Decision{
 			called("bash", map[string]any{"command": "mkdir -p mine && echo ran > mine/ran.txt"}),
 			claimDecision("noted the run in mine/ran.txt"),
 		},
@@ -267,7 +267,7 @@ func TestASubAgentsPreToolUseAskReachesTheLeadAndTheLeadsAllowRunsTheCall(t *tes
 			personAsked = append(personAsked, request.Tool)
 			return PersonDenied, nil
 		}}
-	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	lead := base
 	lead.Task, lead.Tools, lead.Inbox = "hand the note to a sub-agent", NewRegistry(spawn), spawn.Inbox
 	startLead(t.Context(), lead, nil).wait(t)

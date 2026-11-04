@@ -15,7 +15,7 @@ import (
 	"testing"
 
 	"tofu/internal/konst"
-	"tofu/internal/tools/web/browser/driver"
+	browser "tofu/internal/tools/web/browser/driver"
 	"tofu/internal/tools/web/browser/extension"
 )
 

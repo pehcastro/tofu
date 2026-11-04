@@ -3,7 +3,7 @@ package prefix
 import (
 	"testing"
 
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 )
 
 func realRules(t *testing.T) []rule.Rule {

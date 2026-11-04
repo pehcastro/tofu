@@ -1,4 +1,4 @@
-package cred_test
+package accounts_test
 
 import (
 	"context"
@@ -29,23 +29,23 @@ func (e *tokenEndpoint) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-func seeded(t *testing.T, tokenURL, access string, expires time.Time) (*cred.Store, cred.Spec) {
+func seeded(t *testing.T, tokenURL, access string, expires time.Time) (*accounts.Store, accounts.Spec) {
 	t.Helper()
-	store, err := cred.Open(filepath.Join(t.TempDir(), "credentials.db"))
+	store, err := accounts.Open(filepath.Join(t.TempDir(), "credentials.db"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	if err := store.Save(cred.Credential{Provider: cred.ClaudeSub, Kind: cred.KindOAuth, Access: access,
+	if err := store.Save(accounts.Credential{Provider: accounts.ClaudeSub, Kind: accounts.KindOAuth, Access: access,
 		Refresh: "refresh-0", Expires: expires}, time.Now()); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	return store, cred.Spec{Provider: cred.ClaudeSub, ClientID: "test", TokenURL: tokenURL, TokenBody: cred.BodyJSON}
+	return store, accounts.Spec{Provider: accounts.ClaudeSub, ClientID: "test", TokenURL: tokenURL, TokenBody: accounts.BodyJSON}
 }
 
-func stored(t *testing.T, store *cred.Store) cred.Row {
+func stored(t *testing.T, store *accounts.Store) accounts.Row {
 	t.Helper()
-	row, found, err := store.Row(cred.ClaudeSub)
+	row, found, err := store.Row(accounts.ClaudeSub)
 	if err != nil || !found {
 		t.Fatalf("row: found %v, %v", found, err)
 	}
@@ -60,7 +60,7 @@ func TestARefreshTheCallerGaveUpOnStillStoresTheRotatedToken(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
-	if _, err := cred.NewManager(store, spec).Access(ctx); err == nil {
+	if _, err := accounts.NewManager(store, spec).Access(ctx); err == nil {
 		t.Fatal("the caller cancelled at 50 ms and still got a token from a 400 ms grant")
 	}
 	time.Sleep(600 * time.Millisecond)
@@ -74,7 +74,7 @@ func TestACallerJoiningARefreshLeavesWhenItsOwnContextEnds(t *testing.T) {
 	server := httptest.NewServer(endpoint)
 	t.Cleanup(server.Close)
 	store, spec := seeded(t, server.URL, "access-0", time.Now().Add(-time.Minute))
-	manager := cred.NewManager(store, spec)
+	manager := accounts.NewManager(store, spec)
 
 	go func() { _, _ = manager.Access(context.Background()) }()
 	time.Sleep(50 * time.Millisecond)
@@ -98,7 +98,7 @@ func TestAGrantThatNeverAnsweredDoesNotDisableTheCredential(t *testing.T) {
 	t.Cleanup(server.Close)
 	store, spec := seeded(t, server.URL+"/oauth/401", "access-0", time.Now().Add(-time.Minute))
 
-	if _, err := cred.NewManager(store, spec).Access(context.Background()); err == nil {
+	if _, err := accounts.NewManager(store, spec).Access(context.Background()); err == nil {
 		t.Fatal("a dropped connection produced a token")
 	}
 	if row := stored(t, store); row.DisabledCause != "" {
@@ -112,7 +112,7 @@ func TestARejectedTokenIsRefreshedThoughTheClockCallsItFresh(t *testing.T) {
 	t.Cleanup(server.Close)
 	store, spec := seeded(t, server.URL, "access-0", time.Now().Add(time.Hour))
 
-	token, err := cred.NewManager(store, spec).Token(context.Background(), "access-0")
+	token, err := accounts.NewManager(store, spec).Token(context.Background(), "access-0")
 	if err != nil || token != "access-1" || endpoint.minted.Load() != 1 {
 		t.Fatalf("a rejected fresh token gave %q, %v, after %d grants", token, err, endpoint.minted.Load())
 	}
@@ -124,7 +124,7 @@ func TestARejectionAPeerAlreadyRepairedSendsNoGrant(t *testing.T) {
 	t.Cleanup(server.Close)
 	store, spec := seeded(t, server.URL, "access-peer", time.Now().Add(time.Hour))
 
-	token, err := cred.NewManager(store, spec).Token(context.Background(), "access-0")
+	token, err := accounts.NewManager(store, spec).Token(context.Background(), "access-0")
 	if err != nil || token != "access-peer" || endpoint.minted.Load() != 0 {
 		t.Fatalf("a token a peer already replaced gave %q, %v, after %d grants", token, err, endpoint.minted.Load())
 	}

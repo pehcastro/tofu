@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -24,8 +24,8 @@ type failsOnceTool struct{ calls int }
 
 func (t *failsOnceTool) Name() string { return "check" }
 
-func (t *failsOnceTool) Definition() llm.Tool {
-	return llm.Tool{Name: "check", Description: "a check that fails once", Parameters: map[string]any{"type": "object"}}
+func (t *failsOnceTool) Definition() core.Tool {
+	return core.Tool{Name: "check", Description: "a check that fails once", Parameters: map[string]any{"type": "object"}}
 }
 
 func (t *failsOnceTool) Run(context.Context, json.RawMessage) (contract.Result, error) {
@@ -38,9 +38,9 @@ func (t *failsOnceTool) Run(context.Context, json.RawMessage) (contract.Result, 
 }
 
 func TestASubAgentThatRetriedAFailureAndLearnedNothingReportsNeitherAndEndsDone(t *testing.T) {
-	model := &stubModel{decisions: []llm.Decision{
-		toolCallDecision(llm.ToolCall{ID: "check-1", Name: "check", Arguments: json.RawMessage(`{}`)}),
-		toolCallDecision(llm.ToolCall{ID: "check-2", Name: "check", Arguments: json.RawMessage(`{}`)}),
+	model := &stubModel{decisions: []core.Decision{
+		toolCallDecision(core.ToolCall{ID: "check-1", Name: "check", Arguments: json.RawMessage(`{}`)}),
+		toolCallDecision(core.ToolCall{ID: "check-2", Name: "check", Arguments: json.RawMessage(`{}`)}),
 		claimDecision("the check passes"),
 	}}
 	root := t.TempDir()
@@ -53,7 +53,7 @@ func TestASubAgentThatRetriedAFailureAndLearnedNothingReportsNeitherAndEndsDone(
 		ArtifactDir:    filepath.Join(root, "artifacts"),
 		NewID:          func() string { return "turn-orchestrator" },
 	}
-	spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
 	if _, err := spawn.Run(context.Background(), spawnCall("call-1", "run the check under mine/", "mine/**").ToolCalls[0].Arguments); err != nil {
 		t.Fatalf("spawn: %v", err)
 	}
@@ -65,7 +65,7 @@ func TestASubAgentThatRetriedAFailureAndLearnedNothingReportsNeitherAndEndsDone(
 	if !strings.Contains(report, "is finished, done,") {
 		t.Fatalf("the report does not say finished and done:\n%s", report)
 	}
-	if held := onlySubAgent(t, spawn); held.State != subagent.Finished {
+	if held := onlySubAgent(t, spawn); held.State != subagents.Finished {
 		t.Fatalf("a sub-agent nothing reviewed ended %s, want finished", held.State)
 	}
 }
@@ -78,11 +78,11 @@ func TestAReportListsEachCheckWithItsExitCodeAndFirstErrorLineOnlyWhenOneFailed(
 	row := func(calls []ToolCallRow, printed map[string]string) Row {
 		ran := Row{Steps: []StepRow{{ToolCalls: append([]ToolCallRow{{Call: "r", Tool: "read", Command: "go.mod"}}, calls...)}}}
 		for id, said := range printed {
-			ran.Conversation = append(ran.Conversation, llm.Message{Role: llm.RoleTool, ToolCallID: id, Content: said})
+			ran.Conversation = append(ran.Conversation, core.Message{Role: core.RoleTool, ToolCallID: id, Content: said})
 		}
 		return ran
 	}
-	agent := subagent.SubAgent{ID: "sub-1"}
+	agent := subagents.SubAgent{ID: "sub-1"}
 	mixed := row([]ToolCallRow{
 		call("t", "bash", "go test ./x", &failed, ""),
 		call("p", "bash", "cargo test 2>&1 | tail -5", &passed, ""),
@@ -95,7 +95,7 @@ func TestAReportListsEachCheckWithItsExitCodeAndFirstErrorLineOnlyWhenOneFailed(
 		"q": "the command exited 1\n",
 		"s": "nothing it could read",
 	})
-	report := reportOf(agent, nil, []Row{mixed}, subagent.Finished).Text(nil)
+	report := reportOf(agent, nil, []Row{mixed}, subagents.Finished).Text(nil)
 	for _, want := range []string{
 		"\nchecks it ran, each with its exit code and first error line:\n",
 		"\n  go test ./x exited 1: --- FAIL: TestFails (0.00s)\n",
@@ -112,7 +112,7 @@ func TestAReportListsEachCheckWithItsExitCodeAndFirstErrorLineOnlyWhenOneFailed(
 		t.Errorf("the report lists a read, a carriage return or tofu's own exit line:\n%s", report)
 	}
 	clean := reportOf(agent, nil, []Row{row([]ToolCallRow{call("v", "bash", "go vet ./x", &passed, ""), call("p", "bash", "cargo test | tail", &passed, "")},
-		map[string]string{"p": "test result: ok. 1 passed"})}, subagent.Finished).Text(nil)
+		map[string]string{"p": "test result: ok. 1 passed"})}, subagents.Finished).Text(nil)
 	if strings.Contains(clean, "checks it ran") {
 		t.Errorf("a report where every check passed lists its checks:\n%s", clean)
 	}
@@ -143,7 +143,7 @@ func TestASubAgentsProseIsMarkedLineByLineAndALongOneIsCutToAHeadATailAndAHandle
 				}
 			}
 			base := Config{
-				Model:           &stubModel{decisions: []llm.Decision{claimDecision(run.prose)}},
+				Model:           &stubModel{decisions: []core.Decision{claimDecision(run.prose)}},
 				Spend:           SpendAPIKey,
 				Tools:           NewRegistry(),
 				Caps:            Caps{MaxSteps: 20},
@@ -152,7 +152,7 @@ func TestASubAgentsProseIsMarkedLineByLineAndALongOneIsCutToAHeadATailAndAHandle
 				TruncateResults: run.truncate,
 				NewID:           func() string { return "turn-orchestrator" },
 			}
-			spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+			spawn := NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
 			if _, err := spawn.Run(context.Background(), spawnCall("call-1", "report", "mine/**").ToolCalls[0].Arguments); err != nil {
 				t.Fatalf("spawn: %v", err)
 			}
@@ -262,7 +262,7 @@ func TestAReportListsEachChangedExportedItemWithItsCallersOutsideItsFileAndEachW
 				args, _ := json.Marshal(map[string]string{"path": strings.Replace(rel, "<root>", filepath.ToSlash(root), 1)})
 				calls = append(calls, ToolCallRow{Call: "w" + strconv.Itoa(i), Tool: "write", Args: args})
 			}
-			report := reportOf(subagent.SubAgent{ID: "sub-1"}, nil, []Row{{Steps: []StepRow{{ToolCalls: calls}}}}, subagent.Finished)
+			report := reportOf(subagents.SubAgent{ID: "sub-1"}, nil, []Row{{Steps: []StepRow{{ToolCalls: calls}}}}, subagents.Finished)
 			report.Impact = boardy.ImpactOf(root, report.Wrote)
 			text := report.Text(nil)
 			for _, want := range row.want {

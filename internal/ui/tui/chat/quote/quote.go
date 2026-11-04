@@ -20,7 +20,7 @@ const (
 	toolLabel  = "a tool result"
 )
 
-func Ref(event string) string { return tools.QuoteRef(event) }
+func Ref(event string) string { return registry.QuoteRef(event) }
 
 func Collect(talk isession.Conversation) []Turn {
 	var turns []Turn
@@ -40,7 +40,7 @@ func Collect(talk isession.Conversation) []Turn {
 		if gist == "" {
 			continue
 		}
-		turns = append(turns, Turn{Event: tools.SaidEventID(talk, index), From: from, Text: gist})
+		turns = append(turns, Turn{Event: registry.SaidEventID(talk, index), From: from, Text: gist})
 	}
 	slices.Reverse(turns)
 	return turns

@@ -1,4 +1,4 @@
-package subagent
+package subagents
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 	"testing/fstest"
 
 	"tofu/internal/konst"
-	"tofu/internal/models/llm/catalog"
+	models "tofu/internal/models/llm/catalog"
 	"tofu/internal/sys"
 	shipped "tofu/library"
 )

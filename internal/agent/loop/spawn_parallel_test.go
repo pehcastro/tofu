@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -16,14 +16,14 @@ import (
 )
 
 type spawnScript struct {
-	spawns  []llm.ToolCall
+	spawns  []core.ToolCall
 	working sync.Mutex
 	running int
 	widest  int
-	led     [][]llm.Message
+	led     [][]core.Message
 }
 
-func (s *spawnScript) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (s *spawnScript) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	first := request.Messages[0].Content
 	if brief, isSubAgent := strings.CutPrefix(first[strings.LastIndex(first, "\n")+1:], "brief-"); isSubAgent {
 		s.working.Lock()
@@ -67,7 +67,7 @@ func spawnsIn(t *testing.T, owns ...string) *spawnScript {
 		if err != nil {
 			t.Fatal(err)
 		}
-		script.spawns = append(script.spawns, llm.ToolCall{ID: "call-" + n, Name: "spawn", Arguments: args})
+		script.spawns = append(script.spawns, core.ToolCall{ID: "call-" + n, Name: "spawn", Arguments: args})
 	}
 	root := t.TempDir()
 	base := Config{
@@ -78,7 +78,7 @@ func spawnsIn(t *testing.T, owns ...string) *spawnScript {
 		ArtifactDir:    filepath.Join(root, "artifacts"),
 		NewID:          func() string { return "turn-orchestrator" },
 	}
-	spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
 	orchestrator := base
 	orchestrator.Task, orchestrator.Tools, orchestrator.Inbox = "hand the work to sub-agents", NewRegistry(spawn), spawn.Inbox
 	started := time.Now()
@@ -106,12 +106,12 @@ func TestSpawnsWithDisjointOwnsRunTogetherAndEveryReportReachesTheLead(t *testin
 
 type firstAsks struct {
 	mu     sync.Mutex
-	spawns []llm.ToolCall
+	spawns []core.ToolCall
 	led    int
 	first  map[string]time.Time
 }
 
-func (f *firstAsks) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (f *firstAsks) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	said := request.Messages[len(request.Messages)-1].Content
 	brief, isSubAgent := strings.CutPrefix(said[strings.LastIndex(said, "\n")+1:], "brief-")
 	f.mu.Lock()
@@ -139,12 +139,12 @@ func (f *firstAsks) Ask(ctx context.Context, request llm.Request) (llm.Decision,
 
 func TestASiblingWaitsForTheFirstOnlyWhereTheModelMayCacheAPrefix(t *testing.T) {
 	for _, c := range []struct {
-		cache models.PromptCache
+		cache catalog.PromptCache
 		waits bool
 	}{
-		{models.PromptCacheNone, false},
-		{models.PromptCachePrefix, true},
-		{models.PromptCacheUnknown, true},
+		{catalog.PromptCacheNone, false},
+		{catalog.PromptCachePrefix, true},
+		{catalog.PromptCacheUnknown, true},
 	} {
 		script := &firstAsks{first: map[string]time.Time{}}
 		for i, held := range []string{"a/**", "b/**"} {
@@ -153,12 +153,12 @@ func TestASiblingWaitsForTheFirstOnlyWhereTheModelMayCacheAPrefix(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			script.spawns = append(script.spawns, llm.ToolCall{ID: "call-" + n, Name: "spawn", Arguments: args})
+			script.spawns = append(script.spawns, core.ToolCall{ID: "call-" + n, Name: "spawn", Arguments: args})
 		}
 		base := Config{Model: script, Spend: SpendAPIKey, PromptCache: c.cache, Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096,
 			ArtifactDir: filepath.Join(t.TempDir(), "artifacts"), NewID: func() string { return "turn-orchestrator" }}
-		spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
-		spawn.SubAgents.Defined = []subagent.Definition{{Name: "ts-dev", Runs: subagent.RunsModel}}
+		spawn := NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
+		spawn.SubAgents.Defined = []subagents.Definition{{Name: "ts-dev", Runs: subagents.RunsModel}}
 		lead := base
 		lead.Task, lead.Tools, lead.Inbox = "hand the work to sub-agents", NewRegistry(spawn), spawn.Inbox
 		startLead(context.Background(), lead, nil).wait(t)
@@ -190,8 +190,8 @@ const refusesTheSecond = `"PreToolUse":[{"matcher":"Agent","hooks":[{"type":"com
 func threeSpawns(t *testing.T, hooks string) (*crew, Config) {
 	t.Helper()
 	_, bash := hookedProject(t, "{"+hooks+"}")
-	spawning := func(id, task, owns string) llm.ToolCall { return spawnCall(id, task, owns).ToolCalls[0] }
-	model := newCrew(map[string][]llm.Decision{
+	spawning := func(id, task, owns string) core.ToolCall { return spawnCall(id, task, owns).ToolCalls[0] }
+	model := newCrew(map[string][]core.Decision{
 		leadKey: {toolCallDecision(spawning("call-1", firstPiece, "a/**"), spawning("call-2", secondPiece, "b/**"), spawning("call-3", thirdPiece, "c/**")),
 			claimDecision("lead 2"), claimDecision("lead 3"), claimDecision("lead 4"), claimDecision("lead 5")},
 		firstPiece: {claimDecision("first done")},

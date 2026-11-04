@@ -18,17 +18,17 @@ func FullRegistry(dir string) iturn.Registry {
 	readTool := must(iturn.NewReadTool(dir))
 	writeTool := must(iturn.NewWriteTool(dir))
 	bashTool := must(iturn.NewBashTool(dir))
-	shell := must(tools.Checked(dir, []contract.Tool{bashTool}))[0]
+	shell := must(registry.Checked(dir, []contract.Tool{bashTool}))[0]
 
-	verbTools := must(tools.NewVerbs(dir))
+	verbTools := must(registry.NewVerbs(dir))
 	full := append([]contract.Tool{
-		readTool, writeTool, shell, tools.NewPlan(),
-		must(tools.NewProject(dir)), must(tools.NewGlob(dir)), must(tools.NewSearch(dir)),
-		must(tools.NewSymbols(dir)), must(tools.NewEdit(dir)), must(tools.NewGitHubPRDiff(dir)),
+		readTool, writeTool, shell, registry.NewPlan(),
+		must(registry.NewProject(dir)), must(registry.NewGlob(dir)), must(registry.NewSearch(dir)),
+		must(registry.NewSymbols(dir)), must(registry.NewEdit(dir)), must(registry.NewGitHubPRDiff(dir)),
 	}, verbTools...)
-	full = tools.NewMemo().Wrap(full)
+	full = registry.NewMemo().Wrap(full)
 
-	full = append(full, tools.NewQuote(nil, ""))
+	full = append(full, registry.NewQuote(nil, ""))
 	full = append(full, iturn.NewSpawnTool("schemas-probe", iturn.Config{}, nil))
 	full = append(full, must(iturn.NewArtifacts(dir, true)).FetchTool())
 
@@ -57,7 +57,7 @@ func Diff(a, b []string) (onlyA, onlyB []string) {
 	return onlyA, onlyB
 }
 
-func Names(defs []llm.Tool) []string {
+func Names(defs []core.Tool) []string {
 	names := make([]string, len(defs))
 	for i, d := range defs {
 		names[i] = d.Name

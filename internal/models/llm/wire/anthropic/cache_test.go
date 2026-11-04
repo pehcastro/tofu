@@ -50,7 +50,7 @@ func TestACommittedPrefixUnderTheMinimumGetsNoSecondBreakpoint(t *testing.T) {
 func TestALongConversationStaysInsideTheBreakpointAllowance(t *testing.T) {
 	request := historyRequest(40)
 	request.System = []string{"the project instructions"}
-	request.Tools = []llm.Tool{{Name: "read"}, {Name: "write"}}
+	request.Tools = []core.Tool{{Name: "read"}, {Name: "write"}}
 	body, err := request.Encode(true)
 	if err != nil {
 		t.Fatalf("encoding: %v", err)
@@ -88,12 +88,12 @@ func TestAKeptHeadPastTheLookbackTakesTheSecondBreakpoint(t *testing.T) {
 				if step == held.exchanges {
 					width = held.lastCalls
 				}
-				asked := llm.Message{Role: llm.RoleAssistant}
-				var answered []llm.Message
+				asked := core.Message{Role: core.RoleAssistant}
+				var answered []core.Message
 				for call := range width {
 					id := fmt.Sprintf("toolu_%d_%d", step, call)
-					asked.ToolCalls = append(asked.ToolCalls, llm.ToolCall{ID: id, Name: "read"})
-					answered = append(answered, llm.Message{Role: llm.RoleTool, ToolCallID: id, Content: bulk})
+					asked.ToolCalls = append(asked.ToolCalls, core.ToolCall{ID: id, Name: "read"})
+					answered = append(answered, core.Message{Role: core.RoleTool, ToolCallID: id, Content: bulk})
 				}
 				request.Messages = append(append(request.Messages, asked), answered...)
 			}
@@ -102,7 +102,7 @@ func TestAKeptHeadPastTheLookbackTakesTheSecondBreakpoint(t *testing.T) {
 			}
 			if held.headed {
 				request.System = []string{"the project instructions"}
-				request.Tools = []llm.Tool{{Name: "read"}, {Name: "write"}}
+				request.Tools = []core.Tool{{Name: "read"}, {Name: "write"}}
 			}
 			body, err := request.Encode(true)
 			if err != nil {
@@ -175,15 +175,15 @@ func TestTheWriteSplitFromMessageStartSurvivesTheClosingUsage(t *testing.T) {
 func minimalRequest() Request {
 	return Request{
 		Model:    "claude-opus-4-1-20250805",
-		Messages: []llm.Message{{Role: llm.RoleUser, Content: "say ok"}},
+		Messages: []core.Message{{Role: core.RoleUser, Content: "say ok"}},
 	}
 }
 
-func exchange(step int, bulk string) []llm.Message {
+func exchange(step int, bulk string) []core.Message {
 	call := fmt.Sprintf("toolu_%d", step)
-	return []llm.Message{
-		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: call, Name: "read"}}},
-		{Role: llm.RoleTool, ToolCallID: call, Content: bulk},
+	return []core.Message{
+		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: call, Name: "read"}}},
+		{Role: core.RoleTool, ToolCallID: call, Content: bulk},
 	}
 }
 

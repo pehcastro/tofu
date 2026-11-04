@@ -26,14 +26,14 @@ const (
 	nextStop     = "stop"
 )
 
-var chainQuestion = jev.Question{
+var chainQuestion = core.Question{
 	ID:   chainNext,
-	Kind: jev.QuestionChoice,
+	Kind: core.QuestionChoice,
 	Instructions: "A sub-agent was handed `brief` and has taken the steps in `recent_steps`. " +
 		"`last_tool_results` holds what its last three tool calls returned: the tool, the command, " +
 		"the exit code, any error and how many bytes came back. Read the brief against that evidence " +
 		"and choose what the harness should do with the turn right now.",
-	Options: []jev.Option{
+	Options: []core.Option{
 		{Name: nextContinue, Criteria: "Part of the brief is still undone and the latest results show the turn moving toward it, so another step is worth taking."},
 		{Name: nextAsk, Criteria: "The turn cannot settle the brief on its own: the results show it blocked on a choice or a fact only the person has."},
 		{Name: nextStop, Criteria: "Another step will add nothing: the brief is carried out and reported, the turn is repeating itself, or the step was empty."},
@@ -137,7 +137,7 @@ func (b Battery) chain(ctx context.Context, turn Turn, at int) (Chain, error) {
 			out.LatencyMS, out.Cost = measured.LatencyMS, measured.Cost
 		}
 	} else {
-		decision, err := b.client.Ask(ctx, jev.Request{State: json.RawMessage(raw), Questions: []jev.Question{chainQuestion}})
+		decision, err := b.client.Ask(ctx, core.Request{State: json.RawMessage(raw), Questions: []core.Question{chainQuestion}})
 		if err != nil {
 			return Chain{}, err
 		}

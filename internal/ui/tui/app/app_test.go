@@ -1,4 +1,4 @@
-package tui
+package app
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	isettings "tofu/internal/store/settings"
 	"tofu/internal/testkit/golden"
 	"tofu/internal/ui/tui/chat/feed"
@@ -317,10 +317,10 @@ func gateOffApp(t *testing.T, width, height int) *App {
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: width, Height: height})
 	for _, event := range []Event{
-		{Kind: EventGateOff, Text: noKeyAtAll(), GateWhy: jev.WhyNoFile},
+		{Kind: EventGateOff, Text: noKeyAtAll(), GateWhy: core.WhyNoFile},
 		{Kind: EventToolCall, ID: "c1", Tool: "read", Text: "internal/judge/policy/toolgate.go"},
 		{Kind: EventToolResult, ID: "c1", Text: "412 lines, 11.8 KB"},
-		{Kind: EventGateOff, Text: noKeyAtAll(), GateWhy: jev.WhyNoFile},
+		{Kind: EventGateOff, Text: noKeyAtAll(), GateWhy: core.WhyNoFile},
 		{Kind: EventToolCall, ID: "c2", Tool: "bash", Text: "go test ./internal/judge/..."},
 		{Kind: EventToolResult, ID: "c2", Text: "ok tofu/internal/judge 0.42s"},
 	} {
@@ -342,17 +342,17 @@ func TestTheGateOffNoteKeepsThePathAndTheFunctionOutOfTheTranscript(t *testing.T
 }
 
 type gateOffState struct {
-	why  jev.Why
+	why  core.Why
 	want string
 }
 
 func gateOffStates() []gateOffState {
 	return []gateOffState{
-		{jev.WhyNoFile, gateOffNoKey},
-		{jev.WhyFileLacksName, gateOffKeyUnnamed},
-		{jev.WhyUnreadable, gateOffKeyUnread},
-		{jev.WhyStoreUnreadable, gateOffStoreUnread},
-		{jev.WhyUnexplained, gateOffUnexplained},
+		{core.WhyNoFile, gateOffNoKey},
+		{core.WhyFileLacksName, gateOffKeyUnnamed},
+		{core.WhyUnreadable, gateOffKeyUnread},
+		{core.WhyStoreUnreadable, gateOffStoreUnread},
+		{core.WhyUnexplained, gateOffUnexplained},
 	}
 }
 

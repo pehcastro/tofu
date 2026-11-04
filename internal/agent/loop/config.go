@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -26,17 +26,17 @@ import (
 )
 
 type Model interface {
-	Ask(ctx context.Context, request llm.Request) (llm.Decision, error)
+	Ask(ctx context.Context, request core.Request) (core.Decision, error)
 }
 
 type runningModelKey struct{}
 
 type RunningModel struct{}
 
-func (RunningModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (RunningModel) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	model, running := ctx.Value(runningModelKey{}).(Model)
 	if !running {
-		return llm.Decision{}, errors.New("no turn is running, so there is no turn model to ask")
+		return core.Decision{}, errors.New("no turn is running, so there is no turn model to ask")
 	}
 	return model.Ask(ctx, request)
 }
@@ -51,7 +51,7 @@ type Caps struct {
 
 type CalledAsTheStepIsRecordedAndBeforeTheNextOneIsAsked func(StepRow)
 
-type CalledAsEachToolCallAnswersAndBeforeTheNextRequest func(llm.Message)
+type CalledAsEachToolCallAnswersAndBeforeTheNextRequest func(core.Message)
 
 type AccountReason string
 
@@ -84,22 +84,22 @@ type Config struct {
 	Gate            Gate
 	GateMode        GateMode
 	Proxy           *CommandProxy
-	Boundary        *subagent.Boundary
+	Boundary        *subagents.Boundary
 	Person          Person
 	GatePromptAsks  func() bool
 	Task            string
 	Notes           []string
-	TaskOrigin      llm.Origin
-	Arrived         []llm.Message
-	Images          []llm.Image
-	History         []llm.Message
+	TaskOrigin      core.Origin
+	Arrived         []core.Message
+	Images          []core.Image
+	History         []core.Message
 	Wire            string
 	Slug            string
-	PromptCache     models.PromptCache
+	PromptCache     catalog.PromptCache
 	SpawnedFrom     string
 	AgentType       string
 	Project         string
-	SessionSource   hook.SessionSource
+	SessionSource   hooks.SessionSource
 	System          string
 	Parts           []PromptPart
 	References      map[string]string
@@ -108,7 +108,7 @@ type Config struct {
 	Memory          string
 	Plan            func() string
 	Prefix          *Prefix
-	ImagesOf        func(said string) []llm.Image
+	ImagesOf        func(said string) []core.Image
 	Caps            Caps
 	Sift            *ShellSift
 	ResultBytesCap  int
@@ -201,43 +201,43 @@ func notesOn(notes []string) string {
 	return NotesAfterTheTask + strings.Join(notes, "\n\n")
 }
 
-func (c Config) taskOrigin(started time.Time) llm.Origin {
+func (c Config) taskOrigin(started time.Time) core.Origin {
 	task := c.TaskOrigin
 	switch {
 	case task.Source != "" || len(c.Arrived) > 0:
 	case c.SpawnedFrom != "":
-		task.Source = llm.SourceBrief
+		task.Source = core.SourceBrief
 	default:
-		task.Source = llm.SourceTask
+		task.Source = core.SourceTask
 	}
 	task.TakenAt = started
 	return task
 }
 
-func (c Config) forkOpening(task llm.Origin) llm.Message {
-	if task.Kind() == llm.OriginPerson {
-		task.Source = llm.SourceForkTask
+func (c Config) forkOpening(task core.Origin) core.Message {
+	if task.Kind() == core.OriginPerson {
+		task.Source = core.SourceForkTask
 	}
 	if len(c.Arrived) == 0 || c.environmentInHistory() {
-		return llm.Message{Role: llm.RoleUser, Content: c.FirstUserMessage(), Origin: task}
+		return core.Message{Role: core.RoleUser, Content: c.FirstUserMessage(), Origin: task}
 	}
-	return llm.Message{Role: llm.RoleUser, Content: c.Task, Origin: task}
+	return core.Message{Role: core.RoleUser, Content: c.Task, Origin: task}
 }
 
 func (c Config) environmentInHistory() bool {
 	return c.SpawnedFrom != "" && len(c.History) > 0
 }
 
-func (c Config) opening(task llm.Origin, notes ...string) []llm.Message {
+func (c Config) opening(task core.Origin, notes ...string) []core.Message {
 	if c.environmentInHistory() {
 		c.Environment = ""
 	}
 	if len(c.Arrived) == 0 {
-		return []llm.Message{{Role: llm.RoleUser, Content: c.FirstUserMessage(notes...), Images: c.Images, Origin: task}}
+		return []core.Message{{Role: core.RoleUser, Content: c.FirstUserMessage(notes...), Images: c.Images, Origin: task}}
 	}
-	var opened []llm.Message
+	var opened []core.Message
 	if framing := strings.TrimSpace(c.Environment + notesOn(slices.Concat(c.Notes, notes))); framing != "" {
-		opened = append(opened, llm.Message{Role: llm.RoleUser, Content: framing, Origin: llm.Origin{Source: llm.SourceEnvironment, TakenAt: task.TakenAt}})
+		opened = append(opened, core.Message{Role: core.RoleUser, Content: framing, Origin: core.Origin{Source: core.SourceEnvironment, TakenAt: task.TakenAt}})
 	}
 	for _, item := range c.Arrived {
 		item.Origin.TakenAt = task.TakenAt
@@ -246,8 +246,8 @@ func (c Config) opening(task llm.Origin, notes ...string) []llm.Message {
 	return opened
 }
 
-func environmentBefore(messages []llm.Message) string {
-	if len(messages) == 0 || messages[len(messages)-1].Origin.Source != llm.SourceEnvironment {
+func environmentBefore(messages []core.Message) string {
+	if len(messages) == 0 || messages[len(messages)-1].Origin.Source != core.SourceEnvironment {
 		return ""
 	}
 	environment, _, _ := strings.Cut(messages[len(messages)-1].Content, NotesAfterTheTask)
@@ -260,8 +260,8 @@ func environmentBefore(messages []llm.Message) string {
 type Prefix struct {
 	held     bool
 	first    heldPrefix
-	tools    []llm.Tool
-	offered  []llm.Tool
+	tools    []core.Tool
+	offered  []core.Tool
 	inForce  []keptPart
 	appended []keptPart
 	removed  []keptPart
@@ -271,7 +271,7 @@ type Prefix struct {
 	memoryDropped bool
 }
 
-func (p *Prefix) memoryTurnedBackOn(fresh, was []llm.Message) bool {
+func (p *Prefix) memoryTurnedBackOn(fresh, was []core.Message) bool {
 	if p == nil {
 		return false
 	}
@@ -354,14 +354,14 @@ func HeldPrefix(store *session.Store, id, agent string) (*Prefix, error) {
 	return held, nil
 }
 
-func heldTools(prompts []session.PromptBody) ([]llm.Tool, error) {
-	var held []llm.Tool
+func heldTools(prompts []session.PromptBody) ([]core.Tool, error) {
+	var held []core.Tool
 	for i, prompt := range slices.Backward(prompts) {
-		var sent []llm.Tool
+		var sent []core.Tool
 		if err := json.Unmarshal([]byte(cmp.Or(prompt.ToolSchemas, "null")), &sent); err != nil {
 			return nil, err
 		}
-		at := slices.IndexFunc(sent, func(tool llm.Tool) bool { return tool.Name == AskPersonToolName })
+		at := slices.IndexFunc(sent, func(tool core.Tool) bool { return tool.Name == AskPersonToolName })
 		switch {
 		case i == len(prompts)-1:
 			held = sent
@@ -370,7 +370,7 @@ func heldTools(prompts []session.PromptBody) ([]llm.Tool, error) {
 			}
 		case at >= 0:
 			after := min(at, len(held))
-			if before := slices.IndexFunc(held, func(tool llm.Tool) bool { return at > 0 && tool.Name == sent[at-1].Name }); before >= 0 {
+			if before := slices.IndexFunc(held, func(tool core.Tool) bool { return at > 0 && tool.Name == sent[at-1].Name }); before >= 0 {
 				after = before + 1
 			}
 			return slices.Insert(held, after, sent[at]), nil
@@ -379,7 +379,7 @@ func heldTools(prompts []session.PromptBody) ([]llm.Tool, error) {
 	return held, nil
 }
 
-func toldTools(events []session.Event, agent string, held []llm.Tool) ([]llm.Tool, error) {
+func toldTools(events []session.Event, agent string, held []core.Tool) ([]core.Tool, error) {
 	told := slices.Clone(held)
 	for _, event := range events {
 		if event.Kind != session.EventMessage || event.Agent != agent {
@@ -389,13 +389,13 @@ func toldTools(events []session.Event, agent string, held []llm.Tool) ([]llm.Too
 		if err := json.Unmarshal(event.Body, &message); err != nil {
 			return nil, err
 		}
-		if message.Role != llm.RoleUser.String() || !strings.HasPrefix(message.Content, thePromptChangedSince) {
+		if message.Role != core.RoleUser.String() || !strings.HasPrefix(message.Content, thePromptChangedSince) {
 			continue
 		}
 		for _, change := range strings.Split(message.Content, "\n\n") {
 			described, isDescription := strings.CutPrefix(change, aToolDescriptionChanged)
 			name, description, _ := strings.Cut(described, " now reads: ")
-			if at := slices.IndexFunc(told, func(tool llm.Tool) bool { return tool.Name == name }); isDescription && at >= 0 {
+			if at := slices.IndexFunc(told, func(tool core.Tool) bool { return tool.Name == name }); isDescription && at >= 0 {
 				told[at].Description = description
 			}
 		}
@@ -437,15 +437,15 @@ func unloadedSkill(part keptPart) bool {
 	return part.Kind == string(ConcernSkills) && part.State == session.PartDropped && part.Why != partRemovedWhy
 }
 
-func promptChange(message llm.Message) bool {
-	return message.Role == llm.RoleUser && message.Origin.Source == llm.SourceEnvironment && strings.HasPrefix(message.Content, thePromptChangedSince)
+func promptChange(message core.Message) bool {
+	return message.Role == core.RoleUser && message.Origin.Source == core.SourceEnvironment && strings.HasPrefix(message.Content, thePromptChangedSince)
 }
 
 func (part keptPart) samePart(other keptPart) bool {
 	return part.Kind == other.Kind && part.Rule == other.Rule && part.Agent == other.Agent && part.Name == other.Name && part.File == other.File && part.Off == other.Off
 }
 
-func (c Config) holdPrefix(tools []llm.Tool, preview recall.Config) heldPrefix {
+func (c Config) holdPrefix(tools []core.Tool, preview recall.Config) heldPrefix {
 	now := heldPrefix{head: c.System, instructions: c.Instructions, system: c.SystemMessage(), parts: c.promptParts(preview), composedNow: true}
 	p := c.Prefix
 	if p == nil {
@@ -494,21 +494,21 @@ func (c Config) holdPrefix(tools []llm.Tool, preview recall.Config) heldPrefix {
 	return held
 }
 
-func (p *Prefix) holdTools(now []llm.Tool) []string {
-	var kept []llm.Tool
+func (p *Prefix) holdTools(now []core.Tool) []string {
+	var kept []core.Tool
 	var changes []string
 	for _, was := range p.tools {
-		at := slices.IndexFunc(now, func(tool llm.Tool) bool { return tool.Name == was.Name })
+		at := slices.IndexFunc(now, func(tool core.Tool) bool { return tool.Name == was.Name })
 		switch {
 		case at < 0:
 			changes = append(changes, aToolIsGone+was.Name)
-		case !sameDefinition(llm.Tool{Parameters: was.Parameters}, llm.Tool{Parameters: now[at].Parameters}):
+		case !sameDefinition(core.Tool{Parameters: was.Parameters}, core.Tool{Parameters: now[at].Parameters}):
 			kept = append(kept, now[at])
 			changes = append(changes, aToolChanged+was.Name)
 		default:
 			kept = append(kept, was)
 			said := was
-			if before := slices.IndexFunc(p.offered, func(tool llm.Tool) bool { return tool.Name == was.Name }); before >= 0 {
+			if before := slices.IndexFunc(p.offered, func(tool core.Tool) bool { return tool.Name == was.Name }); before >= 0 {
 				said = p.offered[before]
 			}
 			if said.Description != now[at].Description {
@@ -517,7 +517,7 @@ func (p *Prefix) holdTools(now []llm.Tool) []string {
 		}
 	}
 	for _, tool := range now {
-		if !slices.ContainsFunc(p.tools, func(was llm.Tool) bool { return was.Name == tool.Name }) {
+		if !slices.ContainsFunc(p.tools, func(was core.Tool) bool { return was.Name == tool.Name }) {
 			kept = append(kept, tool)
 			changes = append(changes, aToolIsNew+tool.Name)
 		}
@@ -526,13 +526,13 @@ func (p *Prefix) holdTools(now []llm.Tool) []string {
 	return changes
 }
 
-func sameDefinition(was, now llm.Tool) bool {
+func sameDefinition(was, now core.Tool) bool {
 	before, errBefore := json.Marshal(was)
 	after, errAfter := json.Marshal(now)
 	return errBefore == nil && errAfter == nil && string(before) == string(after)
 }
 
-func (p *Prefix) toolsOr(tools []llm.Tool) []llm.Tool {
+func (p *Prefix) toolsOr(tools []core.Tool) []core.Tool {
 	if p == nil || !p.held {
 		return tools
 	}
@@ -554,11 +554,11 @@ func (c Config) promptParts(preview recall.Config) []keptPart {
 	}
 	byTask := composed.render(func(part PromptPart) bool { return part.ByTask })
 	parts := []keptPart{
-		{PromptPart: session.PromptPart{Kind: string(rule.ConcernEnvironment), PerTurn: true}, text: strings.TrimSpace(strings.Replace(c.Environment, byTask, "", 1))},
+		{PromptPart: session.PromptPart{Kind: string(rules.ConcernEnvironment), PerTurn: true}, text: strings.TrimSpace(strings.Replace(c.Environment, byTask, "", 1))},
 		{PromptPart: session.PromptPart{Kind: partInstructions}, text: c.Instructions},
 	}
 	for _, part := range c.Parts {
-		if part.Concern == rule.ConcernEnvironment {
+		if part.Concern == rules.ConcernEnvironment {
 			continue
 		}
 		kept := keptPart{PromptPart: session.PromptPart{Kind: string(part.Concern), Rule: part.RuleID, Agent: part.Agent, Name: part.Name, File: part.File, State: part.State, Why: part.Why,
@@ -575,34 +575,34 @@ func (c Config) promptParts(preview recall.Config) []keptPart {
 	return parts
 }
 
-func (c Config) MemoryMessage() []llm.Message {
+func (c Config) MemoryMessage() []core.Message {
 	if strings.TrimSpace(c.Memory) == "" {
 		return nil
 	}
-	return []llm.Message{{Role: llm.RoleUser, Content: c.Memory, Origin: llm.Origin{Source: llm.SourceMemoryView}}}
+	return []core.Message{{Role: core.RoleUser, Content: c.Memory, Origin: core.Origin{Source: core.SourceMemoryView}}}
 }
 
 func (c Config) opensGeneration() bool {
 	return len(c.History) == 0 || c.SessionSource != ""
 }
 
-func withoutMemoryViews(messages []llm.Message) []llm.Message {
-	return slices.DeleteFunc(slices.Clone(messages), func(message llm.Message) bool { return message.Origin.Source == llm.SourceMemoryView })
+func withoutMemoryViews(messages []core.Message) []core.Message {
+	return slices.DeleteFunc(slices.Clone(messages), func(message core.Message) bool { return message.Origin.Source == core.SourceMemoryView })
 }
 
-func withMemoryViewAtHead(head, view []llm.Message) []llm.Message {
+func withMemoryViewAtHead(head, view []core.Message) []core.Message {
 	head = withoutMemoryViews(head)
-	at := slices.IndexFunc(head, func(message llm.Message) bool { return !standsAtTheHead(message) })
+	at := slices.IndexFunc(head, func(message core.Message) bool { return !standsAtTheHead(message) })
 	if at < 0 {
 		at = len(head)
 	}
 	return slices.Insert(head, at, view...)
 }
 
-func newestMemoryView(messages []llm.Message) []llm.Message {
+func newestMemoryView(messages []core.Message) []core.Message {
 	for _, message := range slices.Backward(messages) {
-		if message.Origin.Source == llm.SourceMemoryView {
-			return []llm.Message{message}
+		if message.Origin.Source == core.SourceMemoryView {
+			return []core.Message{message}
 		}
 	}
 	return nil

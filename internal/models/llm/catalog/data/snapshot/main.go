@@ -33,7 +33,7 @@ func snapshot(vendors []string) error {
 	if len(vendors) == 0 {
 		return errors.New("name the models.dev providers to keep, as in go run ./data/snapshot anthropic openai meta")
 	}
-	source := models.RegistrySource()
+	source := catalog.RegistrySource()
 	response, err := http.Get(source)
 	if err != nil {
 		return err
@@ -71,7 +71,7 @@ func snapshot(vendors []string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := models.ParseRegistry(written, snapshotFile); err != nil {
+	if _, err := catalog.ParseRegistry(written, snapshotFile); err != nil {
 		return err
 	}
 	if err := os.WriteFile(snapshotFile, append(written, '\n'), writtenMode); err != nil {

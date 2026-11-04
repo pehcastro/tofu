@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
@@ -58,7 +58,7 @@ func copyLegacyStateDir(out io.Writer, parent string) {
 		return
 	}
 	said := strings.Join([]string{sys.LegacyStateDirName + " copied to " + sys.StateDirName, output.Plural(countSessions(source), "session"),
-		output.Plural(copied.Files, "file"), widget.Size(int(copied.Bytes)), sys.LegacyStateDirName + " kept"}, " · ")
+		output.Plural(copied.Files, "file"), render.Size(int(copied.Bytes)), sys.LegacyStateDirName + " kept"}, " · ")
 	_ = page.Print(out, []string{page.Receipt(cli.Added, said, target)})
 }
 

@@ -44,7 +44,7 @@ func (r *Renderer) Lines(source string, width int) []string {
 	if r.term == nil || r.width != width {
 		term, err := glamour.NewTermRenderer(glamour.WithStyles(theme.Prose()), glamour.WithWordWrap(width), glamour.WithChromaFormatter("terminal16m"))
 		if err != nil {
-			return widget.Wrap(source, width)
+			return render.Wrap(source, width)
 		}
 		r.width, r.term = width, term
 	}
@@ -64,7 +64,7 @@ func (r *Renderer) Lines(source string, width int) []string {
 			}
 		}
 		if err != nil {
-			return widget.Wrap(source, width)
+			return render.Wrap(source, width)
 		}
 		if len(rendered) > 0 && len(lines) > 0 {
 			lines = append(lines, "")

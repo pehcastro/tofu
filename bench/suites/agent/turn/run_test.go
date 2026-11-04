@@ -12,11 +12,11 @@ import (
 
 type modelThatOnlyEverReadsTheSameMissingFile struct{}
 
-func (modelThatOnlyEverReadsTheSameMissingFile) Ask(_ context.Context, _ llm.Request) (llm.Decision, error) {
-	return llm.Decision{
+func (modelThatOnlyEverReadsTheSameMissingFile) Ask(_ context.Context, _ core.Request) (core.Decision, error) {
+	return core.Decision{
 		Build:   "bench-stub",
-		Outcome: llm.OutcomeToolCalls,
-		ToolCalls: []llm.ToolCall{{
+		Outcome: core.OutcomeToolCalls,
+		ToolCalls: []core.ToolCall{{
 			ID:        "call",
 			Name:      "read",
 			Arguments: json.RawMessage(`{"path":"absent.txt"}`),

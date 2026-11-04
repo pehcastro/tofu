@@ -58,9 +58,9 @@ func (m Managed) Attention(key string, now time.Time) (Attention, error) {
 			one.Since = cmp.Or(started[ticket.ID], ticket.Updated)
 			a.Doing = append(a.Doing, one)
 		case Review:
-			closing := m.subjectOf(rule.HookTicketClose, key, ticket, Done, cmp.Or(m.Person, string(RolePerson)), 0)
+			closing := m.subjectOf(rules.HookTicketClose, key, ticket, Done, cmp.Or(m.Person, string(RolePerson)), 0)
 			closing.dry = true
-			_, _, refusal := m.weigh(hooks, rule.WhenBefore, closing)
+			_, _, refusal := m.weigh(hooks, rules.WhenBefore, closing)
 			a.review(one, refusal)
 		case NeedsDecision:
 			var asked []string

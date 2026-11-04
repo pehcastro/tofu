@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"cmp"
@@ -26,8 +26,8 @@ func NewSearch(dir string) (Search, error) {
 
 func (s Search) Name() string { return "search" }
 
-func (s Search) Definition() llm.Tool {
-	return llm.Tool{
+func (s Search) Definition() core.Tool {
+	return core.Tool{
 		Name: "search",
 		Description: "the only content search: matches a go regexp against every text file under the working directory. " +
 			"a match in .go, .ts, .tsx, .js, .jsx, .py or .rs returns its whole declaration, marked code, comment or string; other files return the lines around it. " +

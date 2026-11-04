@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"encoding/json"
@@ -10,7 +10,7 @@ import (
 	"tofu/internal/models/llm/core"
 )
 
-var goDev = subagent.Definition{Name: "go-dev", Language: "go", Gate: []string{"go vet", "go test"}}
+var goDev = subagents.Definition{Name: "go-dev", Language: "go", Gate: []string{"go vet", "go test"}}
 
 func TestAGateRunThroughRtkCountsAsTheCommandItWraps(t *testing.T) {
 	reopenedFor(t, gatedRun(t, "", goDev, edited("src/x.go"), bashed("rtk go test ./pkg/", 0), bashed("rtk go vet ./pkg/", 0), claimDecision("done")).rows, 1)
@@ -37,7 +37,7 @@ func TestAGateCheckerThatIsNotInstalledIsNotAPass(t *testing.T) {
 				{Call: "ruff", Tool: "bash", Command: "uv run ruff check src | tail -5", ExitCode: &exit},
 				{Call: "pytest", Tool: "bash", Command: "uv run pytest", ExitCode: &exit},
 			}}},
-			Conversation: []llm.Message{{Role: llm.RoleTool, ToolCallID: "ruff", Content: printed}, {Role: llm.RoleTool, ToolCallID: "pytest", Content: "3 passed"}},
+			Conversation: []core.Message{{Role: core.RoleTool, ToolCallID: "ruff", Content: printed}, {Role: core.RoleTool, ToolCallID: "pytest", Content: "3 passed"}},
 		}}
 	}
 	const missing = "ruff check could not run: its checker is not installed"
@@ -91,7 +91,7 @@ func TestEachGoCheckInAChainedCommandIsJudgedByWhatItPrinted(t *testing.T) {
 				{Tool: "edit", Args: json.RawMessage(`{"path":"cart.go"}`)},
 				{Call: "check", Tool: "bash", Command: c.command, ExitCode: &exit},
 			}}},
-			Conversation: []llm.Message{{Role: llm.RoleTool, ToolCallID: "check", Content: c.printed}},
+			Conversation: []core.Message{{Role: core.RoleTool, ToolCallID: "check", Content: c.printed}},
 		}}
 		if missed := strings.Join(gateMissed("", nil, goDev, nil, rows), "; "); missed != c.want {
 			t.Errorf("%q exit %d printing %q: the gate said %q, want %q", c.command, c.exit, c.printed, missed, c.want)
@@ -103,13 +103,13 @@ func typecheckRound(content string) []Row {
 	call := ToolCallRow{Call: "tc", Tool: "typecheck", Command: "web/src", Args: json.RawMessage(`{"path":"web/src"}`), Error: "typecheck: tsc, errors in src: 1, in other files: 0"}
 	return []Row{{
 		Steps:        []StepRow{{ToolCalls: []ToolCallRow{{Tool: "edit", Args: json.RawMessage(`{"path":"web/src/mine.ts"}`)}, call}}},
-		Conversation: []llm.Message{{Role: llm.RoleTool, ToolCallID: "tc", Content: content}},
+		Conversation: []core.Message{{Role: core.RoleTool, ToolCallID: "tc", Content: content}},
 	}}
 }
 
 func TestATypecheckErrorOnlyInAnotherAgentsFileDoesNotSendThisOneBack(t *testing.T) {
 	project := tsProjectHolding(t, map[string]string{"web/tsconfig.json": "{}", "web/src/mine.ts": "", "web/src/theirs.ts": ""})
-	tsGate := subagent.Definition{Name: "ts-dev", Language: "typescript", Gate: []string{"typecheck"}}
+	tsGate := subagents.Definition{Name: "ts-dev", Language: "typescript", Gate: []string{"typecheck"}}
 	owns := []string{"web/src/mine.ts"}
 	head := "typecheck: tsc, errors in src: 1, in other files: 0:\n"
 	for content, want := range map[string]string{
@@ -144,7 +144,7 @@ func cargoRound(edit string, runs ...cargoRun) []Row {
 	for i, run := range runs {
 		call := fmt.Sprint("cargo-", i)
 		row.Steps[0].ToolCalls = append(row.Steps[0].ToolCalls, ToolCallRow{Call: call, Tool: "bash", Command: run.command, ExitCode: &run.exit})
-		row.Conversation = append(row.Conversation, llm.Message{Role: llm.RoleTool, ToolCallID: call, Content: run.printed})
+		row.Conversation = append(row.Conversation, core.Message{Role: core.RoleTool, ToolCallID: call, Content: run.printed})
 	}
 	return []Row{row}
 }

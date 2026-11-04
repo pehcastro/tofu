@@ -29,7 +29,7 @@ type writeOpts struct {
 	dir     string
 	replace bool
 	json    bool
-	concern rule.Concern
+	concern rules.Concern
 	reason  string
 	rest    []string
 }
@@ -54,7 +54,7 @@ func parseWriteArgs(args []string) (writeOpts, error) {
 		case arg == output.JSONFlag:
 			opts.json = true
 		case arg == "--concern":
-			opts.concern = rule.Concern(args[i])
+			opts.concern = rules.Concern(args[i])
 		case arg == "--dir":
 			opts.dir = args[i]
 		case arg == "--reason":
@@ -87,18 +87,18 @@ func parseIDArgs(args []string) (writeOpts, error) {
 	return opts, err
 }
 
-func (opts writeOpts) under(id string) (rule.Rule, bool, error) {
+func (opts writeOpts) under(id string) (rules.Rule, bool, error) {
 	stack, err := wiring.StackRules("", opts.dir)
 	below := stack.Under[opts.layer.Name]
-	at := slices.IndexFunc(below, func(r rule.Rule) bool { return r.ID == id })
+	at := slices.IndexFunc(below, func(r rules.Rule) bool { return r.ID == id })
 	if err != nil || at < 0 {
-		return rule.Rule{}, false, err
+		return rules.Rule{}, false, err
 	}
 	return below[at], true, nil
 }
 
-func (opts writeOpts) override(base rule.Rule, text string) ([]byte, error) {
-	return rule.OverrideFile(base.ID, text, rule.Override{Of: base.ID, Version: base.Version, Reason: opts.reason, By: rule.ByPerson, At: time.Now().Format(time.DateOnly)})
+func (opts writeOpts) override(base rules.Rule, text string) ([]byte, error) {
+	return rules.OverrideFile(base.ID, text, rules.Override{Of: base.ID, Version: base.Version, Reason: opts.reason, By: rules.ByPerson, At: time.Now().Format(time.DateOnly)})
 }
 
 func AddVerb(args []string, out, errOut io.Writer) int {
@@ -134,7 +134,7 @@ func AddVerb(args []string, out, errOut io.Writer) int {
 	case opts.reason != "":
 		return o.Usage(fmt.Errorf("--reason is for overriding a rule that runs, and no rule %s runs", id))
 	default:
-		data, err = rule.HumanRuleFile(id, cmp.Or(opts.concern, rule.ConcernCodeRules), rule.ModeShadow, text)
+		data, err = rules.HumanRuleFile(id, cmp.Or(opts.concern, rules.ConcernCodeRules), rules.ModeShadow, text)
 	}
 	if err != nil {
 		return o.Usage(err)
@@ -149,7 +149,7 @@ func AddVerb(args []string, out, errOut io.Writer) int {
 		undo = "tofu rules restore" + opts.layer.Flag + " " + id
 	}
 	switch {
-	case found && existing.Mode == rule.ModeOff:
+	case found && existing.Mode == rules.ModeOff:
 		change.Change, undo = host.ChangeChanged, undo+"; "+opts.layer.Again(existing)
 	case found:
 		change.Change, undo = host.ChangeChanged, strings.Replace(opts.layer.Again(existing), "tofu rules add", "tofu rules add --replace", 1)
@@ -182,7 +182,7 @@ func offVerb(args []string, out, errOut io.Writer) int {
 	if !runs {
 		return o.Fail(output.ProblemError{What: "no rule " + id + " runs", Hint: "tofu rules list"})
 	}
-	if base.Mode == rule.ModeOff {
+	if base.Mode == rules.ModeOff {
 		hint := "tofu rules list"
 		if key := wiring.RuleSetting(id); key != "" {
 			hint = "tofu settings set " + key + " false"
@@ -261,10 +261,10 @@ func switchOn(o output.Verb, opts writeOpts, id string) int {
 	if err != nil {
 		return o.Fail(err)
 	}
-	if !found || base.Mode != rule.ModeOff {
+	if !found || base.Mode != rules.ModeOff {
 		return o.Fail(output.ProblemError{What: "the " + opts.layer.Name + " rules carry no override of " + id, Hint: "tofu rules overrides"})
 	}
-	data, err := rule.SwitchOnFile(id, rule.Override{Of: id, Version: base.Version, Reason: cmp.Or(opts.reason, "switched on with tofu rules restore"), By: rule.ByPerson, At: time.Now().Format(time.DateOnly)})
+	data, err := rules.SwitchOnFile(id, rules.Override{Of: id, Version: base.Version, Reason: cmp.Or(opts.reason, "switched on with tofu rules restore"), By: rules.ByPerson, At: time.Now().Format(time.DateOnly)})
 	if err != nil {
 		return o.Usage(err)
 	}

@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"cmp"
@@ -22,16 +22,16 @@ import (
 )
 
 type RuleOverride struct {
-	Ask             turn.Person
-	Running         func() ([]rule.Rule, error)
+	Ask             loop.Person
+	Running         func() ([]rules.Rule, error)
 	Project, Global string
 }
 
-func (RuleOverride) Name() string { return turn.RuleOverrideToolName }
+func (RuleOverride) Name() string { return loop.RuleOverrideToolName }
 
-func (RuleOverride) Definition() llm.Tool {
-	return llm.Tool{
-		Name: turn.RuleOverrideToolName,
+func (RuleOverride) Definition() core.Tool {
+	return core.Tool{
+		Name: loop.RuleOverrideToolName,
 		Description: "asks the person to override one rule that stops you from doing what they asked. the person answers yes for this project, yes everywhere, or no, and nothing is written before a yes. " +
 			"on a yes the override is a file in their rules, marked by: asked, and the rule changes from the next turn. on a no, work within the rule",
 		Parameters: map[string]any{
@@ -64,16 +64,16 @@ func (o RuleOverride) Run(ctx context.Context, raw json.RawMessage) (contract.Re
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("rule_override: %w", err)
 	}
-	at := slices.IndexFunc(running, func(r rule.Rule) bool { return r.ID == args.Rule })
+	at := slices.IndexFunc(running, func(r rules.Rule) bool { return r.ID == args.Rule })
 	if at < 0 {
 		return contract.Result{}, fmt.Errorf("rule_override: no rule %q runs, so there is nothing to override", args.Rule)
 	}
 	base := running[at]
 	text := ""
-	if args.Change != string(rule.ModeOff) {
+	if args.Change != string(rules.ModeOff) {
 		text = args.Change
 	}
-	data, err := rule.OverrideFile(base.ID, text, rule.Override{Of: base.ID, Version: base.Version, Reason: args.WhyNow, By: rule.ByAsked, At: time.Now().Format(time.DateOnly)})
+	data, err := rules.OverrideFile(base.ID, text, rules.Override{Of: base.ID, Version: base.Version, Reason: args.WhyNow, By: rules.ByAsked, At: time.Now().Format(time.DateOnly)})
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("rule_override: %w", err)
 	}
@@ -86,17 +86,17 @@ func (o RuleOverride) Run(ctx context.Context, raw json.RawMessage) (contract.Re
 	if err != nil {
 		return contract.Result{}, err
 	}
-	answer, err := o.Ask(ctx, turn.GateRequest{Tool: turn.RuleOverrideToolName, Args: shown}, turn.GateDecision{Verdict: ledger.VerdictAsk})
+	answer, err := o.Ask(ctx, loop.GateRequest{Tool: loop.RuleOverrideToolName, Args: shown}, loop.GateDecision{Verdict: ledger.VerdictAsk})
 	if err != nil {
 		return contract.Result{Content: "the person could not be asked, so nothing was written: " + err.Error() + ". " + within}, nil
 	}
 	var dir, where string
 	switch answer {
-	case turn.PersonDenied:
+	case loop.PersonDenied:
 		return contract.Result{Content: "the person said no, and nothing was written. " + within}, nil
-	case turn.PersonAllowedOnce:
+	case loop.PersonAllowedOnce:
 		dir, where = o.Project, "this project"
-	case turn.PersonAlwaysHere:
+	case loop.PersonAlwaysHere:
 		dir, where = o.Global, "every project"
 	default:
 		panic("tools: unknown person answer")

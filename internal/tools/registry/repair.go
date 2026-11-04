@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"fmt"
@@ -56,7 +56,7 @@ func repairPath(root contract.Root, requested string, withDirectories bool) (str
 	if err != nil {
 		return "", "", err
 	}
-	return turn.RepairPath(requested, noun, found)
+	return loop.RepairPath(requested, noun, found)
 }
 
 func exactOccurrences(body, wanted string) []int {

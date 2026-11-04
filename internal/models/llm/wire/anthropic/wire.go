@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	Name                    = llm.WireAnthropic
+	Name                    = core.WireAnthropic
 	MessagesPath            = "/v1/messages"
 	OAuthQuery              = "?beta=true"
 	unattestedRequestNotice = "the billing placeholder is present but not patched; sending an unattested request"
@@ -32,7 +32,7 @@ const (
 type Config struct {
 	BaseURL    string
 	Model      string
-	Token      llm.TokenSource
+	Token      core.TokenSource
 	HTTP       *http.Client
 	Transport  transport.Config
 	Account    transport.Account
@@ -71,11 +71,11 @@ func New(config Config) (*Wire, error) {
 	if config.StreamIdle <= 0 {
 		config.StreamIdle = konst.StreamIdleMillis * time.Millisecond
 	}
-	return &Wire{config: config, http: llm.StreamingClient(config.HTTP, config.Transport, config.StreamIdle), version: cmp.Or(config.ClaudeCodeVersion, PinnedClaudeCodeVersion)}, nil
+	return &Wire{config: config, http: core.StreamingClient(config.HTTP, config.Transport, config.StreamIdle), version: cmp.Or(config.ClaudeCodeVersion, PinnedClaudeCodeVersion)}, nil
 }
 
 type Dump struct {
-	llm.Dump
+	core.Dump
 	Attestation Attestation
 }
 
@@ -113,7 +113,7 @@ func (w *Wire) Ask(ctx context.Context, request Request) (Result, Dump, error) {
 	request.ClaudeCodeVersion = w.version
 	w.mu.Unlock()
 	result, dump, err := w.send(ctx, request, token, oauth)
-	renewed, err := llm.Renewed(ctx, err, token, w.config.Token)
+	renewed, err := core.Renewed(ctx, err, token, w.config.Token)
 	if renewed != "" {
 		token = renewed
 		result, dump, err = w.send(ctx, request, token, oauth)
@@ -166,7 +166,7 @@ func (w *Wire) send(ctx context.Context, request Request, token string, oauth bo
 	}
 
 	dump := Dump{
-		Dump: llm.Dump{
+		Dump: core.Dump{
 			Method: http.MethodPost,
 			URL:    w.endpoint(oauth),
 			Headers: Headers(HeaderOptions{
@@ -192,10 +192,10 @@ func (w *Wire) send(ctx context.Context, request Request, token string, oauth bo
 	}
 
 	sent := time.Now()
-	result, err := llm.RetryQuiet(ctx, w.config.Transport, request.OnRetry, func() (Result, error) {
+	result, err := core.RetryQuiet(ctx, w.config.Transport, request.OnRetry, func() (Result, error) {
 		return w.post(ctx, dump, oauth, request.OnDelta, request.OnThinking)
 	})
-	result.FirstTokenMS = llm.MillisSince(sent, result.firstDelta)
+	result.FirstTokenMS = core.MillisSince(sent, result.firstDelta)
 	result.Warnings = append(warnings, result.Warnings...)
 	return result, dump, err
 }
@@ -239,7 +239,7 @@ func (w *Wire) post(ctx context.Context, dump Dump, oauth bool, onDelta, onThink
 		return Result{}, refused
 	}
 
-	body := llm.WatchIdle(response.Body, w.config.StreamIdle)
+	body := core.WatchIdle(response.Body, w.config.StreamIdle)
 	defer func() { _ = body.Close() }()
 	reader, err := decoded(normalizedEncoding(response.Header.Get("Content-Encoding")), body)
 	if err != nil {

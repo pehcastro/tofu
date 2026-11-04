@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
@@ -84,7 +84,7 @@ func accessRows(report host.DoctorReport) []cli.Row {
 	}
 	for _, wire := range report.Wires {
 		spend := "subscription"
-		if wiring.WireSpend(wire.Name) == turn.SpendAPIKey {
+		if wiring.WireSpend(wire.Name) == loop.SpendAPIKey {
 			spend = "money"
 		}
 		rows = append(rows, cli.Row{Mark: cli.Done, Cells: []string{wire.Name, spend}})
@@ -105,15 +105,15 @@ func proxyRow(proxy host.DoctorProxy) cli.Row {
 	return cli.Row{Mark: cli.Done, Cells: []string{"rtk", proxy.Version + output.FactSeparator + "rewrites every bash command"}, Detail: from}
 }
 
-func hostRows(hosts []browser.NativeHost) []cli.Row {
+func hostRows(hosts []driver.NativeHost) []cli.Row {
 	rows := make([]cli.Row, len(hosts))
 	for i, native := range hosts {
 		switch native.State {
-		case browser.HostInstalled:
+		case driver.HostInstalled:
 			rows[i] = cli.Row{Mark: cli.Done, Cells: []string{native.Browser, "native host installed"}}
-		case browser.HostStale:
+		case driver.HostStale:
 			rows[i] = cli.Row{Mark: cli.Warn, Cells: []string{native.Browser, "the native host is stale: it runs tofu itself or a copy that is gone"}, Hint: "tofu browser install"}
-		case browser.HostMissing:
+		case driver.HostMissing:
 			rows[i] = cli.Row{Mark: cli.Warn, Cells: []string{native.Browser, "no native host, so tofu cannot reach its tabs"}, Hint: "tofu browser install"}
 		default:
 			panic("tofu doctor: unknown native host state " + string(native.State))

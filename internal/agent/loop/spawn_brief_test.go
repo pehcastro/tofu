@@ -1,4 +1,4 @@
-package turn_test
+package loop_test
 
 import (
 	"context"
@@ -22,26 +22,26 @@ type changingBeforeSpawn struct {
 	change   func() error
 }
 
-func (s *changingBeforeSpawn) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (s *changingBeforeSpawn) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	if !strings.Contains(request.Messages[0].Content, s.brief) {
 		s.leadAsks++
 		if s.leadAsks == 3 {
 			if err := s.change(); err != nil {
-				return llm.Decision{}, err
+				return core.Decision{}, err
 			}
 		}
 	}
 	return s.prefetchScript.Ask(ctx, request)
 }
 
-func reading(calls ...map[string]any) llm.Decision {
-	decision := llm.Decision{Build: "m1", Outcome: llm.OutcomeToolCalls}
+func reading(calls ...map[string]any) core.Decision {
+	decision := core.Decision{Build: "m1", Outcome: core.OutcomeToolCalls}
 	for i, args := range calls {
 		raw, err := json.Marshal(args)
 		if err != nil {
 			panic(err)
 		}
-		decision.ToolCalls = append(decision.ToolCalls, llm.ToolCall{ID: "read-" + string(rune('a'+i)), Name: "read", Arguments: raw})
+		decision.ToolCalls = append(decision.ToolCalls, core.ToolCall{ID: "read-" + string(rune('a'+i)), Name: "read", Arguments: raw})
 	}
 	return decision
 }
@@ -64,14 +64,14 @@ func TestTheBriefPlacesEachFileTheLeadReadInsideTheOwnedPathsOnceAndAsItIsNow(t 
 			t.Fatal(err)
 		}
 	}
-	read, err := turn.NewReadTool(root)
+	read, err := loop.NewReadTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	memoised := tools.NewMemo().Wrap([]contract.Tool{read})
+	memoised := registry.NewMemo().Wrap([]contract.Tool{read})
 	brief := "Change src/c.ts so it exports a name; c.ts is the entry point and d.ts imports it."
 	script := &changingBeforeSpawn{
-		prefetchScript: &prefetchScript{brief: brief, lead: []llm.Decision{
+		prefetchScript: &prefetchScript{brief: brief, lead: []core.Decision{
 			reading(map[string]any{"path": "src/a.ts"}, map[string]any{"path": "docs/x.md"}, map[string]any{"path": "missing.ts"}, map[string]any{"path": "src/c.ts"}),
 			reading(map[string]any{"path": "./src/a.ts"}, map[string]any{"path": `src\a.ts`}, map[string]any{"path": "a.ts"},
 				map[string]any{"path": "src/b.ts", "start_line": 2, "end_line": 2}, map[string]any{"path": "src/gone.ts"}),
@@ -82,20 +82,20 @@ func TestTheBriefPlacesEachFileTheLeadReadInsideTheOwnedPathsOnceAndAsItIsNow(t 
 				os.Remove(filepath.Join(root, "src", "gone.ts")))
 		},
 	}
-	base := turn.Config{
+	base := loop.Config{
 		Model:          script,
-		Spend:          turn.SpendAPIKey,
-		Tools:          turn.NewRegistry(memoised...),
-		Caps:           turn.Caps{MaxSteps: 6},
+		Spend:          loop.SpendAPIKey,
+		Tools:          loop.NewRegistry(memoised...),
+		Caps:           loop.Caps{MaxSteps: 6},
 		ResultBytesCap: 4096,
 		ArtifactDir:    filepath.Join(t.TempDir(), "artifacts"),
 		NewID:          func() string { return "turn-orchestrator" },
 	}
-	spawner := turn.NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+	spawner := loop.NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
 	orchestrator := base
-	orchestrator.Task, orchestrator.Tools, orchestrator.Inbox = "hand the work to a sub-agent", turn.NewRegistry(append([]contract.Tool{spawner}, memoised...)...), spawner.Inbox
+	orchestrator.Task, orchestrator.Tools, orchestrator.Inbox = "hand the work to a sub-agent", loop.NewRegistry(append([]contract.Tool{spawner}, memoised...)...), spawner.Inbox
 
-	if err := turn.Lead(context.Background(), orchestrator, nil, nil, func(turn.Row, error) {}); err != nil {
+	if err := loop.Lead(context.Background(), orchestrator, nil, nil, func(loop.Row, error) {}); err != nil {
 		t.Fatalf("Lead: %v", err)
 	}
 

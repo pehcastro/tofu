@@ -27,7 +27,7 @@ const (
 
 type Result struct {
 	Content     string
-	Images      []llm.Image
+	Images      []core.Image
 	Command     string
 	ExitCode    *int
 	Hits        *int
@@ -35,13 +35,13 @@ type Result struct {
 	Outcome     ResultOutcome
 	SubAgent    string
 	Repeat      bool
-	Origin      llm.Origin
-	Rules       []rule.Fire
+	Origin      core.Origin
+	Rules       []rules.Fire
 }
 
 type Tool interface {
 	Name() string
-	Definition() llm.Tool
+	Definition() core.Tool
 	Run(ctx context.Context, args json.RawMessage) (Result, error)
 }
 

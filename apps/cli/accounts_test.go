@@ -26,34 +26,34 @@ func TestTheScreenSaysAnAccountMovedAndWhatTheMoveCost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
-	onFirst := &queuedModel{decisions: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+	onFirst := &queuedModel{decisions: []core.Decision{
+		{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
 			{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"note.txt"}`)},
 		}},
 	}}
-	onSecond := &queuedModel{decisions: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the note says pong"},
+	onSecond := &queuedModel{decisions: []core.Decision{
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "the note says pong"},
 	}}
 	moved := false
-	held := turn.Accounts{
-		Pick: func(context.Context) (turn.Account, error) {
-			return turn.Account{ID: 1, Model: onFirst, Headroom: 0.2, Window: "5h"}, nil
+	held := loop.Accounts{
+		Pick: func(context.Context) (loop.Account, error) {
+			return loop.Account{ID: 1, Model: onFirst, Headroom: 0.2, Window: "5h"}, nil
 		},
-		Next: func(context.Context, turn.Account) (turn.Account, bool, error) {
+		Next: func(context.Context, loop.Account) (loop.Account, bool, error) {
 			if moved {
-				return turn.Account{}, false, nil
+				return loop.Account{}, false, nil
 			}
 			moved = true
-			return turn.Account{ID: 2, Model: onSecond, Headroom: 0.5, Window: "5h"}, true, nil
+			return loop.Account{ID: 2, Model: onSecond, Headroom: 0.5, Window: "5h"}, true, nil
 		},
 	}
 
-	config, _ := mustConfig(t, opts, built, runtime{accounts: held, spend: turn.SpendSubscription})
-	var taken []turn.AccountTaken
-	config.AccountTaken = func(account turn.AccountTaken) { taken = append(taken, account) }
-	row, err := turn.Run(context.Background(), config)
+	config, _ := mustConfig(t, opts, built, runtime{accounts: held, spend: loop.SpendSubscription})
+	var taken []loop.AccountTaken
+	config.AccountTaken = func(account loop.AccountTaken) { taken = append(taken, account) }
+	row, err := loop.Run(context.Background(), config)
 	if err != nil {
-		t.Fatalf("turn.Run: %v", err)
+		t.Fatalf("loop.Run: %v", err)
 	}
 	var screen bytes.Buffer
 	printRunRow(&screen, row, "stub-model", "5h and 7d")
@@ -64,7 +64,7 @@ func TestTheScreenSaysAnAccountMovedAndWhatTheMoveCost(t *testing.T) {
 	if row.Account != 2 {
 		t.Fatalf("the row says account %d after the move", row.Account)
 	}
-	want := []turn.AccountTaken{{ID: 1, Reason: turn.AccountPicked}, {ID: 2, From: 1, Reason: turn.AccountMoved}}
+	want := []loop.AccountTaken{{ID: 1, Reason: loop.AccountPicked}, {ID: 2, From: 1, Reason: loop.AccountMoved}}
 	if !slices.Equal(taken, want) {
 		t.Fatalf("the turn reported spending %+v, want %+v", taken, want)
 	}

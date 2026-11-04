@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -19,18 +19,18 @@ import (
 	"tofu/internal/tools/contract"
 )
 
-type answer func(t *testing.T) (llm.Decision, error)
+type answer func(t *testing.T) (core.Decision, error)
 
 type overflowModel struct {
 	t        *testing.T
 	answers  []answer
-	requests [][]llm.Message
+	requests [][]core.Message
 }
 
-func (m *overflowModel) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+func (m *overflowModel) Ask(_ context.Context, request core.Request) (core.Decision, error) {
 	m.requests = append(m.requests, slices.Clone(request.Messages))
 	if len(m.requests) > len(m.answers) {
-		return llm.Decision{}, errors.New("overflowModel: asked once more than it holds")
+		return core.Decision{}, errors.New("overflowModel: asked once more than it holds")
 	}
 	return m.answers[len(m.requests)-1](m.t)
 }
@@ -39,8 +39,8 @@ type longResult string
 
 func (l longResult) Name() string { return string(l) }
 
-func (l longResult) Definition() llm.Tool {
-	return llm.Tool{Name: string(l), Parameters: map[string]any{"type": "object"}}
+func (l longResult) Definition() core.Tool {
+	return core.Tool{Name: string(l), Parameters: map[string]any{"type": "object"}}
 }
 
 func (longResult) Run(_ context.Context, args json.RawMessage) (contract.Result, error) {
@@ -52,16 +52,16 @@ func (longResult) Run(_ context.Context, args json.RawMessage) (contract.Result,
 }
 
 func callNamed(id string) answer {
-	return func(*testing.T) (llm.Decision, error) {
-		return toolCallDecision(llm.ToolCall{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"` + id + `"}`)}), nil
+	return func(*testing.T) (core.Decision, error) {
+		return toolCallDecision(core.ToolCall{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"` + id + `"}`)}), nil
 	}
 }
 
 func failing(err error) answer {
-	return func(*testing.T) (llm.Decision, error) { return llm.Decision{}, err }
+	return func(*testing.T) (core.Decision, error) { return core.Decision{}, err }
 }
 
-func answered(*testing.T) (llm.Decision, error) { return messageDecision(), nil }
+func answered(*testing.T) (core.Decision, error) { return messageDecision(), nil }
 
 func fixture(t *testing.T, name string) *os.File {
 	body, err := os.Open("testdata/overflow/" + name)
@@ -72,14 +72,14 @@ func fixture(t *testing.T, name string) *os.File {
 	return body
 }
 
-func anthropicStream(t *testing.T) (llm.Decision, error) {
+func anthropicStream(t *testing.T) (core.Decision, error) {
 	result, err := anthropic.ReadStream(fixture(t, "anthropic-window-exceeded.sse"), false, nil, nil)
-	return llm.Decision{Build: result.Model, Content: result.Content, Outcome: llm.OutcomeAfter(result.Stop, len(result.ToolCalls))}, err
+	return core.Decision{Build: result.Model, Content: result.Content, Outcome: core.OutcomeAfter(result.Stop, len(result.ToolCalls))}, err
 }
 
-func codexStream(t *testing.T) (llm.Decision, error) {
+func codexStream(t *testing.T) (core.Decision, error) {
 	result, err := codex.ReadStream(fixture(t, "codex-context-length.sse"), nil)
-	return llm.Decision{Build: result.Model, Content: result.Content, Outcome: llm.OutcomeAfter(result.Stop, len(result.ToolCalls))}, err
+	return core.Decision{Build: result.Model, Content: result.Content, Outcome: core.OutcomeAfter(result.Stop, len(result.ToolCalls))}, err
 }
 
 func wireRefused(status int, detail string) error {
@@ -108,9 +108,9 @@ func TestWithHandlesOffAShrunkResultSaysItWasDroppedAndNamesNoFetch(t *testing.T
 	}
 }
 
-func resultOf(messages []llm.Message, id string) string {
+func resultOf(messages []core.Message, id string) string {
 	for _, message := range messages {
-		if message.Role == llm.RoleTool && message.ToolCallID == id {
+		if message.Role == core.RoleTool && message.ToolCallID == id {
 			return message.Content
 		}
 	}

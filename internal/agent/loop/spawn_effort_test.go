@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -10,69 +10,69 @@ import (
 	"testing"
 
 	"tofu/internal/agent/subagents"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 )
 
 type effortOpener struct {
-	asked []llm.Effort
-	lead  llm.Effort
-	takes map[string][]llm.Effort
+	asked []core.Effort
+	lead  core.Effort
+	takes map[string][]core.Effort
 }
 
-func (o *effortOpener) taken(definition subagent.Definition) ([]llm.Effort, error) {
+func (o *effortOpener) taken(definition subagents.Definition) ([]core.Effort, error) {
 	return o.takes[definition.Name], nil
 }
 
-func (o *effortOpener) open(definition subagent.Definition, wanted llm.Effort) (SubAgentModel, error) {
+func (o *effortOpener) open(definition subagents.Definition, wanted core.Effort) (SubAgentModel, error) {
 	o.asked = append(o.asked, wanted)
 	takes := o.takes[definition.Name]
 	switch {
 	case wanted != "" && len(takes) == 0:
 		return SubAgentModel{}, fmt.Errorf("effort %s for stub/model: it sends no reasoning effort, so the level would be dropped without a word", wanted)
 	case wanted != "" && !slices.Contains(takes, wanted):
-		return SubAgentModel{}, fmt.Errorf("effort %s for stub/model: it takes %s, so the level would be changed without a word", wanted, llm.EffortList(takes))
+		return SubAgentModel{}, fmt.Errorf("effort %s for stub/model: it takes %s, so the level would be changed without a word", wanted, core.EffortList(takes))
 	}
 	return SubAgentModel{Slug: "stub/model", Effort: cmp.Or(wanted, o.lead)}, nil
 }
 
 func TestASpawnRunsItsSubAgentAtTheNearestEffortItsModelTakes(t *testing.T) {
-	lowToHigh := []llm.Effort{llm.EffortLow, llm.EffortMedium, llm.EffortHigh}
-	ran := []llm.Decision{claimDecision("done")}
+	lowToHigh := []core.Effort{core.EffortLow, core.EffortMedium, core.EffortHigh}
+	ran := []core.Decision{claimDecision("done")}
 	for _, spawned := range []struct {
 		name         string
 		effort       string
-		takes        []llm.Effort
-		lead         []llm.Decision
-		subAgent     []llm.Decision
-		wantAsked    []llm.Effort
+		takes        []core.Effort
+		lead         []core.Decision
+		subAgent     []core.Decision
+		wantAsked    []core.Effort
 		wantSaid     string
 		leadRequests int
 	}{
-		{"exact then resumed", "low", lowToHigh, []llm.Decision{messageTo("call-message", "ts-dev-1", "once more"), claimDecision("asked again"), claimDecision("done")},
-			[]llm.Decision{claimDecision("done"), claimDecision("again")}, []llm.Effort{llm.EffortLow, llm.EffortLow}, "at effort low", 4},
-		{"inherited", "", lowToHigh, []llm.Decision{claimDecision("done")}, ran, []llm.Effort{""}, "at effort medium", 2},
-		{"below the lowest", "minimal", lowToHigh, []llm.Decision{claimDecision("done")}, ran, []llm.Effort{llm.EffortLow},
+		{"exact then resumed", "low", lowToHigh, []core.Decision{messageTo("call-message", "ts-dev-1", "once more"), claimDecision("asked again"), claimDecision("done")},
+			[]core.Decision{claimDecision("done"), claimDecision("again")}, []core.Effort{core.EffortLow, core.EffortLow}, "at effort low", 4},
+		{"inherited", "", lowToHigh, []core.Decision{claimDecision("done")}, ran, []core.Effort{""}, "at effort medium", 2},
+		{"below the lowest", "minimal", lowToHigh, []core.Decision{claimDecision("done")}, ran, []core.Effort{core.EffortLow},
 			"effort minimal is not one stub/model takes, so it runs at low", 2},
-		{"below the lowest, resumed", "minimal", lowToHigh, []llm.Decision{messageTo("call-message", "ts-dev-1", "once more"), claimDecision("asked again"), claimDecision("done")},
-			[]llm.Decision{claimDecision("done"), claimDecision("again")}, []llm.Effort{llm.EffortLow, llm.EffortLow}, "so it runs at low", 4},
-		{"above the highest", "max", lowToHigh, []llm.Decision{claimDecision("done")}, ran, []llm.Effort{llm.EffortHigh},
+		{"below the lowest, resumed", "minimal", lowToHigh, []core.Decision{messageTo("call-message", "ts-dev-1", "once more"), claimDecision("asked again"), claimDecision("done")},
+			[]core.Decision{claimDecision("done"), claimDecision("again")}, []core.Effort{core.EffortLow, core.EffortLow}, "so it runs at low", 4},
+		{"above the highest", "max", lowToHigh, []core.Decision{claimDecision("done")}, ran, []core.Effort{core.EffortHigh},
 			"effort max is not one stub/model takes, so it runs at high", 2},
-		{"between two, a tie goes up", "medium", []llm.Effort{llm.EffortLow, llm.EffortHigh}, []llm.Decision{claimDecision("done")}, ran, []llm.Effort{llm.EffortHigh},
+		{"between two, a tie goes up", "medium", []core.Effort{core.EffortLow, core.EffortHigh}, []core.Decision{claimDecision("done")}, ran, []core.Effort{core.EffortHigh},
 			"effort medium is not one stub/model takes, so it runs at high", 2},
-		{"between two, the nearer", "xhigh", []llm.Effort{llm.EffortLow, llm.EffortMax}, []llm.Decision{claimDecision("done")}, ran, []llm.Effort{llm.EffortMax},
+		{"between two, the nearer", "xhigh", []core.Effort{core.EffortLow, core.EffortMax}, []core.Decision{claimDecision("done")}, ran, []core.Effort{core.EffortMax},
 			"effort xhigh is not one stub/model takes, so it runs at max", 2},
-		{"a model that takes none", "low", nil, []llm.Decision{messageDecision()}, nil, []llm.Effort{llm.EffortLow}, "it sends no reasoning effort", 2},
-		{"an unknown word", "turbo", lowToHigh, []llm.Decision{messageDecision()}, nil, nil, "is no thinking effort", 2},
+		{"a model that takes none", "low", nil, []core.Decision{messageDecision()}, nil, []core.Effort{core.EffortLow}, "it sends no reasoning effort", 2},
+		{"an unknown word", "turbo", lowToHigh, []core.Decision{messageDecision()}, nil, nil, "is no thinking effort", 2},
 	} {
 		t.Run(spawned.name, func(t *testing.T) {
 			orchestrator, spawn := orchestratorTurn(t, t.TempDir(), nil)
-			opener := &effortOpener{lead: llm.EffortMedium, takes: map[string][]llm.Effort{"ts-dev": spawned.takes}}
-			spawn.SubAgents.Defined = []subagent.Definition{{Name: "ts-dev", Runs: subagent.RunsModel}}
+			opener := &effortOpener{lead: core.EffortMedium, takes: map[string][]core.Effort{"ts-dev": spawned.takes}}
+			spawn.SubAgents.Defined = []subagents.Definition{{Name: "ts-dev", Runs: subagents.RunsModel}}
 			spawn.SubAgents.Open, spawn.SubAgents.Takes = opener.open, opener.taken
 			args, _ := json.Marshal(map[string]any{"task": usersRoute, "owns": []string{"src/users.ts"}, "agent": "ts-dev", "effort": spawned.effort})
-			model := newCrew(map[string][]llm.Decision{
-				leadKey:    append([]llm.Decision{toolCallDecision(llm.ToolCall{ID: "call-spawn", Name: "spawn", Arguments: args})}, spawned.lead...),
+			model := newCrew(map[string][]core.Decision{
+				leadKey:    append([]core.Decision{toolCallDecision(core.ToolCall{ID: "call-spawn", Name: "spawn", Arguments: args})}, spawned.lead...),
 				usersRoute: spawned.subAgent,
 			})
 			release := model.hold(usersRoute, 1)
@@ -84,7 +84,7 @@ func TestASpawnRunsItsSubAgentAtTheNearestEffortItsModelTakes(t *testing.T) {
 			led.wait(t)
 			said := answerTo(t, model, "call-spawn")
 			leadRequests := len(model.requests(leadKey))
-			t.Logf("effort %q on a model taking [%s]: opened at %q, %d lead requests, the spawn said:\n%.300s", spawned.effort, llm.EffortList(spawned.takes), opener.asked, leadRequests, said)
+			t.Logf("effort %q on a model taking [%s]: opened at %q, %d lead requests, the spawn said:\n%.300s", spawned.effort, core.EffortList(spawned.takes), opener.asked, leadRequests, said)
 			if !slices.Equal(opener.asked, spawned.wantAsked) || !strings.Contains(said, spawned.wantSaid) || leadRequests != spawned.leadRequests {
 				t.Fatalf("effort %q: the opener was asked %q, want %q; the spawn should say %q; %d lead requests, want %d",
 					spawned.effort, opener.asked, spawned.wantAsked, spawned.wantSaid, leadRequests, spawned.leadRequests)
@@ -104,25 +104,25 @@ func TestTheLeadIsToldToSpawnAtLowAndSettleTheBrief(t *testing.T) {
 		t.Fatalf("spawn_effort at index %d does not read as the ticket says", shipped)
 	}
 	const told = "how hard the sub-agent thinks. low unless it must make design decisions the brief does not settle. left out, it thinks as hard as you do. "
-	lowToHigh := []llm.Effort{llm.EffortLow, llm.EffortMedium, llm.EffortHigh}
+	lowToHigh := []core.Effort{core.EffortLow, core.EffortMedium, core.EffortHigh}
 	for _, offered := range []struct {
 		name     string
-		takes    map[string][]llm.Effort
+		takes    map[string][]core.Effort
 		wantEnum []string
 		wantSaid string
 	}{
-		{"one model", map[string][]llm.Effort{"": lowToHigh, "ts-dev": lowToHigh}, []string{"low", "medium", "high"},
+		{"one model", map[string][]core.Effort{"": lowToHigh, "ts-dev": lowToHigh}, []string{"low", "medium", "high"},
 			told + "the model takes low, medium, high"},
-		{"two models", map[string][]llm.Effort{"": {llm.EffortMinimal, llm.EffortLow}, "ts-dev": lowToHigh}, []string{"minimal", "low", "medium", "high"},
+		{"two models", map[string][]core.Effort{"": {core.EffortMinimal, core.EffortLow}, "ts-dev": lowToHigh}, []string{"minimal", "low", "medium", "high"},
 			told + "left out it takes minimal, low; ts-dev takes low, medium, high"},
-		{"one takes none", map[string][]llm.Effort{"ts-dev": lowToHigh}, []string{"low", "medium", "high"},
+		{"one takes none", map[string][]core.Effort{"ts-dev": lowToHigh}, []string{"low", "medium", "high"},
 			told + "left out it takes none, so leave effort out; ts-dev takes low, medium, high"},
-		{"none takes any", map[string][]llm.Effort{}, nil, ""},
+		{"none takes any", map[string][]core.Effort{}, nil, ""},
 	} {
 		t.Run(offered.name, func(t *testing.T) {
 			_, spawn := orchestratorTurn(t, t.TempDir(), nil)
 			opener := &effortOpener{takes: offered.takes}
-			spawn.SubAgents.Defined = []subagent.Definition{{Name: "ts-dev", Runs: subagent.RunsModel}, {Name: "off", Runs: subagent.RunsDisabled}}
+			spawn.SubAgents.Defined = []subagents.Definition{{Name: "ts-dev", Runs: subagents.RunsModel}, {Name: "off", Runs: subagents.RunsDisabled}}
 			spawn.SubAgents.Open, spawn.SubAgents.Takes = opener.open, opener.taken
 			defined, _ := json.Marshal(spawn.Definition().Parameters.(map[string]any)["properties"].(map[string]any)["effort"])
 			t.Logf("effort: %s", defined)

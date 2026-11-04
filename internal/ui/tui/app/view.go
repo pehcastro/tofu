@@ -1,4 +1,4 @@
-package tui
+package app
 
 import (
 	"cmp"
@@ -216,7 +216,7 @@ func (a *App) welcome(width, rows int) []string {
 	}
 	art = append(art, slices.Repeat([]string{strings.Repeat(" ", width)}, noticeRows)...)
 	said := cmp.Or(string(a.updateSaid), upToDate+konst.Version)
-	art[last+noticeRows] = lipgloss.PlaceHorizontal(width, lipgloss.Center, look.Muted(widget.Fit(said, width)))
+	art[last+noticeRows] = lipgloss.PlaceHorizontal(width, lipgloss.Center, look.Muted(render.Fit(said, width)))
 	return art
 }
 
@@ -261,7 +261,7 @@ func (a *App) syncFeed() {
 		agents = append(agents, feed.Agent{Name: subAgent.Name, Definition: subAgent.Agent, Model: subAgent.Model, State: subAgent.State, Doing: subAgent.Doing, Since: subAgent.Since, Owns: subAgent.Owns, Report: subAgent.Report, Moves: subAgent.Moves})
 	}
 	a.feedAgents = agents
-	a.feed.SetFolded(len(a.folded), a.unfolded, widget.Until(konst.SettledSubAgentFoldMinutes*time.Minute))
+	a.feed.SetFolded(len(a.folded), a.unfolded, render.Until(konst.SettledSubAgentFoldMinutes*time.Minute))
 	a.feed.SetDensity(a.text(isettings.Density))
 	a.feed.SetRetention(a.retention())
 	a.feed.SetThinking(a.flag(isettings.ShowThinking))
@@ -271,10 +271,10 @@ func (a *App) syncFeed() {
 func (a *App) setupView(rows int) string {
 	var lines []string
 	add := func(colour look.Color, text string) {
-		lines = append(lines, look.Style(colour).Render(widget.Fit(text, a.width)))
+		lines = append(lines, look.Style(colour).Render(render.Fit(text, a.width)))
 	}
 	indented := func(colour look.Color, text string) {
-		for _, line := range widget.Wrap(text, a.width-widget.Cells(setupIndent)) {
+		for _, line := range render.Wrap(text, a.width-render.Cells(setupIndent)) {
 			add(colour, setupIndent+line)
 		}
 	}
@@ -307,7 +307,7 @@ func (a *App) setupView(rows int) string {
 		case a.entry.variable != "":
 			keys = setupEntryKeys
 			add(look.Text, setupIndent+a.entry.label)
-			add(look.Text, widget.Pad(setupIndent+a.entry.field.Line(), a.width))
+			add(look.Text, render.Pad(setupIndent+a.entry.field.Line(), a.width))
 			switch {
 			case a.entry.checking != 0:
 				indented(look.MutedColor, setupChecking)

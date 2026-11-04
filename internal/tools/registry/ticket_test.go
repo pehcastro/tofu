@@ -1,4 +1,4 @@
-package tools_test
+package registry_test
 
 import (
 	"context"
@@ -42,7 +42,7 @@ const drafted = `"before":"b","driven":"d","still_works":"w","error_case":"e","f
 
 func subAgentTool(t *testing.T, board boardy.Managed, name string) contract.Tool {
 	t.Helper()
-	list, err := tools.TicketTools(board, "go-dev-1")
+	list, err := registry.TicketTools(board, "go-dev-1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,14 +60,14 @@ func runTicket(tool contract.Tool, args string) (string, error) {
 
 func TestTicketGrantAssignsMovesAndRefuses(t *testing.T) {
 	board := ticketBoard(t)
-	if _, err := tools.TicketGrant(board, "DEMO-1", "lead", "go-dev-1"); err == nil {
+	if _, err := registry.TicketGrant(board, "DEMO-1", "lead", "go-dev-1"); err == nil {
 		t.Error("a ticket with no owns was granted")
 	}
 	var refused boardy.RefusedError
-	if _, err := tools.TicketGrant(board, "DEMO-2", "someone", "go-dev-1"); !errors.As(err, &refused) {
+	if _, err := registry.TicketGrant(board, "DEMO-2", "someone", "go-dev-1"); !errors.As(err, &refused) {
 		t.Errorf("a lead that manages nothing got %v, want a refusal", err)
 	}
-	owns, err := tools.TicketGrant(board, "DEMO-2", "lead", "go-dev-1")
+	owns, err := registry.TicketGrant(board, "DEMO-2", "lead", "go-dev-1")
 	ticket, _ := board.Store.Get("DEMO-2")
 	if err != nil || !slices.Equal(owns, []string{"internal/a/**"}) || ticket.Assignee != "go-dev-1" || ticket.Status != boardy.Doing {
 		t.Fatalf("grant gave %q, %v; ticket is %s for %q", owns, err, ticket.Status, ticket.Assignee)
@@ -76,7 +76,7 @@ func TestTicketGrantAssignsMovesAndRefuses(t *testing.T) {
 
 func TestTicketToolsKeepASubAgentToItsOwnTicket(t *testing.T) {
 	board := ticketBoard(t)
-	if _, err := tools.TicketGrant(board, "DEMO-2", "lead", "go-dev-1"); err != nil {
+	if _, err := registry.TicketGrant(board, "DEMO-2", "lead", "go-dev-1"); err != nil {
 		t.Fatal(err)
 	}
 	move := subAgentTool(t, board, "ticket_move")
@@ -133,10 +133,10 @@ func TestTicketToolsKeepASubAgentToItsOwnTicket(t *testing.T) {
 
 func TestTicketToolsSplitATicketAndThreadTheAsk(t *testing.T) {
 	board := ticketBoard(t)
-	if _, err := tools.TicketGrant(board, "DEMO-2", "lead", "go-dev-1"); err != nil {
+	if _, err := registry.TicketGrant(board, "DEMO-2", "lead", "go-dev-1"); err != nil {
 		t.Fatal(err)
 	}
-	lead, err := tools.TicketTools(board, "lead")
+	lead, err := registry.TicketTools(board, "lead")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,11 +154,11 @@ func TestTicketToolsSplitATicketAndThreadTheAsk(t *testing.T) {
 	if _, err := runTicket(create, `{"board":"DEMO",`+drafted+`"parent":"DEMO-2","title":"outside","acceptance":"- no","owns":["internal/b/**"]}`); err == nil || !strings.Contains(err.Error(), "DEMO-2") {
 		t.Errorf("a child owning outside DEMO-2: %v, want a refusal naming it", err)
 	}
-	owns, err := tools.TicketGrant(board, "DEMO-2-1", "lead", "go-dev-2")
+	owns, err := registry.TicketGrant(board, "DEMO-2-1", "lead", "go-dev-2")
 	if err != nil || !slices.Equal(owns, []string{"internal/a/parse.go"}) {
 		t.Fatalf("a grant on DEMO-2-1 while DEMO-2 is in doing gave %q, %v", owns, err)
 	}
-	if got := subagent.TicketID("work DEMO-2-1 to its acceptance"); got != "DEMO-2-1" {
+	if got := subagents.TicketID("work DEMO-2-1 to its acceptance"); got != "DEMO-2-1" {
 		t.Errorf("a brief citing DEMO-2-1 reads as %q", got)
 	}
 	if _, err := runTicket(subAgentTool(t, board, "ticket_ask"), `{"id":"DEMO-2","question":"which encoding"}`); err != nil {
@@ -173,10 +173,10 @@ func TestTicketToolsSplitATicketAndThreadTheAsk(t *testing.T) {
 
 func TestANotPossibleReportHoldsTheTicketForThePerson(t *testing.T) {
 	board := ticketBoard(t)
-	if _, err := tools.TicketGrant(board, "DEMO-2", "lead", "go-dev-1"); err != nil {
+	if _, err := registry.TicketGrant(board, "DEMO-2", "lead", "go-dev-1"); err != nil {
 		t.Fatal(err)
 	}
-	lead, err := tools.TicketTools(board, "lead")
+	lead, err := registry.TicketTools(board, "lead")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -226,7 +226,7 @@ func TestANotPossibleReportHoldsTheTicketForThePerson(t *testing.T) {
 
 func TestTicketToolsWriteNoBoardWhenThereIsNone(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), boardy.BoardsDirName)
-	list, err := tools.TicketTools(boardy.Managed{Local: boardy.Local{Store: boardy.Store{Dir: dir}}}, "lead")
+	list, err := registry.TicketTools(boardy.Managed{Local: boardy.Local{Store: boardy.Store{Dir: dir}}}, "lead")
 	if _, statErr := os.Stat(dir); err != nil || !errors.Is(statErr, os.ErrNotExist) || len(list) == 0 {
 		t.Errorf("building %d tools gave %v and the boards folder stats as %v", len(list), err, statErr)
 	}
@@ -234,7 +234,7 @@ func TestTicketToolsWriteNoBoardWhenThereIsNone(t *testing.T) {
 
 func TestTicketToolsStateAndKeepTheirLimitsInWords(t *testing.T) {
 	board := ticketBoard(t)
-	if _, err := tools.TicketGrant(board, "DEMO-2", "lead", "go-dev-1"); err != nil {
+	if _, err := registry.TicketGrant(board, "DEMO-2", "lead", "go-dev-1"); err != nil {
 		t.Fatal(err)
 	}
 	logged := subAgentTool(t, board, "ticket_log")
@@ -251,7 +251,7 @@ func TestTicketToolsStateAndKeepTheirLimitsInWords(t *testing.T) {
 	if _, err := runTicket(subAgentTool(t, board, "ticket_move"), `{"id":"DEMO-2","to":"review","reason":"fixed the parser, e.g. its UTF-8 path in v0.5.9 and later."}`); err != nil && strings.Contains(err.Error(), "one sentence") {
 		t.Errorf("a one-sentence reason with e.g. was refused: %v", err)
 	}
-	lead, err := tools.TicketTools(board, "lead")
+	lead, err := registry.TicketTools(board, "lead")
 	if err != nil {
 		t.Fatal(err)
 	}

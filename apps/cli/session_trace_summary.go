@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/render"
 	"tofu/internal/store/session"
@@ -54,7 +54,7 @@ func traceRowLines(page cli.Page, timeline traceTimeline, wide bool) []string {
 func fitted(page cli.Page, rows []cli.Row) []string {
 	lines := cli.Indent(page.Rows(rows)...)
 	for i := range lines {
-		lines[i] = widget.Fit(lines[i], page.Width)
+		lines[i] = render.Fit(lines[i], page.Width)
 	}
 	return lines
 }
@@ -64,7 +64,7 @@ func traceSummaryLines(page cli.Page, timeline traceTimeline) []string {
 	facts := []string{timeline.Handle, output.Plural(timeline.Events, "event")}
 	if len(rows) > 0 {
 		last := rows[len(rows)-1].At
-		facts = append(facts, timeline.began.Format(time.TimeOnly)+" to "+last.Format(time.TimeOnly)+" ("+widget.Until(last.Sub(timeline.began))+")")
+		facts = append(facts, timeline.began.Format(time.TimeOnly)+" to "+last.Format(time.TimeOnly)+" ("+render.Until(last.Sub(timeline.began))+")")
 	}
 	kinds, ended, failures, stops := map[traceKind]int{}, map[string]int{}, map[traceKind][]traceRow{}, map[string][]traceRow{}
 	began, startup := 0, ""
@@ -148,7 +148,7 @@ func traceAgentRows(timeline traceTimeline) []cli.Row {
 			idle[run.Status] = append(idle[run.Status], run.Agent)
 			continue
 		}
-		mark := map[string]cli.Mark{subagent.Finished.String(): cli.Done, subagent.Working.String(): cli.Active, subagent.Parked.String(): cli.Warn, subagent.Errored.String(): cli.Fail}[run.Status]
+		mark := map[string]cli.Mark{subagents.Finished.String(): cli.Done, subagents.Working.String(): cli.Active, subagents.Parked.String(): cli.Warn, subagents.Errored.String(): cli.Fail}[run.Status]
 		agents = append(agents, cli.Row{Mark: cmp.Or(mark, cli.Idle), Cells: []string{run.Agent, cmp.Or(run.Definition, "unnamed"), run.Status, output.Plural(calls, "call"), "last " + last.Format(time.TimeOnly)}, Detail: said})
 	}
 	for _, status := range slices.Sorted(maps.Keys(idle)) {

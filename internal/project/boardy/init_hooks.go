@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 	"tofu/internal/sys"
 	"tofu/library"
 )

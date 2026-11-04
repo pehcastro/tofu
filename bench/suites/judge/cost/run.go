@@ -23,7 +23,7 @@ type CaseResult struct {
 	Money        ledger.Money
 	List         ledger.ListPrice
 	LatencyMS    float64
-	Answers      map[string]jev.Answer
+	Answers      map[string]core.Answer
 	Reason       gate.Reason
 	Verdict      Verdict
 	Label        Verdict
@@ -50,7 +50,7 @@ type Disagreement struct {
 	Case    string
 	Probe   string
 	LabelBy corpus.Labeller
-	Answers map[string]jev.Answer
+	Answers map[string]core.Answer
 	Reason  gate.Reason
 	Answer  Verdict
 	Label   Verdict
@@ -238,13 +238,13 @@ func msSince(d time.Duration) float64 {
 	return float64(d) / float64(time.Millisecond)
 }
 
-func runJev(ctx context.Context, key string, records []corpus.Record, battery []jev.Question, pol gate.Rule) (ArmResult, error) {
+func runJev(ctx context.Context, key string, records []corpus.Record, battery []core.Question, pol gate.Rule) (ArmResult, error) {
 	wire, err := typesafe.NewWire(key)
 	if err != nil {
 		return ArmResult{}, err
 	}
 	arm := buildArm("jev", records, func(record corpus.Record) (CaseResult, error) {
-		call := typesafe.Ask(ctx, wire, jev.Request{State: record.State, Questions: battery})
+		call := typesafe.Ask(ctx, wire, core.Request{State: record.State, Questions: battery})
 		if call.Err != nil {
 			return CaseResult{}, call.Err
 		}

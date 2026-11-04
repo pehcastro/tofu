@@ -54,10 +54,10 @@ const (
 	WhitespaceByteCap         = 16 << 10
 )
 
-func ReasoningEfforts() []llm.Effort {
-	return []llm.Effort{
-		llm.EffortNone, llm.EffortMinimal, llm.EffortLow,
-		llm.EffortMedium, llm.EffortHigh, llm.EffortXHigh, llm.EffortMax,
+func ReasoningEfforts() []core.Effort {
+	return []core.Effort{
+		core.EffortNone, core.EffortMinimal, core.EffortLow,
+		core.EffortMedium, core.EffortHigh, core.EffortXHigh, core.EffortMax,
 	}
 }
 

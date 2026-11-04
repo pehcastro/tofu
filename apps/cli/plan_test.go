@@ -11,7 +11,7 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
-	testkit "tofu/internal/testkit/cli"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/tools/registry"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/chat/session"
@@ -32,7 +32,7 @@ func TestADryRunListsThePlanToolAndTheOffArmDoesNot(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &body); err != nil {
 		t.Fatalf("the printed request is not the request that would be sent: %v", err)
 	}
-	wanted := anthropic.ClaudeCodeToolPrefix + tools.PlanToolName
+	wanted := anthropic.ClaudeCodeToolPrefix + registry.PlanToolName
 	offered := make([]string, 0, len(body.Tools))
 	described := ""
 	for _, tool := range body.Tools {
@@ -47,23 +47,23 @@ func TestADryRunListsThePlanToolAndTheOffArmDoesNot(t *testing.T) {
 	if !strings.Contains(described, "set") || !strings.Contains(described, "start") {
 		t.Fatalf("the plan tool is offered without saying how to move an item: %q", described)
 	}
-	if three := toolNames(t, armOpts(t, "--tools", toolSetThree)); slices.Contains(three, tools.PlanToolName) {
+	if three := toolNames(t, armOpts(t, "--tools", toolSetThree)); slices.Contains(three, registry.PlanToolName) {
 		t.Fatalf("the off arm must stay the three tools the recorded runs had: %v", three)
 	}
-	t.Logf("%d tools offered, including %s", len(offered), tools.PlanToolName)
+	t.Logf("%d tools offered, including %s", len(offered), registry.PlanToolName)
 }
 
-func planCall(id, args string) llm.Decision {
-	return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
-		{ID: id, Name: tools.PlanToolName, Arguments: json.RawMessage(args)},
+func planCall(id, args string) core.Decision {
+	return core.Decision{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
+		{ID: id, Name: registry.PlanToolName, Arguments: json.RawMessage(args)},
 	}}
 }
 
-func lastPlan(events []tui.Event) ([]session.PlanItem, int) {
+func lastPlan(events []app.Event) ([]session.PlanItem, int) {
 	var plan []session.PlanItem
 	seen := 0
 	for _, event := range events {
-		if event.Kind != tui.EventPlan {
+		if event.Kind != app.EventPlan {
 			continue
 		}
 		seen++
@@ -73,11 +73,11 @@ func lastPlan(events []tui.Event) ([]session.PlanItem, int) {
 }
 
 func TestAPlanStatedDuringATurnReachesTheView(t *testing.T) {
-	dir := testkit.ScratchProject(t)
-	model := &sendModel{queued: []llm.Decision{
+	dir := cli.ScratchProject(t)
+	model := &sendModel{queued: []core.Decision{
 		planCall("call-1", `{"op":"set","items":[{"phase":"read","text":"read the gate"},{"phase":"write","text":"wire the plan tool"}]}`),
 		planCall("call-2", `{"op":"start","item":"read the gate"}`),
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "stated"},
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "stated"},
 	}}
 	var events eventLog
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "state a plan and start on it", events.add)
@@ -97,7 +97,7 @@ func TestAPlanStatedDuringATurnReachesTheView(t *testing.T) {
 }
 
 func TestATurnThatStatesNoPlanHandsTheViewNothingToDraw(t *testing.T) {
-	dir := testkit.ScratchProject(t)
+	dir := cli.ScratchProject(t)
 	var events eventLog
 	stubbedTurn(dir, noteThenStop())(t.Context(), onTheSubscription, "write the note", events.add)
 

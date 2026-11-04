@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"cmp"
@@ -24,8 +24,8 @@ func NewSymbols(dir string) (Symbols, error) {
 
 func (s Symbols) Name() string { return "symbols" }
 
-func (s Symbols) Definition() llm.Tool {
-	return llm.Tool{
+func (s Symbols) Definition() core.Tool {
+	return core.Tool{
 		Name: "symbols",
 		Description: "answers where one identifier is declared and every place that calls it, in go, rust and typescript files, rather than from a text match: " +
 			"go from the go parser, which also lists what a declaration calls, and rust and typescript from a scan that skips comments and strings and counts a call inside a macro. " +

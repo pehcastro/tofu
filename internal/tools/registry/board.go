@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"cmp"
@@ -46,7 +46,7 @@ func stringParam(about string) map[string]any {
 func nudged(store boardy.Store, name string, run func() (contract.Result, error)) (contract.Result, error) {
 	sizes := store.EventSizes()
 	result, err := run()
-	note := turn.BoardNudges(store, sizes)
+	note := loop.BoardNudges(store, sizes)
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("%s: %w%s", name, err, note)
 	}
@@ -56,7 +56,7 @@ func nudged(store boardy.Store, name string, run func() (contract.Result, error)
 
 func (t boardTool) Name() string { return string(t.verb) }
 
-func (t boardTool) Definition() llm.Tool {
+func (t boardTool) Definition() core.Tool {
 	properties := map[string]any{"board": stringParam("the board key, such as DEMO")}
 	var describe string
 	var actions []string
@@ -101,7 +101,7 @@ func (t boardTool) Definition() llm.Tool {
 		properties["note"] = stringParam("how the work holds against the words, for review")
 	}
 	properties["action"] = map[string]any{"type": "string", "enum": actions}
-	return llm.Tool{Name: string(t.verb), Description: describe, Parameters: map[string]any{"type": "object", "properties": properties, "required": []string{"board", "action"}}}
+	return core.Tool{Name: string(t.verb), Description: describe, Parameters: map[string]any{"type": "object", "properties": properties, "required": []string{"board", "action"}}}
 }
 
 func (t boardTool) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
@@ -162,7 +162,7 @@ func (t boardTool) rule(a boardArgs) (string, error) {
 		got, err := api.RuleGet(boardy.RuleRequest{Board: a.Board, Scope: scope, ID: a.ID})
 		return hookLine(got.Hook) + "\n" + got.Source, err
 	case "add", "edit":
-		h, err := rule.ParseHook([]byte(a.Source), "source")
+		h, err := rules.ParseHook([]byte(a.Source), "source")
 		if err != nil {
 			return "", err
 		}

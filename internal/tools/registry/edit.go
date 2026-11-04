@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"bytes"
@@ -14,7 +14,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
@@ -23,8 +23,8 @@ import (
 
 type Edit struct {
 	root     contract.Root
-	ledger   *turn.ReadLedger
-	checkers *turn.Typecheckers
+	ledger   *loop.ReadLedger
+	checkers *loop.Typecheckers
 	rules    []rule.Rule
 }
 
@@ -38,19 +38,19 @@ func NewEdit(dir string) (Edit, error) {
 	return Edit{root: root}, err
 }
 
-func (e Edit) Reading(ledger *turn.ReadLedger) Edit {
+func (e Edit) Reading(ledger *loop.ReadLedger) Edit {
 	e.ledger = ledger
 	return e
 }
 
-func (e Edit) Checking(checkers *turn.Typecheckers) Edit {
+func (e Edit) Checking(checkers *loop.Typecheckers) Edit {
 	e.checkers = checkers
 	return e
 }
 
 func (e Edit) Name() string { return "edit" }
 
-func (e Edit) Definition() llm.Tool {
+func (e Edit) Definition() core.Tool {
 	change := map[string]any{
 		"path":        map[string]any{"type": "string"},
 		"old_string":  map[string]any{"type": "string"},
@@ -62,7 +62,7 @@ func (e Edit) Definition() llm.Tool {
 	for name, field := range change {
 		properties[name] = field
 	}
-	return llm.Tool{
+	return core.Tool{
 		Name: "edit",
 		Description: "replaces one exact stretch of an existing file. " +
 			"old_string is copied from the file character for character and appears exactly once; " +
@@ -81,20 +81,20 @@ func (e Edit) Definition() llm.Tool {
 type plannedEdit struct {
 	resolved string
 	preview  patch.Preview
-	change   turn.LineChange
+	change   loop.LineChange
 	notes    []string
 	fires    []rule.Fire
 }
 
 func (e Edit) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
-	changes, err := turn.EditChanges(raw)
+	changes, err := loop.EditChanges(raw)
 	if err != nil {
 		return contract.Result{}, err
 	}
 	var files, skipped []string
-	byFile := map[string][]turn.EditChange{}
+	byFile := map[string][]loop.EditChange{}
 	for _, change := range changes {
-		change.Old, change.New = turn.AsLF(change.Old), turn.AsLF(change.New)
+		change.Old, change.New = loop.AsLF(change.Old), loop.AsLF(change.New)
 		if len(changes) > 1 && change.Old != "" && change.Old == change.New {
 			skipped = append(skipped, "skipped a change to "+change.Path+" whose old_string and new_string are the same text")
 			continue
@@ -111,7 +111,7 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 	plans := make([]plannedEdit, len(files))
 	for i, file := range files {
 		if plans[i], err = e.plan(ctx, byFile[file], len(files) > 1); err != nil {
-			return contract.Result{}, fmt.Errorf("%w%s", err, turn.NoneWritten(len(files)))
+			return contract.Result{}, fmt.Errorf("%w%s", err, loop.NoneWritten(len(files)))
 		}
 	}
 	for i, plan := range plans {
@@ -123,7 +123,7 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 				return contract.Result{}, errors.New("edit: " + engine.Note(engine.Stale,
 					plan.preview.Path+" is no longer the text edit read, so nothing was written: read it again and edit the text that is there now"))
 			}
-			return contract.Result{}, fmt.Errorf("edit: %w%s", err, turn.NoneWritten(len(files)))
+			return contract.Result{}, fmt.Errorf("edit: %w%s", err, loop.NoneWritten(len(files)))
 		}
 	}
 	shown, targets := make([]string, len(plans)), make([]string, len(plans))
@@ -137,7 +137,7 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 	return contract.Result{Content: strings.Join(append(shown, skipped...), "\n"), Command: strings.Join(targets, " "), Rules: fires}, nil
 }
 
-func refusedChange(change turn.EditChange, onFile int) error {
+func refusedChange(change loop.EditChange, onFile int) error {
 	switch {
 	case change.Old == "" && change.Symbol == "" && change.New == "":
 		return errors.New("edit: say what is replaced, either old_string for a stretch of text copied from the file or symbol for the whole of one go declaration; an empty old_string appends new_string to the end of the file, and write creates a file")
@@ -153,7 +153,7 @@ func refusedChange(change turn.EditChange, onFile int) error {
 	return nil
 }
 
-func (e Edit) plan(ctx context.Context, changes []turn.EditChange, several bool) (plannedEdit, error) {
+func (e Edit) plan(ctx context.Context, changes []loop.EditChange, several bool) (plannedEdit, error) {
 	for _, change := range changes {
 		if err := refusedChange(change, len(changes)); err != nil {
 			return plannedEdit{}, err
@@ -189,7 +189,7 @@ func (e Edit) plan(ctx context.Context, changes []turn.EditChange, several bool)
 			target+" holds a null byte, so it is not text and replacing a stretch of it would corrupt it"))
 	}
 	before := string(body)
-	text, endings := turn.EndingsOf(before)
+	text, endings := loop.EndingsOf(before)
 	after, quotedOnce := text, true
 	for _, change := range changes {
 		var note string
@@ -212,9 +212,9 @@ func (e Edit) plan(ctx context.Context, changes []turn.EditChange, several bool)
 			notes = append(notes, note)
 		}
 	}
-	var change turn.LineChange
+	var change loop.LineChange
 	if err == nil {
-		change = turn.ChangeOf(text, after)
+		change = loop.ChangeOf(text, after)
 	}
 	if !e.ledger.Saw(ctx, target, body) {
 		if err != nil || changes[0].Symbol != "" || e.ledger.Known(ctx, target) || len(body) > konst.RefusalCarriesWholeUpToBytes {

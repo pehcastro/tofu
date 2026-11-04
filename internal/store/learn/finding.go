@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"tofu/internal/store/learn/words"
-	"tofu/internal/store/memory/entries"
+	memory "tofu/internal/store/memory/entries"
 )
 
 type Class string

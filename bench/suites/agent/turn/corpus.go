@@ -79,7 +79,7 @@ func SameQuestionDifferentKeyPairs(turns []RecordedTurn) (total int, byTool map[
 		var calls []RecordedCall
 		for _, step := range recorded.Steps {
 			for _, call := range step.ToolCalls {
-				if tools.SideEffectFree(call.Tool) {
+				if registry.SideEffectFree(call.Tool) {
 					calls = append(calls, call)
 				}
 			}
@@ -89,8 +89,8 @@ func SameQuestionDifferentKeyPairs(turns []RecordedTurn) (total int, byTool map[
 				if calls[i].Tool != calls[j].Tool {
 					continue
 				}
-				keyI, okI := tools.CallKey(calls[i].Tool, calls[i].Args)
-				keyJ, okJ := tools.CallKey(calls[j].Tool, calls[j].Args)
+				keyI, okI := registry.CallKey(calls[i].Tool, calls[i].Args)
+				keyJ, okJ := registry.CallKey(calls[j].Tool, calls[j].Args)
 				if !okI || !okJ || keyI == keyJ {
 					continue
 				}

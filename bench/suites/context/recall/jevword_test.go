@@ -13,13 +13,13 @@ import (
 
 var forkRepoRoot = sys.SourceRoot()
 
-func liveJevWire(t *testing.T) jev.Wire {
+func liveJevWire(t *testing.T) core.Wire {
 	t.Helper()
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the last word to the real jev route")
 	}
 	sys.AllowLiveCredential(t)
-	key, err := jev.TypeSafeKey(filepath.Join(forkRepoRoot, ".env"))
+	key, err := core.TypeSafeKey(filepath.Join(forkRepoRoot, ".env"))
 	if err != nil {
 		t.Skipf("no TYPESAFE_API_KEY reachable: %v", err)
 	}

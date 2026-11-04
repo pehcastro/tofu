@@ -144,7 +144,7 @@ func (r *Reader) Precedents(targets []Row) ([][]Precedent, error) {
 				if i >= len(targets) {
 					return
 				}
-				failed[i] = safe.Call(report, "precedent shortlist", func() error {
+				failed[i] = recover.Call(report, "precedent shortlist", func() error {
 					found[i] = Shortlist(targets[i], points[targets[i].Point])
 					return nil
 				})

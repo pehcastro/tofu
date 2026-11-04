@@ -15,7 +15,7 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/sys"
-	testkit "tofu/internal/testkit/cli"
+	"tofu/internal/testkit/cli"
 )
 
 var builtTofu struct {
@@ -104,8 +104,8 @@ func TestE2ETheCredentialGuardRefusesAPlantedFileWithNoUSERPROFILE(t *testing.T)
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(plant) })
-	testkit.WriteFile(t, plant, ".env", sys.TypeSafeKeyName+"=planted-not-real\n")
-	testkit.WriteFile(t, plant, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
+	cli.WriteFile(t, plant, ".env", sys.TypeSafeKeyName+"=planted-not-real\n")
+	cli.WriteFile(t, plant, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
 	plantedEnv, err := filepath.Abs(filepath.Join(plant, ".env"))
 	if err != nil {
 		t.Fatal(err)
@@ -126,7 +126,7 @@ func TestE2ETheCredentialGuardRefusesAPlantedFileWithNoUSERPROFILE(t *testing.T)
 
 func TestModelsLoadAndBindAClassifierWithNoHome(t *testing.T) {
 	dir := t.TempDir()
-	testkit.WriteFile(t, dir, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
+	cli.WriteFile(t, dir, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
 	t.Chdir(dir)
 	t.Setenv("USERPROFILE", "")
 	t.Setenv("HOME", "")
@@ -134,7 +134,7 @@ func TestModelsLoadAndBindAClassifierWithNoHome(t *testing.T) {
 	if err != nil {
 		t.Fatalf("with no home the model library did not load: %v", err)
 	}
-	if classifier.KeyName(bound.Provider) == "" {
+	if classifiers.KeyName(bound.Provider) == "" {
 		t.Fatalf("with no home the classifier %q names no key", bound.Slug())
 	}
 }

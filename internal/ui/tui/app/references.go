@@ -1,4 +1,4 @@
-package tui
+package app
 
 import (
 	"strconv"
@@ -80,7 +80,7 @@ func (a *App) insertReference(ref string, focusChat bool) bool {
 		if id == "" {
 			return false
 		}
-		token = tools.QuoteRef(strings.TrimPrefix(id, "#"))
+		token = registry.QuoteRef(strings.TrimPrefix(id, "#"))
 	}
 	if focusChat {
 		a.current, a.dialogs = screenChat, nil

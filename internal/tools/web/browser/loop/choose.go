@@ -1,4 +1,4 @@
-package jevloop
+package loop
 
 import (
 	"context"
@@ -19,15 +19,15 @@ const operationQuestion = "operation"
 const stateBuilder = "jevloop.stepState@2"
 
 type Choice struct {
-	Action   browser.Action
-	Decision jev.Decision
+	Action   driver.Action
+	Decision core.Decision
 }
 
-type Chooser func(ctx context.Context, goal string, page browser.Page, steps []Step) (Choice, error)
+type Chooser func(ctx context.Context, goal string, page driver.Page, steps []Step) (Choice, error)
 
 type Jev struct {
-	Client  *jev.Client
-	Set     question.Set
+	Client  *core.Client
+	Set     questions.Set
 	Ledger  *ledger.Writer
 	Decided map[string]Choice
 }
@@ -39,34 +39,34 @@ type pageState struct {
 }
 
 type recentAction struct {
-	Action      string        `json:"action"`
-	Op          string        `json:"op"`
-	Value       string        `json:"value,omitempty"`
-	PageChanged bool          `json:"page_changed"`
-	DidNotRun   browser.Stale `json:"did_not_run,omitempty"`
+	Action      string       `json:"action"`
+	Op          string       `json:"op"`
+	Value       string       `json:"value,omitempty"`
+	PageChanged bool         `json:"page_changed"`
+	DidNotRun   driver.Stale `json:"did_not_run,omitempty"`
 }
 
 type stepState struct {
-	Goal          string            `json:"goal"`
-	Page          pageState         `json:"page"`
-	Elements      []browser.Element `json:"elements"`
-	RecentActions []recentAction    `json:"recent_actions"`
+	Goal          string           `json:"goal"`
+	Page          pageState        `json:"page"`
+	Elements      []driver.Element `json:"elements"`
+	RecentActions []recentAction   `json:"recent_actions"`
 }
 
 type targetCriteria struct {
-	Element      string       `json:"element"`
-	CurrentValue string       `json:"current_value"`
-	Role         browser.Role `json:"role"`
-	Checked      string       `json:"checked,omitempty"`
-	Selected     string       `json:"selected,omitempty"`
-	Expanded     string       `json:"expanded,omitempty"`
+	Element      string      `json:"element"`
+	CurrentValue string      `json:"current_value"`
+	Role         driver.Role `json:"role"`
+	Checked      string      `json:"checked,omitempty"`
+	Selected     string      `json:"selected,omitempty"`
+	Expanded     string      `json:"expanded,omitempty"`
 }
 
-func targetQuestion(op browser.Op) string {
+func targetQuestion(op driver.Op) string {
 	return strings.ToLower(op.String()) + "_target"
 }
 
-func (j Jev) Choose(ctx context.Context, goal string, page browser.Page, steps []Step) (Choice, error) {
+func (j Jev) Choose(ctx context.Context, goal string, page driver.Page, steps []Step) (Choice, error) {
 	operation, hasOperation := j.Set.Question(operationQuestion)
 	target, hasTarget := j.Set.Question("target")
 	if !hasOperation || !hasTarget {
@@ -95,24 +95,24 @@ func (j Jev) Choose(ctx context.Context, goal string, page browser.Page, steps [
 	}
 
 	ops := operation.ToJev()
-	request := jev.Request{State: state, Questions: []jev.Question{ops}}
-	targets := map[browser.Op]map[string]browser.Action{}
-	var offered []jev.Option
+	request := core.Request{State: state, Questions: []core.Question{ops}}
+	targets := map[driver.Op]map[string]driver.Action{}
+	var offered []core.Option
 	for _, option := range ops.Options {
-		op, err := browser.ParseOp(option.Name)
+		op, err := driver.ParseOp(option.Name)
 		if err != nil {
 			return Choice{}, err
 		}
 		switch op {
-		case browser.OpScrollUp:
+		case driver.OpScrollUp:
 			if !page.Scroll.Up {
 				continue
 			}
-		case browser.OpScrollDown:
+		case driver.OpScrollDown:
 			if !page.Scroll.Down {
 				continue
 			}
-		case browser.OpClick, browser.OpTypeText, browser.OpSelect:
+		case driver.OpClick, driver.OpTypeText, driver.OpSelect:
 			options, actions := candidates(op, page)
 			if len(options) == 0 {
 				continue
@@ -121,13 +121,13 @@ func (j Jev) Choose(ctx context.Context, goal string, page browser.Page, steps [
 				return Choice{}, fmt.Errorf("%s offers %d targets and a question holds at most %d", op, len(options), konst.ChoiceCeiling)
 			}
 			targets[op] = actions
-			request.Questions = append(request.Questions, jev.Question{
+			request.Questions = append(request.Questions, core.Question{
 				ID:           targetQuestion(op),
-				Kind:         jev.QuestionChoice,
+				Kind:         core.QuestionChoice,
 				Instructions: operation.Instructions + "\n\n" + target.Instructions + "\n\nOperation: " + op.String(),
 				Options:      options,
 			})
-		case browser.OpWait, browser.OpDone, browser.OpBlocked:
+		case driver.OpWait, driver.OpDone, driver.OpBlocked:
 		}
 		offered = append(offered, option)
 	}
@@ -140,11 +140,11 @@ func (j Jev) Choose(ctx context.Context, goal string, page browser.Page, steps [
 	if err := j.record(body, hash, request.Questions, decision); err != nil {
 		return Choice{}, fmt.Errorf("the decision was not logged, so it does not run: %w", err)
 	}
-	op, err := browser.ParseOp(decision.Answers[operationQuestion].Choice)
+	op, err := driver.ParseOp(decision.Answers[operationQuestion].Choice)
 	if err != nil {
 		return Choice{}, err
 	}
-	action := browser.Action{Op: op}
+	action := driver.Action{Op: op}
 	if actions, targeted := targets[op]; targeted {
 		action = actions[decision.Answers[targetQuestion(op)].Choice]
 	}
@@ -155,31 +155,31 @@ func (j Jev) Choose(ctx context.Context, goal string, page browser.Page, steps [
 	return choice, nil
 }
 
-func (j Jev) record(body []byte, hash string, asked []jev.Question, decision jev.Decision) error {
+func (j Jev) record(body []byte, hash string, asked []core.Question, decision core.Decision) error {
 	if j.Ledger == nil {
 		return nil
 	}
 	row := ledger.Row{Point: j.Set.Name, Questions: j.Set.Name, Version: j.Set.QuestionsVersion, StateHash: hash, StateBuilder: stateBuilder, State: body}
-	decision.Record(&row, slices.SortedFunc(slices.Values(asked), func(a, b jev.Question) int { return strings.Compare(a.ID, b.ID) }), j.Set.QuestionsVersion)
+	decision.Record(&row, slices.SortedFunc(slices.Values(asked), func(a, b core.Question) int { return strings.Compare(a.ID, b.ID) }), j.Set.QuestionsVersion)
 	_, err := j.Ledger.Append(row)
 	return err
 }
 
-func candidates(op browser.Op, page browser.Page) ([]jev.Option, map[string]browser.Action) {
-	var options []jev.Option
-	actions := map[string]browser.Action{}
-	offer := func(name, label, value string, element browser.Element) {
-		options = append(options, jev.Option{Name: name, Criteria: targetCriteria{
+func candidates(op driver.Op, page driver.Page) ([]core.Option, map[string]driver.Action) {
+	var options []core.Option
+	actions := map[string]driver.Action{}
+	offer := func(name, label, value string, element driver.Element) {
+		options = append(options, core.Option{Name: name, Criteria: targetCriteria{
 			Element: "[" + name + "] " + label, CurrentValue: element.Value, Role: element.Role,
 			Checked: element.Checked, Selected: element.Selected, Expanded: element.Expanded,
 		}})
-		actions[name] = browser.Action{Op: op, Element: element.Index, Value: value}
+		actions[name] = driver.Action{Op: op, Element: element.Index, Value: value}
 	}
 	for _, element := range page.Elements {
-		if !op.Accepts(element.Role) || op == browser.OpTypeText && element.ReadOnly {
+		if !op.Accepts(element.Role) || op == driver.OpTypeText && element.ReadOnly {
 			continue
 		}
-		if op != browser.OpSelect {
+		if op != driver.OpSelect {
 			offer(strconv.Itoa(element.Index), element.Label, "", element)
 			continue
 		}

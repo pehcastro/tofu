@@ -1,4 +1,4 @@
-package tui
+package app
 
 import (
 	"errors"
@@ -39,7 +39,7 @@ type copiedMsg struct {
 func (m copiedMsg) note() string {
 	switch m.state {
 	case copyToClipboard:
-		return m.unit + copyWritten + widget.Size(len(m.text))
+		return m.unit + copyWritten + render.Size(len(m.text))
 	case copyToTerminal:
 		return m.unit + copyHanded
 	case copyRefused:

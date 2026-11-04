@@ -206,7 +206,7 @@ func freshHome(tofu, scratch string) (boardy.Managed, error) {
 }
 
 func replay(m boardy.Managed, key string, f fixture) (verdict, error) {
-	lines := subagent.InForce([]string{f.Acceptance})
+	lines := subagents.InForce([]string{f.Acceptance})
 	if len(lines) == 0 {
 		lines = []string{"no acceptance line was written"}
 	}

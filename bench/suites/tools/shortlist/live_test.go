@@ -15,13 +15,13 @@ import (
 
 var repoRoot = sys.SourceRoot()
 
-func liveClient(t *testing.T) *jev.Client {
+func liveClient(t *testing.T) *core.Client {
 	t.Helper()
 	if os.Getenv("TOFU_LIVE") != "1" {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
 	sys.AllowLiveCredential(t)
-	key, err := jev.TypeSafeKey(repoRoot + "/.env")
+	key, err := core.TypeSafeKey(repoRoot + "/.env")
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
@@ -29,7 +29,7 @@ func liveClient(t *testing.T) *jev.Client {
 	if err != nil {
 		t.Fatalf("NewWire: %v", err)
 	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+	client, err := core.NewClient(core.Config{Wire: wire})
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}

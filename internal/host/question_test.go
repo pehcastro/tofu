@@ -11,7 +11,7 @@ import (
 	"tofu/internal/agent/loop"
 )
 
-func questionServer(t *testing.T, declared bool) (*server, turn.PersonForm, chan string) {
+func questionServer(t *testing.T, declared bool) (*server, loop.PersonForm, chan string) {
 	t.Helper()
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -36,10 +36,10 @@ func (s *server) heard(event Event) {
 	s.publish(<-s.Host.Events())
 }
 
-func twoLibraries() []turn.PersonQuestion {
+func twoLibraries() []loop.PersonQuestion {
 	first := 0
-	return []turn.PersonQuestion{{ID: "lib", Header: "HTTP client", Question: "Which HTTP client?", Type: turn.QuestionChoice, Recommended: &first,
-		Options: []turn.PersonOption{{Label: "net/http", Description: "standard"}, {Label: "resty", Description: "retries"}}}}
+	return []loop.PersonQuestion{{ID: "lib", Header: "HTTP client", Question: "Which HTTP client?", Type: loop.QuestionChoice, Recommended: &first,
+		Options: []loop.PersonOption{{Label: "net/http", Description: "standard"}, {Label: "resty", Description: "retries"}}}}
 }
 
 func sent(s *server) []string {
@@ -54,7 +54,7 @@ func sent(s *server) []string {
 
 func TestAClientThatAnswersQuestionsGetsTheRequestTheStateAndTheResolution(t *testing.T) {
 	s, form, awaited := questionServer(t, true)
-	got := make(chan []turn.PersonReply, 1)
+	got := make(chan []loop.PersonReply, 1)
 	go func() {
 		replies, _ := form(t.Context(), twoLibraries(), 2*time.Minute)
 		got <- replies
@@ -93,7 +93,7 @@ func TestAClientWithoutQuestionsIsUndeliveredAtOnce(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Second)
 	defer cancel()
 	_, err := form(ctx, twoLibraries(), 0)
-	var undelivered turn.QuestionUndelivered
+	var undelivered loop.QuestionUndelivered
 	if !errors.As(err, &undelivered) {
 		t.Fatalf("got %v, want undelivered at once, without the blocking wait", err)
 	}
@@ -104,7 +104,7 @@ func TestAClientWithoutQuestionsIsUndeliveredAtOnce(t *testing.T) {
 
 func TestAQuestionOutlivesTheTurnInTheStatus(t *testing.T) {
 	var feed statusFeed
-	feed.follow(Event{Kind: EventAwaitPerson, ID: "q1", Tool: turn.AskPersonToolName, Text: "Which HTTP client?", Questions: twoLibraries()})
+	feed.follow(Event{Kind: EventAwaitPerson, ID: "q1", Tool: loop.AskPersonToolName, Text: "Which HTTP client?", Questions: twoLibraries()})
 	feed.follow(Event{Kind: EventTurnEnded})
 	lead := feed.records(nil)[0]
 	if lead.State != "blocked" || lead.Kind != "question" {

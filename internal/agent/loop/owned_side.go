@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -46,7 +46,7 @@ func OwnsAccess(globs []string) (Access, error) {
 	owns := make([]string, len(globs))
 	for i, glob := range globs {
 		owns[i] = strings.TrimSpace(glob)
-		if _, err := subagent.Matches(".", owns[i:i+1]); err != nil {
+		if _, err := subagents.Matches(".", owns[i:i+1]); err != nil {
 			return Access{}, fmt.Errorf("side chat access %q is none of %s, %s and %s, and not a comma list of globs: %w", strings.Join(globs, ","), PresetRead, PresetNotes, PresetFiles, err)
 		}
 	}
@@ -64,7 +64,7 @@ type SideBranch struct {
 	Access Access
 	Seed   Seed
 	Chosen *session.Chosen
-	Effort llm.Effort
+	Effort core.Effort
 	From   string
 }
 
@@ -88,7 +88,7 @@ func BranchSide(store *session.Store, parent session.Header, side SideBranch, at
 		}
 		events = events[:upTo+1]
 	}
-	var seeded []llm.Message
+	var seeded []core.Message
 	noTask := false
 	switch side.Seed {
 	case SeedSummary:
@@ -111,7 +111,7 @@ func BranchSide(store *session.Store, parent session.Header, side SideBranch, at
 	written := &record{store: store, log: log, scope: id, turn: id, said: map[string]string{}}
 	request := ""
 	for _, message := range seeded {
-		if message.Role == llm.RoleAssistant {
+		if message.Role == core.RoleAssistant {
 			request = session.NewEventID()
 		}
 		written.message(message, request, nil)
@@ -122,7 +122,7 @@ func BranchSide(store *session.Store, parent session.Header, side SideBranch, at
 	return SideOpened{Header: log.Header(), Carried: len(seeded), NoTask: noTask}, errors.Join(err, log.Close())
 }
 
-func sideSeed(store *session.Store, parent session.Header, events []session.Event) ([]llm.Message, bool, error) {
+func sideSeed(store *session.Store, parent session.Header, events []session.Event) ([]core.Message, bool, error) {
 	if len(events) == 0 {
 		return nil, true, nil
 	}
@@ -143,14 +143,14 @@ func sideSeed(store *session.Store, parent session.Header, events []session.Even
 	if err != nil {
 		return nil, false, err
 	}
-	opening := llm.Message{Role: llm.RoleUser, Content: task, Origin: llm.Origin{Source: llm.SourceForkTask}}
+	opening := core.Message{Role: core.RoleUser, Content: task, Origin: core.Origin{Source: core.SourceForkTask}}
 	fork, begun, err := forkHistory(artifacts, budget, opening, messages, ForkContinuation, 0, 0)
 	if err != nil {
 		return nil, false, err
 	}
 	carryState(fork, begun, "", parent.ID)
 	begun = slices.DeleteFunc(begun, standsAtTheHead)
-	at := slices.IndexFunc(begun, func(message llm.Message) bool { return message.Origin.Source == llm.SourceForkCarry })
+	at := slices.IndexFunc(begun, func(message core.Message) bool { return message.Origin.Source == core.SourceForkCarry })
 	_, rest, _ := strings.Cut(begun[at].Content, "\n")
 	begun[at].Content = "this is a side chat beside session " + parent.ID + ", which keeps running and has not ended: " +
 		"the summary below is the one tofu writes when a session forks, and every session it names is that one.\n" + rest
@@ -211,7 +211,7 @@ func sideChat(config Config) (Config, error) {
 		return config, err
 	}
 	store, own := config.Sessions, config.Session
-	boundary := subagent.NewBoundary(side.ID, "", side.Owns)
+	boundary := subagents.NewBoundary(side.ID, "", side.Owns)
 	shellRules := ""
 	if bash, offered := config.Tools.byName[bashToolName]; offered && found {
 		shell := ownedShell{tool: bash, boundary: boundary}
@@ -260,7 +260,7 @@ func orchestratorOnly() []string {
 	return []string{"spawn", "message", "subagents", ShellToolName, "settings", "cron", "remember", "zoom", "recall", "rule_override", "browser_act", "browser_do", "browser_motion"}
 }
 
-func sideTools(registry Registry, boundary *subagent.Boundary) Registry {
+func sideTools(registry Registry, boundary *subagents.Boundary) Registry {
 	var kept []contract.Tool
 	refused := func(tool contract.Tool) sideRefused { return sideRefused{tool: tool, owns: boundary.Owns()} }
 	for _, tool := range registry.tools {
@@ -283,12 +283,12 @@ func sideTools(registry Registry, boundary *subagent.Boundary) Registry {
 
 type sideWrite struct {
 	tool     contract.Tool
-	boundary *subagent.Boundary
+	boundary *subagents.Boundary
 }
 
 func (t sideWrite) Name() string { return t.tool.Name() }
 
-func (t sideWrite) Definition() llm.Tool { return t.tool.Definition() }
+func (t sideWrite) Definition() core.Tool { return t.tool.Definition() }
 
 func (t sideWrite) refusal(raw json.RawMessage) error {
 	paths, err := TargetPaths(t.Name(), raw)
@@ -297,7 +297,7 @@ func (t sideWrite) refusal(raw json.RawMessage) error {
 	}
 	for _, path := range paths {
 		err = t.boundary.Write(path)
-		if errors.As(err, &subagent.DeniedError{}) {
+		if errors.As(err, &subagents.DeniedError{}) {
 			return SideRefusedError{Tool: t.Name(), What: path + " is left as it was" + NoneWritten(len(paths)), Owns: t.boundary.Owns()}
 		}
 		if err != nil {
@@ -320,8 +320,8 @@ type sideShell struct {
 
 func (t sideShell) refusal(raw json.RawMessage) error {
 	err := t.ownedShell.refusal(raw)
-	var denied subagent.DeniedError
-	var unread subagent.ReadListError
+	var denied subagents.DeniedError
+	var unread subagents.ReadListError
 	switch {
 	case errors.As(err, &denied):
 		return SideRefusedError{Tool: t.Name(), What: denied.Path + " is left as it was", Owns: t.boundary.Owns()}
@@ -331,7 +331,7 @@ func (t sideShell) refusal(raw json.RawMessage) error {
 	return err
 }
 
-func (t sideShell) Definition() llm.Tool { return t.tool.Definition() }
+func (t sideShell) Definition() core.Tool { return t.tool.Definition() }
 
 func (t sideShell) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	if err := t.refusal(raw); err != nil {
@@ -347,7 +347,7 @@ type sideRefused struct {
 
 func (t sideRefused) Name() string { return t.tool.Name() }
 
-func (t sideRefused) Definition() llm.Tool { return t.tool.Definition() }
+func (t sideRefused) Definition() core.Tool { return t.tool.Definition() }
 
 func (t sideRefused) refusal(json.RawMessage) error {
 	return SideRefusedError{Tool: t.Name(), What: "it is the orchestrator's, offered here only so the tool list matches the session this chat sits beside, and " + sideNever, Owns: t.owns}

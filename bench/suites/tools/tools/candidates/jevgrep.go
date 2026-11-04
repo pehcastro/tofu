@@ -42,14 +42,14 @@ func twoPatterns(q toolscorpus.Asked) (string, string) {
 	return broad, narrow
 }
 
-func choosePattern(ctx context.Context, client *jev.Client, question, a, b string) (string, jev.Decision, error) {
-	request := jev.Request{
+func choosePattern(ctx context.Context, client *core.Client, question, a, b string) (string, core.Decision, error) {
+	request := core.Request{
 		State: map[string]any{"question": question, "pattern_a": a, "pattern_b": b},
-		Questions: []jev.Question{{
+		Questions: []core.Question{{
 			ID:           "pick",
-			Kind:         jev.QuestionChoice,
+			Kind:         core.QuestionChoice,
 			Instructions: "which of these two go regular expressions is more likely to match the exact line that `question` is asking to find in a source repository",
-			Options: []jev.Option{
+			Options: []core.Option{
 				{Name: "a", Criteria: map[string]any{"see": "pattern_a"}},
 				{Name: "b", Criteria: map[string]any{"see": "pattern_b"}},
 			},
@@ -66,7 +66,7 @@ func choosePattern(ctx context.Context, client *jev.Client, question, a, b strin
 	return a, decision, nil
 }
 
-func Jevgrep(ctx context.Context, client *jev.Client, root string, q toolscorpus.Asked) tools.Outcome {
+func Jevgrep(ctx context.Context, client *core.Client, root string, q toolscorpus.Asked) tools.Outcome {
 	a, b := twoPatterns(q)
 	started := time.Now()
 	pattern, decision, err := choosePattern(ctx, client, q.Text, a, b)
@@ -88,7 +88,7 @@ func Jevgrep(ctx context.Context, client *jev.Client, root string, q toolscorpus
 	}
 }
 
-func JevgrepTriple(ctx context.Context, client *jev.Client, root string, q toolscorpus.Asked) tools.Outcome {
+func JevgrepTriple(ctx context.Context, client *core.Client, root string, q toolscorpus.Asked) tools.Outcome {
 	a, b := twoPatterns(q)
 	words := tools.ContentWords(q.Text)
 	c := tools.Alternation(words[:min(2, len(words))])
@@ -106,18 +106,18 @@ func JevgrepTriple(ctx context.Context, client *jev.Client, root string, q tools
 		totalBytes += bytes
 	}
 
-	options := make([]jev.Option, len(patterns))
+	options := make([]core.Option, len(patterns))
 	state := map[string]any{"question": q.Text}
 	for i, p := range patterns {
 		key := fmt.Sprintf("result_%d", i)
 		state[key] = fmt.Sprintf("pattern %q found %d matching lines", p, len(results[i]))
-		options[i] = jev.Option{Name: fmt.Sprintf("%d", i), Criteria: map[string]any{"see": key}}
+		options[i] = core.Option{Name: fmt.Sprintf("%d", i), Criteria: map[string]any{"see": key}}
 	}
-	decision, err := client.Ask(ctx, jev.Request{
+	decision, err := client.Ask(ctx, core.Request{
 		State: state,
-		Questions: []jev.Question{{
+		Questions: []core.Question{{
 			ID:           "pick",
-			Kind:         jev.QuestionChoice,
+			Kind:         core.QuestionChoice,
 			Instructions: "which of these three grep results most likely answers `question`",
 			Options:      options,
 		}},
@@ -141,7 +141,7 @@ func JevgrepTriple(ctx context.Context, client *jev.Client, root string, q tools
 	}
 }
 
-func JevgrepAnswer(ctx context.Context, client *jev.Client, root string, q toolscorpus.Asked) tools.Outcome {
+func JevgrepAnswer(ctx context.Context, client *core.Client, root string, q toolscorpus.Asked) tools.Outcome {
 	broad := broadPattern(tools.ContentWords(q.Text))
 	started := time.Now()
 	lines, _, err := GitGrep(root, broad, q.Tree)
@@ -156,17 +156,17 @@ func JevgrepAnswer(ctx context.Context, client *jev.Client, root string, q tools
 		capped = capped[:jevgrepAnswerLineCap]
 	}
 	state := map[string]any{"question": q.Text}
-	options := make([]jev.Option, len(capped))
+	options := make([]core.Option, len(capped))
 	for i, l := range capped {
 		key := fmt.Sprintf("line_%d", i)
 		state[key] = l
-		options[i] = jev.Option{Name: fmt.Sprintf("%d", i), Criteria: map[string]any{"see": key}}
+		options[i] = core.Option{Name: fmt.Sprintf("%d", i), Criteria: map[string]any{"see": key}}
 	}
-	decision, err := client.Ask(ctx, jev.Request{
+	decision, err := client.Ask(ctx, core.Request{
 		State: state,
-		Questions: []jev.Question{{
+		Questions: []core.Question{{
 			ID:           "pick",
-			Kind:         jev.QuestionChoice,
+			Kind:         core.QuestionChoice,
 			Instructions: "which of these matched lines is the single line that answers `question`",
 			Options:      options,
 		}},
@@ -205,21 +205,21 @@ func topLevelDirs(root string) []string {
 	return dirs
 }
 
-func JevgrepNarrowed(ctx context.Context, client *jev.Client, root string, q toolscorpus.Asked) tools.Outcome {
+func JevgrepNarrowed(ctx context.Context, client *core.Client, root string, q toolscorpus.Asked) tools.Outcome {
 	started := time.Now()
 	dirs := topLevelDirs(root)
 	if len(dirs) == 0 {
 		return tools.Outcome{Version: "jevgrep narrowed", Skipped: "no top level directory to narrow into", Elapsed: time.Since(started)}
 	}
-	dirOptions := make([]jev.Option, len(dirs))
+	dirOptions := make([]core.Option, len(dirs))
 	for i, d := range dirs {
-		dirOptions[i] = jev.Option{Name: d, Criteria: fmt.Sprintf("the answer to `question` sits under the %s directory", d)}
+		dirOptions[i] = core.Option{Name: d, Criteria: fmt.Sprintf("the answer to `question` sits under the %s directory", d)}
 	}
-	dirDecision, err := client.Ask(ctx, jev.Request{
+	dirDecision, err := client.Ask(ctx, core.Request{
 		State: map[string]any{"question": q.Text},
-		Questions: []jev.Question{{
+		Questions: []core.Question{{
 			ID:           "dir",
-			Kind:         jev.QuestionChoice,
+			Kind:         core.QuestionChoice,
 			Instructions: "which top level directory of this go repository most likely holds the file that answers `question`",
 			Options:      dirOptions,
 		}},

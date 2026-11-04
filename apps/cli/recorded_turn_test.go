@@ -16,14 +16,14 @@ const (
 	turnThatWroteTheFile    = "turn-18d690dd45903d58.json"
 )
 
-func readRecordedTurn(dir, name string) (turn.Row, error) {
+func readRecordedTurn(dir, name string) (loop.Row, error) {
 	body, err := os.ReadFile(filepath.Join(dir, name))
 	if err != nil {
-		return turn.Row{}, err
+		return loop.Row{}, err
 	}
-	var row turn.Row
+	var row loop.Row
 	if err := json.Unmarshal(body, &row); err != nil {
-		return turn.Row{}, fmt.Errorf("reading %s: %w", name, err)
+		return loop.Row{}, fmt.Errorf("reading %s: %w", name, err)
 	}
 	return row, nil
 }

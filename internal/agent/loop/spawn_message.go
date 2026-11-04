@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -50,9 +50,9 @@ const (
 
 func (messageTool) Name() string { return "message" }
 
-func (messageTool) Definition() llm.Tool {
+func (messageTool) Definition() core.Tool {
 	text := map[string]any{"type": "string"}
-	return llm.Tool{
+	return core.Tool{
 		Name: "message",
 		Description: "sends a sub-agent more work or a correction, from this turn or any earlier one, and returns at once. " +
 			"a running sub-agent reads text at its next step; one that has ended or was released resumes in the background with its conversation, taking back its paths if no other sub-agent holds them, " +
@@ -136,7 +136,7 @@ func (m messageTool) Run(ctx context.Context, raw json.RawMessage) (contract.Res
 				"send text to resume it with your answer, or do release to free its paths", args.To)
 		}
 		if strings.TrimSpace(args.Text) != "" {
-			held.inbox.post(inboxItem{text: args.Text, origin: postedNow(llm.SourceMessage, t.orchestratorID)})
+			held.inbox.post(inboxItem{text: args.Text, origin: postedNow(core.SourceMessage, t.orchestratorID)})
 		}
 		answered += t.toThread(args.To, boardy.Answered, strings.TrimSpace(args.Answer+" "+args.Text))
 		return contract.Result{Content: answered, Command: args.Answer + " " + args.To, SubAgent: args.To}, nil
@@ -171,7 +171,7 @@ func answeredAsksOnly(calls []ToolCallRow) bool {
 }
 
 func (t *SpawnTool) send(ctx context.Context, to, text, from string) (contract.Result, error) {
-	var backup []llm.Message
+	var backup []core.Message
 	if from != "" {
 		var err error
 		if backup, err = t.restoreBackup(to, from); err != nil {
@@ -216,14 +216,14 @@ func (t *SpawnTool) send(ctx context.Context, to, text, from string) (contract.R
 		if opened.Close != nil {
 			opened.Close()
 		}
-		t.Inbox.ended(held, "", llm.SourceReport, true, nil)
+		t.Inbox.ended(held, "", core.SourceReport, true, nil)
 		cancel()
 		return contract.Result{}, fmt.Errorf("message refused: %w", err)
 	}
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	t.Inbox.hold(held, site.log)
-	safe.Go(sys.Crashes(t.Project), "sub-agent "+held.agent.ID, func() {
-		t.background(runCtx, cancel, held, opened, site, text, postedNow(llm.SourceMessage, t.orchestratorID), nil)
+	recover.Go(sys.Crashes(t.Project), "sub-agent "+held.agent.ID, func() {
+		t.background(runCtx, cancel, held, opened, site, text, postedNow(core.SourceMessage, t.orchestratorID), nil)
 	})
 	return contract.Result{Content: to + " resumes in the background with its conversation. its report comes to you as a message when it ends.", Command: "message " + to, SubAgent: to}, nil
 }
@@ -253,9 +253,9 @@ func (t *SpawnTool) regrant(ctx context.Context, args messageArgs) (contract.Res
 	}
 	after := ownsAfter(args.Do, before, args.Owns)
 	t.tree.mu.Lock()
-	err := t.roster.Regrant(args.To, after, subagent.OwnsChange{At: t.clock(), Did: args.Do, Paths: args.Owns})
+	err := t.roster.Regrant(args.To, after, subagents.OwnsChange{At: t.clock(), Did: args.Do, Paths: args.Owns})
 	t.tree.mu.Unlock()
-	var collision subagent.CollisionError
+	var collision subagents.CollisionError
 	if errors.As(err, &collision) {
 		return contract.Result{}, fmt.Errorf("message refused: %s already holds %q, which overlaps %q. release or kill %s first, or send this work to it", collision.Holder, collision.HolderGlob, collision.Glob, collision.Holder)
 	}
@@ -271,7 +271,7 @@ func (t *SpawnTool) regrant(ctx context.Context, args messageArgs) (contract.Res
 	held.kept.Unlock()
 	notice := "the orchestrator " + did + strings.Join(args.Owns, ", ") + ": you now hold " + cmp.Or(strings.Join(after, ", "), "no paths") + "."
 	if args.Do == doRevoke {
-		held.inbox.post(inboxItem{text: notice + " a write there is refused from now on.", origin: postedNow(llm.SourceNotice, "")})
+		held.inbox.post(inboxItem{text: notice + " a write there is refused from now on.", origin: postedNow(core.SourceNotice, "")})
 		return contract.Result{Content: args.To + " now holds " + cmp.Or(strings.Join(after, " "), "no paths") + ". it reads this at its next step, or when it next runs.", Command: args.Do + " " + args.To, SubAgent: args.To}, nil
 	}
 	sent, err := t.send(ctx, args.To, strings.TrimSpace(notice+" the write that was refused may run now.\n\n"+args.Text), "")
@@ -376,11 +376,11 @@ func stopShells(ctx context.Context, owners []string) stoppedShells {
 			continue
 		}
 		err := registry.AgentKill(running.Name)
-		var holding shell.HeldError
+		var holding process.HeldError
 		switch {
 		case errors.As(err, &holding):
 			stopped.held = append(stopped.held, running.Name)
-		case err != nil && !errors.Is(err, shell.ErrNotRunning):
+		case err != nil && !errors.Is(err, process.ErrNotRunning):
 			failed = append(failed, err)
 		default:
 			stopped.killed = append(stopped.killed, running.Name)

@@ -79,11 +79,11 @@ func spread(frames []time.Duration) (time.Duration, time.Duration) {
 
 func watchStall(t *testing.T, stop <-chan struct{}) <-chan time.Duration {
 	stalled := make(chan time.Duration, 1)
-	failed := func(p safe.Panic) {
+	failed := func(p recover.Panic) {
 		t.Errorf("%v\n\n%s", p, p.Stack)
 		stalled <- 0
 	}
-	safe.Go(failed, "stall watch", func() {
+	recover.Go(failed, "stall watch", func() {
 		last, worst := time.Now(), time.Duration(0)
 		for {
 			select {

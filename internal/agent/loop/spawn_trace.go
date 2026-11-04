@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -18,10 +18,10 @@ type spawnSite struct {
 	turn         string
 	agent        string
 	call         string
-	conversation []llm.Message
+	conversation []core.Message
 }
 
-func (r *record) site(call string, conversation []llm.Message) spawnSite {
+func (r *record) site(call string, conversation []core.Message) spawnSite {
 	sofar := conversation[:len(conversation):len(conversation)]
 	if r == nil {
 		return spawnSite{call: call, conversation: sofar}
@@ -53,18 +53,18 @@ func (s spawnTrace) begin(id string) error {
 		return nil
 	}
 	if slices.ContainsFunc(log.Header().Agents, func(run session.AgentRun) bool { return run.Agent == id }) {
-		return markRun(log, id, subagent.Working, nil)
+		return markRun(log, id, subagents.Working, nil)
 	}
 	_, err := log.Append(session.Event{Turn: site.turn, Agent: site.agent, Call: site.call, Kind: session.EventSpawn},
 		session.SpawnBody{Agent: id, Definition: s.definition, Model: s.model, Mission: s.mission, Owns: s.owns, Ticket: s.ticket, Depth: s.depth,
 			Stagger: s.stagger.decided, StaggerWhy: s.stagger.why})
 	return errors.Join(err, log.Edit(func(header *session.Header) {
 		header.Agents = append(header.Agents, session.AgentRun{Agent: id, Definition: s.definition, Model: s.model, ParentAgent: site.agent,
-			SpawnCall: site.call, SpawnTurn: site.turn, Depth: s.depth, Status: subagent.Working.String(), StartedAt: time.Now()})
+			SpawnCall: site.call, SpawnTurn: site.turn, Depth: s.depth, Status: subagents.Working.String(), StartedAt: time.Now()})
 	}))
 }
 
-func (s spawnTrace) end(id string, state subagent.State) error {
+func (s spawnTrace) end(id string, state subagents.State) error {
 	log := s.site.log
 	if log == nil {
 		return nil
@@ -80,7 +80,7 @@ func (s spawnTrace) end(id string, state subagent.State) error {
 	return errors.Join(err, markRun(log, id, state, &at))
 }
 
-func markRun(log *session.Log, id string, state subagent.State, ended *time.Time) error {
+func markRun(log *session.Log, id string, state subagents.State, ended *time.Time) error {
 	return log.Edit(func(header *session.Header) {
 		for i := range header.Agents {
 			if header.Agents[i].Agent == id {

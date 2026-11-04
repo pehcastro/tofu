@@ -41,10 +41,10 @@ func ShellSiftCost() string {
 }
 
 type ShellScorer struct {
-	client  *jev.Client
+	client  *core.Client
 	set     Battery
 	batch   Battery
-	rubric  jev.Question
+	rubric  core.Question
 	rows    RowLedger
 	TurnID  string
 	spent   sync.Mutex
@@ -52,11 +52,11 @@ type ShellScorer struct {
 	costUSD float64
 }
 
-func BuildShellSift(arm, log string) (*turn.ShellSift, *ShellScorer, error) {
-	return ShellSiftOn(arm, log, jev.ReadKeyring())
+func BuildShellSift(arm, log string) (*loop.ShellSift, *ShellScorer, error) {
+	return ShellSiftOn(arm, log, core.ReadKeyring())
 }
 
-func ShellSiftOn(arm, log string, keys jev.Keyring) (*turn.ShellSift, *ShellScorer, error) {
+func ShellSiftOn(arm, log string, keys core.Keyring) (*loop.ShellSift, *ShellScorer, error) {
 	table, err := method.Load(shipped.Files())
 	if err != nil {
 		return nil, nil, err
@@ -72,7 +72,7 @@ func ShellSiftOn(arm, log string, keys jev.Keyring) (*turn.ShellSift, *ShellScor
 		return nil, nil, err
 	}
 	var scorer *ShellScorer
-	var scores turn.ShellScores
+	var scores loop.ShellScores
 	if chosen.Method == method.Judged {
 		set, setErr := ResolveLibrary(ShellSiftPoint, "")
 		if setErr != nil {
@@ -82,7 +82,7 @@ func ShellSiftOn(arm, log string, keys jev.Keyring) (*turn.ShellSift, *ShellScor
 		if batchErr != nil {
 			return nil, nil, batchErr
 		}
-		at := slices.IndexFunc(batch.Questions, func(q jev.Question) bool { return q.ID == sift.NeededQuestion })
+		at := slices.IndexFunc(batch.Questions, func(q core.Question) bool { return q.ID == sift.NeededQuestion })
 		if at < 0 {
 			return nil, nil, fmt.Errorf("%s asks no %s, and it is the rubric every chunk is judged by", sift.ShellBatchPoint, sift.NeededQuestion)
 		}
@@ -97,7 +97,7 @@ func ShellSiftOn(arm, log string, keys jev.Keyring) (*turn.ShellSift, *ShellScor
 		scorer = &ShellScorer{client: client, set: set, batch: batch, rubric: batch.Questions[at], rows: rows}
 		scores = scorer
 	}
-	built, err := turn.NewShellSift(scores)
+	built, err := loop.NewShellSift(scores)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -139,7 +139,7 @@ func (s *ShellScorer) Score(ctx context.Context, shell sift.Shell, units []sift.
 
 func (s *ShellScorer) scorePerChunk(ctx context.Context, shell sift.Shell, units []sift.Unit, task string) (map[int]float64, error) {
 	states := make([]json.RawMessage, len(units))
-	replies := make([]*jev.Decision, len(units))
+	replies := make([]*core.Decision, len(units))
 	failed := make([]error, len(units))
 	var asking sync.WaitGroup
 	for i, unit := range units {
@@ -152,8 +152,8 @@ func (s *ShellScorer) scorePerChunk(ctx context.Context, shell sift.Shell, units
 		}
 		states[i] = state
 		asking.Go(func() {
-			failed[i] = sys.Crashed(".", safe.Call(nil, "shell sift", func() error {
-				if decision, err := s.client.Ask(ctx, jev.Request{State: states[i], Questions: s.set.Questions}); err == nil {
+			failed[i] = sys.Crashed(".", recover.Call(nil, "shell sift", func() error {
+				if decision, err := s.client.Ask(ctx, core.Request{State: states[i], Questions: s.set.Questions}); err == nil {
 					replies[i] = &decision
 				}
 				return nil
@@ -182,7 +182,7 @@ func (s *ShellScorer) scorePerChunk(ctx context.Context, shell sift.Shell, units
 	return scores, nil
 }
 
-func (s *ShellScorer) record(state json.RawMessage, set Battery, builder string, decision jev.Decision) error {
+func (s *ShellScorer) record(state json.RawMessage, set Battery, builder string, decision core.Decision) error {
 	s.spent.Lock()
 	turnID := s.TurnID
 	s.spent.Unlock()

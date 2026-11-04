@@ -15,13 +15,13 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	"tofu/internal/store/learn"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
@@ -47,7 +47,7 @@ type Deps struct {
 
 type learnOpts struct {
 	chain, dir, reason       string
-	scope                    memory.Scope
+	scope                    entries.Scope
 	last                     int
 	global, local, all, list bool
 	rest                     []string
@@ -82,7 +82,7 @@ func parseLearnArgs(args []string) (learnOpts, error) {
 		case "--all":
 			opts.all = true
 		case "--scope":
-			scope, err := memory.ParseScope(args[i])
+			scope, err := entries.ParseScope(args[i])
 			if err != nil {
 				return learnOpts{}, err
 			}
@@ -196,7 +196,7 @@ func learnScan(o output.Verb, opts learnOpts, home learn.Home) int {
 	if err != nil {
 		return o.Fail(err)
 	}
-	shelves, err := memory.Open(opts.dir)
+	shelves, err := entries.Open(opts.dir)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -236,7 +236,7 @@ func labelWindows(run *learn.Run, errOut io.Writer) error {
 	if err != nil {
 		return err
 	}
-	asked := wiring.Battery{SetName: set.Name, QuestionsVersion: set.QuestionsVersion, Kinds: map[string]question.Kind{}}
+	asked := wiring.Battery{SetName: set.Name, QuestionsVersion: set.QuestionsVersion, Kinds: map[string]questions.Kind{}}
 	for _, q := range set.Questions {
 		asked.Questions, asked.Kinds[q.Name] = append(asked.Questions, q.ToJev()), q.Kind
 	}
@@ -258,14 +258,14 @@ func labelWindows(run *learn.Run, errOut io.Writer) error {
 	_ = page.Print(errOut, []string{page.Label(fmt.Sprintf("sending %d windows to Jev, one request each, %d bytes of your sessions", len(states), run.Sent.Bytes))})
 	for i, state := range states {
 		label := learn.Label{Said: i}
-		decision, err := client.Ask(context.Background(), jev.Request{State: state, Questions: asked.Questions})
+		decision, err := client.Ask(context.Background(), core.Request{State: state, Questions: asked.Questions})
 		if err == nil {
 			var row ledger.Row
 			row, err = wiring.AppendRow(state, asked, wiring.RowInput{Decision: &decision, Answers: wiring.ToLedgerAnswers(set.QuestionsVersion, decision.Answers), StateBuilder: set.Name + "@" + strconv.Itoa(set.QuestionsVersion)})
 			label.Row, label.Build, label.Cost = row.ID, decision.Build, decision.Usage.Cost
 			label.Answers, label.Chosen = map[string]float64{}, map[string]string{}
 			for name, answer := range decision.Answers {
-				if answer.Kind == jev.QuestionChoice {
+				if answer.Kind == core.QuestionChoice {
 					label.Chosen[name] = answer.Choice
 					continue
 				}
@@ -325,7 +325,7 @@ func learnApply(o output.Verb, deps Deps, opts learnOpts, home learn.Home, findi
 	}
 	if finding.Target() == learn.TargetRule {
 		flag := "--project"
-		if finding.Scope == memory.Global {
+		if finding.Scope == entries.Global {
 			flag = "--global"
 		}
 		if code := deps.AddRule([]string{flag, "--dir", opts.dir, learnRuleID + finding.Key, finding.Rule}, o.Out, o.ErrOut); code != output.ExitOK {
@@ -337,7 +337,7 @@ func learnApply(o output.Verb, deps Deps, opts learnOpts, home learn.Home, findi
 			}
 			return output.ExitOK
 		}
-		shelves, err := memory.Open(opts.dir)
+		shelves, err := entries.Open(opts.dir)
 		if err == nil {
 			_, err = shelves.Remove(finding.Scope, finding.Retire)
 		}
@@ -347,11 +347,11 @@ func learnApply(o output.Verb, deps Deps, opts learnOpts, home learn.Home, findi
 		return o.Receipt(host.WriteReceipt{Changes: []host.FileChange{{Change: host.ChangeRemoved, What: "memory " + finding.Retire + ", now the rule " + learnRuleID + finding.Key}},
 			Undo: "tofu memory add --scope " + string(finding.Scope) + " --said " + strconv.Quote(finding.Said) + " " + strconv.Quote(finding.Rule)})
 	}
-	shelves, err := memory.Open(opts.dir)
+	shelves, err := entries.Open(opts.dir)
 	if err != nil {
 		return o.Fail(err)
 	}
-	added, err := shelves.Add(memory.Entry{Scope: cmp.Or(opts.scope, finding.Scope), Kind: memory.KindPerson, Text: finding.Rule, Said: finding.Said, Session: finding.Session, At: time.Now(), By: memory.ByOffer}, "")
+	added, err := shelves.Add(entries.Entry{Scope: cmp.Or(opts.scope, finding.Scope), Kind: entries.KindPerson, Text: finding.Rule, Said: finding.Said, Session: finding.Session, At: time.Now(), By: entries.ByOffer}, "")
 	if err = errors.Join(err, decide(learn.ActionApply)); err != nil {
 		return o.Fail(err)
 	}

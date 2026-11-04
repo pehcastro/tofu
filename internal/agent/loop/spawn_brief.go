@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -17,14 +17,14 @@ import (
 	"tofu/internal/tools/contract"
 )
 
-func (s SubAgents) prompt(inherited Config, definition subagent.Definition, task string, owns []string) (string, []PromptPart, string, error) {
+func (s SubAgents) prompt(inherited Config, definition subagents.Definition, task string, owns []string) (string, []PromptPart, string, error) {
 	system, environment := inherited.System, inherited.Environment
 	var parts []PromptPart
 	switch {
 	case s.Prompt.Environment != "":
 		spec := s.Prompt
-		spec.Task, spec.Paths, spec.Agent, spec.Role = task, owns, definition, rule.RoleSubAgent
-		reached, err := rule.Frameworks(s.Root, slices.Concat(owns, TaskNamed(task).Paths))
+		spec.Task, spec.Paths, spec.Agent, spec.Role = task, owns, definition, rules.RoleSubAgent
+		reached, err := rules.Frameworks(s.Root, slices.Concat(owns, TaskNamed(task).Paths))
 		if err != nil {
 			return "", nil, "", err
 		}
@@ -126,7 +126,7 @@ type briefCandidate struct {
 	byLead bool
 }
 
-func (t *SpawnTool) briefFiles(ctx context.Context, args spawnArgs, lead []llm.Message) string {
+func (t *SpawnTool) briefFiles(ctx context.Context, args spawnArgs, lead []core.Message) string {
 	read, readable := t.base.Tools.byName["read"]
 	if !readable {
 		return ""
@@ -151,7 +151,7 @@ func (t *SpawnTool) briefFiles(ctx context.Context, args spawnArgs, lead []llm.M
 				continue
 			}
 			key := ledgerKey(leadRead.Path)
-			if owned, _ := subagent.Matches(key, args.Owns); owned && !listed[key] {
+			if owned, _ := subagents.Matches(key, args.Owns); owned && !listed[key] {
 				candidates = append(candidates, briefCandidate{path: leadRead.Path, byLead: true})
 			}
 			listed[key] = true
@@ -166,7 +166,7 @@ func (t *SpawnTool) briefFiles(ctx context.Context, args spawnArgs, lead []llm.M
 			continue
 		}
 		file := ledgerKey(result.Command)
-		if owned, _ := subagent.Matches(file, args.Owns); slices.Contains(placed, file) || candidate.byLead && !owned {
+		if owned, _ := subagents.Matches(file, args.Owns); slices.Contains(placed, file) || candidate.byLead && !owned {
 			continue
 		}
 		placed = append(placed, file)

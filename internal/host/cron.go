@@ -81,7 +81,7 @@ func (h *Host) armCron() {
 		h.ticking = nil
 		h.dropRead()
 		h.mu.Unlock()
-		_ = safe.Call(h.report, "cron", func() error {
+		_ = recover.Call(h.report, "cron", func() error {
 			h.fire(h.cron.Due(context.Background(), h.now(), cron.Tick))
 			return nil
 		})
@@ -104,7 +104,7 @@ func (h *Host) fire(fires []cron.Fire) {
 			h.note(fired.Line)
 			continue
 		}
-		origin := llm.Origin{Source: llm.SourceCronFire, ID: fired.ID}
+		origin := core.Origin{Source: core.SourceCronFire, ID: fired.ID}
 		if job, err := h.cron.Job(fired.ID); err == nil {
 			origin.Schedule = job.Spec().Schedule
 		}

@@ -1,4 +1,4 @@
-package tools_test
+package registry_test
 
 import (
 	"context"
@@ -28,13 +28,13 @@ type askedResult struct {
 const twoLibraries = `{"questions":[{"id":"lib","header":"HTTP client","question":"Which HTTP client should the fetcher use?","type":"choice",
 "options":[{"label":"net/http","description":"standard library, no dependency"},{"label":"resty","description":"retries built in, one dependency"}],"recommended":0}]}`
 
-func personSays(answer turn.PersonAnswer, err error) turn.Person {
-	return func(context.Context, turn.GateRequest, turn.GateDecision) (turn.PersonAnswer, error) {
+func personSays(answer loop.PersonAnswer, err error) loop.Person {
+	return func(context.Context, loop.GateRequest, loop.GateDecision) (loop.PersonAnswer, error) {
 		return answer, err
 	}
 }
 
-func asked(t *testing.T, tool tools.AskPerson, args string) askedResult {
+func asked(t *testing.T, tool registry.AskPerson, args string) askedResult {
 	t.Helper()
 	result, err := tool.Run(t.Context(), json.RawMessage(args))
 	if err != nil {
@@ -71,7 +71,7 @@ func TestAskPersonRefusesAQuestionSetOutsideTheShape(t *testing.T) {
 		{"text with options", `{"questions":[` + question("x", "h", "text", two, "") + `]}`, "text"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			tool := tools.AskPerson{Person: personSays(turn.PersonAllowedOnce, nil), Auto: func() bool { return false }}
+			tool := registry.AskPerson{Person: personSays(loop.PersonAllowedOnce, nil), Auto: func() bool { return false }}
 			_, err := tool.Run(t.Context(), json.RawMessage(c.args))
 			if err == nil || !strings.Contains(err.Error(), c.says) {
 				t.Fatalf("got %v, want a refusal saying %q", err, c.says)
@@ -81,7 +81,7 @@ func TestAskPersonRefusesAQuestionSetOutsideTheShape(t *testing.T) {
 }
 
 func TestAskPersonTakesAFourWordHeaderLongerThanThirtyCharacters(t *testing.T) {
-	tool := tools.AskPerson{Person: personSays(turn.PersonAllowedOnce, nil), Auto: func() bool { return false }}
+	tool := registry.AskPerson{Person: personSays(loop.PersonAllowedOnce, nil), Auto: func() bool { return false }}
 	got := asked(t, tool, strings.Replace(twoLibraries, "HTTP client", "Préférences  concernant client HTTPS", 1))
 	if got.Outcome != "submitted" {
 		t.Fatalf("outcome %q, want submitted", got.Outcome)
@@ -93,22 +93,22 @@ func TestAskPersonSaysWhatHappenedToEachQuestion(t *testing.T) {
 {"id":"name","header":"Name","question":"What should the module be called?","type":"text"}]}`
 	for _, c := range []struct {
 		name     string
-		person   turn.Person
+		person   loop.Person
 		args     string
 		outcome  string
 		statuses []string
 		chosen   [][]string
 	}{
-		{"allowed", personSays(turn.PersonAllowedOnce, nil), twoLibraries, "submitted", []string{"answered"}, [][]string{{"net/http"}}},
-		{"always here", personSays(turn.PersonAlwaysHere, nil), twoLibraries, "submitted", []string{"answered"}, [][]string{{"net/http"}}},
-		{"denied", personSays(turn.PersonDenied, nil), twoLibraries, "submitted", []string{"skipped"}, [][]string{nil}},
-		{"yes or no and a typed one", personSays(turn.PersonAllowedOnce, nil), yesno, "submitted", []string{"answered", "unanswered"}, [][]string{{"no"}, nil}},
-		{"nobody could be asked", personSays(turn.PersonDenied, errors.New("the client declared no questions")), twoLibraries, "undelivered", []string{"unanswered"}, [][]string{{"net/http"}}},
+		{"allowed", personSays(loop.PersonAllowedOnce, nil), twoLibraries, "submitted", []string{"answered"}, [][]string{{"net/http"}}},
+		{"always here", personSays(loop.PersonAlwaysHere, nil), twoLibraries, "submitted", []string{"answered"}, [][]string{{"net/http"}}},
+		{"denied", personSays(loop.PersonDenied, nil), twoLibraries, "submitted", []string{"skipped"}, [][]string{nil}},
+		{"yes or no and a typed one", personSays(loop.PersonAllowedOnce, nil), yesno, "submitted", []string{"answered", "unanswered"}, [][]string{{"no"}, nil}},
+		{"nobody could be asked", personSays(loop.PersonDenied, errors.New("the client declared no questions")), twoLibraries, "undelivered", []string{"unanswered"}, [][]string{{"net/http"}}},
 		{"no person at all", nil, twoLibraries, "undelivered", []string{"unanswered"}, [][]string{{"net/http"}}},
-		{"stopped while it waited", personSays(turn.PersonDenied, context.Canceled), twoLibraries, "cancelled", []string{"unanswered"}, [][]string{{"net/http"}}},
+		{"stopped while it waited", personSays(loop.PersonDenied, context.Canceled), twoLibraries, "cancelled", []string{"unanswered"}, [][]string{{"net/http"}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			got := asked(t, tools.AskPerson{Person: c.person, Auto: func() bool { return false }}, c.args)
+			got := asked(t, registry.AskPerson{Person: c.person, Auto: func() bool { return false }}, c.args)
 			if got.Outcome != c.outcome || len(got.Answers) != len(c.statuses) {
 				t.Fatalf("got %+v, want outcome %s and %d answers", got, c.outcome, len(c.statuses))
 			}
@@ -126,12 +126,12 @@ func TestAskPersonSaysWhatHappenedToEachQuestion(t *testing.T) {
 
 func TestAskPersonInAutoATimeoutIsNeverAnAnswer(t *testing.T) {
 	release := make(chan struct{})
-	slow := func(ctx context.Context, _ turn.GateRequest, _ turn.GateDecision) (turn.PersonAnswer, error) {
+	slow := func(ctx context.Context, _ loop.GateRequest, _ loop.GateDecision) (loop.PersonAnswer, error) {
 		<-release
-		return turn.PersonAllowedOnce, nil
+		return loop.PersonAllowedOnce, nil
 	}
-	inbox := turn.NewInbox()
-	tool := tools.AskPerson{Person: slow, Auto: func() bool { return true }, Wait: 20 * time.Millisecond, Inbox: inbox}
+	inbox := loop.NewInbox()
+	tool := registry.AskPerson{Person: slow, Auto: func() bool { return true }, Wait: 20 * time.Millisecond, Inbox: inbox}
 	result, err := tool.Run(t.Context(), json.RawMessage(twoLibraries))
 	if err != nil || !strings.Contains(result.Content, "comes as a message") || strings.Contains(result.Content, "recommended") {
 		t.Fatalf("got %q, %v, want the call back at once saying the answer comes as a message and naming no option to take", result.Content, err)
@@ -158,7 +158,7 @@ func TestAskPersonInAutoATimeoutIsNeverAnAnswer(t *testing.T) {
 	}
 }
 
-func inboxSays(t *testing.T, inbox *turn.Inbox) string {
+func inboxSays(t *testing.T, inbox *loop.Inbox) string {
 	t.Helper()
 	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(5 * time.Millisecond) {
 		if taken := inbox.Take(); len(taken) > 0 {
@@ -170,8 +170,8 @@ func inboxSays(t *testing.T, inbox *turn.Inbox) string {
 }
 
 func TestAskPersonInAutoTakesAnAnswerThatArrivesInTime(t *testing.T) {
-	inbox := turn.NewInbox()
-	tool := tools.AskPerson{Person: personSays(turn.PersonAllowedOnce, nil), Auto: func() bool { return true }, Wait: time.Minute, Inbox: inbox}
+	inbox := loop.NewInbox()
+	tool := registry.AskPerson{Person: personSays(loop.PersonAllowedOnce, nil), Auto: func() bool { return true }, Wait: time.Minute, Inbox: inbox}
 	if _, err := tool.Run(t.Context(), json.RawMessage(twoLibraries)); err != nil {
 		t.Fatal(err)
 	}
@@ -181,11 +181,11 @@ func TestAskPersonInAutoTakesAnAnswerThatArrivesInTime(t *testing.T) {
 }
 
 func TestAskPersonInAskModeWaitsPastTheAutoWait(t *testing.T) {
-	slow := func(context.Context, turn.GateRequest, turn.GateDecision) (turn.PersonAnswer, error) {
+	slow := func(context.Context, loop.GateRequest, loop.GateDecision) (loop.PersonAnswer, error) {
 		time.Sleep(60 * time.Millisecond)
-		return turn.PersonAllowedOnce, nil
+		return loop.PersonAllowedOnce, nil
 	}
-	tool := tools.AskPerson{Person: slow, Auto: func() bool { return false }, Wait: 10 * time.Millisecond}
+	tool := registry.AskPerson{Person: slow, Auto: func() bool { return false }, Wait: 10 * time.Millisecond}
 	if got := asked(t, tool, twoLibraries); got.Outcome != "submitted" {
 		t.Fatalf("got %+v, want submitted, since ask mode has no timeout", got)
 	}
@@ -193,12 +193,12 @@ func TestAskPersonInAskModeWaitsPastTheAutoWait(t *testing.T) {
 
 func TestAskPersonSendsNoLateAnswerAfterAStop(t *testing.T) {
 	ctx, stop := context.WithCancel(t.Context())
-	waits := func(ctx context.Context, _ turn.GateRequest, _ turn.GateDecision) (turn.PersonAnswer, error) {
+	waits := func(ctx context.Context, _ loop.GateRequest, _ loop.GateDecision) (loop.PersonAnswer, error) {
 		<-ctx.Done()
-		return turn.PersonDenied, ctx.Err()
+		return loop.PersonDenied, ctx.Err()
 	}
-	inbox := turn.NewInbox()
-	tool := tools.AskPerson{Person: waits, Auto: func() bool { return true }, Wait: time.Minute, Inbox: inbox}
+	inbox := loop.NewInbox()
+	tool := registry.AskPerson{Person: waits, Auto: func() bool { return true }, Wait: time.Minute, Inbox: inbox}
 	if _, err := tool.Run(ctx, json.RawMessage(twoLibraries)); err != nil {
 		t.Fatal(err)
 	}
@@ -215,14 +215,14 @@ const threeKinds = `{"questions":[{"id":"lib","header":"HTTP client","question":
 {"id":"name","header":"Name","question":"What is the module called?","type":"text"}]}`
 
 func TestAskPersonThroughTheFormSaysWhatWasChosenTypedAndSkipped(t *testing.T) {
-	var shown []turn.PersonQuestion
+	var shown []loop.PersonQuestion
 	var waited time.Duration
-	form := func(_ context.Context, questions []turn.PersonQuestion, wait time.Duration) ([]turn.PersonReply, error) {
+	form := func(_ context.Context, questions []loop.PersonQuestion, wait time.Duration) ([]loop.PersonReply, error) {
 		shown, waited = questions, wait
-		return []turn.PersonReply{{ID: "lib", Chosen: []string{"resty"}}, {ID: "push", Chosen: []string{}}, {ID: "name", Chosen: []string{}, Text: "fetchx"}}, nil
+		return []loop.PersonReply{{ID: "lib", Chosen: []string{"resty"}}, {ID: "push", Chosen: []string{}}, {ID: "name", Chosen: []string{}, Text: "fetchx"}}, nil
 	}
-	tool := tools.AskPerson{Person: personSays(turn.PersonDenied, nil), Auto: func() bool { return false }, Wait: time.Minute}
-	result, err := tool.Run(turn.WithPersonForm(t.Context(), form), json.RawMessage(threeKinds))
+	tool := registry.AskPerson{Person: personSays(loop.PersonDenied, nil), Auto: func() bool { return false }, Wait: time.Minute}
+	result, err := tool.Run(loop.WithPersonForm(t.Context(), form), json.RawMessage(threeKinds))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,15 +259,15 @@ func TestAskPersonFormOutcomesWhenNobodyChooses(t *testing.T) {
 		err     error
 		outcome string
 	}{
-		{"esc", turn.QuestionDismissed{}, "cancelled"},
-		{"a client without questions", turn.QuestionUndelivered{Why: "the client did not declare questions"}, "undelivered"},
+		{"esc", loop.QuestionDismissed{}, "cancelled"},
+		{"a client without questions", loop.QuestionUndelivered{Why: "the client did not declare questions"}, "undelivered"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			form := func(context.Context, []turn.PersonQuestion, time.Duration) ([]turn.PersonReply, error) {
+			form := func(context.Context, []loop.PersonQuestion, time.Duration) ([]loop.PersonReply, error) {
 				return nil, c.err
 			}
-			tool := tools.AskPerson{Person: personSays(turn.PersonAllowedOnce, nil), Auto: func() bool { return false }}
-			result, err := tool.Run(turn.WithPersonForm(t.Context(), form), json.RawMessage(twoLibraries))
+			tool := registry.AskPerson{Person: personSays(loop.PersonAllowedOnce, nil), Auto: func() bool { return false }}
+			result, err := tool.Run(loop.WithPersonForm(t.Context(), form), json.RawMessage(twoLibraries))
 			if err != nil || !strings.Contains(result.Content, `"outcome":"`+c.outcome+`"`) || !strings.Contains(result.Content, `"chosen":["net/http"]`) {
 				t.Fatalf("got %q, %v, want %s with the recommended standing", result.Content, err, c.outcome)
 			}
@@ -278,14 +278,14 @@ func TestAskPersonFormOutcomesWhenNobodyChooses(t *testing.T) {
 func TestAskPersonInAutoKeepsTheFormOpenPastTheWait(t *testing.T) {
 	release := make(chan struct{})
 	var waited time.Duration
-	form := func(_ context.Context, _ []turn.PersonQuestion, wait time.Duration) ([]turn.PersonReply, error) {
+	form := func(_ context.Context, _ []loop.PersonQuestion, wait time.Duration) ([]loop.PersonReply, error) {
 		waited = wait
 		<-release
-		return []turn.PersonReply{{ID: "lib", Chosen: []string{"resty"}}}, nil
+		return []loop.PersonReply{{ID: "lib", Chosen: []string{"resty"}}}, nil
 	}
-	inbox := turn.NewInbox()
-	tool := tools.AskPerson{Person: personSays(turn.PersonDenied, nil), Auto: func() bool { return true }, Wait: 20 * time.Millisecond, Inbox: inbox}
-	if _, err := tool.Run(turn.WithPersonForm(t.Context(), form), json.RawMessage(twoLibraries)); err != nil {
+	inbox := loop.NewInbox()
+	tool := registry.AskPerson{Person: personSays(loop.PersonDenied, nil), Auto: func() bool { return true }, Wait: 20 * time.Millisecond, Inbox: inbox}
+	if _, err := tool.Run(loop.WithPersonForm(t.Context(), form), json.RawMessage(twoLibraries)); err != nil {
 		t.Fatal(err)
 	}
 	if first := inboxSays(t, inbox); !strings.Contains(first, "timed_out") {

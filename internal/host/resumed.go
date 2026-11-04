@@ -62,7 +62,7 @@ type Earlier struct {
 	runs    map[string]session.AgentRun
 	bottom  int
 	next    int
-	child   []llm.Message
+	child   []core.Message
 }
 
 func resumedChat(carry Carry, dir string) Opened {
@@ -98,11 +98,11 @@ func (e *Earlier) lead(store *session.Store) *resumedLead {
 	lead.watch = &watcher{emit: func(event Event) {
 		event.Turn, event.At = lead.turn, lead.at
 		lead.chat = append(lead.chat, redacted(event, e.mask))
-	}, turnID: e.carry.Session, seen: &shownResults{ids: map[string]bool{}}, spawner: &turn.SpawnTool{}}
+	}, turnID: e.carry.Session, seen: &shownResults{ids: map[string]bool{}}, spawner: &loop.SpawnTool{}}
 	return lead
 }
 
-func (e *Earlier) open(store *session.Store, lead *resumedLead) []llm.Message {
+func (e *Earlier) open(store *session.Store, lead *resumedLead) []core.Message {
 	e.lineage, _ = store.Lineage(e.carry.Session)
 	head := len(e.lineage) - 1
 	e.bottom = head
@@ -140,12 +140,12 @@ func (e *Earlier) Next() ([]Event, bool) {
 	return lead.chat, e.next >= e.bottom
 }
 
-func (e *Earlier) unheldIn(at int) []llm.Message {
+func (e *Earlier) unheldIn(at int) []core.Message {
 	if at <= e.bottom {
 		return e.child
 	}
 	said, _, _ := e.store.ReadSaid(e.lineage[at-1].Header.ID, e.events(at-1))
-	parent, _ := turn.ConversationOf(said)
+	parent, _ := loop.ConversationOf(said)
 	fresh := unheld(parent, e.child)
 	e.child = parent
 	return fresh
@@ -160,28 +160,28 @@ func (e *Earlier) events(at int) []session.Event {
 	return generation.Events
 }
 
-func (l *resumedLead) replay(messages []llm.Message, generation int) {
+func (l *resumedLead) replay(messages []core.Message, generation int) {
 	for _, message := range messages {
-		if message.Origin.Source == llm.SourceSpawnLine {
+		if message.Origin.Source == core.SourceSpawnLine {
 			continue
 		}
 		said, persisted := l.recorded(message, generation), ""
 		if said != nil {
 			l.at, persisted = said.At, said.ID
 		}
-		if said != nil && message.Role == llm.RoleUser && (message.Origin.Source == llm.SourceTask || message.Origin.Source == llm.SourceCronFire) {
+		if said != nil && message.Role == core.RoleUser && (message.Origin.Source == core.SourceTask || message.Origin.Source == core.SourceCronFire) {
 			l.turn, l.watch.turnID = said.Turn, cmp.Or(said.Turn, l.carry.Session)
 		}
 		switch message.Role {
-		case llm.RoleUser:
+		case core.RoleUser:
 			if endsTheRow(message.Origin.Source) {
 				l.watch.endLeadRow()
 			}
 			task, origin := l.carry.taskIn(message.Content), l.originOf(message)
 			left, drew := l.reportsIn(task)
 			switch {
-			case origin.Sub == llm.SourceEnvironment:
-			case !drew || origin.Sub == llm.SourceReport || origin.Sub == llm.SourceReportFor:
+			case origin.Sub == core.SourceEnvironment:
+			case !drew || origin.Sub == core.SourceReport || origin.Sub == core.SourceReportFor:
 				var images []MessageImage
 				if said != nil && l.store != nil {
 					images = shownAttached(task, l.images[said.ID], l.store)
@@ -190,7 +190,7 @@ func (l *resumedLead) replay(messages []llm.Message, generation int) {
 			case left != "" && origin.Kind == OriginPerson:
 				l.watch.emit(Event{Kind: EventTask, ID: persisted, Text: left, Origin: origin})
 			}
-		case llm.RoleAssistant:
+		case core.RoleAssistant:
 			if text := strings.TrimSpace(message.Content); text != "" {
 				l.watch.endLeadRow()
 				l.watch.emit(Event{Kind: EventText, ID: persisted, Text: text})
@@ -205,7 +205,7 @@ func (l *resumedLead) replay(messages []llm.Message, generation int) {
 					l.spawned(recorded.spawn)
 				}
 			}
-		case llm.RoleTool:
+		case core.RoleTool:
 			if recorded := l.calls[message.ToolCallID]; recorded != nil && recorded.result.Call != "" {
 				ran, err := resultOf(recorded.result)
 				if err != nil {
@@ -216,7 +216,7 @@ func (l *resumedLead) replay(messages []llm.Message, generation int) {
 				l.replaying(recorded.result)
 			}
 			l.watch.result(message, "")
-		case llm.RoleSystem, llm.RoleUnknown:
+		case core.RoleSystem, core.RoleUnknown:
 		}
 		if said != nil {
 			l.watch.emit(Event{Kind: EventPersisted, ID: said.ID, Logged: said})
@@ -224,12 +224,12 @@ func (l *resumedLead) replay(messages []llm.Message, generation int) {
 	}
 }
 
-func unheld(parent, child []llm.Message) []llm.Message {
+func unheld(parent, child []core.Message) []core.Message {
 	held := map[string]bool{}
 	for _, message := range parent {
 		held[heldKey(message)] = true
 	}
-	carry := slices.IndexFunc(child, func(message llm.Message) bool { return message.Origin.Source == llm.SourceForkCarry })
+	carry := slices.IndexFunc(child, func(message core.Message) bool { return message.Origin.Source == core.SourceForkCarry })
 	fresh := carry + 1
 	for fresh < len(child) && held[heldKey(child[fresh])] {
 		fresh++
@@ -237,12 +237,12 @@ func unheld(parent, child []llm.Message) []llm.Message {
 	if carry < 0 {
 		return child[fresh:]
 	}
-	return append([]llm.Message{child[carry]}, child[fresh:]...)
+	return append([]core.Message{child[carry]}, child[fresh:]...)
 }
 
-func heldKey(message llm.Message) string {
+func heldKey(message core.Message) string {
 	switch {
-	case message.Role == llm.RoleTool:
+	case message.Role == core.RoleTool:
 		return "tool " + message.ToolCallID
 	case len(message.ToolCalls) > 0:
 		return "call " + message.ToolCalls[0].ID
@@ -314,20 +314,20 @@ func (l *resumedLead) note(event session.Event, generation int) {
 	}
 }
 
-func callOf(event session.Event) llm.ToolCall {
+func callOf(event session.Event) core.ToolCall {
 	var call session.CallBody
 	_ = json.Unmarshal(event.Body, &call)
-	return llm.ToolCall{ID: event.Call, Name: call.Tool, Arguments: call.Args}
+	return core.ToolCall{ID: event.Call, Name: call.Tool, Arguments: call.Args}
 }
 
-func resultOf(event session.Event) (llm.Message, error) {
+func resultOf(event session.Event) (core.Message, error) {
 	var result struct {
 		session.ResultBody
 		Hits *int `json:"hits"`
 	}
 	_ = json.Unmarshal(event.Body, &result)
-	outcome, err := turn.ToolOutcomeOf(result.ToolOutcome)
-	return llm.Message{Role: llm.RoleTool, ToolCallID: event.Call, Content: turn.WithoutToolRef(result.Content), ToolResultBytes: result.ResultBytes, ToolExitCode: result.ExitCode, ToolHits: result.Hits, ToolOutcome: outcome}, err
+	outcome, err := loop.ToolOutcomeOf(result.ToolOutcome)
+	return core.Message{Role: core.RoleTool, ToolCallID: event.Call, Content: loop.WithoutToolRef(result.Content), ToolResultBytes: result.ResultBytes, ToolExitCode: result.ExitCode, ToolHits: result.Hits, ToolOutcome: outcome}, err
 }
 
 func (l *resumedLead) replayResult(event session.Event, agent string) {
@@ -383,8 +383,8 @@ func (l *resumedLead) reportsIn(task string) (string, bool) {
 	return strings.TrimSpace(task), drew
 }
 
-func (l *resumedLead) recorded(message llm.Message, generation int) *session.Event {
-	if message.Role != llm.RoleUser && message.Role != llm.RoleAssistant {
+func (l *resumedLead) recorded(message core.Message, generation int) *session.Event {
+	if message.Role != core.RoleUser && message.Role != core.RoleAssistant {
 		return nil
 	}
 	key := saidKey{generation: generation, role: message.Role.String(), content: message.Content}
@@ -396,7 +396,7 @@ func (l *resumedLead) recorded(message llm.Message, generation int) *session.Eve
 	return &queued[0]
 }
 
-func (l *resumedLead) originOf(message llm.Message) Origin {
+func (l *resumedLead) originOf(message core.Message) Origin {
 	origin := message.Origin
 	if origin.Kind() != OriginAgent || origin.Name != "" {
 		return wireOrigin(origin)
@@ -479,7 +479,7 @@ func (l *resumedLead) settleTheRunning(held func() []SubAgentRow) {
 }
 
 func (carry Carry) taskIn(content string) string {
-	if task, found := turn.TaskIn(content); found {
+	if task, found := loop.TaskIn(content); found {
 		return task
 	}
 	for _, task := range carry.Tasks {

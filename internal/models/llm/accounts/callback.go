@@ -1,4 +1,4 @@
-package cred
+package accounts
 
 import (
 	"errors"
@@ -104,8 +104,8 @@ func startCallback(path, expectedState string, port int, portFallback, ipv6 bool
 	cb.server = &http.Server{Handler: mux}
 	report := sys.Crashes(".")
 	for _, listener := range listeners {
-		safe.Go(report, "login callback", func() {
-			if err := safe.Call(report, "login callback", func() error {
+		recover.Go(report, "login callback", func() {
+			if err := recover.Call(report, "login callback", func() error {
 				_ = cb.server.Serve(listener)
 				return nil
 			}); err != nil {

@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"bytes"
@@ -47,8 +47,8 @@ func (t *ReadTool) Reading(ledger *ReadLedger) *ReadTool {
 
 func (t *ReadTool) Name() string { return "read" }
 
-func (t *ReadTool) Definition() llm.Tool {
-	return llm.Tool{
+func (t *ReadTool) Definition() core.Tool {
+	return core.Tool{
 		Name: "read",
 		Description: "reads a file inside the turn's working directory, whole, or only the lines from start_line to end_line, counted from 1 and both included. " +
 			"a path that does not exist is repaired when exactly one file under the working directory carries that name and refused when two do, and a repair is named at the top of the result. " +
@@ -106,7 +106,7 @@ func (t *ReadTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 		if err != nil {
 			return contract.Result{}, fmt.Errorf("read: %s: %w", args.Path, err)
 		}
-		return contract.Result{Content: repair + args.Path + ": " + said, Images: []llm.Image{picture}, Command: args.Path}, nil
+		return contract.Result{Content: repair + args.Path + ": " + said, Images: []core.Image{picture}, Command: args.Path}, nil
 	}
 	if args.StartLine <= 0 && args.EndLine <= 0 {
 		t.ledger.Mark(ctx, args.Path, content)
@@ -157,11 +157,11 @@ func (t *ReadTool) noteRepeat(ctx context.Context, path string, content []byte, 
 	return text + fmt.Sprintf("\n\nthis read has returned this same text %d times and the file has not changed, so reading it again will not change it: read a narrower range with start_line and end_line, or go on with the change", seen.times)
 }
 
-func lookAt(media string, content []byte) (llm.Image, string, error) {
+func lookAt(media string, content []byte) (core.Image, string, error) {
 	format := strings.TrimPrefix(media, "image/")
-	fit, err := llm.FitImage(llm.Image{MediaType: media, Data: content})
+	fit, err := core.FitImage(core.Image{MediaType: media, Data: content})
 	if err != nil {
-		return llm.Image{}, "", err
+		return core.Image{}, "", err
 	}
 	if media == "image/webp" {
 		return fit.Image, fmt.Sprintf("webp, %d bytes, attached as a picture", len(content)), nil
@@ -172,7 +172,7 @@ func lookAt(media string, content []byte) (llm.Image, string, error) {
 			said, fit.Sent.X, fit.Sent.Y, strings.TrimPrefix(fit.MediaType, "image/"), len(fit.Data)), nil
 	}
 	if _, _, err := image.Decode(bytes.NewReader(content)); err != nil {
-		return llm.Image{}, "", fmt.Errorf("it looks like a %s and does not decode: %w", format, err)
+		return core.Image{}, "", fmt.Errorf("it looks like a %s and does not decode: %w", format, err)
 	}
 	return fit.Image, said + ", attached as a picture", nil
 }

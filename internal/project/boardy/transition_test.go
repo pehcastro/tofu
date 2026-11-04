@@ -48,13 +48,13 @@ func jevSaysNothingOpen(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv(classifier.EndpointVariable, server.URL)
+	t.Setenv(classifiers.EndpointVariable, server.URL)
 	t.Setenv(sys.TypeSafeKeyName, "stub-key-not-a-real-credential")
 	dir, err := sys.HomeConfigDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := models.BindRole(dir, models.RoleClassifier, "typesafe/jev-latest"); err != nil {
+	if err := catalog.BindRole(dir, catalog.RoleClassifier, "typesafe/jev-latest"); err != nil {
 		t.Fatal(err)
 	}
 }

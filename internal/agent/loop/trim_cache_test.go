@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -25,13 +25,13 @@ type cachedRequest struct {
 
 type cachingLead struct {
 	preview recall.Config
-	steps   func(step int) llm.Decision
+	steps   func(step int) core.Decision
 	cached  map[string]bool
 	sent    []cachedRequest
 	took    int
 }
 
-func newCachingLead(t *testing.T, steps func(step int) llm.Decision) *cachingLead {
+func newCachingLead(t *testing.T, steps func(step int) core.Decision) *cachingLead {
 	t.Helper()
 	preview, err := recall.LoadConfig()
 	if err != nil {
@@ -40,17 +40,17 @@ func newCachingLead(t *testing.T, steps func(step int) llm.Decision) *cachingLea
 	return &cachingLead{preview: preview.OnWire("anthropic"), steps: steps, cached: map[string]bool{}}
 }
 
-func (m *cachingLead) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
-	conversation := slices.DeleteFunc(slices.Clone(request.Messages), func(message llm.Message) bool { return message.Role == llm.RoleSystem })
+func (m *cachingLead) Ask(_ context.Context, request core.Request) (core.Decision, error) {
+	conversation := slices.DeleteFunc(slices.Clone(request.Messages), func(message core.Message) bool { return message.Role == core.RoleSystem })
 	running, lastAssistant := sha256.New(), -1
 	keys, tokens := make([]string, len(conversation)), make([]int, len(conversation))
 	for i, message := range conversation {
-		if message.Role == llm.RoleAssistant {
+		if message.Role == core.RoleAssistant {
 			lastAssistant = i
 		}
 		said, err := json.Marshal(message)
 		if err != nil {
-			return llm.Decision{}, err
+			return core.Decision{}, err
 		}
 		running.Write(said)
 		keys[i], tokens[i] = string(running.Sum(nil)), HistoryTokens(m.preview, conversation[:i+1])
@@ -72,23 +72,23 @@ func (m *cachingLead) Ask(_ context.Context, request llm.Request) (llm.Decision,
 		m.cached[keys[mark]] = true
 	}
 	total := tokens[len(tokens)-1]
-	state := conversation[len(conversation)-1].Origin.Source == llm.SourceForkState
+	state := conversation[len(conversation)-1].Origin.Source == core.SourceForkState
 	m.sent = append(m.sent, cachedRequest{state: state, tokens: total, read: read, write: total - read})
 	if state {
-		return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: "goal: rename the parser"}, nil
+		return core.Decision{Build: "m1", Outcome: core.OutcomeMessage, Content: "goal: rename the parser"}, nil
 	}
 	m.took++
 	return m.steps(m.took), nil
 }
 
-func saidAndRead(step int, said, path string) llm.Decision {
-	decision := toolCallDecision(llm.ToolCall{ID: "call-" + strconv.Itoa(step), Name: "read", Arguments: json.RawMessage(`{"path":"` + path + `"}`)})
+func saidAndRead(step int, said, path string) core.Decision {
+	decision := toolCallDecision(core.ToolCall{ID: "call-" + strconv.Itoa(step), Name: "read", Arguments: json.RawMessage(`{"path":"` + path + `"}`)})
 	decision.Content = said
 	return decision
 }
 
-func longThenShortSteps(last int) func(step int) llm.Decision {
-	return func(step int) llm.Decision {
+func longThenShortSteps(last int) func(step int) core.Decision {
+	return func(step int) core.Decision {
 		switch {
 		case step > last:
 			return messageDecision()
@@ -154,7 +154,7 @@ func TestWithNoForkTheTrimStillGetsUnderTheTargetRewritingTheNewestResultsFirst(
 	for i := 1; i <= 40; i++ {
 		reads["f"+strconv.Itoa(i)+".go"] = 3000
 	}
-	model := newCachingLead(t, func(step int) llm.Decision {
+	model := newCachingLead(t, func(step int) core.Decision {
 		if step > 40 {
 			return messageDecision()
 		}
@@ -206,7 +206,7 @@ func TestATrimRewritesOldResultsInsteadOfForkingOnlyOnceTheCacheHasGoneCold(t *t
 		reads["f"+strconv.Itoa(i)+".go"] = 4000
 	}
 	run := func(idle time.Duration) []StepRow {
-		model := newCachingLead(t, func(step int) llm.Decision {
+		model := newCachingLead(t, func(step int) core.Decision {
 			if step > steps {
 				return messageDecision()
 			}

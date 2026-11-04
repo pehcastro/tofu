@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
 	"tofu/internal/sys"
@@ -67,7 +67,7 @@ func (report firedReport) lines(page cli.Page, day string, now time.Time) []stri
 	lines := page.Title("Rules fired", facts, wiring.FiresVerdict(len(report.Fires), report.Blocked))
 	rows := make([]cli.Row, len(report.Fires))
 	for i, fire := range report.Fires {
-		rows[i] = fire.row(page, widget.Until(now.Sub(fire.At))+" ago")
+		rows[i] = fire.row(page, render.Until(now.Sub(fire.At))+" ago")
 	}
 	if len(rows) > 0 {
 		lines = append(append(lines, ""), page.Rows(rows)...)

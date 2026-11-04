@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -18,7 +18,7 @@ func reviewedSubAgent(t *testing.T, named string) (*stubReview, []Row) {
 	t.Helper()
 	root := t.TempDir()
 	review := &stubReview{writer: ledger.NewWriter(filepath.Join(root, "ledger")), verdict: DoneReopen}
-	_, spawn := orchestratorTurn(t, root, []llm.Decision{
+	_, spawn := orchestratorTurn(t, root, []core.Decision{
 		claimDecision("all done"),
 		claimDecision("done again"),
 		claimDecision("done a third time"),
@@ -74,7 +74,7 @@ func TestAnUnwiredStopCheckLeavesTheSubAgentsOwnClaimStanding(t *testing.T) {
 func TestTheStopCheckMethodComesFromTheShippedTableWhenNobodyPassesOne(t *testing.T) {
 	root := t.TempDir()
 	review := &stubReview{writer: ledger.NewWriter(filepath.Join(root, "ledger")), verdict: DoneAccepted}
-	_, spawn := orchestratorTurn(t, root, []llm.Decision{claimDecision("all done")})
+	_, spawn := orchestratorTurn(t, root, []core.Decision{claimDecision("all done")})
 	spawn.Review = review
 	spawnGreeting(t, spawn)
 
@@ -92,7 +92,7 @@ func TestTheStopCheckMethodComesFromTheShippedTableWhenNobodyPassesOne(t *testin
 	if review.reviewed != 1 {
 		t.Fatalf("the shipped table says judged and the judged arm ran %d times", review.reviewed)
 	}
-	if held := onlySubAgent(t, spawn); held.State != subagent.Finished {
+	if held := onlySubAgent(t, spawn); held.State != subagents.Finished {
 		t.Fatalf("the accepted verdict left the sub-agent %s", held.State)
 	}
 }
@@ -104,12 +104,12 @@ func TestASubAgentStillUnbelievedAtTheRoundCapReachesTheLeadBlockedNamingTheLine
 		{"TOFU-1: write the greeting under mine/.\n\n## Acceptance\n- mine/greeting.txt says hello, pasted\n", "is finished, blocked,", ", done,"},
 		{"write the greeting under mine/", "is finished, done,", "round cap"},
 	} {
-		_, spawn := orchestratorTurn(t, t.TempDir(), []llm.Decision{claimDecision("all done"), claimDecision("done again"), claimDecision("done a third time")})
+		_, spawn := orchestratorTurn(t, t.TempDir(), []core.Decision{claimDecision("all done"), claimDecision("done again"), claimDecision("done a third time")})
 		spawn.Review = ContractDoneReview{}
 		spawn.Methods = methodTable(t, string(method.Judged))
 		var endedFinished []bool
-		var endedCompletion subagent.Completion
-		spawn.SubAgents.Ended = func(_ subagent.Definition, _ string, _ []Row, ended SubAgentReport, finished bool) {
+		var endedCompletion subagents.Completion
+		spawn.SubAgents.Ended = func(_ subagents.Definition, _ string, _ []Row, ended SubAgentReport, finished bool) {
 			endedFinished, endedCompletion = append(endedFinished, finished), ended.Completion
 		}
 		if _, err := spawn.Run(context.Background(), spawnCall("call-1", c.brief, "mine/**").ToolCalls[0].Arguments); err != nil {
@@ -120,7 +120,7 @@ func TestASubAgentStillUnbelievedAtTheRoundCapReachesTheLeadBlockedNamingTheLine
 			t.Fatalf("the lead got, for %q:\n%s\nwant %q and no %q", c.brief, report, c.want, c.refused)
 		}
 		capped := strings.HasPrefix(c.brief, "TOFU-1")
-		if len(endedFinished) != 1 || endedFinished[0] == capped || (endedCompletion == subagent.Blocked) != capped {
+		if len(endedFinished) != 1 || endedFinished[0] == capped || (endedCompletion == subagents.Blocked) != capped {
 			t.Fatalf("for %q the Ended consumer was told finished %v with completion %s, want finished %v", c.brief, endedFinished, endedCompletion, !capped)
 		}
 		if strings.HasPrefix(c.brief, "TOFU-1") && (!strings.Contains(report, "line 1, mine/greeting.txt says hello") || !strings.Contains(report, "round cap of 3")) {
@@ -146,19 +146,19 @@ func methodTable(t *testing.T, named string) method.Table {
 	return table
 }
 
-func claimDecision(text string) llm.Decision {
-	return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: text}
+func claimDecision(text string) core.Decision {
+	return core.Decision{Build: "m1", Outcome: core.OutcomeMessage, Content: text}
 }
 
-func spawnCall(id, task string, owns ...string) llm.Decision {
+func spawnCall(id, task string, owns ...string) core.Decision {
 	args, err := json.Marshal(spawnArgs{Task: task, Owns: owns})
 	if err != nil {
 		panic(err)
 	}
-	return toolCallDecision(llm.ToolCall{ID: id, Name: "spawn", Arguments: args})
+	return toolCallDecision(core.ToolCall{ID: id, Name: "spawn", Arguments: args})
 }
 
-func orchestratorTurn(t *testing.T, root string, decisions []llm.Decision) (Config, *SpawnTool) {
+func orchestratorTurn(t *testing.T, root string, decisions []core.Decision) (Config, *SpawnTool) {
 	t.Helper()
 	write, err := NewWriteTool(root)
 	if err != nil {
@@ -178,14 +178,14 @@ func orchestratorTurn(t *testing.T, root string, decisions []llm.Decision) (Conf
 		ArtifactDir:    filepath.Join(root, "artifacts"),
 		NewID:          func() string { return orchestratorID },
 	}
-	spawn := NewSpawnTool(orchestratorID, base, &subagent.Roster{})
+	spawn := NewSpawnTool(orchestratorID, base, &subagents.Roster{})
 	orchestrator := base
 	orchestrator.Task = "hand the work to a sub-agent"
 	orchestrator.Tools, orchestrator.Inbox = NewRegistry(read, write, spawn), spawn.Inbox
 	return orchestrator, spawn
 }
 
-func onlySubAgent(t *testing.T, spawn *SpawnTool) subagent.SubAgent {
+func onlySubAgent(t *testing.T, spawn *SpawnTool) subagents.SubAgent {
 	t.Helper()
 	held := spawn.roster.SubAgents()
 	if len(held) != 1 {

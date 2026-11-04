@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -11,7 +11,7 @@ import (
 	"tofu/internal/project/boardy"
 )
 
-func (t *SpawnTool) open(definition subagent.Definition, effort llm.Effort) (SubAgentModel, error) {
+func (t *SpawnTool) open(definition subagents.Definition, effort core.Effort) (SubAgentModel, error) {
 	switch {
 	case t.SubAgents.Open == nil && effort != "":
 		return SubAgentModel{}, fmt.Errorf("effort %s: this run opens no model of its own for a sub-agent, so the level would be dropped without a word", effort)
@@ -35,12 +35,12 @@ func (t *SpawnTool) open(definition subagent.Definition, effort llm.Effort) (Sub
 	return opened, nil
 }
 
-func nearestEffort(wanted llm.Effort, takes []llm.Effort) llm.Effort {
+func nearestEffort(wanted core.Effort, takes []core.Effort) core.Effort {
 	if len(takes) == 0 || slices.Contains(takes, wanted) {
 		return wanted
 	}
-	rank := func(effort llm.Effort) int { return slices.Index(llm.Efforts(), effort) }
-	distance := func(effort llm.Effort) int { return max(rank(effort)-rank(wanted), rank(wanted)-rank(effort)) }
+	rank := func(effort core.Effort) int { return slices.Index(core.Efforts(), effort) }
+	distance := func(effort core.Effort) int { return max(rank(effort)-rank(wanted), rank(wanted)-rank(effort)) }
 	nearest := takes[0]
 	for _, effort := range takes[1:] {
 		if closer := distance(effort) - distance(nearest); closer < 0 || closer == 0 && rank(effort) > rank(nearest) {
@@ -50,8 +50,8 @@ func nearestEffort(wanted llm.Effort, takes []llm.Effort) llm.Effort {
 	return nearest
 }
 
-func raisedTwice(ticket string, thread []boardy.Event, revision int, asked llm.Effort) error {
-	rank := func(effort string) int { return slices.Index(llm.Efforts(), llm.Effort(effort)) }
+func raisedTwice(ticket string, thread []boardy.Event, revision int, asked core.Effort) error {
+	rank := func(effort string) int { return slices.Index(core.Efforts(), core.Effort(effort)) }
 	var earlier []string
 	raised := false
 	for _, event := range thread {
@@ -68,14 +68,14 @@ func raisedTwice(ticket string, thread []boardy.Event, revision int, asked llm.E
 		ticket, strings.Join(earlier, ", then "), asked, ticket)
 }
 
-func effortWords(effort llm.Effort) string {
+func effortWords(effort core.Effort) string {
 	if effort == "" {
 		return ""
 	}
 	return " at " + string(effort)
 }
 
-func clampedWords(asked llm.Effort, opened SubAgentModel) string {
+func clampedWords(asked core.Effort, opened SubAgentModel) string {
 	if asked == "" || opened.Effort == asked {
 		return ""
 	}
@@ -85,21 +85,21 @@ func clampedWords(asked llm.Effort, opened SubAgentModel) string {
 func (s SubAgents) effortProperty() map[string]any {
 	const told = "how hard the sub-agent thinks. low unless it must make design decisions the brief does not settle. left out, it thinks as hard as you do"
 	if s.Takes == nil {
-		return map[string]any{"type": "string", "enum": llm.Efforts(), "description": told}
+		return map[string]any{"type": "string", "enum": core.Efforts(), "description": told}
 	}
 	var offered, each []string
-	var union []llm.Effort
-	for _, definition := range append([]subagent.Definition{{}}, enabledSubAgents(s.Defined)...) {
+	var union []core.Effort
+	for _, definition := range append([]subagents.Definition{{}}, enabledSubAgents(s.Defined)...) {
 		takes, err := s.Takes(definition)
 		if err != nil {
 			continue
 		}
 		union = append(union, takes...)
-		listed := cmp.Or(llm.EffortList(takes), "none, so leave effort out")
+		listed := cmp.Or(core.EffortList(takes), "none, so leave effort out")
 		offered = append(offered, listed)
 		each = append(each, cmp.Or(definition.Name, "left out it")+" takes "+listed)
 	}
-	levels := slices.DeleteFunc(llm.Efforts(), func(effort llm.Effort) bool { return !slices.Contains(union, effort) })
+	levels := slices.DeleteFunc(core.Efforts(), func(effort core.Effort) bool { return !slices.Contains(union, effort) })
 	if len(levels) == 0 {
 		return nil
 	}

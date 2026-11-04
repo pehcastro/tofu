@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -23,8 +23,8 @@ type ranTool struct {
 	printed string
 }
 
-func (t ranTool) Name() string         { return t.name }
-func (t ranTool) Definition() llm.Tool { return llm.Tool{Name: t.name} }
+func (t ranTool) Name() string          { return t.name }
+func (t ranTool) Definition() core.Tool { return core.Tool{Name: t.name} }
 func (t ranTool) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	*t.ran = append(*t.ran, string(raw))
 	return contract.Result{Content: t.printed}, nil
@@ -238,8 +238,8 @@ type scriptTool struct {
 	run func(dir string)
 }
 
-func (t scriptTool) Name() string         { return "bash" }
-func (t scriptTool) Definition() llm.Tool { return llm.Tool{Name: "bash"} }
+func (t scriptTool) Name() string          { return "bash" }
+func (t scriptTool) Definition() core.Tool { return core.Tool{Name: "bash"} }
 func (t scriptTool) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	*t.ran = append(*t.ran, string(raw))
 	t.run(t.dir)

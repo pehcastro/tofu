@@ -1,4 +1,4 @@
-package jev
+package core
 
 type CriteriaKind int
 

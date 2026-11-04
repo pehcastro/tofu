@@ -23,7 +23,7 @@ type SizeLatency struct {
 	Cost        float64
 }
 
-func LatencyByStateSize(ctx context.Context, wire jev.Wire, fixtures []SizeFixture, question jev.Question, runsPerSize int) ([]SizeLatency, []typesafe.Call, error) {
+func LatencyByStateSize(ctx context.Context, wire core.Wire, fixtures []SizeFixture, question core.Question, runsPerSize int) ([]SizeLatency, []typesafe.Call, error) {
 	results := make([]SizeLatency, 0, len(fixtures))
 	var calls []typesafe.Call
 	for _, fixture := range fixtures {
@@ -32,7 +32,7 @@ func LatencyByStateSize(ctx context.Context, wire jev.Wire, fixtures []SizeFixtu
 		build := ""
 		cost := 0.0
 		for run := 0; run < runsPerSize; run++ {
-			call := typesafe.Ask(ctx, wire, jev.Request{State: fixture.State, Questions: []jev.Question{question}})
+			call := typesafe.Ask(ctx, wire, core.Request{State: fixture.State, Questions: []core.Question{question}})
 			calls = append(calls, call)
 			if call.Err != nil {
 				return nil, calls, fmt.Errorf("size %s run %d: %w", fixture.Label, run, call.Err)
@@ -65,14 +65,14 @@ type CountLatency struct {
 	MedianMS float64
 }
 
-func LatencyByQuestionCount(ctx context.Context, wire jev.Wire, state any, counts []int, runsPerCount int) ([]CountLatency, []typesafe.Call, error) {
+func LatencyByQuestionCount(ctx context.Context, wire core.Wire, state any, counts []int, runsPerCount int) ([]CountLatency, []typesafe.Call, error) {
 	results := make([]CountLatency, 0, len(counts))
 	var calls []typesafe.Call
 	for _, count := range counts {
 		questions := CountSweepQuestions(count)
 		latencies := make([]float64, 0, runsPerCount)
 		for run := 0; run < runsPerCount; run++ {
-			call := typesafe.Ask(ctx, wire, jev.Request{State: state, Questions: questions})
+			call := typesafe.Ask(ctx, wire, core.Request{State: state, Questions: questions})
 			calls = append(calls, call)
 			if call.Err != nil {
 				return nil, calls, fmt.Errorf("question count %d run %d: %w", count, run, call.Err)

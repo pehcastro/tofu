@@ -127,7 +127,7 @@ func classify(before, expected, after string, said bool) Outcome {
 }
 
 func tofuEdit(dir string, edit EditCase) (string, bool, int, error) {
-	tool, err := tools.NewEdit(dir)
+	tool, err := registry.NewEdit(dir)
 	if err != nil {
 		return "", false, 0, err
 	}
@@ -236,7 +236,7 @@ func RunReads(corpus Corpus, scratch string) ([]ReadRow, error) {
 			return nil, err
 		}
 	}
-	tool, err := turn.NewReadTool(scratch)
+	tool, err := loop.NewReadTool(scratch)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +289,7 @@ func readArm(output, wanted string) ReadArm {
 }
 
 func RunLists(corpus Corpus) ([]ListRow, error) {
-	glob, err := tools.NewGlob(corpus.Seed)
+	glob, err := registry.NewGlob(corpus.Seed)
 	if err != nil {
 		return nil, err
 	}

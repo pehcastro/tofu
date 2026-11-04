@@ -46,8 +46,8 @@ func TestThinkingDeltasReachOnThinkingInOrderAndTheDecision(t *testing.T) {
 	}
 
 	var streamed []string
-	decision, err := turn.Subscription{Wire: wire, Effort: llm.EffortMedium}.Ask(context.Background(), llm.Request{
-		Messages:   []llm.Message{{Role: llm.RoleUser, Content: "hi"}},
+	decision, err := loop.Subscription{Wire: wire, Effort: core.EffortMedium}.Ask(context.Background(), core.Request{
+		Messages:   []core.Message{{Role: core.RoleUser, Content: "hi"}},
 		OnThinking: func(text string) { streamed = append(streamed, text) },
 	})
 	if err != nil {
@@ -62,13 +62,13 @@ func TestThinkingDeltasReachOnThinkingInOrderAndTheDecision(t *testing.T) {
 }
 
 func TestOpusFiveAsksForSummarizedThinkingOnlyWhenItThinks(t *testing.T) {
-	for effort, want := range map[llm.Effort]string{
-		llm.EffortMedium: `{"type":"adaptive","display":"summarized"}`,
-		llm.EffortNone:   "",
+	for effort, want := range map[core.Effort]string{
+		core.EffortMedium: `{"type":"adaptive","display":"summarized"}`,
+		core.EffortNone:   "",
 	} {
 		body, err := anthropic.Request{
 			Model:    "claude-opus-5",
-			Messages: []llm.Message{{Role: llm.RoleUser, Content: "hi"}},
+			Messages: []core.Message{{Role: core.RoleUser, Content: "hi"}},
 			Effort:   effort,
 		}.Encode(true)
 		if err != nil {
@@ -114,8 +114,8 @@ func TestThinkingSummarySettingDecidesTheDisplayFieldAndThinkingTokensAreKept(t 
 		if err != nil {
 			t.Fatalf("new wire: %v", err)
 		}
-		decision, err := turn.Subscription{Wire: wire, Effort: llm.EffortMedium}.Ask(context.Background(), llm.Request{
-			Messages:            []llm.Message{{Role: llm.RoleUser, Content: "hi"}},
+		decision, err := loop.Subscription{Wire: wire, Effort: core.EffortMedium}.Ask(context.Background(), core.Request{
+			Messages:            []core.Message{{Role: core.RoleUser, Content: "hi"}},
 			OmitThinkingSummary: omit,
 		})
 		server.Close()

@@ -42,17 +42,17 @@ func Cases(path string) ([]Case, error) {
 }
 
 type OpenQuestion struct {
-	Asked     jev.Question
+	Asked     core.Question
 	Threshold float64
 }
 
-func OpenQuestionIn(layers []question.Layer) (OpenQuestion, error) {
-	set, fields, err := question.Resolve(RequestOpen, layers)
+func OpenQuestionIn(layers []questions.Layer) (OpenQuestion, error) {
+	set, fields, err := questions.Resolve(RequestOpen, layers)
 	if err != nil {
 		return OpenQuestion{}, err
 	}
 	asked, found := set.Question(requestOpenName)
-	at := slices.IndexFunc(fields, func(f question.Field) bool { return f.Path == "thresholds."+requestOpenName+"_at" })
+	at := slices.IndexFunc(fields, func(f questions.Field) bool { return f.Path == "thresholds."+requestOpenName+"_at" })
 	if !found || at < 0 {
 		return OpenQuestion{}, fmt.Errorf("%s names no %s question or no thresholds.%s_at", RequestOpen, requestOpenName, requestOpenName)
 	}
@@ -67,14 +67,14 @@ type Judged struct {
 	Cost    float64
 }
 
-func (q OpenQuestion) Ask(ctx context.Context, client *jev.Client, said string) (Judged, error) {
+func (q OpenQuestion) Ask(ctx context.Context, client *core.Client, said string) (Judged, error) {
 	state, err := json.Marshal(struct {
 		Said string `json:"said"`
 	}{said})
 	if err != nil {
 		return Judged{}, err
 	}
-	decision, err := client.Ask(ctx, jev.Request{State: state, Questions: []jev.Question{q.Asked}})
+	decision, err := client.Ask(ctx, core.Request{State: state, Questions: []core.Question{q.Asked}})
 	if err != nil {
 		return Judged{}, err
 	}

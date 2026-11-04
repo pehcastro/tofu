@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"strconv"
 
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
 	"tofu/library/questions"
@@ -33,9 +33,9 @@ func newOpenJudge(project, log string) (*oneQuestion, error) {
 
 type oneQuestion struct {
 	questionAt
-	client    *jev.Client
+	client    *core.Client
 	set       question.Set
-	asked     jev.Question
+	asked     core.Question
 	threshold float64
 	ledger    *ledger.Writer
 }
@@ -58,7 +58,7 @@ func newOneQuestion(at questionAt, project, log string) (*oneQuestion, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := classifier.Open(project, jev.ReadKeyring(), 1)
+	client, err := classifiers.Open(project, core.ReadKeyring(), 1)
 	if err != nil {
 		return nil, err
 	}
@@ -70,10 +70,10 @@ func (j *oneQuestion) reached(ctx context.Context, state any) (bool, error) {
 	if err != nil {
 		return j.onReach == ledger.VerdictAsk, err
 	}
-	asked := []jev.Question{j.asked}
+	asked := []core.Question{j.asked}
 	row := ledger.Row{Point: j.set.Name, Questions: j.set.Name, Version: j.set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: j.builder, State: body,
 		Verdict: ledger.VerdictAsk, Reason: &ledger.Reason{Question: j.name, Comparison: ">= " + strconv.FormatFloat(j.threshold, 'f', -1, 64), Threshold: j.threshold, Mode: ledger.ModeEnforced}}
-	decision, err := j.client.Ask(ctx, jev.Request{State: json.RawMessage(body), Questions: asked})
+	decision, err := j.client.Ask(ctx, core.Request{State: json.RawMessage(body), Questions: asked})
 	if err != nil {
 		failed := j.unanswered + err.Error()
 		row.Reason.ModeReason = &failed

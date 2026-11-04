@@ -16,13 +16,13 @@ import (
 
 const recordedSessionID = "turn-18d6a5df2caeac68"
 
-func recordedSingleFileSession(t *testing.T, dir string) turn.Row {
+func recordedSingleFileSession(t *testing.T, dir string) loop.Row {
 	t.Helper()
 	body, err := os.ReadFile(dummy.Path("turns", "labelled", recordedSessionID+".json"))
 	if err != nil {
 		t.Fatalf("read the session recorded under .boji/sessions before the writer changed, kept once in the labelled turns: %v", err)
 	}
-	var row turn.Row
+	var row loop.Row
 	if err := json.Unmarshal(body, &row); err != nil {
 		t.Fatalf("the recorded session is not a turn row: %v", err)
 	}
@@ -32,25 +32,25 @@ func recordedSingleFileSession(t *testing.T, dir string) turn.Row {
 	return row
 }
 
-func sessionTheLoopWrites(t *testing.T, dir string, at time.Time) turn.Row {
+func sessionTheLoopWrites(t *testing.T, dir string, at time.Time) loop.Row {
 	t.Helper()
-	row := turn.Row{
+	row := loop.Row{
 		ID:      "turn-header-and-body",
-		Schema:  turn.SchemaVersion,
+		Schema:  loop.SchemaVersion,
 		At:      at,
 		Task:    "read one file and answer",
 		Wire:    "anthropic",
 		Model:   "claude-opus-5",
-		Spend:   turn.SpendSubscription,
-		Outcome: turn.OutcomeStopped,
-		Steps: []turn.StepRow{
+		Spend:   loop.SpendSubscription,
+		Outcome: loop.OutcomeStopped,
+		Steps: []loop.StepRow{
 			{
 				Index:            1,
 				AssistantText:    "I will read the file.",
 				StopReason:       "tool_use",
 				PromptTokens:     103,
 				CompletionTokens: 58,
-				ToolCalls:        []turn.ToolCallRow{{Tool: "read", Command: "read notes.txt", ResultBytes: 11210}},
+				ToolCalls:        []loop.ToolCallRow{{Tool: "read", Command: "read notes.txt", ResultBytes: 11210}},
 			},
 			{
 				Index:            2,
@@ -72,7 +72,7 @@ func sessionTheLoopWrites(t *testing.T, dir string, at time.Time) turn.Row {
 	return row
 }
 
-func sameWorkMeasured(t *testing.T, row turn.Row, wantInput int64) {
+func sameWorkMeasured(t *testing.T, row loop.Row, wantInput int64) {
 	t.Helper()
 	calls := countToolCalls(row)
 	input, output := countTokens(row)
@@ -82,7 +82,7 @@ func sameWorkMeasured(t *testing.T, row turn.Row, wantInput int64) {
 	t.Logf("%s measures %d turns, one read, %d tokens in and %d out", row.ID, len(row.Steps), input, output)
 }
 
-func sameRowBesidesAssignedIDs(t *testing.T, read, want turn.Row) {
+func sameRowBesidesAssignedIDs(t *testing.T, read, want loop.Row) {
 	t.Helper()
 	for _, step := range read.Steps {
 		for _, call := range step.ToolCalls {
@@ -91,10 +91,10 @@ func sameRowBesidesAssignedIDs(t *testing.T, read, want turn.Row) {
 			}
 		}
 	}
-	settled := func(row turn.Row) turn.Row {
-		steps := make([]turn.StepRow, len(row.Steps))
+	settled := func(row loop.Row) loop.Row {
+		steps := make([]loop.StepRow, len(row.Steps))
 		for i, step := range row.Steps {
-			calls := make([]turn.ToolCallRow, len(step.ToolCalls))
+			calls := make([]loop.ToolCallRow, len(step.ToolCalls))
 			for j, call := range step.ToolCalls {
 				var args bytes.Buffer
 				if len(call.Args) > 0 && json.Compact(&args, call.Args) == nil {
@@ -160,12 +160,12 @@ func TestLatestSessionStillReadsARecordedSingleFileSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LatestSession over a session recorded before the writer changed: %v", err)
 	}
-	if read.ID != recordedSessionID || len(read.Steps) != 2 || read.Outcome != turn.OutcomeStopped {
+	if read.ID != recordedSessionID || len(read.Steps) != 2 || read.Outcome != loop.OutcomeStopped {
 		t.Fatalf("read session %q with outcome %q over %d steps, want %q stopped over 2", read.ID, read.Outcome, len(read.Steps), recordedSessionID)
 	}
-	if read.Spend != turn.SpendSubscription || read.WallClockMS != 3999 {
+	if read.Spend != loop.SpendSubscription || read.WallClockMS != 3999 {
 		t.Fatalf("read spend %q and wall clock %d ms, want %q and 3999 ms: a recorded session that loses these cannot be measured",
-			read.Spend, read.WallClockMS, turn.SpendSubscription)
+			read.Spend, read.WallClockMS, loop.SpendSubscription)
 	}
 	sameRowBesidesAssignedIDs(t, read, recorded)
 	sameWorkMeasured(t, read, billedWithCache)

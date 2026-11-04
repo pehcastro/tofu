@@ -1,4 +1,4 @@
-package rule
+package rules
 
 import (
 	"errors"
@@ -359,7 +359,7 @@ func (c *Conditions) set(key, value, at string) (bool, error) {
 		c.Sprint, err = value, planValue(value)
 	case "owns":
 		c.Owns = value
-		_, err = subagent.Matches("a/path/the/owns/condition/is/tested/against", []string{value})
+		_, err = subagents.Matches("a/path/the/owns/condition/is/tested/against", []string{value})
 	case "in_status_for":
 		c.InStatusFor, err = time.ParseDuration(value)
 	case "created_before":

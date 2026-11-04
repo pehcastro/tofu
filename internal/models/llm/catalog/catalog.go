@@ -1,4 +1,4 @@
-package models
+package catalog
 
 import (
 	"fmt"
@@ -82,7 +82,7 @@ func (c Library) discovered(account Served, id string, registry Registry, found 
 		model.Vision = VisionSees
 	}
 	for _, raw := range facts.Efforts {
-		if effort, err := llm.ParseEffort(raw); err == nil && facts.Reasoning {
+		if effort, err := core.ParseEffort(raw); err == nil && facts.Reasoning {
 			model.Efforts = append(model.Efforts, effort)
 		}
 	}
@@ -139,7 +139,7 @@ func (p CatalogPlan) Write(dir string) error {
 			{"use", string(model.Use)},
 			{"reason", model.Reason},
 			{"vision", string(model.Vision)},
-			{"efforts", llm.EffortList(model.Efforts)},
+			{"efforts", core.EffortList(model.Efforts)},
 			{"from", model.From},
 			{"found", model.Found},
 		} {

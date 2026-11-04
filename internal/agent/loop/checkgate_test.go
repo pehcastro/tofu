@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -18,8 +18,8 @@ type typecheckIn struct {
 
 func (typecheckIn) Name() string { return "typecheck" }
 
-func (typecheckIn) Definition() llm.Tool {
-	return llm.Tool{Name: "typecheck", Parameters: map[string]any{"type": "object"}}
+func (typecheckIn) Definition() core.Tool {
+	return core.Tool{Name: "typecheck", Parameters: map[string]any{"type": "object"}}
 }
 
 func (c typecheckIn) Run(ctx context.Context, _ json.RawMessage) (contract.Result, error) {
@@ -31,7 +31,7 @@ func TestATsDevWhoseLastTypecheckFoundAnErrorIsReopened(t *testing.T) {
 	checkers := NewTypecheckers()
 	t.Cleanup(checkers.Close)
 	base := Config{
-		Model: &stubModel{decisions: []llm.Decision{
+		Model: &stubModel{decisions: []core.Decision{
 			edited("src/users.ts"), called("test", map[string]any{}), called("typecheck", map[string]any{}), claimDecision("done"),
 		}},
 		Spend:          SpendAPIKey,
@@ -41,8 +41,8 @@ func TestATsDevWhoseLastTypecheckFoundAnErrorIsReopened(t *testing.T) {
 		ArtifactDir:    filepath.Join(t.TempDir(), "artifacts"),
 		NewID:          func() string { return "turn-orchestrator" },
 	}
-	spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
-	spawn.SubAgents.Defined = []subagent.Definition{{Name: "ts-dev", Language: "typescript", Gate: []string{"typecheck", "test"}, Runs: subagent.RunsInherit, Description: "a fixture"}}
+	spawn := NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
+	spawn.SubAgents.Defined = []subagents.Definition{{Name: "ts-dev", Language: "typescript", Gate: []string{"typecheck", "test"}, Runs: subagents.RunsInherit, Description: "a fixture"}}
 	args, err := json.Marshal(spawnArgs{Task: "change the users route", Owns: []string{"src/**"}, Agent: "ts-dev"})
 	if err != nil {
 		t.Fatal(err)

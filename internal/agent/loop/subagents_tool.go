@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -26,8 +26,8 @@ const (
 	showDiagnose = "diagnose"
 )
 
-func (subAgentsTool) Definition() llm.Tool {
-	return llm.Tool{
+func (subAgentsTool) Definition() core.Tool {
+	return core.Tool{
 		Name: "subagents",
 		Description: "lists every sub-agent of this session and what it is doing now, and returns at once without waiting for any of them: " +
 			"its name, definition, state, effort, how long it has run or ran, its step and tool call counts, the last tool it called, the paths it holds, or that they are free until it resumes once it has ended or was released, and every grant, revoke and replace of them. " +
@@ -71,9 +71,9 @@ func (l subAgentsTool) Run(ctx context.Context, raw json.RawMessage) (contract.R
 		if !found {
 			return contract.Result{}, t.unknown(args.Name)
 		}
-		agents = []subagent.SubAgent{agent}
+		agents = []subagents.SubAgent{agent}
 	}
-	effort := map[string]llm.Effort{}
+	effort := map[string]core.Effort{}
 	for _, ran := range t.Spawned() {
 		effort[ran.ID] = ran.Effort
 	}
@@ -82,12 +82,12 @@ func (l subAgentsTool) Run(ctx context.Context, raw json.RawMessage) (contract.R
 	for _, agent := range agents {
 		state, ran, until := agent.State.String(), "ran", agent.Active
 		switch agent.State {
-		case subagent.Working, subagent.InReview, subagent.Reopened:
+		case subagents.Working, subagents.InReview, subagents.Reopened:
 			state, ran, until = "running", "has run", now
-			if agent.State != subagent.Working {
+			if agent.State != subagents.Working {
 				state += " " + agent.State.String()
 			}
-		case subagent.WaitingAnswer, subagent.Parked, subagent.Errored, subagent.Finished:
+		case subagents.WaitingAnswer, subagents.Parked, subagents.Errored, subagents.Finished:
 		}
 		line := fmt.Sprintf("%s: %s, %s, %s %s, %d steps, %d tool calls", agent.ID, cmp.Or(agent.Agent, "no definition"), state, ran,
 			until.Sub(agent.Started).Round(time.Second), agent.Steps, len(agent.Calling)+agent.CallsDropped)
@@ -117,7 +117,7 @@ func (l subAgentsTool) Run(ctx context.Context, raw json.RawMessage) (contract.R
 	return contract.Result{Content: listed, Command: strings.TrimSpace("subagents " + args.Name), SubAgent: args.Name}, nil
 }
 
-func conversationText(history []llm.Message) string {
+func conversationText(history []core.Message) string {
 	var text strings.Builder
 	for i, message := range history {
 		fmt.Fprintf(&text, "\n[%d] %s", i+1, message.Role)
@@ -171,15 +171,15 @@ func (t *SpawnTool) failedCalls(held *heldSubAgent) []string {
 	for _, step := range check.steps {
 		for _, call := range step.ToolCalls {
 			switch call.Outcome() {
-			case llm.ToolOutcomeRan:
+			case core.ToolOutcomeRan:
 				failed = nil
-			case llm.ToolOutcomeFailed, llm.ToolOutcomeSkipped:
+			case core.ToolOutcomeFailed, core.ToolOutcomeSkipped:
 				why := call.Error
 				if why == "" && call.ExitCode != nil {
 					why = "exit code " + strconv.Itoa(*call.ExitCode)
 				}
 				failed = append(failed, call.Tool+" "+call.Command+": "+why)
-			case llm.ToolOutcomeUnset, llm.ToolOutcomeAborted:
+			case core.ToolOutcomeUnset, core.ToolOutcomeAborted:
 			}
 		}
 	}

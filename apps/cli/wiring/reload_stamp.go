@@ -7,7 +7,7 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/internal/konst"
-	"tofu/internal/models/llm/catalog"
+	models "tofu/internal/models/llm/catalog"
 )
 
 const (

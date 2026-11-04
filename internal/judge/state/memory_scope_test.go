@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/store/memory/entries"
 	"tofu/library/questions"
 )
@@ -52,18 +52,18 @@ func TestMemoryScopeOffersEveryScopeAndEscapesToNone(t *testing.T) {
 	if !ok || scope.Kind != question.KindChoice || scope.Escape != MemoryScopeNone {
 		t.Fatalf("scope is %+v, want a choice escaping to %s", scope, MemoryScopeNone)
 	}
-	var offered []memory.Scope
+	var offered []entries.Scope
 	for _, option := range scope.Options {
 		if option.Name == MemoryScopeNone {
 			continue
 		}
-		parsed, err := memory.ParseScope(MemoryScopeOf(option.Name))
+		parsed, err := entries.ParseScope(MemoryScopeOf(option.Name))
 		if err != nil {
 			t.Errorf("option %s is no memory scope: %v", option.Name, err)
 		}
 		offered = append(offered, parsed)
 	}
-	for _, want := range []memory.Scope{memory.Global, memory.UserLocal, memory.Project, memory.ProjectLocal} {
+	for _, want := range []entries.Scope{entries.Global, entries.UserLocal, entries.Project, entries.ProjectLocal} {
 		if !slices.Contains(offered, want) {
 			t.Errorf("the set never offers %s, offers %v", want, offered)
 		}

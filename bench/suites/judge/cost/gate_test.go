@@ -62,7 +62,7 @@ func TestTheArmRefusesAnAnswerSetTheGateWouldRefuse(t *testing.T) {
 		t.Fatal("the arm decided without a risk answer, so it is not going through gate.Decide")
 	}
 	answers = answerMap(pol, gateAnswers{Risk: 3})
-	answers[pol.RiskQuestion] = jev.Answer{Kind: jev.QuestionNoul, Noul: 1}
+	answers[pol.RiskQuestion] = core.Answer{Kind: core.QuestionNoul, Noul: 1}
 	if _, _, err := decide(answers, pol); err == nil {
 		t.Fatal("the arm read a noul where the rule needs a score")
 	}

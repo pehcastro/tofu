@@ -77,11 +77,11 @@ func TestAReasoningItemFromStepOneReachesTheStepTwoCodexRequestAndTheStoredRow(t
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
 	store := session.NewStore(t.TempDir())
-	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, sessions: store})
+	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: loop.SpendSubscription, sessions: store})
 
-	row, err := turn.Run(context.Background(), config)
+	row, err := loop.Run(context.Background(), config)
 	if err != nil {
-		t.Fatalf("turn.Run: %v", err)
+		t.Fatalf("loop.Run: %v", err)
 	}
 	if len(requests) != 2 {
 		t.Fatalf("the wire saw %d requests, want 2", len(requests))

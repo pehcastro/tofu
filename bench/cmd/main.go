@@ -128,7 +128,7 @@ func reportOf(target string) producer {
 }
 
 func writeReport(out, errOut io.Writer, target string, produce producer) int {
-	key, err := jev.TypeSafeKey(".env")
+	key, err := core.TypeSafeKey(".env")
 	if err != nil {
 		return fail(errOut, target, err)
 	}

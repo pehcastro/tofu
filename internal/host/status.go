@@ -130,7 +130,7 @@ func AgentStatus(row SubAgentRow, rows []SubAgentRow) statusline.Record {
 }
 
 func AskStatus(ask Event) (statusline.Kind, string) {
-	if ask.Tool == turn.AskPersonToolName {
+	if ask.Tool == loop.AskPersonToolName {
 		return statusline.Question, ask.Text
 	}
 	return statusline.Permission, ask.Tool + ": " + ask.Text
@@ -172,19 +172,19 @@ func (f *statusFeed) records(shells map[string]*watchedShell) []statusline.Recor
 }
 
 func (w *watchedShell) records(name string) []statusline.Record {
-	if !w.status.ranHere || w.state == shell.Killed {
+	if !w.status.ranHere || w.state == process.Killed {
 		return nil
 	}
 	id := statusline.Path("shells", name)
 	own := statusline.Record{ID: id, State: statusline.Working, App: statusApp, Title: name, Msg: w.command}
-	running := w.state == shell.Running
+	running := w.state == process.Running
 	if !running {
 		own.State = statusline.Done
 		if w.exitCode != nil && *w.exitCode != 0 {
 			own.State, own.Msg = statusline.Errored, "exit "+strconv.Itoa(*w.exitCode)+": "+w.command
 		}
 	}
-	held := running && w.holder == shell.HolderPerson
+	held := running && w.holder == process.HolderPerson
 	var records []statusline.Record
 	for _, reported := range w.status.program.List() {
 		lasting := reported.State == statusline.Done || reported.State == statusline.Errored

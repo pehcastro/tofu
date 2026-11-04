@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/project/boardy"
@@ -174,7 +174,7 @@ func (c boardyCall) check() int {
 	if len(c.args) != 2 {
 		return c.o.Usage(errors.New("name an event and a " + c.words.Ticket))
 	}
-	event, err := rule.ParseEvent(c.args[0])
+	event, err := rules.ParseEvent(c.args[0])
 	if err != nil {
 		return c.o.Usage(err)
 	}
@@ -215,7 +215,7 @@ func (c boardyCall) check() int {
 }
 
 type boardyChecked struct {
-	Event   rule.Event     `json:"event"`
+	Event   rules.Event    `json:"event"`
 	Ticket  string         `json:"ticket"`
 	Fired   []boardy.Fired `json:"fired"`
 	Refused string         `json:"refused,omitempty"`

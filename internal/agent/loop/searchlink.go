@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"encoding/json"
@@ -36,7 +36,7 @@ func slashed(path string) string {
 	return strings.ReplaceAll(path, `\`, "/")
 }
 
-func callsInOrder(conversation []llm.Message) ([]actingCall, map[string]string) {
+func callsInOrder(conversation []core.Message) ([]actingCall, map[string]string) {
 	var calls []actingCall
 	results := make(map[string]string)
 	for _, message := range conversation {
@@ -50,14 +50,14 @@ func callsInOrder(conversation []llm.Message) ([]actingCall, map[string]string) 
 			}
 			calls = append(calls, actingCall{id: call.ID, tool: call.Name, path: path})
 		}
-		if message.Role == llm.RoleTool && message.ToolCallID != "" {
+		if message.Role == core.RoleTool && message.ToolCallID != "" {
 			results[message.ToolCallID] = message.Content
 		}
 	}
 	return calls, results
 }
 
-func SearchLinksOf(conversation []llm.Message) []SearchLink {
+func SearchLinksOf(conversation []core.Message) []SearchLink {
 	calls, results := callsInOrder(conversation)
 	var links []SearchLink
 	for i, call := range calls {

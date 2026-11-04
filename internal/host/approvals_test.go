@@ -24,16 +24,16 @@ func TestTwoAsksWaitingAtOnceEachGetTheAnswerSentForThem(t *testing.T) {
 			awaited <- event.ID
 		}
 	}
-	person := awaitPerson(emit, h.asks, &turn.Config{})
+	person := awaitPerson(emit, h.asks, &loop.Config{})
 	for round := range 50 {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		got := map[string]chan turn.PersonAnswer{}
+		got := map[string]chan loop.PersonAnswer{}
 		var order []string
 		for _, name := range []string{"a", "b"} {
 			id := fmt.Sprintf("ask-%s-%d", name, round)
-			got[id] = make(chan turn.PersonAnswer, 1)
+			got[id] = make(chan loop.PersonAnswer, 1)
 			go func() {
-				answer, _ := person(ctx, turn.GateRequest{Tool: "bash", Args: json.RawMessage(`{"command":"echo ` + id + `"}`)}, turn.GateDecision{ID: id})
+				answer, _ := person(ctx, loop.GateRequest{Tool: "bash", Args: json.RawMessage(`{"command":"echo ` + id + `"}`)}, loop.GateDecision{ID: id})
 				got[id] <- answer
 			}()
 			order = append(order, <-awaited)
@@ -43,7 +43,7 @@ func TestTwoAsksWaitingAtOnceEachGetTheAnswerSentForThem(t *testing.T) {
 			s.answered(json.RawMessage(`"`+first+`"`), json.RawMessage(`{"decision":"allow_once"}`))); err != nil {
 			t.Fatalf("round %d: %v", round, err)
 		}
-		for id, want := range map[string]turn.PersonAnswer{first: turn.PersonAllowedOnce, second: turn.PersonDenied} {
+		for id, want := range map[string]loop.PersonAnswer{first: loop.PersonAllowedOnce, second: loop.PersonDenied} {
 			select {
 			case answer := <-got[id]:
 				if answer != want {

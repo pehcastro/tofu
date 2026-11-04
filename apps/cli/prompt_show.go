@@ -17,12 +17,12 @@ import (
 )
 
 func showPrompt(opts wiring.RunOpts, out, errOut io.Writer) int {
-	shell, err := turn.ResolveRunShell(settingspkg.TextSaying(opts.Dir, settingspkg.Shell, writeNotice(errOut)))
+	shell, err := loop.ResolveRunShell(settingspkg.TextSaying(opts.Dir, settingspkg.Shell, writeNotice(errOut)))
 	if err != nil {
 		return runFail(errOut, err)
 	}
 	opts.Shell = shell
-	named, _, err := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, turn.NewReadLedger()), nil, shell)
+	named, _, err := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, loop.NewReadLedger()), nil, shell)
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -35,15 +35,15 @@ func showPrompt(opts wiring.RunOpts, out, errOut io.Writer) int {
 		return runFail(errOut, err)
 	}
 	opts, instructions, composed := prompt.opts, prompt.instructions, prompt.composed
-	sent := turn.Config{System: composed.Head(), Instructions: prompt.files, Memory: prompt.memory, Environment: composed.WithTaskRules(prompt.environment) + board.attached, Task: opts.Task, Notes: []string{board.notified}}
+	sent := loop.Config{System: composed.Head(), Instructions: prompt.files, Memory: prompt.memory, Environment: composed.WithTaskRules(prompt.environment) + board.attached, Task: opts.Task, Notes: []string{board.notified}}
 	system, firstUser := sent.SystemMessage(), sent.FirstUserMessage()
 	uncomposed := len(runSystem(opts))
 
-	shipsOff := func(part turn.PromptPart) bool {
-		return slices.ContainsFunc(prompt.shippedOff, func(off rule.Rule) bool { return off.ID == part.RuleID })
+	shipsOff := func(part loop.PromptPart) bool {
+		return slices.ContainsFunc(prompt.shippedOff, func(off rules.Rule) bool { return off.ID == part.RuleID })
 	}
-	held := slices.DeleteFunc(slices.Clone(composed.Unsent), func(part turn.PromptPart) bool { return part.RuleID == "" || shipsOff(part) })
-	shippedOff := slices.DeleteFunc(slices.Clone(composed.Unsent), func(part turn.PromptPart) bool { return !shipsOff(part) })
+	held := slices.DeleteFunc(slices.Clone(composed.Unsent), func(part loop.PromptPart) bool { return part.RuleID == "" || shipsOff(part) })
+	shippedOff := slices.DeleteFunc(slices.Clone(composed.Unsent), func(part loop.PromptPart) bool { return !shipsOff(part) })
 	fired, off, widest := 0, len(shippedOff), 0
 	for _, part := range composed.Parts {
 		switch {
@@ -107,7 +107,7 @@ func showPrompt(opts wiring.RunOpts, out, errOut io.Writer) int {
 	return output.ExitOK
 }
 
-func offeredTools(opts wiring.RunOpts, prompt composedRun, named []contract.Tool) ([]llm.Tool, leadForeseen, error) {
+func offeredTools(opts wiring.RunOpts, prompt composedRun, named []contract.Tool) ([]core.Tool, leadForeseen, error) {
 	var board leadForeseen
 	config, spawner, err := runConfig(opts, named, runtime{open: wiring.OpenWire, composed: &prompt, foreseen: &board})
 	if err != nil || opts.Agent == "" {

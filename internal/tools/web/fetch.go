@@ -97,8 +97,8 @@ func (c *Client) Get(ctx context.Context, address string) (Page, error) {
 		shared = &flight{done: make(chan struct{})}
 		c.flights[key] = shared
 		report := sys.Crashes(".")
-		safe.Go(report, "web fetch", func() {
-			shared.err = safe.Call(report, "web fetch", func() (err error) {
+		recover.Go(report, "web fetch", func() {
+			shared.err = recover.Call(report, "web fetch", func() (err error) {
 				shared.page, err = c.fetch(context.WithoutCancel(ctx), target)
 				return err
 			})

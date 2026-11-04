@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/konst"
@@ -45,7 +45,7 @@ type calibrationCorpus struct {
 }
 
 type askedCase struct {
-	Answers map[string]jev.Answer
+	Answers map[string]core.Answer
 	Build   string
 }
 
@@ -129,7 +129,7 @@ func CalibrateVerb(args []string, out, errOut io.Writer) int {
 	}
 	ask := func(ctx context.Context, c calibrationCase) (askedCase, error) {
 		report.Calls++
-		outcome, _, err := AskFresh(ctx, client, jev.Request{State: c.State, Questions: set.Questions}, set)
+		outcome, _, err := AskFresh(ctx, client, core.Request{State: c.State, Questions: set.Questions}, set)
 		return askedCase{Answers: outcome.Decision.Answers, Build: outcome.Decision.Build}, err
 	}
 	result, err := calibrate(context.Background(), rule, corpus, ask, time.Now)

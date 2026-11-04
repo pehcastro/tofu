@@ -19,17 +19,17 @@ func TestAStandingAnswerNeverTrustsHooksThatChangedAfterIt(t *testing.T) {
 		if event.Kind == EventAwaitPerson {
 			asked <- event.ID
 		}
-	}, h.asks, &turn.Config{})
-	hooks := func(command string) turn.GateRequest {
+	}, h.asks, &loop.Config{})
+	hooks := func(command string) loop.GateRequest {
 		args, _ := json.Marshal(map[string]string{"command": command})
-		return turn.GateRequest{Tool: "hooks", Args: args}
+		return loop.GateRequest{Tool: "hooks", Args: args}
 	}
-	ask := func(request turn.GateRequest, answer Answer) (turn.PersonAnswer, bool) {
+	ask := func(request loop.GateRequest, answer Answer) (loop.PersonAnswer, bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		got := make(chan turn.PersonAnswer, 1)
+		got := make(chan loop.PersonAnswer, 1)
 		go func() {
-			answered, _ := person(ctx, request, turn.GateDecision{})
+			answered, _ := person(ctx, request, loop.GateDecision{})
 			got <- answered
 		}()
 		select {
@@ -40,11 +40,11 @@ func TestAStandingAnswerNeverTrustsHooksThatChangedAfterIt(t *testing.T) {
 			return answered, false
 		}
 	}
-	if answered, wasAsked := ask(hooks("GateVerdict *: bash .tofu/hooks/gate.sh (project, .tofu/hooks.json)"), AlwaysHere); !wasAsked || answered != turn.PersonAlwaysHere {
+	if answered, wasAsked := ask(hooks("GateVerdict *: bash .tofu/hooks/gate.sh (project, .tofu/hooks.json)"), AlwaysHere); !wasAsked || answered != loop.PersonAlwaysHere {
 		t.Fatalf("the first trust ask was not put to the person, or not answered always: asked %v, %v", wasAsked, answered)
 	}
 	changed := hooks("GateVerdict *: bash .tofu/hooks/gate.sh (project, .tofu/hooks.json)")
-	if answered, wasAsked := ask(changed, Denied); !wasAsked || answered != turn.PersonDenied {
+	if answered, wasAsked := ask(changed, Denied); !wasAsked || answered != loop.PersonDenied {
 		t.Fatalf("hooks that changed after always here were trusted without asking: asked %v, answer %v", wasAsked, answered)
 	}
 }

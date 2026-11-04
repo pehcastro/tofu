@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -46,8 +46,8 @@ func (p *Plan) ForAnotherAgent() (contract.Tool, func() string) {
 
 func (p *Plan) Name() string { return PlanToolName }
 
-func (p *Plan) Definition() llm.Tool {
-	return llm.Tool{
+func (p *Plan) Definition() core.Tool {
+	return core.Tool{
 		Name: PlanToolName,
 		Description: "states what you intend to do, as an ordered list of short items the person watching can read. " +
 			"write one only when the task has several steps across more than one file; a task a few tool calls finish needs none. " +

@@ -9,11 +9,11 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/catalog"
 	shipped "tofu/library"
@@ -96,11 +96,11 @@ func resolve(o output.Verb, name, dir string) int {
 }
 
 func reportVerb(o output.Verb, dir string, verbs []string) int {
-	layers, err := models.Layers(shipped.Files(), dir)
+	layers, err := catalog.Layers(shipped.Files(), dir)
 	if err != nil {
 		return o.Fail(err)
 	}
-	library, _ := models.Load(layers)
+	library, _ := catalog.Load(layers)
 	sets, refused := question.LoadAll(questions.Files(), wiring.LibraryRoot+"/questions")
 	proxy := wiring.LoadProxySetting(dir)
 	corpus, missing := DocsCoverage(verbs)
@@ -113,7 +113,7 @@ func reportVerb(o output.Verb, dir string, verbs []string) int {
 		report.Layers = append(report.Layers, host.LibraryLayer{Name: layer.Name, Origin: layer.Origin})
 	}
 	files, domainsDir, origin := wiring.LibrarySource()
-	domains, err := rule.LoadDomains(files, wiring.LibraryRoot)
+	domains, err := rules.LoadDomains(files, wiring.LibraryRoot)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -188,7 +188,7 @@ func reportLines(page cli.Page, report Report, problems []cli.Problem) []string 
 	lines = append(lines, "", page.Section("refused", cli.Verdict{}))
 	for _, problem := range problems {
 		under := "    "
-		for i, wrapped := range widget.Wrap(problem.What, page.Width-len(under)) {
+		for i, wrapped := range render.Wrap(problem.What, page.Width-len(under)) {
 			lead := under
 			if i == 0 {
 				lead = "  " + page.Glyph(cli.Fail) + " "

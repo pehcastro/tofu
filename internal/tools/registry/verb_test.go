@@ -1,4 +1,4 @@
-package tools_test
+package registry_test
 
 import (
 	"context"
@@ -74,25 +74,25 @@ func standInForTofu(args []string) int {
 }
 
 type recordingModel struct {
-	calls []llm.ToolCall
+	calls []core.ToolCall
 	step  int
-	seen  []llm.Message
+	seen  []core.Message
 }
 
-func (m *recordingModel) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+func (m *recordingModel) Ask(_ context.Context, request core.Request) (core.Decision, error) {
 	m.seen = request.Messages
 	if m.step >= len(m.calls) {
-		return llm.Decision{Build: "recording", Outcome: llm.OutcomeMessage, Content: "done"}, nil
+		return core.Decision{Build: "recording", Outcome: core.OutcomeMessage, Content: "done"}, nil
 	}
 	call := m.calls[m.step]
 	m.step++
-	return llm.Decision{Build: "recording", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{call}}, nil
+	return core.Decision{Build: "recording", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{call}}, nil
 }
 
 func (m *recordingModel) toolResults() string {
 	var results []string
 	for _, message := range m.seen {
-		if message.Role == llm.RoleTool {
+		if message.Role == core.RoleTool {
 			results = append(results, message.Content)
 		}
 	}
@@ -101,7 +101,7 @@ func (m *recordingModel) toolResults() string {
 
 func verbTool(t *testing.T, root, name string) contract.Tool {
 	t.Helper()
-	verbs, err := tools.NewVerbs(root)
+	verbs, err := registry.NewVerbs(root)
 	if err != nil {
 		t.Fatalf("building the verb tools: %v", err)
 	}
@@ -114,22 +114,22 @@ func verbTool(t *testing.T, root, name string) contract.Tool {
 	return nil
 }
 
-func verbTurn(t *testing.T, root string, model *recordingModel) turn.Row {
+func verbTurn(t *testing.T, root string, model *recordingModel) loop.Row {
 	t.Helper()
-	verbs, err := tools.NewVerbs(root)
+	verbs, err := registry.NewVerbs(root)
 	if err != nil {
 		t.Fatalf("building the verb tools: %v", err)
 	}
-	row, err := turn.Run(context.Background(), turn.Config{
+	row, err := loop.Run(context.Background(), loop.Config{
 		Model:          model,
-		Spend:          turn.SpendSubscription,
-		Tools:          turn.NewRegistry(verbs...),
+		Spend:          loop.SpendSubscription,
+		Tools:          loop.NewRegistry(verbs...),
 		Task:           "check this tree with tofu's own verbs",
 		ResultBytesCap: konst.TurnResultBytesCap,
 		ArtifactDir:    t.TempDir(),
 	})
 	if err != nil {
-		t.Fatalf("turn.Run: %v", err)
+		t.Fatalf("loop.Run: %v", err)
 	}
 	return row
 }
@@ -181,7 +181,7 @@ func TestAVerbNonzeroExitReachesTheModelAsAFailedResultCarryingItsOwnMessage(t *
 	t.Setenv(standInExitEnvar, "1")
 	t.Setenv(standInMessageEnvar, message+"\n")
 
-	model := &recordingModel{calls: []llm.ToolCall{
+	model := &recordingModel{calls: []core.ToolCall{
 		{ID: "c1", Name: "tofu_lint_comments", Arguments: json.RawMessage(`{"path":"."}`)},
 	}}
 	row := verbTurn(t, t.TempDir(), model)
@@ -301,7 +301,7 @@ func TestATurnCallsRulesCheckThroughTheToolInATreeThatIsNotThisRepository(t *tes
 	root := t.TempDir()
 	seed(t, root, "scratch/notes.md", "the line that breaks the rule"+string(rune(0x2014))+"on purpose\n")
 
-	model := &recordingModel{calls: []llm.ToolCall{
+	model := &recordingModel{calls: []core.ToolCall{
 		{ID: "c1", Name: "tofu_rules_check", Arguments: json.RawMessage(`{"path":"scratch"}`)},
 	}}
 	called := loggedRows(t, verbTurn(t, root, model))
@@ -336,7 +336,7 @@ func TestATurnCallsJudgeThroughTheToolAndTheMissingKeyIsAStatedRequirement(t *te
 		t.Fatal(err)
 	}
 
-	model := &recordingModel{calls: []llm.ToolCall{
+	model := &recordingModel{calls: []core.ToolCall{
 		{ID: "c1", Name: "tofu_judge", Arguments: json.RawMessage(`{"state":"the tests pass and the task is done","battery":"stop_check@1"}`)},
 	}}
 	called := loggedRows(t, verbTurn(t, root, model))
@@ -383,7 +383,7 @@ func TestTheJudgeVerbRefusesTheCallTheModelActuallyMade(t *testing.T) {
 }
 
 func TestEveryVerbToolSaysWhatItNeedsToRun(t *testing.T) {
-	verbs, err := tools.NewVerbs(t.TempDir())
+	verbs, err := registry.NewVerbs(t.TempDir())
 	if err != nil {
 		t.Fatalf("building the verb tools: %v", err)
 	}
@@ -406,7 +406,7 @@ func TestATurnCallsLintCommentsThroughTheToolAndTheResultNamesARealComment(t *te
 	comment := slashSlash + " the comment tofu lint has to find"
 	seed(t, root, "scratch/add.go", "package scratch\n\n"+comment+"\nfunc Add(a, b int) int { return a + b }\n")
 
-	model := &recordingModel{calls: []llm.ToolCall{
+	model := &recordingModel{calls: []core.ToolCall{
 		{ID: "c1", Name: "tofu_lint_comments", Arguments: json.RawMessage(`{"path":"scratch"}`)},
 	}}
 	called := loggedRows(t, verbTurn(t, root, model))
@@ -424,7 +424,7 @@ func TestATurnCallsLintCommentsThroughTheToolAndTheResultNamesARealComment(t *te
 }
 
 func TestEveryVerbGivesTheModelATofuName(t *testing.T) {
-	verbs, err := tools.NewVerbs(t.TempDir())
+	verbs, err := registry.NewVerbs(t.TempDir())
 	if err != nil {
 		t.Fatalf("building the verb tools: %v", err)
 	}
@@ -434,7 +434,7 @@ func TestEveryVerbGivesTheModelATofuName(t *testing.T) {
 	}
 	t.Logf("the model is given: %v", given)
 
-	wanted := []string{"tofu_lint_comments", "tofu_rules_check", "tofu_judge", "tofu_why", "tofu_replay", tools.DocsToolName}
+	wanted := []string{"tofu_lint_comments", "tofu_rules_check", "tofu_judge", "tofu_why", "tofu_replay", registry.DocsToolName}
 	if len(given) != len(wanted) {
 		t.Fatalf("the model is given %d verb tools, want exactly %d: %v", len(given), len(wanted), given)
 	}
@@ -458,9 +458,9 @@ func seed(t *testing.T, root, rel, body string) {
 	}
 }
 
-func loggedRows(t *testing.T, row turn.Row) []turn.ToolCallRow {
+func loggedRows(t *testing.T, row loop.Row) []loop.ToolCallRow {
 	t.Helper()
-	var called []turn.ToolCallRow
+	var called []loop.ToolCallRow
 	for _, step := range row.Steps {
 		called = append(called, step.ToolCalls...)
 	}

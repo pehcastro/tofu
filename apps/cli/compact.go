@@ -19,7 +19,7 @@ func branchLine(live *host.Host, message string) (string, string) {
 	if err != nil {
 		return "/branch takes the number of one of your messages, not " + strconv.Quote(message), ""
 	}
-	forked, err := live.Fork(host.HandFork{Kind: turn.ForkBranch, Message: number, By: "the person, /branch in the terminal interface"})
+	forked, err := live.Fork(host.HandFork{Kind: loop.ForkBranch, Message: number, By: "the person, /branch in the terminal interface"})
 	if err != nil {
 		return err.Error(), ""
 	}
@@ -27,18 +27,18 @@ func branchLine(live *host.Host, message string) (string, string) {
 		number, forked.Into, forked.Kept, forked.TokensAfter, forked.TokensBefore, number), forked.Words
 }
 
-func forkNote(live *host.Host, kind turn.ForkKind, focus string) string {
+func forkNote(live *host.Host, kind loop.ForkKind, focus string) string {
 	forked, err := live.Fork(host.HandFork{Kind: kind, Focus: focus, By: "the person, /" + string(kind) + " in the terminal interface"})
 	focused := ""
 	if focus != "" {
 		focused = fmt.Sprintf(", and %d result(s) naming %s stay whole", forked.Focused, strconv.Quote(focus))
 	}
 	switch {
-	case err != nil && kind == turn.ForkCompact:
+	case err != nil && kind == loop.ForkCompact:
 		return "nothing was compacted, and the next turn carries the history as it was: " + err.Error()
 	case err != nil:
 		return noLineOpened + err.Error()
-	case kind == turn.ForkByHand:
+	case kind == loop.ForkByHand:
 		return fmt.Sprintf("forked into session %s, carrying what /compact carries: %d old tool result(s) shrunk after the first %d message(s), which stay as they were so the next request reads them from cache, about %d tokens to %d",
 			forked.Into, forked.Results, forked.Kept, forked.TokensBefore, forked.TokensAfter)
 	case forked.Into != "":

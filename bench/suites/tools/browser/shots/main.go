@@ -73,23 +73,23 @@ func record(pagesDir, fastbrowse, hotel, home string) (err error) {
 	defer func() { _ = server.Close() }()
 	origin := "http://" + listener.Addr().String()
 
-	if _, err := browser.NewProfile(home, profile); err != nil {
+	if _, err := driver.NewProfile(home, profile); err != nil {
 		return err
 	}
-	client, err := browser.Endpoint{Home: home, Profile: profile, Headless: true}.Dial()
+	client, err := driver.Endpoint{Home: home, Profile: profile, Headless: true}.Dial()
 	if err != nil {
 		return err
 	}
 	defer func() {
 		_ = client.Close()
-		_, stopped := browser.StopProfile(home, profile)
+		_, stopped := driver.StopProfile(home, profile)
 		err = errors.Join(err, stopped)
 	}()
 	tab, err := client.Open(origin + "/shop.html")
 	if err != nil {
 		return err
 	}
-	shared := browser.SharedTab{Client: client, ID: tab}
+	shared := driver.SharedTab{Client: client, ID: tab}
 	machine, _ := os.Hostname()
 	out := browserbench.Shots{
 		Date: time.Now().Format(time.DateOnly), Machine: machine,
@@ -120,7 +120,7 @@ func record(pagesDir, fastbrowse, hotel, home string) (err error) {
 			return err
 		}
 		for _, typed := range fills[c.ID] {
-			if _, err := shared.Drive(live, browser.Action{Op: browser.OpTypeText, Element: typed.element, Value: typed.value}); err != nil {
+			if _, err := shared.Drive(live, driver.Action{Op: driver.OpTypeText, Element: typed.element, Value: typed.value}); err != nil {
 				return fmt.Errorf("%s: %w", c.ID, err)
 			}
 		}
@@ -173,7 +173,7 @@ func record(pagesDir, fastbrowse, hotel, home string) (err error) {
 	return os.WriteFile(filepath.Join(pagesDir, "shots.json"), append(encoded, '\n'), 0o644)
 }
 
-func cdp(client *browser.Client, tab int, method string, params any) (json.RawMessage, error) {
+func cdp(client *driver.Client, tab int, method string, params any) (json.RawMessage, error) {
 	args, err := json.Marshal(map[string]any{"calls": []map[string]any{{"method": method, "params": params}}})
 	if err != nil {
 		return nil, err
@@ -195,7 +195,7 @@ func cdp(client *browser.Client, tab int, method string, params any) (json.RawMe
 	return answers[0].Result, nil
 }
 
-func screenshot(client *browser.Client, tab int) ([]byte, error) {
+func screenshot(client *driver.Client, tab int) ([]byte, error) {
 	if err := client.StartScreencast(tab); err != nil {
 		return nil, err
 	}
@@ -210,7 +210,7 @@ func screenshot(client *browser.Client, tab int) ([]byte, error) {
 	return frames[len(frames)-1].Data, nil
 }
 
-func differ(recorded, live browser.Page) []string {
+func differ(recorded, live driver.Page) []string {
 	var differences []string
 	if recorded.Title != live.Title {
 		differences = append(differences, fmt.Sprintf("title %q against %q", live.Title, recorded.Title))

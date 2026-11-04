@@ -133,11 +133,11 @@ func TestDeskAnEndedSubAgentSaysWhenItEndedTheSameLiveAndOnReplay(t *testing.T) 
 		append(spawnedBy("call-1", "research-1", "read the frame loop", spawned.Add(-time.Millisecond)),
 			reported("research-1", roster.Finished, report, ended.Add(time.Millisecond)))...)
 	args, _ := json.Marshal(map[string]string{"agent": "research", "task": "read the frame loop"})
-	carry := Carry{Session: id, Messages: []llm.Message{
-		{Role: llm.RoleUser, Content: "read it"},
-		{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{{ID: "call-1", Name: "spawn", Arguments: args}}},
-		{Role: llm.RoleTool, ToolCallID: "call-1", Content: "research-1 is running in the background"},
-		{Role: llm.RoleUser, Content: report},
+	carry := Carry{Session: id, Messages: []core.Message{
+		{Role: core.RoleUser, Content: "read it"},
+		{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{{ID: "call-1", Name: "spawn", Arguments: args}}},
+		{Role: core.RoleTool, ToolCallID: "call-1", Content: "research-1 is running in the background"},
+		{Role: core.RoleUser, Content: report},
 	}}
 	replay := newItems(id)
 	replayed := agentEnded(t, replay.all(resumedChat(carry, project).Chat))

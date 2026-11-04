@@ -22,8 +22,8 @@ import (
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/sys"
-	testkit "tofu/internal/testkit/cli"
-	"tofu/internal/ui/tui/app"
+	"tofu/internal/testkit/cli"
+	tui "tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/chat/session"
 )
 
@@ -45,7 +45,7 @@ func firstRunApp(t *testing.T, width, height int) *tui.App {
 func plainFrame(app *tui.App) string { return ansi.Strip(app.View().Content) }
 
 func TestAFirstRunWithNothingStoredDrawsTheSetupAndNotAnError(t *testing.T) {
-	testkit.ScratchProject(t)
+	cli.ScratchProject(t)
 	narrow, wide := plainFrame(firstRunApp(t, 80, 24)), plainFrame(firstRunApp(t, 120, 36))
 	for _, want := range []string{wiring.NoCredential, "1. " + wiring.ModelStep, "2. " + wiring.ClassifierStep, "tofu login llm <source>"} {
 		if !strings.Contains(narrow, want) {
@@ -70,8 +70,8 @@ func TestAFirstRunWithNothingStoredDrawsTheSetupAndNotAnError(t *testing.T) {
 }
 
 func TestACredentialWithoutAKeyLeavesOnlyTheKeyStep(t *testing.T) {
-	testkit.ScratchProject(t)
-	storeCredential(t, cred.ClaudeSub)
+	cli.ScratchProject(t)
+	storeCredential(t, accounts.ClaudeSub)
 	bindOrchestrator(t, "claude-sub/claude-opus-5")
 	frame := plainFrame(firstRunApp(t, 80, 24))
 	if !strings.Contains(frame, "no classifier is bound") || !strings.Contains(frame, "bind typesafe/jev-latest") {
@@ -84,8 +84,8 @@ func TestACredentialWithoutAKeyLeavesOnlyTheKeyStep(t *testing.T) {
 }
 
 func TestWithBothStoredNoSetupIsDrawnAndTheComposerHasFocus(t *testing.T) {
-	testkit.ScratchProject(t)
-	storeCredential(t, cred.ClaudeSub)
+	cli.ScratchProject(t)
+	storeCredential(t, accounts.ClaudeSub)
 	bindOrchestrator(t, "claude-sub/claude-opus-5")
 	storeGateKey(t, gateKeyForTests)
 	app := firstRunApp(t, 80, 24)
@@ -122,7 +122,7 @@ func drive(t *testing.T, app *tui.App, cmd tea.Cmd) {
 }
 
 func TestALoginRunInAnotherTerminalMovesTheAppOnWithoutARestart(t *testing.T) {
-	testkit.ScratchProject(t)
+	cli.ScratchProject(t)
 	held := heldForTest(t)
 	app := tui.New(tui.Options{Repo: "scratch", Requirements: held.Requirements(), Recheck: held.Requirements})
 	start := app.Init()
@@ -131,7 +131,7 @@ func TestALoginRunInAnotherTerminalMovesTheAppOnWithoutARestart(t *testing.T) {
 		t.Fatalf("the app did not start on the setup screen\n%s", plainFrame(app))
 	}
 
-	storeCredential(t, cred.ClaudeSub)
+	storeCredential(t, accounts.ClaudeSub)
 	bindOrchestrator(t, "claude-sub/claude-opus-5")
 	storeGateKey(t, gateKeyForTests)
 	began := time.Now()
@@ -151,14 +151,14 @@ func TestALoginRunInAnotherTerminalMovesTheAppOnWithoutARestart(t *testing.T) {
 }
 
 func TestTheAppAndDoctorCallTheSameStateReady(t *testing.T) {
-	testkit.ScratchProject(t)
+	cli.ScratchProject(t)
 	for _, step := range []struct {
 		what  string
 		store func()
 	}{
 		{"nothing stored", func() {}},
 		{"the key alone", func() { storeGateKey(t, gateKeyForTests) }},
-		{"the credential too", func() { storeCredential(t, cred.ClaudeSub) }},
+		{"the credential too", func() { storeCredential(t, accounts.ClaudeSub) }},
 		{"the orchestrator bound", func() { bindOrchestrator(t, "claude-sub/claude-opus-5") }},
 	} {
 		step.store()
@@ -201,19 +201,19 @@ func filesUnder(t *testing.T, dir string) map[string]string {
 }
 
 func TestTheKeyIsNeverInAFrameALogOrARecordedSession(t *testing.T) {
-	dir := testkit.ScratchProject(t)
+	dir := cli.ScratchProject(t)
 	const key = "sk-or-v1-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd"
 	storeGateKey(t, key)
 	t.Setenv(sys.TypeSafeKeyName, key)
-	storeCredential(t, cred.ClaudeSub)
+	storeCredential(t, accounts.ClaudeSub)
 	var authorization string
 	jevStub(t, http.StatusOK, untrustedDenyReply, &authorization)
 
-	model := &queuedModel{decisions: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+	model := &queuedModel{decisions: []core.Decision{
+		{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
 			{ID: "call-1", Name: "write", Arguments: json.RawMessage(`{"path":"note.txt","content":"a note"}`)},
 		}},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "wrote the note"},
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "wrote the note"},
 	}}
 	app := firstRunApp(t, 100, 30)
 	var turned eventLog

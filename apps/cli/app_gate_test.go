@@ -9,13 +9,13 @@ import (
 	"tofu/internal/ui/tui/app"
 )
 
-func gateEvents(t *testing.T, events []tui.Event) (failure, gateOff string) {
+func gateEvents(t *testing.T, events []app.Event) (failure, gateOff string) {
 	t.Helper()
 	for _, event := range events {
 		switch event.Kind {
-		case tui.EventFailure:
+		case app.EventFailure:
 			failure = event.Text
-		case tui.EventGateOff:
+		case app.EventGateOff:
 			gateOff = event.Text
 		}
 	}
@@ -23,11 +23,11 @@ func gateEvents(t *testing.T, events []tui.Event) (failure, gateOff string) {
 }
 
 func TestARuleWithAThresholdOutOfRangeRefusesToStartTheTurn(t *testing.T) {
-	dir := testkit.ScratchProject(t)
+	dir := cli.ScratchProject(t)
 	t.Setenv(envVarName(), fakeSecret("gate"))
 	path := writeGateRuleWithThresholds(t, strings.Replace(gateFixtureThresholds, "relax_at: 0.85", "relax_at: 1.85", 1))
 
-	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the turn should never reach a model"}}}
+	model := &sendModel{queued: []core.Decision{{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "the turn should never reach a model"}}}
 	var events eventLog
 	liveAppSession(dir, model).run(t.Context(), onTheSubscription, "write a note", events.add)
 
@@ -51,8 +51,8 @@ func TestARuleWithAThresholdOutOfRangeRefusesToStartTheTurn(t *testing.T) {
 }
 
 func TestAMissingKeyStartsTheTurnWithTheGateOff(t *testing.T) {
-	dir := testkit.ScratchProject(t)
-	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "wrote it"}}}
+	dir := cli.ScratchProject(t)
+	model := &sendModel{queued: []core.Decision{{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "wrote it"}}}
 	var events eventLog
 	liveAppSession(dir, model).run(t.Context(), onTheSubscription, "write a note", events.add)
 

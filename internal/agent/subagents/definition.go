@@ -1,4 +1,4 @@
-package subagent
+package subagents
 
 import (
 	"cmp"
@@ -45,7 +45,7 @@ type Definition struct {
 	Model        string       `json:"model,omitempty"`
 	Written      string       `json:"written_model,omitempty"`
 	AssignedIn   string       `json:"assigned_in,omitempty"`
-	Effort       llm.Effort   `json:"effort,omitempty"`
+	Effort       core.Effort  `json:"effort,omitempty"`
 	Language     string       `json:"language,omitempty"`
 	Domain       string       `json:"domain,omitempty"`
 	Tools        []string     `json:"tools,omitempty"`
@@ -88,7 +88,7 @@ type Scan struct {
 	Library    fs.FS
 	Tools      []string
 	KnownTools []string
-	Catalog    models.Library
+	Catalog    catalog.Library
 	Tiers      map[Tier]string
 }
 
@@ -116,7 +116,7 @@ func Definitions(scan Scan) Found {
 	report := sys.Crashes(scan.Project)
 	for i := range files {
 		reading.Go(func() {
-			files[i].err = safe.Call(report, "sub-agent discovery", func() (err error) {
+			files[i].err = recover.Call(report, "sub-agent discovery", func() (err error) {
 				files[i].definition, err = read(files[i].layer.FS, files[i].match)
 				return err
 			})
@@ -195,7 +195,7 @@ func (s Scan) assignments() (map[string]assignment, []Broken) {
 }
 
 func frontMatter(data []byte) (header, body string, err error) {
-	header, body, found := skill.SplitFrontMatter(string(data))
+	header, body, found := skills.SplitFrontMatter(string(data))
 	if !found {
 		return "", "", errors.New("the file opens with no front matter, or never closes it")
 	}
@@ -223,7 +223,7 @@ func read(fsys fs.FS, name string) (Definition, error) {
 		Name:         strings.Join(fields["name"], " "),
 		Description:  strings.Join(fields["description"], " "),
 		Written:      strings.Join(fields["model"], " "),
-		Effort:       llm.Effort(strings.Join(effort, " ")),
+		Effort:       core.Effort(strings.Join(effort, " ")),
 		Language:     strings.Join(fields["language"], " "),
 		Domain:       strings.Join(fields["domain"], " "),
 		Tools:        commaList(fields["tools"]),
@@ -340,7 +340,7 @@ func (s Scan) resolve(definition *Definition, assigned assignment) {
 	}
 	definition.Tools = tools
 	if definition.Effort != "" {
-		if _, err := llm.ParseEffort(string(definition.Effort)); err != nil {
+		if _, err := core.ParseEffort(string(definition.Effort)); err != nil {
 			definition.Refused = append(definition.Refused, err.Error())
 		}
 	}
@@ -424,7 +424,7 @@ func (s Scan) place(definition *Definition, tofuWrote bool) {
 	}
 	var read []Reference
 	for _, reference := range named {
-		found := skill.LibraryFiles(s.Library, "references", reference.Name)
+		found := skills.LibraryFiles(s.Library, "references", reference.Name)
 		if len(found) == 0 {
 			definition.Refused = append(definition.Refused, fmt.Sprintf("names the reference %q, which the library does not ship", reference.Name))
 			continue
@@ -495,7 +495,7 @@ func (s Scan) runsOn(definition *Definition, written string, tofuFile bool) erro
 	}
 	if isTier && slug == "" {
 		runs := "the orchestrator's model"
-		if bound, ok := s.Catalog.Bound(models.RoleSubAgent); ok {
+		if bound, ok := s.Catalog.Bound(catalog.RoleSubAgent); ok {
 			runs = "the sub-agent binding " + bound.Slug()
 		}
 		definition.Runs = RunsInherit

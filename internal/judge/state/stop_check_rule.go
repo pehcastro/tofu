@@ -22,7 +22,7 @@ const (
 )
 
 func StopCheckRule() (gate.Rule, gate.Origin, error) {
-	r, origin, err := gate.LoadPoint(shipped.Files(), StopCheckRuleRef, question.Set{}, "")
+	r, origin, err := gate.LoadPoint(shipped.Files(), StopCheckRuleRef, questions.Set{}, "")
 	if err != nil {
 		return gate.Rule{}, "", err
 	}

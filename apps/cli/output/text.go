@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 )
 
 const (

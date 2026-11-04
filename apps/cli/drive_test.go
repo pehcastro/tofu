@@ -21,7 +21,7 @@ import (
 	"tofu/internal/models/llm/core"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
-	testkit "tofu/internal/testkit/cli"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/chat/session"
 	"tofu/internal/ui/tui/panels/progress"
 )
@@ -34,7 +34,7 @@ func TestADrivenStepSettlesInsideOneProgressTick(t *testing.T) {
 
 func drivenProject(t *testing.T) string {
 	t.Helper()
-	dir := testkit.ScratchProject(t)
+	dir := cli.ScratchProject(t)
 	t.Setenv(cassetteVariable, "")
 	if err := os.WriteFile(filepath.Join(dir, "note.txt"), []byte("the note says a note"), 0o600); err != nil {
 		t.Fatal(err)
@@ -315,7 +315,7 @@ func TestACassetteGivesACancelledTurnNoDeltaAndNoReply(t *testing.T) {
 	}
 	var drawn []string
 	stopped := &cancelledWhenAwaited{Context: context.Background(), awaited: make(chan struct{})}
-	decision, err := deck.Ask(stopped, llm.Request{OnDelta: func(text string) { drawn = append(drawn, text) }})
+	decision, err := deck.Ask(stopped, core.Request{OnDelta: func(text string) { drawn = append(drawn, text) }})
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("a turn stopped while its request was in flight was answered %q with error %v", decision.Content, err)
 	}
@@ -335,9 +335,9 @@ const addressedCassette = `{"text":"handing it to a sub-agent","tools":[{"name":
 
 func asked(t *testing.T, deck *cassette, task string) string {
 	t.Helper()
-	decision, err := deck.Ask(context.Background(), llm.Request{Messages: []llm.Message{
-		{Role: llm.RoleSystem, Content: "the system prompt both conversations share"},
-		{Role: llm.RoleUser, Content: task},
+	decision, err := deck.Ask(context.Background(), core.Request{Messages: []core.Message{
+		{Role: core.RoleSystem, Content: "the system prompt both conversations share"},
+		{Role: core.RoleUser, Content: task},
 	}})
 	if err != nil {
 		t.Fatalf("%q was answered %v", task, err)
@@ -369,7 +369,7 @@ func TestACassetteWithNoReplyForASubAgentSaysSoNamingTheSubAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 	asked(t, deck, "the orchestrator task")
-	_, err = deck.Ask(context.Background(), llm.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "the sub-agent brief"}}})
+	_, err = deck.Ask(context.Background(), core.Request{Messages: []core.Message{{Role: core.RoleUser, Content: "the sub-agent brief"}}})
 	if err == nil {
 		t.Fatal("a sub-agent was handed a reply from a cassette that addresses none to it")
 	}

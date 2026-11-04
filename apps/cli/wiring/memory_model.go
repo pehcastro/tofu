@@ -48,10 +48,10 @@ type MemoryModel struct {
 	err  error
 }
 
-func chooseMemoryModel(dir string, session models.Model) (MemoryModel, models.Model) {
+func chooseMemoryModel(dir string, session catalog.Model) (MemoryModel, catalog.Model) {
 	set := settingspkg.TextSaying(dir, settingspkg.MemoryModel, nil)
 	library, err := ModelLibrary(dir)
-	var model models.Model
+	var model catalog.Model
 	switch {
 	case err != nil:
 	case set != "":
@@ -66,12 +66,12 @@ func chooseMemoryModel(dir string, session models.Model) (MemoryModel, models.Mo
 	return chosen, model
 }
 
-func OpenMemoryModel(dir string, session models.Model, open Opener) MemoryModel {
+func OpenMemoryModel(dir string, session catalog.Model, open Opener) MemoryModel {
 	chosen, model := chooseMemoryModel(dir, session)
 	return chosen.open(dir, model, open)
 }
 
-func (m MemoryModel) open(dir string, model models.Model, open Opener) MemoryModel {
+func (m MemoryModel) open(dir string, model catalog.Model, open Opener) MemoryModel {
 	if m.err != nil {
 		return m
 	}
@@ -84,12 +84,12 @@ func (m MemoryModel) open(dir string, model models.Model, open Opener) MemoryMod
 	return m
 }
 
-func sessionMemoryWriter(library models.Library, session models.Model) (models.Model, error) {
+func sessionMemoryWriter(library catalog.Library, session catalog.Model) (catalog.Model, error) {
 	if model, marked := library.MemoryWriter(session.Source()); marked {
 		return model, nil
 	}
-	return models.Model{}, fmt.Errorf("no model of %s is marked memory: %s, so the session writes no memory summaries: set %s to the model that writes them",
-		session.Source(), models.MemoryWrites, settingspkg.MemoryModel)
+	return catalog.Model{}, fmt.Errorf("no model of %s is marked memory: %s, so the session writes no memory summaries: set %s to the model that writes them",
+		session.Source(), catalog.MemoryWrites, settingspkg.MemoryModel)
 }
 
 func (m MemoryModel) Release() {
@@ -107,7 +107,7 @@ type SessionMemoryModel struct {
 
 var errMemoryModelClosed = errors.New("the session that held the memory model has ended")
 
-func (s *SessionMemoryModel) Model(dir string, session models.Model, open Opener) MemoryModel {
+func (s *SessionMemoryModel) Model(dir string, session catalog.Model, open Opener) MemoryModel {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
@@ -143,10 +143,10 @@ func (s *SessionMemoryModel) Close() {
 	}
 }
 
-func (m MemoryModel) Compactors(ask turn.RecordedAsk) (memtree.Compact, memtree.CompactAll) {
+func (m MemoryModel) Compactors(ask loop.RecordedAsk) (tree.Compact, tree.CompactAll) {
 	if m.err != nil {
 		return func(context.Context, string, string, string) (string, error) { return "", m.err },
-			func(context.Context, string, []memtree.Step) ([]string, error) { return nil, m.err }
+			func(context.Context, string, []tree.Step) ([]string, error) { return nil, m.err }
 	}
 	var mu sync.Mutex
 	chatsBeingWritten := map[string]chan struct{}{}
@@ -154,11 +154,11 @@ func (m MemoryModel) Compactors(ask turn.RecordedAsk) (memtree.Compact, memtree.
 		compactionSystem, len(compactionExample), konst.MemtreeLineBytes, strings.Repeat("-", len(compactionExample)), compactionExample, len(strings.Fields(compactionExample)))
 	chatStep := konst.MemtreeCompactionsAtOnce * konst.MemtreeLineBytes
 	written := func(ctx context.Context, before, why, task string) (string, error) {
-		messages := []llm.Message{{Role: llm.RoleSystem, Content: system}, {Role: llm.RoleUser, Content: "<chat>\n"}}
+		messages := []core.Message{{Role: core.RoleSystem, Content: system}, {Role: core.RoleUser, Content: "<chat>\n"}}
 		cachedChat, offset, sharedEnd := 0, 0, len(before)/chatStep*chatStep
 		for line := range strings.Lines(before) {
 			offset += len(line)
-			message := llm.Message{Role: llm.RoleUser, Content: line}
+			message := core.Message{Role: core.RoleUser, Content: line}
 			if offset <= sharedEnd {
 				cachedChat = offset
 			} else {
@@ -184,8 +184,8 @@ func (m MemoryModel) Compactors(ask turn.RecordedAsk) (memtree.Compact, memtree.
 				return "", ctx.Err()
 			}
 		}
-		messages = append(messages, llm.Message{Role: llm.RoleUser, Origin: llm.Origin{Source: anthropic.SourceAfterTheCachedPrefix}, Content: "\n</chat>\n\n" + task})
-		decision, err := ask(anthropic.WithCacheTTL(ctx, anthropic.CacheTTLFiveMinutes), why, m.wire, account.Model, llm.Request{Messages: messages})
+		messages = append(messages, core.Message{Role: core.RoleUser, Origin: core.Origin{Source: anthropic.SourceAfterTheCachedPrefix}, Content: "\n</chat>\n\n" + task})
+		decision, err := ask(anthropic.WithCacheTTL(ctx, anthropic.CacheTTLFiveMinutes), why, m.wire, account.Model, core.Request{Messages: messages})
 		if !anotherCallWritesThisChat {
 			mu.Lock()
 			delete(chatsBeingWritten, before[:cachedChat])
@@ -195,7 +195,7 @@ func (m MemoryModel) Compactors(ask turn.RecordedAsk) (memtree.Compact, memtree.
 		if err != nil {
 			return "", err
 		}
-		if decision.Outcome != llm.OutcomeMessage || strings.TrimSpace(decision.Content) == "" {
+		if decision.Outcome != core.OutcomeMessage || strings.TrimSpace(decision.Content) == "" {
 			return "", fmt.Errorf("the memory model wrote no line: outcome %s, refusal %q", decision.Outcome, decision.Refusal)
 		}
 		return decision.Content, nil
@@ -208,7 +208,7 @@ func (m MemoryModel) Compactors(ask turn.RecordedAsk) (memtree.Compact, memtree.
 		line, err := written(ctx, before, "memory model: "+task, fmt.Sprintf("Compaction: %s into one line.\n<input>\n%s\n</input>\n<input> is %d words.", task, input, len(strings.Fields(input))))
 		return cutAtAWord(line), err
 	}
-	all := func(ctx context.Context, before string, steps []memtree.Step) ([]string, error) {
+	all := func(ctx context.Context, before string, steps []tree.Step) ([]string, error) {
 		var tasks strings.Builder
 		fmt.Fprintf(&tasks, "Compaction: %d tasks, one line each, all in this one reply. Write each line as its task number, a bar and the line, as in 1|user: ..., one per row and nothing else. Each line keeps the rules above on its own: the ruler, the word limit, the order of value, and every name it is asked to keep.\n", len(steps))
 		for number, step := range steps {
@@ -226,7 +226,7 @@ func (m MemoryModel) Compactors(ask turn.RecordedAsk) (memtree.Compact, memtree.
 			if step.From == [2]int{} {
 				fmt.Fprintf(&tasks, "\n<input> is %d words.", len(strings.Fields(input)))
 			}
-			if names := memtree.Names(input); len(names) > 0 {
+			if names := tree.Names(input); len(names) > 0 {
 				fmt.Fprintf(&tasks, " Keep these names as written: %s.", strings.Join(names, ", "))
 			}
 		}

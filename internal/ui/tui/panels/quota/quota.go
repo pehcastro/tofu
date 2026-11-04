@@ -76,16 +76,16 @@ func meter(width int, q frame.Quota) string {
 
 func window(q frame.Quota) string {
 	_, name, _ := strings.Cut(q.Label, " ")
-	return look.Muted(widget.Pad(name, windowColumn))
+	return look.Muted(render.Pad(name, windowColumn))
 }
 
 func reading(q frame.Quota, now time.Time, resets string) string {
 	if !q.Reported {
 		return look.Faint(notReported)
 	}
-	said := widget.Lead(widget.Percent(q.Fraction), percentCells)
+	said := render.Lead(render.Percent(q.Fraction), percentCells)
 	if !q.ResetsAt.IsZero() {
-		said += resets + widget.Until(q.ResetsAt.Sub(now))
+		said += resets + render.Until(q.ResetsAt.Sub(now))
 	}
 	return look.Title(said)
 }

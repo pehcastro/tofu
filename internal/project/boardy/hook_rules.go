@@ -35,26 +35,26 @@ func listedScopes() []HookScope { return append(hookScopes(), ScopeLibrary) }
 func (HookScope) Enum() []string { return enum(hookScopes()...) }
 
 type HookRow struct {
-	ID          string         `json:"id"`
-	Scope       HookScope      `json:"scope"`
-	File        string         `json:"file"`
-	When        rule.When      `json:"when"`
-	On          rule.HookEvent `json:"on"`
-	Trigger     string         `json:"trigger"`
-	Do          rule.Do        `json:"do"`
-	Arg         string         `json:"arg,omitempty"`
-	Then        rule.Then      `json:"then,omitempty"`
-	Text        string         `json:"text,omitempty"`
-	Name        string         `json:"name,omitempty"`
-	Description string         `json:"description,omitempty"`
-	Bypass      string         `json:"bypass,omitempty"`
-	ShadowedBy  HookScope      `json:"shadowed_by,omitempty"`
-	Bypassed    int            `json:"bypassed,omitempty"`
-	LastFired   time.Time      `json:"last_fired,omitzero"`
-	hook        rule.Hook
+	ID          string          `json:"id"`
+	Scope       HookScope       `json:"scope"`
+	File        string          `json:"file"`
+	When        rules.When      `json:"when"`
+	On          rules.HookEvent `json:"on"`
+	Trigger     string          `json:"trigger"`
+	Do          rules.Do        `json:"do"`
+	Arg         string          `json:"arg,omitempty"`
+	Then        rules.Then      `json:"then,omitempty"`
+	Text        string          `json:"text,omitempty"`
+	Name        string          `json:"name,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Bypass      string          `json:"bypass,omitempty"`
+	ShadowedBy  HookScope       `json:"shadowed_by,omitempty"`
+	Bypassed    int             `json:"bypassed,omitempty"`
+	LastFired   time.Time       `json:"last_fired,omitzero"`
+	hook        rules.Hook
 }
 
-func actorNames(actors []rule.HookActor) []string {
+func actorNames(actors []rules.HookActor) []string {
 	names := make([]string, len(actors))
 	for i, actor := range actors {
 		names[i] = string(actor)
@@ -62,7 +62,7 @@ func actorNames(actors []rule.HookActor) []string {
 	return names
 }
 
-func hookRow(h rule.Hook, scope HookScope) HookRow {
+func hookRow(h rules.Hook, scope HookScope) HookRow {
 	on := make([]string, len(h.Events()))
 	for i, event := range h.Events() {
 		on[i] = string(event)
@@ -178,7 +178,7 @@ func (a API) Rules(request RulesRequest) (RulesAnswer, error) {
 			if i+1 < len(broken) && broken[i+1].File == h.File {
 				continue
 			}
-			if len(on) == len(rule.HookEvents()) {
+			if len(on) == len(rules.HookEvents()) {
 				on = []string{"every event"}
 			}
 			answer.Invalid = append(answer.Invalid, strings.ReplaceAll(h.Text, "\n", "; ")+" (refuses "+strings.Join(on, ", ")+" until it is fixed)")
@@ -238,14 +238,14 @@ type RulePutRequest struct {
 	Source string    `json:"source"`
 }
 
-func (a API) parseHook(board string, scope HookScope, source string) (string, rule.Hook, error) {
+func (a API) parseHook(board string, scope HookScope, source string) (string, rules.Hook, error) {
 	key, err := a.boardKey(board)
 	if err != nil {
-		return "", rule.Hook{}, err
+		return "", rules.Hook{}, err
 	}
 	dir, err := a.Board.Store.hookDir(key, scope)
 	if err != nil {
-		return "", rule.Hook{}, err
+		return "", rules.Hook{}, err
 	}
 	file := dir
 	for line := range strings.Lines(source) {
@@ -254,12 +254,12 @@ func (a API) parseHook(board string, scope HookScope, source string) (string, ru
 			file = filepath.Join(dir, id+".yaml")
 		}
 	}
-	h, err := rule.ParseHook([]byte(source), file)
+	h, err := rules.ParseHook([]byte(source), file)
 	if err == nil && file == dir {
 		err = fmt.Errorf("%s: hook id %q names its file, so it is one plain name", dir, h.ID)
 	}
 	if err != nil {
-		return "", rule.Hook{}, err
+		return "", rules.Hook{}, err
 	}
 	return key, h, validHook(h)
 }
@@ -290,16 +290,16 @@ func (a API) RulePut(request RulePutRequest) (RuleAnswer, error) {
 	return answer, errors.Join(err, a.hookChanged(key, verb, answer.Hook))
 }
 
-func (a API) weakens(key string, scope HookScope, h rule.Hook) error {
+func (a API) weakens(key string, scope HookScope, h rules.Hook) error {
 	kind := a.Board.actorKind(a.Actor)
-	if kind == rule.ActorPerson {
+	if kind == rules.ActorPerson {
 		return nil
 	}
 	listed, err := a.Rules(RulesRequest{Board: key})
 	if err != nil {
 		return err
 	}
-	strictness := func(then rule.Then) int { return slices.Index([]rule.Then{rule.ThenAsk, rule.ThenRefuse}, then) }
+	strictness := func(then rules.Then) int { return slices.Index([]rules.Then{rules.ThenAsk, rules.ThenRefuse}, then) }
 	for _, row := range listed.Hooks {
 		was := row.hook
 		if row.ID != h.ID || strictness(was.Then) < 0 {
@@ -346,16 +346,16 @@ type RuleTestRequest struct {
 }
 
 type RuleTestAnswer struct {
-	Hook    HookRow   `json:"hook"`
-	Ticket  string    `json:"ticket,omitempty"`
-	To      Status    `json:"to,omitempty"`
-	Holds   bool      `json:"holds"`
-	Fails   bool      `json:"fails"`
-	Blocks  bool      `json:"blocks"`
-	Then    rule.Then `json:"then,omitempty"`
-	Verdict string    `json:"verdict"`
-	Detail  string    `json:"detail,omitempty"`
-	Words   Words     `json:"words"`
+	Hook    HookRow    `json:"hook"`
+	Ticket  string     `json:"ticket,omitempty"`
+	To      Status     `json:"to,omitempty"`
+	Holds   bool       `json:"holds"`
+	Fails   bool       `json:"fails"`
+	Blocks  bool       `json:"blocks"`
+	Then    rules.Then `json:"then,omitempty"`
+	Verdict string     `json:"verdict"`
+	Detail  string     `json:"detail,omitempty"`
+	Words   Words      `json:"words"`
 }
 
 func (a API) RuleTest(request RuleTestRequest) (RuleTestAnswer, error) {
@@ -383,7 +383,7 @@ func (a API) RuleTest(request RuleTestRequest) (RuleTestAnswer, error) {
 			return RuleTestAnswer{}, err
 		}
 		to := ticket.Status
-		if (h.On == rule.HookTicketMove || h.On == rule.HookTicketClose) && len(h.If.To) > 0 {
+		if (h.On == rules.HookTicketMove || h.On == rules.HookTicketClose) && len(h.If.To) > 0 {
 			to = Status(h.If.To[0])
 		}
 		if request.To != "" {
@@ -393,7 +393,7 @@ func (a API) RuleTest(request RuleTestRequest) (RuleTestAnswer, error) {
 		}
 		s = m.subjectOf(h.On, board.Key, ticket, to, a.Actor, 0)
 		s.entered = m.entered(board.Key, ticket)
-		if h.On == rule.HookSchedule {
+		if h.On == rules.HookSchedule {
 			s.from = ""
 		}
 	}

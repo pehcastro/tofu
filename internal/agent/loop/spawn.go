@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -24,7 +24,7 @@ import (
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
-	"tofu/internal/platform/recover"
+	safe "tofu/internal/platform/recover"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
@@ -79,8 +79,8 @@ type SubAgentModel struct {
 	Slug     string
 	Windows  string
 	Wire     string
-	Cache    models.PromptCache
-	Effort   llm.Effort
+	Cache    catalog.PromptCache
+	Effort   core.Effort
 	Spend    Spend
 	Accounts Accounts
 	Close    func()
@@ -92,17 +92,17 @@ type Spawned struct {
 	Agent   string
 	Slug    string
 	Windows string
-	Effort  llm.Effort
+	Effort  core.Effort
 }
 
 type SubAgents struct {
-	Defined []subagent.Definition
-	Open    func(subagent.Definition, llm.Effort) (SubAgentModel, error)
-	Takes   func(subagent.Definition) ([]llm.Effort, error)
+	Defined []subagents.Definition
+	Open    func(subagents.Definition, core.Effort) (SubAgentModel, error)
+	Takes   func(subagents.Definition) ([]core.Effort, error)
 	Prompt  ComposeSpec
 	Root    string
-	Brief   func(definition subagent.Definition, task string) string
-	Ended   func(definition subagent.Definition, task string, rounds []Row, report SubAgentReport, finished bool)
+	Brief   func(definition subagents.Definition, task string) string
+	Ended   func(definition subagents.Definition, task string, rounds []Row, report SubAgentReport, finished bool)
 }
 
 type AgentRefusedError struct {
@@ -119,10 +119,10 @@ func (e AgentRefusedError) Error() string {
 	return "spawn refused: " + e.Name + " " + e.Why + "; " + enabled
 }
 
-func enabledSubAgents(defined []subagent.Definition) []subagent.Definition {
-	var enabled []subagent.Definition
+func enabledSubAgents(defined []subagents.Definition) []subagents.Definition {
+	var enabled []subagents.Definition
 	for _, definition := range defined {
-		if definition.Runs == subagent.RunsModel || definition.Runs == subagent.RunsInherit {
+		if definition.Runs == subagents.RunsModel || definition.Runs == subagents.RunsInherit {
 			enabled = append(enabled, definition)
 		}
 	}
@@ -137,9 +137,9 @@ func (s SubAgents) enabledNames() []string {
 	return names
 }
 
-func (s SubAgents) Named(name string) (subagent.Definition, error) {
+func (s SubAgents) Named(name string) (subagents.Definition, error) {
 	if name == "" {
-		return subagent.Definition{}, nil
+		return subagents.Definition{}, nil
 	}
 	why := "is no sub-agent tofu found"
 	for _, definition := range s.Defined {
@@ -147,17 +147,17 @@ func (s SubAgents) Named(name string) (subagent.Definition, error) {
 			continue
 		}
 		switch definition.Runs {
-		case subagent.RunsModel, subagent.RunsInherit:
+		case subagents.RunsModel, subagents.RunsInherit:
 			return definition, nil
-		case subagent.RunsDisabled:
+		case subagents.RunsDisabled:
 			why = "is disabled by " + cmp.Or(definition.AssignedIn, definition.Path)
-		case subagent.RunsRefused:
+		case subagents.RunsRefused:
 			why = "cannot run: " + strings.Join(definition.Refused, "; ")
 		default:
 			panic("turn: unknown sub-agent state " + string(definition.Runs))
 		}
 	}
-	return subagent.Definition{}, AgentRefusedError{Name: name, Why: why, Enabled: s.enabledNames()}
+	return subagents.Definition{}, AgentRefusedError{Name: name, Why: why, Enabled: s.enabledNames()}
 }
 
 type SubAgentLimits struct {
@@ -184,12 +184,12 @@ type SpawnTool struct {
 	mu             sync.Mutex
 	tree           *spawnTree
 	base           Config
-	roster         *subagent.Roster
+	roster         *subagents.Roster
 	warmups        map[string]*warmup
 	naming         *namingOrder
 	plans          map[string]agentPlan
 	built          *builtOncePerTurn
-	writes         *subagent.Writes
+	writes         *subagents.Writes
 	stepped        CalledAsASubAgentStepIsRecorded
 }
 
@@ -198,7 +198,7 @@ type builtOncePerTurn struct {
 	effort      map[string]any
 	agent       map[string]any
 	tools       sync.Once
-	definitions []llm.Tool
+	definitions []core.Tool
 }
 
 func (b *builtOncePerTurn) offered(s SubAgents) (effort, agent map[string]any) {
@@ -212,7 +212,7 @@ func (b *builtOncePerTurn) offered(s SubAgents) (effort, agent map[string]any) {
 	return b.effort, b.agent
 }
 
-func (b *builtOncePerTurn) defined(tools Registry) []llm.Tool {
+func (b *builtOncePerTurn) defined(tools Registry) []core.Tool {
 	b.tools.Do(func() { b.definitions = tools.Definitions() })
 	return b.definitions
 }
@@ -277,8 +277,8 @@ func (t *spawnTree) retain(rows []Row) {
 	}
 }
 
-func NewSpawnTool(orchestratorID string, base Config, roster *subagent.Roster) *SpawnTool {
-	return &SpawnTool{Inbox: NewInbox(), orchestratorID: orchestratorID, base: base, roster: roster, tree: &spawnTree{}, built: &builtOncePerTurn{}, writes: &subagent.Writes{}}
+func NewSpawnTool(orchestratorID string, base Config, roster *subagents.Roster) *SpawnTool {
+	return &SpawnTool{Inbox: NewInbox(), orchestratorID: orchestratorID, base: base, roster: roster, tree: &spawnTree{}, built: &builtOncePerTurn{}, writes: &subagents.Writes{}}
 }
 
 type CalledAsASubAgentStepIsRecorded func(agent string, step StepRow)
@@ -320,7 +320,7 @@ func (t *SpawnTool) limits() SubAgentLimits {
 	return t.Limits()
 }
 
-func (t *SpawnTool) Definition() llm.Tool {
+func (t *SpawnTool) Definition() core.Tool {
 	limits := t.limits()
 	raise := "the person can raise either in the settings menu."
 	cite := ""
@@ -345,7 +345,7 @@ func (t *SpawnTool) Definition() llm.Tool {
 	if agent != nil {
 		properties["agent"] = agent
 	}
-	return llm.Tool{
+	return core.Tool{
 		Name: SpawnToolName,
 		Description: "hands one piece of work to a sub-agent with its own context and its own conversation, and returns at once with its name while it works in the background. task is the whole brief the sub-agent starts from. " +
 			"its report, rather than its transcript, comes to you later as a message naming it. a reply whose calls are all spawns ends your turn once they start. " +
@@ -433,9 +433,9 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	if t.writesNothing && (len(args.Owns) > 0 || args.Ticket != "") {
 		return contract.Result{}, ReadOnlyError{Tool: t.Name()}
 	}
-	var effort llm.Effort
+	var effort core.Effort
 	if args.Effort != "" {
-		if effort, err = llm.ParseEffort(args.Effort); err != nil {
+		if effort, err = core.ParseEffort(args.Effort); err != nil {
 			return contract.Result{}, fmt.Errorf("spawn: %w", err)
 		}
 	}
@@ -443,7 +443,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	revision := 0
 	if args.Ticket != "" && t.base.Board != nil {
 		boardSizes = t.base.Board.Store.EventSizes()
-		if err := t.base.Board.Fire(rule.WhenBefore, rule.HookAgentSpawn, "", args.Ticket, t.base.Session); err != nil {
+		if err := t.base.Board.Fire(rules.WhenBefore, rules.HookAgentSpawn, "", args.Ticket, t.base.Session); err != nil {
 			return contract.Result{}, fmt.Errorf("spawn: %w%s", err, BoardNudges(t.base.Board.Store, boardSizes))
 		}
 		ticket, err := t.base.Board.Get(args.Ticket)
@@ -484,8 +484,8 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 		return contract.Result{}, err
 	}
 	narrowed := ""
-	if fire, firing := ctx.Value(hookFireKey{}).(func(context.Context, hook.Input) hook.Verdict); firing {
-		spawning := fire(ctx, hook.Input{Event: hook.SubagentSpawn, CallID: site.call, Spawn: &hook.SpawnFacts{Definition: definition.Name, Mission: args.mission(), Task: args.Task, Owns: append([]string{}, args.Owns...), Ticket: args.Ticket}})
+	if fire, firing := ctx.Value(hookFireKey{}).(func(context.Context, hooks.Input) hooks.Verdict); firing {
+		spawning := fire(ctx, hooks.Input{Event: hooks.SubagentSpawn, CallID: site.call, Spawn: &hooks.SpawnFacts{Definition: definition.Name, Mission: args.mission(), Task: args.Task, Owns: append([]string{}, args.Owns...), Ticket: args.Ticket}})
 		if spawning.Block != "" {
 			return contract.Result{}, errors.New("spawn refused by a SubagentSpawn hook: " + spawning.Block)
 		}
@@ -518,7 +518,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	}
 	timing.took("earlier siblings")
 	t.tree.mu.Lock()
-	agent := subagent.SubAgent{
+	agent := subagents.SubAgent{
 		ID:      t.roster.NextID(definition.Name, recorded),
 		Agent:   definition.Name,
 		Model:   opened.Slug,
@@ -532,7 +532,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	t.tree.mu.Unlock()
 	naming.passed(site.call)
 	if err := holding; err != nil {
-		var collision subagent.CollisionError
+		var collision subagents.CollisionError
 		if errors.As(err, &collision) {
 			return contract.Result{}, fmt.Errorf("spawn refused: %s already holds %q, which overlaps %q. send this work to %s with message, or free its paths with message and do release, or do kill if it runs",
 				collision.Holder, collision.HolderGlob, collision.Glob, collision.Holder)
@@ -562,7 +562,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, askedEffort: effort, system: system, parts: parts,
 		environment: environment + scratchWords(scratch),
 		briefFiles:  t.briefFiles(context.WithValue(ctx, subAgentKey{}, subAgentID), args, site.conversation),
-		boundary:    subagent.NewBoundary(subAgentID, scratch.Dir(), args.Owns), scratch: scratch, inbox: NewInbox(),
+		boundary:    subagents.NewBoundary(subAgentID, scratch.Dir(), args.Owns), scratch: scratch, inbox: NewInbox(),
 		trace: spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, ticket: args.Ticket, depth: t.depth + 1}}
 	runCtx, cancel := outlivingTheWave(ctx)
 	t.Inbox.keep(held, cancel)
@@ -578,11 +578,11 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	started = true
 	t.Inbox.hold(held, site.log)
 	safe.Go(sys.Crashes(t.Project), "sub-agent "+subAgentID, func() {
-		t.background(runCtx, cancel, held, opened, site, task, llm.Origin{Source: llm.SourceBrief, Name: t.orchestratorID}, warm)
+		t.background(runCtx, cancel, held, opened, site, task, core.Origin{Source: core.SourceBrief, Name: t.orchestratorID}, warm)
 	})
 	said := narrowed + clampedWords(effort, opened) + held.runningWords()
 	if boardSizes != nil {
-		if err := t.base.Board.Fire(rule.WhenAfter, rule.HookAgentSpawn, "", args.Ticket, t.base.Session); err != nil {
+		if err := t.base.Board.Fire(rules.WhenAfter, rules.HookAgentSpawn, "", args.Ticket, t.base.Session); err != nil {
 			said += "\n\na board hook after agent.spawn failed: " + err.Error()
 		}
 		said += BoardNudges(t.base.Board.Store, boardSizes)
@@ -615,7 +615,7 @@ func (t *SpawnTool) artifactDir() (string, error) {
 
 const resumedWords = "resumed by a message"
 
-func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, held *heldSubAgent, opened SubAgentModel, site spawnSite, task string, taskOrigin llm.Origin, warm *warmup) {
+func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, held *heldSubAgent, opened SubAgentModel, site spawnSite, task string, taskOrigin core.Origin, warm *warmup) {
 	defer cancel()
 	defer warm.leaderDone(site.call)
 	if opened.Close != nil {
@@ -635,16 +635,16 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 	defer t.watch(held, check)()
 	defer func() {
 		if value := recover(); value != nil {
-			told := "sub-agent " + held.agent.ID + " is " + subagent.Errored.String() + ": " + panicked{value: value, stack: debug.Stack()}.Error()
-			held.agent.State = subagent.Errored
-			t.roster.Reached(held.agent.ID, subagent.Errored, told)
+			told := "sub-agent " + held.agent.ID + " is " + subagents.Errored.String() + ": " + panicked{value: value, stack: debug.Stack()}.Error()
+			held.agent.State = subagents.Errored
+			t.roster.Reached(held.agent.ID, subagents.Errored, told)
 			trace := held.trace
 			trace.site = site
-			_ = trace.end(held.agent.ID, subagent.Errored)
-			t.settle(ctx, held, told, llm.SourceReportFor, false, site.log)
+			_ = trace.end(held.agent.ID, subagents.Errored)
+			t.settle(ctx, held, told, core.SourceReportFor, false, site.log)
 		}
 	}()
-	var items []llm.Message
+	var items []core.Message
 	for {
 		subAgent := opened.onto(t.subAgentConfig(held, site, check, limits))
 		subAgent.Task, subAgent.TaskOrigin, subAgent.Arrived, subAgent.NewID = task, taskOrigin, items, func() string { return held.agent.ID }
@@ -655,9 +655,9 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 		if stopping {
 			_ = held.inbox.settle()
 		}
-		source := llm.SourceReportFor
-		if completion == subagent.Done && taskOrigin.Source == llm.SourceBrief {
-			source = llm.SourceReport
+		source := core.SourceReportFor
+		if completion == subagents.Done && taskOrigin.Source == core.SourceBrief {
+			source = core.SourceReport
 		}
 		if stopping || len(next) == 0 {
 			next = t.settle(ctx, held, report, source, stopping, site.log)
@@ -666,11 +666,11 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 			return
 		}
 		task, taskOrigin, items, warm = strings.Join(textsOf(next), taskItemsApart), next[0].origin, arrived(next), nil
-		t.roster.Reached(held.agent.ID, subagent.Working, resumedWords)
+		t.roster.Reached(held.agent.ID, subagents.Working, resumedWords)
 	}
 }
 
-func (t *SpawnTool) settle(ctx context.Context, held *heldSubAgent, report string, source llm.Source, stopping bool, log *session.Log) []inboxItem {
+func (t *SpawnTool) settle(ctx context.Context, held *heldSubAgent, report string, source core.Source, stopping bool, log *session.Log) []inboxItem {
 	stopped := stopShells(ctx, []string{held.agent.ID})
 	told := stopped.told()
 	if stopped.failed != nil {
@@ -695,9 +695,9 @@ func (t *SpawnTool) settle(ctx context.Context, held *heldSubAgent, report strin
 	return nil
 }
 
-func (t *SpawnTool) OfferedTo(definition subagent.Definition, ticket string) []llm.Tool {
-	agent := subagent.SubAgent{ID: definition.Name, Ticket: ticket}
-	held := &heldSubAgent{agent: agent, definition: definition, boundary: subagent.NewBoundary(agent.ID, "", nil), inbox: NewInbox()}
+func (t *SpawnTool) OfferedTo(definition subagents.Definition, ticket string) []core.Tool {
+	agent := subagents.SubAgent{ID: definition.Name, Ticket: ticket}
+	held := &heldSubAgent{agent: agent, definition: definition, boundary: subagents.NewBoundary(agent.ID, "", nil), inbox: NewInbox()}
 	offered, _ := t.offeredTools(held, spawnSite{}, SubAgentLimits{})
 	return NewRegistry(offered...).Definitions()
 }
@@ -760,7 +760,7 @@ func (t *SpawnTool) subAgentConfig(held *heldSubAgent, site spawnSite, check *ch
 	subAgent.References = heldReferences(t.base.References, subAgent.Parts)
 	subAgent.Memory = ""
 	if t.Remembered != nil {
-		block, err := memory.Block(t.Project)
+		block, err := entries.Block(t.Project)
 		if err != nil && t.base.Notify != nil {
 			t.base.Notify("sub-agent " + held.agent.ID + " starts without your memory: " + err.Error())
 		}
@@ -801,7 +801,7 @@ func (m SubAgentModel) onto(subAgent Config) Config {
 	return subAgent
 }
 
-func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent Config, site spawnSite) (string, subagent.Completion) {
+func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent Config, site spawnSite) (string, subagents.Completion) {
 	agent, trace := held.agent, held.trace
 	trace.site = site
 	subAgentCtx, release := context.WithCancel(ctx)
@@ -828,20 +828,20 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	}
 	report := reportOf(agent, forked, []Row{wholeRun(claims)}, state)
 	report.Asked, report.Impact = asked, boardy.ImpactOf(t.SubAgents.Root, report.Wrote)
-	ruledOut := report.Completion == subagent.NotPossible
-	if len(asked) > 0 && state == subagent.Finished && !ruledOut {
-		report.Completion = subagent.NeedsContext
+	ruledOut := report.Completion == subagents.NotPossible
+	if len(asked) > 0 && state == subagents.Finished && !ruledOut {
+		report.Completion = subagents.NeedsContext
 	}
 	if len(sentBack) > 0 {
 		times := "once"
 		if len(sentBack) > 1 {
 			times = strconv.Itoa(len(sentBack)) + " times"
 		}
-		report.Findings = append(report.Findings, subagent.Finding{Bucket: subagent.Noted, Text: "sent back " + times + ": " + strings.Join(sentBack, "; then ")})
+		report.Findings = append(report.Findings, subagents.Finding{Bucket: subagents.Noted, Text: "sent back " + times + ": " + strings.Join(sentBack, "; then ")})
 	}
 	if unbelievedAtCap != "" && !ruledOut {
-		report.Completion = subagent.Blocked
-		report.Findings = append(report.Findings, subagent.Finding{Bucket: subagent.ActOn, Text: "not done: " + unbelievedAtCap})
+		report.Completion = subagents.Blocked
+		report.Findings = append(report.Findings, subagents.Finding{Bucket: subagents.ActOn, Text: "not done: " + unbelievedAtCap})
 	}
 	t.tree.mu.Lock()
 	t.tree.retain(claims)
@@ -850,7 +850,7 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	}
 	t.tree.mu.Unlock()
 	if t.SubAgents.Ended != nil {
-		t.SubAgents.Ended(held.definition, agent.Brief, append(forked, claims...), report, runErr == nil && state != subagent.Errored && !stoppedEarly(state, last.Outcome) && unbelievedAtCap == "")
+		t.SubAgents.Ended(held.definition, agent.Brief, append(forked, claims...), report, runErr == nil && state != subagents.Errored && !stoppedEarly(state, last.Outcome) && unbelievedAtCap == "")
 	}
 	text := report.Text(t.proseStore())
 	if agent.Ticket != "" && t.base.Board != nil {
@@ -861,13 +861,13 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	}
 	t.roster.Reached(agent.ID, state, text)
 	held.agent.State = state
-	if runErr != nil && state != subagent.Parked {
+	if runErr != nil && state != subagents.Parked {
 		return fmt.Sprintf("sub-agent %s is %s: %v\n\n%s", agent.ID, state, runErr, text), report.Completion
 	}
 	return text, report.Completion
 }
 
-func (t *SpawnTool) reportedOnBoard(ctx context.Context, agent subagent.SubAgent, call string, report SubAgentReport, stopped bool) string {
+func (t *SpawnTool) reportedOnBoard(ctx context.Context, agent subagents.SubAgent, call string, report SubAgentReport, stopped bool) string {
 	board := t.base.Board
 	sizes := board.Store.EventSizes()
 	ticket, err := board.Get(agent.Ticket)
@@ -910,21 +910,21 @@ func (t *SpawnTool) reportedOnBoard(ctx context.Context, agent subagent.SubAgent
 	} else if held {
 		written += t.askThePerson(ctx, agent.ID, ticket, q)
 	}
-	if err := board.Fire(rule.WhenAfter, rule.HookAgentReport, "", agent.Ticket, actor); err != nil {
+	if err := board.Fire(rules.WhenAfter, rules.HookAgentReport, "", agent.Ticket, actor); err != nil {
 		written += "\n\na board hook after agent.report failed: " + err.Error()
 	}
 	return written + BoardNudges(board.Store, sizes)
 }
 
-func verdictOf(completion subagent.Completion, stopped bool, lines []boardy.AcceptanceLine) boardy.Verdict {
+func verdictOf(completion subagents.Completion, stopped bool, lines []boardy.AcceptanceLine) boardy.Verdict {
 	switch {
-	case completion == subagent.NotPossible:
+	case completion == subagents.NotPossible:
 		return boardy.VerdictNotPossible
-	case stopped || completion == subagent.Blocked:
+	case stopped || completion == subagents.Blocked:
 		return boardy.VerdictBlocked
-	case completion == subagent.NeedsContext:
+	case completion == subagents.NeedsContext:
 		return boardy.VerdictNeedsYou
-	case completion == subagent.DoneWithConcerns || slices.ContainsFunc(lines, func(line boardy.AcceptanceLine) bool { return line.State == boardy.LineUnmet }):
+	case completion == subagents.DoneWithConcerns || slices.ContainsFunc(lines, func(line boardy.AcceptanceLine) bool { return line.State == boardy.LineUnmet }):
 		return boardy.VerdictConcerns
 	}
 	return boardy.VerdictDone

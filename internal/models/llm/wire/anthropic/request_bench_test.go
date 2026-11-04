@@ -10,15 +10,15 @@ import (
 )
 
 func BenchmarkEncodeALongConversation(b *testing.B) {
-	messages := []llm.Message{{Role: llm.RoleUser, Content: "read every file"}}
+	messages := []core.Message{{Role: core.RoleUser, Content: "read every file"}}
 	result := strings.Repeat("func f() { return next(x) }\n", 400)
 	for i := range 120 {
 		id := "call-" + strconv.Itoa(i)
 		messages = append(messages,
-			llm.Message{Role: llm.RoleAssistant, Content: "reading", ToolCalls: []llm.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"a.go"}`)}}},
-			llm.Message{Role: llm.RoleTool, ToolCallID: id, Content: result})
+			core.Message{Role: core.RoleAssistant, Content: "reading", ToolCalls: []core.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"a.go"}`)}}},
+			core.Message{Role: core.RoleTool, ToolCallID: id, Content: result})
 	}
-	r := Request{Model: "claude-opus-5", System: []string{"you are a coder"}, Messages: messages, ToolChoice: llm.ToolChoiceAuto}
+	r := Request{Model: "claude-opus-5", System: []string{"you are a coder"}, Messages: messages, ToolChoice: core.ToolChoiceAuto}
 	body, err := r.Encode(true)
 	if err != nil {
 		b.Fatal(err)

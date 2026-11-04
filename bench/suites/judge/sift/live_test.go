@@ -25,7 +25,7 @@ func liveClient(t *testing.T) Asker {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
 	sys.AllowLiveCredential(t)
-	key, err := jev.TypeSafeKey(filepath.Join(repoRoot, ".env"))
+	key, err := core.TypeSafeKey(filepath.Join(repoRoot, ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
@@ -33,7 +33,7 @@ func liveClient(t *testing.T) Asker {
 	if err != nil {
 		t.Fatalf("NewWire: %v", err)
 	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+	client, err := core.NewClient(core.Config{Wire: wire})
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
@@ -133,7 +133,7 @@ func TestTheSameChunkUnderTwoTasks(t *testing.T) {
 		t.Fatalf("the chunk did not survive splitting: %+v", units)
 	}
 
-	questions := make([]jev.Question, len(asker.Set.Questions))
+	questions := make([]core.Question, len(asker.Set.Questions))
 	for i, q := range asker.Set.Questions {
 		questions[i] = q.ToJev()
 	}
@@ -146,7 +146,7 @@ func TestTheSameChunkUnderTwoTasks(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		decision, err := asker.Client.Ask(context.Background(), jev.Request{State: json.RawMessage(state), Questions: questions})
+		decision, err := asker.Client.Ask(context.Background(), core.Request{State: json.RawMessage(state), Questions: questions})
 		if err != nil {
 			t.Fatalf("Ask: %v", err)
 		}

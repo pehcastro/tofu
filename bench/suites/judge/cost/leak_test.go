@@ -14,7 +14,7 @@ const leakWindow = 24
 
 var labelWord = regexp.MustCompile(`(?i)\b(` + regexp.QuoteMeta(string(corpus.Block)) + `|` + regexp.QuoteMeta(string(corpus.Proceed)) + `)\b`)
 
-func leaksIn(set question.Set, records []corpus.Record) []string {
+func leaksIn(set questions.Set, records []corpus.Record) []string {
 	var found []string
 	for _, q := range set.Questions {
 		text := strings.Join(q.Words(), "\n")
@@ -36,13 +36,13 @@ func leaksIn(set question.Set, records []corpus.Record) []string {
 	return found
 }
 
-func plantedSet(instructions, whenTrue string) question.Set {
-	return question.Set{Name: "planted", Questions: []question.Question{{
+func plantedSet(instructions, whenTrue string) questions.Set {
+	return questions.Set{Name: "planted", Questions: []questions.Question{{
 		Name:         "planted",
-		Kind:         question.KindNoul,
+		Kind:         questions.KindNoul,
 		Instructions: instructions,
-		True:         question.Criteria{Kind: question.CriteriaText, Text: whenTrue},
-		False:        question.Criteria{Kind: question.CriteriaText, Text: "No."},
+		True:         questions.Criteria{Kind: questions.CriteriaText, Text: whenTrue},
+		False:        questions.Criteria{Kind: questions.CriteriaText, Text: "No."},
 	}}}
 }
 
@@ -57,7 +57,7 @@ func TestAPlantedQuestionThatNamesItsOwnCaseLabelIsALeak(t *testing.T) {
 	}
 	for _, planted := range []struct {
 		name string
-		set  question.Set
+		set  questions.Set
 	}{
 		{"the block label in the instructions", plantedSet("Answer true when this case is labelled block.", "Yes.")},
 		{"the proceed label in a criterion", plantedSet("Is the call safe?", "The label is proceed.")},
@@ -84,7 +84,7 @@ func TestNoQuestionAJevArmAsksNamesACaseLabel(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the decomposed set: %v", err)
 	}
-	for _, set := range []question.Set{shipped, hazards} {
+	for _, set := range []questions.Set{shipped, hazards} {
 		for _, leak := range leaksIn(set, heldOut) {
 			t.Errorf("%s: %s", set.Name, leak)
 		}

@@ -1,4 +1,4 @@
-package models
+package catalog
 
 import (
 	"errors"
@@ -200,7 +200,7 @@ func TestAGlobalFileOverridesTheCatalogFieldByField(t *testing.T) {
 	if model.Use != UseExcluded || model.Reason != "not on this machine" {
 		t.Fatalf("the global file did not win on use: %+v", model)
 	}
-	if !slices.Equal(model.Efforts, []llm.Effort{llm.EffortLow, llm.EffortHigh}) || model.Vision != VisionSees ||
+	if !slices.Equal(model.Efforts, []core.Effort{core.EffortLow, core.EffortHigh}) || model.Vision != VisionSees ||
 		model.From != "the claude-sub account" || model.Found != "2026-09-01" {
 		t.Fatalf("the global file replaced the catalog entry whole: %+v", model)
 	}
@@ -231,7 +231,7 @@ func TestFromAndFoundRoundTripThroughTheCatalog(t *testing.T) {
 		}
 	}
 	mythos := entryIn(t, plan, "claude-sub/claude-mythos-1")
-	if !slices.Equal(mythos.Efforts, []llm.Effort{llm.EffortLow}) || mythos.Vision != VisionSees || !strings.Contains(mythos.From, "models.dev") {
+	if !slices.Equal(mythos.Efforts, []core.Effort{core.EffortLow}) || mythos.Vision != VisionSees || !strings.Contains(mythos.From, "models.dev") {
 		t.Fatalf("a new family took %v %q from %q, want low alone and sight from models.dev", mythos.Efforts, mythos.Vision, mythos.From)
 	}
 	if unknown := reloaded.Reconcile(Served{Subscription: ClaudeSub, IDs: []string{"claude-mythos-1", "claude-sonnet-5-5"}}, registry).Unknown; len(unknown) != 0 {

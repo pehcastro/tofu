@@ -18,20 +18,20 @@ type JevWordResult struct {
 	CostUSD   float64
 }
 
-func jevWordQuestion(candidates []string) jev.Question {
-	options := make([]jev.Option, len(candidates))
+func jevWordQuestion(candidates []string) core.Question {
+	options := make([]core.Option, len(candidates))
 	for i, candidate := range candidates {
-		options[i] = jev.Option{Name: fmt.Sprintf("line_%d", i), Criteria: map[string]string{"text": candidate}}
+		options[i] = core.Option{Name: fmt.Sprintf("line_%d", i), Criteria: map[string]string{"text": candidate}}
 	}
-	return jev.Question{
+	return core.Question{
 		ID:           jevWordQuestionID,
-		Kind:         jev.QuestionChoice,
+		Kind:         core.QuestionChoice,
 		Instructions: "the state carries a task and the candidates a forked session could carry as its last recorded action. choose the option whose text a person would most want kept if only one could survive, to answer the task.",
 		Options:      options,
 	}
 }
 
-func JevLastWord(ctx context.Context, wire jev.Wire, task, raw string) (JevWordResult, error) {
+func JevLastWord(ctx context.Context, wire core.Wire, task, raw string) (JevWordResult, error) {
 	candidates := lastWordCandidates(raw)
 	if len(candidates) <= 1 {
 		return JevWordResult{Chosen: raw}, nil
@@ -39,7 +39,7 @@ func JevLastWord(ctx context.Context, wire jev.Wire, task, raw string) (JevWordR
 	question := jevWordQuestion(candidates)
 	started := time.Now()
 	state := map[string]any{"task": task, "candidates": candidates}
-	call := typesafe.Ask(ctx, wire, jev.Request{State: state, Questions: []jev.Question{question}})
+	call := typesafe.Ask(ctx, wire, core.Request{State: state, Questions: []core.Question{question}})
 	if call.Err != nil {
 		return JevWordResult{}, call.Err
 	}

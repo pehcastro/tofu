@@ -13,7 +13,7 @@ import (
 )
 
 type RowInput struct {
-	Decision     *jev.Decision
+	Decision     *core.Decision
 	ReplayOf     string
 	Build        string
 	RequestID    string
@@ -25,12 +25,12 @@ type RowInput struct {
 
 type RowLedger struct {
 	writer     *ledger.Writer
-	classifier models.Model
+	classifier catalog.Model
 }
 
 func OpenRowLedger(log string) (RowLedger, error) {
 	classifier, err := BoundClassifier()
-	if jev.IsUnbound(err) {
+	if core.IsUnbound(err) {
 		err = nil
 	}
 	return RowLedger{writer: ledger.NewWriter(log), classifier: classifier}, err
@@ -70,7 +70,7 @@ func (l RowLedger) skeleton(state any, set Battery, in RowInput) (ledger.Row, er
 	}
 	classifier := l.classifier
 	if in.Decision != nil {
-		classifier.Provider = models.Provider(in.Decision.Wire)
+		classifier.Provider = catalog.Provider(in.Decision.Wire)
 	}
 	return ledger.Row{
 		Point:        set.SetName,
@@ -147,7 +147,7 @@ func (l RowLedger) AppendOwnShell(state json.RawMessage, set Battery, in RowInpu
 	return l.writer.Append(row)
 }
 
-func ToLedgerAnswers(wording int, in map[string]jev.Answer) []ledger.Answer {
+func ToLedgerAnswers(wording int, in map[string]core.Answer) []ledger.Answer {
 	ids := make([]string, 0, len(in))
 	for id := range in {
 		ids = append(ids, id)
@@ -160,17 +160,17 @@ func ToLedgerAnswers(wording int, in map[string]jev.Answer) []ledger.Answer {
 	return out
 }
 
-func toLedgerAnswer(id string, wording int, a jev.Answer) ledger.Answer {
+func toLedgerAnswer(id string, wording int, a core.Answer) ledger.Answer {
 	la := ledger.Answer{Question: id, Wording: wording}
 	switch a.Kind {
-	case jev.QuestionNoul:
+	case core.QuestionNoul:
 		la.Kind = ledger.AnswerNoul
 		la.Noul = a.Noul
-	case jev.QuestionChoice:
+	case core.QuestionChoice:
 		la.Kind = ledger.AnswerChoice
 		la.Choice = a.Choice
 		la.Dist = distOf(a.Probabilities)
-	case jev.QuestionScore:
+	case core.QuestionScore:
 		la.Kind = ledger.AnswerScore
 		la.Score = a.Score
 		la.Dist = distOf(a.Probabilities)
@@ -192,17 +192,17 @@ func distOf(p map[string]float64) []ledger.Slice {
 	return out
 }
 
-func LedgerAnswersToJev(answers []ledger.Answer) map[string]jev.Answer {
-	out := make(map[string]jev.Answer, len(answers))
+func LedgerAnswersToJev(answers []ledger.Answer) map[string]core.Answer {
+	out := make(map[string]core.Answer, len(answers))
 	for _, a := range answers {
-		ja := jev.Answer{}
+		ja := core.Answer{}
 		switch a.Kind {
 		case ledger.AnswerNoul:
-			ja.Kind, ja.Noul = jev.QuestionNoul, a.Noul
+			ja.Kind, ja.Noul = core.QuestionNoul, a.Noul
 		case ledger.AnswerChoice:
-			ja.Kind, ja.Choice = jev.QuestionChoice, a.Choice
+			ja.Kind, ja.Choice = core.QuestionChoice, a.Choice
 		case ledger.AnswerScore:
-			ja.Kind, ja.Score = jev.QuestionScore, a.Score
+			ja.Kind, ja.Score = core.QuestionScore, a.Score
 		}
 		out[a.Question] = ja
 	}

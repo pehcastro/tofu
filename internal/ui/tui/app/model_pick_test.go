@@ -1,4 +1,4 @@
-package tui
+package app
 
 import (
 	"context"
@@ -94,8 +94,8 @@ func TestPickingAModelInsideASubscriptionRunsThatModel(t *testing.T) {
 	if pick.Wire != "anthropic" {
 		t.Errorf("the turn ran on wire %q, want anthropic, which serves %s", pick.Wire, sonnet)
 	}
-	if pick.Effort != llm.EffortDefault {
-		t.Errorf("the turn ran at effort %q, want the %s the picker showed", pick.Effort, llm.EffortDefault)
+	if pick.Effort != core.EffortDefault {
+		t.Errorf("the turn ran at effort %q, want the %s the picker showed", pick.Effort, core.EffortDefault)
 	}
 }
 
@@ -109,7 +109,7 @@ func TestThePickerCarriesTheEffortChosenBesideTheModel(t *testing.T) {
 		t.Fatalf("the picker does not say the effort it would send\n%s", shown)
 	}
 	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if pick := turnPick(t, app, ran); pick.Effort != llm.EffortHigh {
+	if pick := turnPick(t, app, ran); pick.Effort != core.EffortHigh {
 		t.Errorf("the turn ran at effort %q, want the picked high", pick.Effort)
 	}
 }
@@ -120,8 +120,8 @@ func TestTheEffortOffTheEndOfTheListStaysWhereItIs(t *testing.T) {
 	for range pressesPastEveryRow {
 		app.Update(tea.KeyPressMsg{Code: tea.KeyLeft, Mod: tea.ModShift})
 	}
-	if lowest := openPicker(t, app).Effort(); lowest != llm.EffortLow {
-		t.Fatalf("the effort walked to %q, and the anthropic wire offers %s", lowest, llm.EffortList(claudeEfforts()))
+	if lowest := openPicker(t, app).Effort(); lowest != core.EffortLow {
+		t.Fatalf("the effort walked to %q, and the anthropic wire offers %s", lowest, core.EffortList(claudeEfforts()))
 	}
 }
 
@@ -203,7 +203,7 @@ func TestAModelOnASubscriptionTheTurnCannotRunIsNotReached(t *testing.T) {
 	app := newTestApp(Options{Repo: testRepo, Now: fixedClock(), Wires: anthropicAlone, Models: shippedFixture})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
-	app.runNextTurnOn("codex-sub/gpt-5.6-sol", llm.EffortHigh)
+	app.runNextTurnOn("codex-sub/gpt-5.6-sol", core.EffortHigh)
 	if app.picked != "" || app.wire != "anthropic" {
 		t.Fatalf("a slug reached wire %q with model %q, and no signed wire serves codex-sub", app.wire, app.picked)
 	}

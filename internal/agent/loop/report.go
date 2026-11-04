@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -82,30 +82,30 @@ func (c SubAgentCommand) checked() (string, bool) {
 const TicketNotPossibleToolName = "ticket_not_possible"
 
 type SubAgentReport struct {
-	ID         string              `json:"id"`
-	Mission    string              `json:"mission"`
-	Owns       []string            `json:"owns"`
-	State      string              `json:"state"`
-	Completion subagent.Completion `json:"completion"`
-	Outcome    Outcome             `json:"outcome"`
-	Steps      int                 `json:"steps"`
-	Forks      int                 `json:"forks,omitempty"`
-	Attempts   []subagent.Attempt  `json:"attempts"`
-	Findings   []subagent.Finding  `json:"findings"`
-	Learned    []string            `json:"learned"`
-	Wrote      []string            `json:"wrote,omitempty"`
-	Impact     boardy.Impact       `json:"impact,omitzero"`
-	Ran        []SubAgentCommand   `json:"ran,omitempty"`
-	CostUSD    float64             `json:"cost_usd"`
-	Asked      []subagent.Question `json:"asked,omitempty"`
-	Prose      string              `json:"prose,omitempty"`
-	ProseStep  int                 `json:"prose_step,omitempty"`
+	ID         string               `json:"id"`
+	Mission    string               `json:"mission"`
+	Owns       []string             `json:"owns"`
+	State      string               `json:"state"`
+	Completion subagents.Completion `json:"completion"`
+	Outcome    Outcome              `json:"outcome"`
+	Steps      int                  `json:"steps"`
+	Forks      int                  `json:"forks,omitempty"`
+	Attempts   []subagents.Attempt  `json:"attempts"`
+	Findings   []subagents.Finding  `json:"findings"`
+	Learned    []string             `json:"learned"`
+	Wrote      []string             `json:"wrote,omitempty"`
+	Impact     boardy.Impact        `json:"impact,omitzero"`
+	Ran        []SubAgentCommand    `json:"ran,omitempty"`
+	CostUSD    float64              `json:"cost_usd"`
+	Asked      []subagents.Question `json:"asked,omitempty"`
+	Prose      string               `json:"prose,omitempty"`
+	ProseStep  int                  `json:"prose_step,omitempty"`
 }
 
-func reportOf(agent subagent.SubAgent, forked, attempts []Row, state subagent.State) SubAgentReport {
+func reportOf(agent subagents.SubAgent, forked, attempts []Row, state subagents.State) SubAgentReport {
 	row := attempts[len(attempts)-1]
 	ended := row.Outcome
-	if state == subagent.Parked {
+	if state == subagents.Parked {
 		ended = OutcomeStopped
 	}
 	report := SubAgentReport{
@@ -135,7 +135,7 @@ func reportOf(agent subagent.SubAgent, forked, attempts []Row, state subagent.St
 	}
 	report.Completion = completionOf(state, report.Findings)
 	if ruledOut(append(slices.Clone(forked), row)) {
-		report.Completion = subagent.NotPossible
+		report.Completion = subagents.NotPossible
 	}
 	for i := len(row.Steps) - 1; i >= 0; i-- {
 		if spoken := strings.TrimSpace(row.Steps[i].AssistantText); spoken != "" {
@@ -157,7 +157,7 @@ func ruledOut(rows []Row) bool {
 	return false
 }
 
-func attemptOf(row Row, ended Outcome) subagent.Attempt {
+func attemptOf(row Row, ended Outcome) subagents.Attempt {
 	var tools []string
 	for _, step := range row.Steps {
 		for _, call := range step.ToolCalls {
@@ -170,28 +170,28 @@ func attemptOf(row Row, ended Outcome) subagent.Attempt {
 	if len(tools) > 0 {
 		tried = strings.Join(tools, ", ")
 	}
-	return subagent.Attempt{ID: row.ID, Tried: tried, Outcome: ended.String()}
+	return subagents.Attempt{ID: row.ID, Tried: tried, Outcome: ended.String()}
 }
 
-func completionOf(state subagent.State, found []subagent.Finding) subagent.Completion {
+func completionOf(state subagents.State, found []subagents.Finding) subagents.Completion {
 	switch state {
-	case subagent.Errored, subagent.Parked:
-		return subagent.Blocked
-	case subagent.WaitingAnswer:
-		return subagent.NeedsContext
-	case subagent.Working, subagent.InReview, subagent.Finished:
+	case subagents.Errored, subagents.Parked:
+		return subagents.Blocked
+	case subagents.WaitingAnswer:
+		return subagents.NeedsContext
+	case subagents.Working, subagents.InReview, subagents.Finished:
 		for _, finding := range found {
 			if finding.Bucket.Concerns() {
-				return subagent.DoneWithConcerns
+				return subagents.DoneWithConcerns
 			}
 		}
-		return subagent.Done
+		return subagents.Done
 	}
 	panic("turn: unknown sub-agent state " + strconv.Itoa(int(state)))
 }
 
-func findings(row Row, state subagent.State) []subagent.Finding {
-	found := []subagent.Finding{}
+func findings(row Row, state subagents.State) []subagents.Finding {
+	found := []subagents.Finding{}
 	if outcome, carries := outcomeFinding(row, state); carries {
 		found = append(found, outcome)
 	}
@@ -201,48 +201,48 @@ func findings(row Row, state subagent.State) []subagent.Finding {
 	}
 	for i, call := range calls {
 		if !call.Outcome().Failed() || slices.ContainsFunc(calls[i+1:], func(later ToolCallRow) bool {
-			return later.Tool == call.Tool && later.Outcome() == llm.ToolOutcomeRan
+			return later.Tool == call.Tool && later.Outcome() == core.ToolOutcomeRan
 		}) {
 			continue
 		}
-		if call.Outcome() == llm.ToolOutcomeSkipped {
-			found = append(found, subagent.Finding{Bucket: subagent.Consider, Text: call.Error + ", and nothing after it ran " + call.Tool + ", so what it checks is unverified"})
+		if call.Outcome() == core.ToolOutcomeSkipped {
+			found = append(found, subagents.Finding{Bucket: subagents.Consider, Text: call.Error + ", and nothing after it ran " + call.Tool + ", so what it checks is unverified"})
 			continue
 		}
 		failure := call.Error
 		if failure == "" {
 			failure = "exit code " + strconv.Itoa(*call.ExitCode)
 		}
-		found = append(found, subagent.Finding{Bucket: subagent.ActOn, Text: call.Tool + " failed and nothing after it made " + call.Tool + " work: " + failure})
+		found = append(found, subagents.Finding{Bucket: subagents.ActOn, Text: call.Tool + " failed and nothing after it made " + call.Tool + " work: " + failure})
 	}
 	return found
 }
 
-func outcomeFinding(row Row, state subagent.State) (subagent.Finding, bool) {
-	if state == subagent.Parked {
-		return subagent.Finding{Bucket: subagent.ActOn,
+func outcomeFinding(row Row, state subagents.State) (subagents.Finding, bool) {
+	if state == subagents.Parked {
+		return subagents.Finding{Bucket: subagents.ActOn,
 			Text: "the sub-agent was stopped from outside partway through, so its work is unfinished and what it did do stands"}, true
 	}
 	outcome := row.Outcome
 	switch outcome {
 	case OutcomeUnset, OutcomeStopped:
-		return subagent.Finding{}, false
+		return subagents.Finding{}, false
 	case OutcomeStepCap, OutcomeRetiredCostCap, OutcomeRetiredWallClockCap, OutcomeDecisionCap:
-		return subagent.Finding{Bucket: subagent.ActOn,
+		return subagents.Finding{Bucket: subagents.ActOn,
 			Text: "the sub-agent was stopped by the " + outcome.String() + " and its work is unfinished"}, true
 	case OutcomeError:
-		return subagent.Finding{Bucket: subagent.ActOn, Text: "the sub-agent ended on an error and its work is unfinished"}, true
+		return subagents.Finding{Bucket: subagents.ActOn, Text: "the sub-agent ended on an error and its work is unfinished"}, true
 	case OutcomeCancelled:
-		return subagent.Finding{Bucket: subagent.ActOn, Text: "the sub-agent was cancelled partway through, so its work is unfinished and what it did do stands"}, true
+		return subagents.Finding{Bucket: subagents.ActOn, Text: "the sub-agent was cancelled partway through, so its work is unfinished and what it did do stands"}, true
 	case OutcomeLoopGuard:
-		return subagent.Finding{Bucket: subagent.ActOn, Text: "the sub-agent repeated one call until the loop guard stopped it"}, true
+		return subagents.Finding{Bucket: subagents.ActOn, Text: "the sub-agent repeated one call until the loop guard stopped it"}, true
 	case OutcomeForkStop:
-		return subagent.Finding{Bucket: subagent.ActOn, Text: "the sub-agent was stopped by its forks and its work is unfinished: " + row.ForkStop}, true
+		return subagents.Finding{Bucket: subagents.ActOn, Text: "the sub-agent was stopped by its forks and its work is unfinished: " + row.ForkStop}, true
 	case OutcomeTruncated:
-		return subagent.Finding{Bucket: subagent.Consider,
+		return subagents.Finding{Bucket: subagents.Consider,
 			Text: "output was truncated, so what the sub-agent read may be short of what it asked for"}, true
 	case OutcomeForked:
-		return subagent.Finding{Bucket: subagent.Noted, Text: "the sub-agent forked its conversation and this report is the fork"}, true
+		return subagents.Finding{Bucket: subagents.Noted, Text: "the sub-agent forked its conversation and this report is the fork"}, true
 	}
 	panic("turn: unknown sub-agent outcome " + strconv.Itoa(int(outcome)))
 }
@@ -359,7 +359,7 @@ func (t *SpawnTool) boardLine(reports string) string {
 		if !strings.HasPrefix(said, acceptancePrefix) {
 			continue
 		}
-		if id := subagent.TicketID(said); w.status[id] != "" {
+		if id := subagents.TicketID(said); w.status[id] != "" {
 			line += "; " + id + " is " + string(w.status[id])
 		}
 	}

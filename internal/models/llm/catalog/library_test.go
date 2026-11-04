@@ -1,4 +1,4 @@
-package models
+package catalog
 
 import (
 	"errors"
@@ -327,19 +327,19 @@ func TestSubscriptionsCarryTheQuotaWindowsAndTheModelsDoNot(t *testing.T) {
 
 func TestAModelSendsOnlyAnEffortItsEntryNames(t *testing.T) {
 	shipped := shippedLibrary(t)
-	for slug, want := range map[string]llm.Effort{
+	for slug, want := range map[string]core.Effort{
 		"claude-sub/claude-haiku-4-5-20251001": "",
-		"claude-sub/claude-opus-5":             llm.EffortHigh,
-		"claude-sub/claude-sonnet-5":           llm.EffortHigh,
-		"codex-sub/gpt-5.6-sol":                llm.EffortHigh,
-		"codex-sub/gpt-5.6-luna":               llm.EffortHigh,
-		"codex-sub/gpt-5.6-terra":              llm.EffortHigh,
+		"claude-sub/claude-opus-5":             core.EffortHigh,
+		"claude-sub/claude-sonnet-5":           core.EffortHigh,
+		"codex-sub/gpt-5.6-sol":                core.EffortHigh,
+		"codex-sub/gpt-5.6-luna":               core.EffortHigh,
+		"codex-sub/gpt-5.6-terra":              core.EffortHigh,
 	} {
 		model, err := shipped.Select(slug)
 		if err != nil {
 			t.Fatalf("%s: %v", slug, err)
 		}
-		if got := model.EffortTaken(llm.EffortHigh); got != want {
+		if got := model.EffortTaken(core.EffortHigh); got != want {
 			t.Fatalf("%s asked for high sends %q, want %q", slug, got, want)
 		}
 	}
@@ -347,12 +347,12 @@ func TestAModelSendsOnlyAnEffortItsEntryNames(t *testing.T) {
 	unstated := layerOf("user", withSubscriptions(oneFile("models/anthropic/claude-new.yaml", "subscription: claude-sub\nuse: allowed\n")))
 	overridden := layerOf("user", oneFile("models/anthropic/claude-opus-5.yaml", "use: allowed\n"))
 	stated, _ := Load([]Layer{shippedLayer(), unstated, overridden})
-	for slug, want := range map[string]llm.Effort{"claude-sub/claude-new": "", "claude-sub/claude-opus-5": llm.EffortMedium} {
+	for slug, want := range map[string]core.Effort{"claude-sub/claude-new": "", "claude-sub/claude-opus-5": core.EffortMedium} {
 		model, err := stated.Select(slug)
 		if err != nil {
 			t.Fatalf("%s: %v", slug, err)
 		}
-		if got := model.EffortTaken(llm.EffortMedium); got != want {
+		if got := model.EffortTaken(core.EffortMedium); got != want {
 			t.Fatalf("%s asked for medium sends %q, want %q", slug, got, want)
 		}
 	}

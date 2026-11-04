@@ -14,17 +14,17 @@ import (
 	"tofu/internal/store/session"
 )
 
-func answeredStanding(t *testing.T, h *Host, request turn.GateRequest, given Answer) turn.PersonAnswer {
+func answeredStanding(t *testing.T, h *Host, request loop.GateRequest, given Answer) loop.PersonAnswer {
 	t.Helper()
 	return answeredWith(t, h, request, func(id string) { h.AnswerAsk(id, given, nil) })
 }
 
-func answeredFor(t *testing.T, h *Host, request turn.GateRequest, until time.Time) {
+func answeredFor(t *testing.T, h *Host, request loop.GateRequest, until time.Time) {
 	t.Helper()
 	answeredWith(t, h, request, func(id string) { h.AllowAskFor(id, until, nil) })
 }
 
-func answeredWith(t *testing.T, h *Host, request turn.GateRequest, answer func(id string)) turn.PersonAnswer {
+func answeredWith(t *testing.T, h *Host, request loop.GateRequest, answer func(id string)) loop.PersonAnswer {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -34,9 +34,9 @@ func answeredWith(t *testing.T, h *Host, request turn.GateRequest, answer func(i
 			asked <- event.ID
 		}
 	}
-	got := make(chan turn.PersonAnswer, 1)
+	got := make(chan loop.PersonAnswer, 1)
 	go func() {
-		answer, _ := awaitPerson(emit, h.asks, &turn.Config{})(ctx, request, turn.GateDecision{Verdict: ledger.VerdictAsk})
+		answer, _ := awaitPerson(emit, h.asks, &loop.Config{})(ctx, request, loop.GateDecision{Verdict: ledger.VerdictAsk})
 		got <- answer
 	}()
 	select {
@@ -50,7 +50,7 @@ func answeredWith(t *testing.T, h *Host, request turn.GateRequest, answer func(i
 	return <-got
 }
 
-func unasked(t *testing.T, h *Host, request turn.GateRequest) turn.PersonAnswer {
+func unasked(t *testing.T, h *Host, request loop.GateRequest) loop.PersonAnswer {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -59,7 +59,7 @@ func unasked(t *testing.T, h *Host, request turn.GateRequest) turn.PersonAnswer 
 			t.Errorf("%s asked again after a standing answer was given for it", request.Args)
 			cancel()
 		}
-	}, h.asks, &turn.Config{})(ctx, request, turn.GateDecision{Verdict: ledger.VerdictAsk})
+	}, h.asks, &loop.Config{})(ctx, request, loop.GateDecision{Verdict: ledger.VerdictAsk})
 	return answer
 }
 
@@ -89,10 +89,10 @@ func TestAStandingAnswerOutlivesTheHostAndNeverLeavesItsSession(t *testing.T) {
 	if got := second.Standing(); !slices.Equal(got, want) {
 		t.Fatalf("after a restart session.state stands on %v, want %v", got, want)
 	}
-	if answer := unasked(t, second, settingsAsk("3")); answer != turn.PersonAlwaysHere {
+	if answer := unasked(t, second, settingsAsk("3")); answer != loop.PersonAlwaysHere {
 		t.Errorf("after a restart the allow_always call answered %v, want it run unasked", answer)
 	}
-	if answer := unasked(t, second, settingsAsk("9")); answer != turn.PersonDenied {
+	if answer := unasked(t, second, settingsAsk("9")); answer != loop.PersonDenied {
 		t.Errorf("after a restart the reject_always call answered %v, want it refused unasked", answer)
 	}
 
@@ -102,7 +102,7 @@ func TestAStandingAnswerOutlivesTheHostAndNeverLeavesItsSession(t *testing.T) {
 	if got := second.Standing(); len(got) != 0 {
 		t.Errorf("a fresh session stands on %v, the answers of another session", got)
 	}
-	if answer := answeredStanding(t, second, settingsAsk("3"), Denied); answer != turn.PersonDenied {
+	if answer := answeredStanding(t, second, settingsAsk("3"), Denied); answer != loop.PersonDenied {
 		t.Errorf("a fresh session answered %v for a call only another session stood on", answer)
 	}
 	if _, err := second.Resume(Carry{Session: here}); err != nil {
@@ -126,10 +126,10 @@ func TestATimedAllowEndsOnTimeOutlivesARestartAndAnyGrantIsRevoked(t *testing.T)
 	answeredFor(t, first, settingsAsk("3"), until)
 	answeredFor(t, first, settingsAsk("4"), time.Now().Add(-time.Second))
 	answeredFor(t, first, pythonAsk("import os; print(1)"), until)
-	if answer := unasked(t, first, settingsAsk("3")); answer != turn.PersonAllowedOnce {
+	if answer := unasked(t, first, settingsAsk("3")); answer != loop.PersonAllowedOnce {
 		t.Errorf("within its hour the allow_for call answered %v, want it run unasked", answer)
 	}
-	if answer := answeredStanding(t, first, settingsAsk("4"), Denied); answer != turn.PersonDenied {
+	if answer := answeredStanding(t, first, settingsAsk("4"), Denied); answer != loop.PersonDenied {
 		t.Errorf("an allow_for already over answered %v without asking", answer)
 	}
 	first.Close()
@@ -139,7 +139,7 @@ func TestATimedAllowEndsOnTimeOutlivesARestartAndAnyGrantIsRevoked(t *testing.T)
 	if got := second.Standing(); len(got) != 1 || got[0].Decision != AllowFor || !got[0].Until.Equal(until) {
 		t.Fatalf("after a restart it stands on %+v, want the one allow_for until %s, not the ended one and not the one on code", got, until)
 	}
-	if answer := unasked(t, second, settingsAsk("3")); answer != turn.PersonAllowedOnce {
+	if answer := unasked(t, second, settingsAsk("3")); answer != loop.PersonAllowedOnce {
 		t.Errorf("after a restart the allow_for call answered %v, want it run unasked", answer)
 	}
 	answeredStanding(t, second, settingsAsk("5"), AlwaysHere)
@@ -148,7 +148,7 @@ func TestATimedAllowEndsOnTimeOutlivesARestartAndAnyGrantIsRevoked(t *testing.T)
 		if _, revoked := second.Revoke(askedPlace(settingsAsk(value))); !revoked {
 			t.Errorf("the grant on %s was not revoked", value)
 		}
-		if answer := answeredStanding(t, second, settingsAsk(value), Denied); answer != turn.PersonDenied {
+		if answer := answeredStanding(t, second, settingsAsk(value), Denied); answer != loop.PersonDenied {
 			t.Errorf("after a revoke the call on %s answered %v without asking", value, answer)
 		}
 	}
@@ -188,7 +188,7 @@ func TestAStandingFileThatDoesNotReadStandsOnNothing(t *testing.T) {
 			if got := h.Standing(); len(got) != 0 {
 				t.Errorf("a %s file stands on %v, want nothing so the call asks", name, got)
 			}
-			if answer := answeredStanding(t, h, settingsAsk("3"), Denied); answer != turn.PersonDenied {
+			if answer := answeredStanding(t, h, settingsAsk("3"), Denied); answer != loop.PersonDenied {
 				t.Errorf("a %s file answered %v without asking", name, answer)
 			}
 		})
@@ -212,7 +212,7 @@ func TestAStandingAnswerThatCannotBeWrittenSaysSo(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(store.Dir(here), "standing.json", "blocked"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if answer := answeredStanding(t, h, settingsAsk("3"), AlwaysHere); answer != turn.PersonAlwaysHere {
+	if answer := answeredStanding(t, h, settingsAsk("3"), AlwaysHere); answer != loop.PersonAlwaysHere {
 		t.Fatalf("an unwritable file answered %v, want the answer to hold for now", answer)
 	}
 	for {
@@ -265,7 +265,7 @@ func TestACompactedSessionReopenedKeepsTheStandingAnswersOfTheOneItContinues(t *
 	if len(stands) != 1 {
 		t.Fatalf("%s compacted from %s and reopened with nothing asked in between stands on %v, want the answer carried", into, from, stands)
 	}
-	if answer := unasked(t, reopened, settingsAsk("3")); answer != turn.PersonAlwaysHere {
+	if answer := unasked(t, reopened, settingsAsk("3")); answer != loop.PersonAlwaysHere {
 		t.Errorf("after compaction into %s and a reopen the allow_always call answered %v, want it run unasked", into, answer)
 	}
 	if _, revoked := reopened.Revoke(stands[0].Target); !revoked {

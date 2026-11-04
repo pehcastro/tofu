@@ -49,9 +49,9 @@ const (
 )
 
 type watcher struct {
-	inner     turn.Model
+	inner     loop.Model
 	decisions func() int
-	spawner   *turn.SpawnTool
+	spawner   *loop.SpawnTool
 	held      *roster.Roster
 	emit      func(Event)
 	now       func() time.Time
@@ -119,26 +119,26 @@ func (t *tokenTally) counts() map[string]int {
 
 type watchedSubAgent struct {
 	watch *watcher
-	inner turn.Model
+	inner loop.Model
 }
 
-func (c watchedSubAgent) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (c watchedSubAgent) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	return c.watch.askThrough(ctx, c.inner, request)
 }
 
-func (a *watcher) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
-	if a.stop == nil || turn.SubAgentAsking(ctx) != "" {
+func (a *watcher) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
+	if a.stop == nil || loop.SubAgentAsking(ctx) != "" {
 		return a.askThrough(ctx, a.inner, request)
 	}
 	ctx, release := a.stop.during(ctx)
 	defer release()
 	if err := ctx.Err(); err != nil {
-		return llm.Decision{}, err
+		return core.Decision{}, err
 	}
 	decision, err := a.askThrough(ctx, a.inner, request)
-	if err != nil && errors.Is(context.Cause(ctx), turn.SentNow{}) {
+	if err != nil && errors.Is(context.Cause(ctx), loop.SentNow{}) {
 		a.emit(Event{Kind: EventStreamReset})
-		return decision, turn.SentNow{}
+		return decision, loop.SentNow{}
 	}
 	return decision, err
 }
@@ -173,7 +173,7 @@ func (l *leadStop) sendNow() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.cancel != nil {
-		l.cancel(turn.SentNow{})
+		l.cancel(loop.SentNow{})
 	}
 }
 
@@ -183,10 +183,10 @@ func (l *leadStop) reset() {
 	l.stopped, l.cancel = false, nil
 }
 
-func (l *leadStop) listen(report safe.Report, stops, sendNow <-chan struct{}) (quiet func()) {
+func (l *leadStop) listen(report recover.Report, stops, sendNow <-chan struct{}) (quiet func()) {
 	done := make(chan struct{})
-	safe.Go(report, "lead stop", func() {
-		safe.Loop(report, "lead stop", done, func() {
+	recover.Go(report, "lead stop", func() {
+		recover.Loop(report, "lead stop", done, func() {
 			for {
 				select {
 				case <-stops:
@@ -202,12 +202,12 @@ func (l *leadStop) listen(report safe.Report, stops, sendNow <-chan struct{}) (q
 	return func() { close(done) }
 }
 
-func (a *watcher) askThrough(ctx context.Context, inner turn.Model, request llm.Request) (llm.Decision, error) {
-	asker := turn.SubAgentAsking(ctx)
+func (a *watcher) askThrough(ctx context.Context, inner loop.Model, request core.Request) (core.Decision, error) {
+	asker := loop.SubAgentAsking(ctx)
 	answered := sinceLastReply(request.Messages)
 	a.seen.forget(asker, request.Messages[:answered])
 	for _, message := range request.Messages[answered:] {
-		if message.Role == llm.RoleTool {
+		if message.Role == core.RoleTool {
 			a.result(message, asker)
 		}
 	}
@@ -224,7 +224,7 @@ func (a *watcher) askThrough(ctx context.Context, inner turn.Model, request llm.
 	if asker == "" {
 		a.emit(Event{Kind: EventRequesting})
 	}
-	inChat := asker == "" && !turn.AskedQuietly(ctx)
+	inChat := asker == "" && !loop.AskedQuietly(ctx)
 	if inChat {
 		request.OnDelta = func(text string) {
 			streamed = true
@@ -271,11 +271,11 @@ type shownResults struct {
 	ids map[string]bool
 }
 
-func (s *shownResults) forget(asker string, messages []llm.Message) {
+func (s *shownResults) forget(asker string, messages []core.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	for _, message := range messages {
-		if message.Role == llm.RoleTool {
+		if message.Role == core.RoleTool {
 			delete(s.ids, session.EventIDFor(asker, message.ToolCallID))
 		}
 	}
@@ -292,9 +292,9 @@ func (s *shownResults) firstTime(asker, call string) bool {
 	return true
 }
 
-func sinceLastReply(messages []llm.Message) int {
+func sinceLastReply(messages []core.Message) int {
 	for at := len(messages) - 1; at >= 0; at-- {
-		if messages[at].Role == llm.RoleAssistant {
+		if messages[at].Role == core.RoleAssistant {
 			return at + 1
 		}
 	}
@@ -317,7 +317,7 @@ func (a *watcher) eventID(asker, call string) string {
 	return session.EventIDFor(cmp.Or(asker, a.recordedTurn()), call)
 }
 
-func (a *watcher) called(call llm.ToolCall, asker string) {
+func (a *watcher) called(call core.ToolCall, asker string) {
 	intent, detail := callIntent(call)
 	id, promotes := a.eventID(asker, call.ID), a.spawning(call.Name)
 	a.marks.Lock()
@@ -334,8 +334,8 @@ func (a *watcher) called(call llm.ToolCall, asker string) {
 	a.emit(Event{Kind: EventToolCall, ID: id, Tool: call.Name, Text: intent, Detail: detail, Promote: promotes, Agent: asker, Args: call.Arguments, Card: card, Group: group})
 }
 
-func (a *watcher) result(message llm.Message, asker string) {
-	killedWithNothingToShow := message.ToolOutcome == llm.ToolOutcomeAborted && message.ToolResultBytes == 0
+func (a *watcher) result(message core.Message, asker string) {
+	killedWithNothingToShow := message.ToolOutcome == core.ToolOutcomeAborted && message.ToolResultBytes == 0
 	a.marks.Lock()
 	created := a.wrote[asker][message.ToolCallID]
 	delete(a.wrote[asker], message.ToolCallID)
@@ -360,9 +360,9 @@ func (a *watcher) result(message llm.Message, asker string) {
 	if reply, asked := answerOf(message.Content); asked {
 		result.Text = reply
 	}
-	body := turn.WithoutToolRef(message.Content)
+	body := loop.WithoutToolRef(message.Content)
 	result.Card, result.Group, result.GroupSummary = a.cards.settle(result.ID, body, result.Outcome, message.ToolExitCode)
-	first, appended, appends := turn.AppendedLines(body)
+	first, appended, appends := loop.AppendedLines(body)
 	switch {
 	case result.Outcome.Failed():
 	case strings.HasPrefix(body, unifiedDiffHeader):
@@ -405,7 +405,7 @@ func (a *watcher) startedBy(call string) []SubAgentRow {
 	return nil
 }
 
-func (a *watcher) noteWholeFile(call llm.ToolCall, asker string) {
+func (a *watcher) noteWholeFile(call core.ToolCall, asker string) {
 	var args struct {
 		Content string `json:"content"`
 	}
@@ -421,7 +421,7 @@ func (a *watcher) noteWholeFile(call llm.ToolCall, asker string) {
 	a.wrote[asker][call.ID] = args.Content
 }
 
-func (a *watcher) noteSubAgentsAsk(subAgent string, tokens int, calls []llm.ToolCall) {
+func (a *watcher) noteSubAgentsAsk(subAgent string, tokens int, calls []core.ToolCall) {
 	if subAgent == "" {
 		return
 	}
@@ -473,7 +473,7 @@ func (a *watcher) readCallsOf(agents []roster.SubAgent) {
 	if len(moving) == 0 {
 		return
 	}
-	var rows []turn.Row
+	var rows []loop.Row
 	if a.spawner != nil {
 		rows = a.spawner.SubAgentRows()
 	}
@@ -627,13 +627,13 @@ func (a *watcher) verdictOf(id, report string) (string, bool) {
 	return "", false
 }
 
-func (a *watcher) clockRunningSubAgents(report safe.Report) (stop func()) {
+func (a *watcher) clockRunningSubAgents(report recover.Report) (stop func()) {
 	ticking, stopped := make(chan struct{}), make(chan struct{})
-	safe.Go(report, "sub-agent clock", func() {
+	recover.Go(report, "sub-agent clock", func() {
 		defer close(stopped)
 		every := time.NewTicker(konst.SubAgentRedrawMillis * time.Millisecond)
 		defer every.Stop()
-		safe.Loop(report, "sub-agent clock", ticking, func() {
+		recover.Loop(report, "sub-agent clock", ticking, func() {
 			for {
 				select {
 				case <-ticking:
@@ -681,7 +681,7 @@ func hidingEarlier(kept []Call, hidden int) []Call {
 	return append([]Call{{Tool: strconv.Itoa(hidden) + earlierCallsHidden}}, kept...)
 }
 
-func recordedCalls(rows []turn.Row, id string) []Call {
+func recordedCalls(rows []loop.Row, id string) []Call {
 	spawnedBy := ""
 	for index := range rows {
 		if rows[index].ID == id {
@@ -711,7 +711,7 @@ func inThePane(calls []Call) []Call {
 	return hidingEarlier(calls[hidden:], hidden)
 }
 
-func callIntent(call llm.ToolCall) (string, string) {
+func callIntent(call core.ToolCall) (string, string) {
 	var fields map[string]any
 	if err := json.Unmarshal(call.Arguments, &fields); err != nil {
 		return "", ""
@@ -791,10 +791,10 @@ func resultSummary(content string) string {
 
 func answerOf(content string) (string, bool) {
 	first, _, _ := strings.Cut(content, "\n\n")
-	if answer, answered := strings.CutPrefix(first, turn.AskAnswered); answered {
+	if answer, answered := strings.CutPrefix(first, loop.AskAnswered); answered {
 		return answeredReply + oneLine(answer), true
 	}
-	if assumed, wasAssumed := strings.CutPrefix(first, turn.AskAssumed); wasAssumed {
+	if assumed, wasAssumed := strings.CutPrefix(first, loop.AskAssumed); wasAssumed {
 		return assumedReply + oneLine(assumed), true
 	}
 	return "", false

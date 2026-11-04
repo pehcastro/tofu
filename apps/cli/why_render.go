@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
 	"tofu/internal/judge/gate"
@@ -32,7 +32,7 @@ func whyPage(page cli.Page, report whyReport, now time.Time) []string {
 
 func decisionLines(page cli.Page, listing whyListing, now time.Time) []string {
 	row := listing.decision()
-	ago := func(at time.Time) string { return widget.Until(now.Sub(at)) + " ago" }
+	ago := func(at time.Time) string { return render.Until(now.Sub(at)) + " ago" }
 	lines := append(page.Title(row.Point, []string{row.ID, ago(row.At)}, wiring.VerdictLook(row.Verdict)), "")
 	var answers []cli.Fact
 	for _, answer := range row.Answers {
@@ -186,7 +186,7 @@ func stateFacts(page cli.Page, listing whyListing) ([]cli.Fact, string, string) 
 			reason = "missing: " + page.Path(listing.statePath)
 		}
 		e := row.StateElision
-		return []cli.Fact{{Label: "state", Text: widget.Size(e.Bytes) + " · " + reason}, {Label: "head", Text: e.Head}, {Label: "tail", Text: e.Tail}}, "", ""
+		return []cli.Fact{{Label: "state", Text: render.Size(e.Bytes) + " · " + reason}, {Label: "head", Text: e.Head}, {Label: "tail", Text: e.Tail}}, "", ""
 	}
 	if len(listing.state) == 0 && row.Schema < ledger.StateBodySchema {
 		return []cli.Fact{{Label: "state", Text: "none, schema " + strconv.Itoa(row.Schema) + " predates it"}}, "", ""
@@ -195,8 +195,8 @@ func stateFacts(page cli.Page, listing whyListing) ([]cli.Fact, string, string) 
 		return []cli.Fact{{Label: "state", Text: "none recorded"}}, "", ""
 	}
 	body, hint := string(listing.state), ""
-	if len(body) > konst.WhyStateBytes || widget.Cells(body)+2*len(cli.Gap) > page.Width {
-		body, hint = widget.Fit(body, page.Width-2*len(cli.Gap)), "tofu why "+row.ID+" --state"
+	if len(body) > konst.WhyStateBytes || render.Cells(body)+2*len(cli.Gap) > page.Width {
+		body, hint = render.Fit(body, page.Width-2*len(cli.Gap)), "tofu why "+row.ID+" --state"
 	}
-	return []cli.Fact{{Label: "state", Text: widget.Size(len(listing.state))}}, body, hint
+	return []cli.Fact{{Label: "state", Text: render.Size(len(listing.state))}}, body, hint
 }

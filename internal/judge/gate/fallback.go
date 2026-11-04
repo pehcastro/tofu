@@ -15,7 +15,7 @@ const ArmRegex Arm = "regex"
 const unavailablePrefix = "unavailable_"
 
 type Fallback struct {
-	Unavailable jev.Unavailable
+	Unavailable core.Unavailable
 	Arm         Arm
 	ArmVerdict  Verdict
 	Verdict     Verdict
@@ -23,7 +23,7 @@ type Fallback struct {
 
 func DecideUnavailable(err error, state []byte) Fallback {
 	return Fallback{
-		Unavailable: jev.Unavailability(err),
+		Unavailable: core.Unavailability(err),
 		Arm:         ArmRegex,
 		ArmVerdict:  RegexArm(state),
 		Verdict:     VerdictAsk,

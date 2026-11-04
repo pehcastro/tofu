@@ -14,14 +14,14 @@ import (
 	"tofu/internal/models/transport"
 )
 
-type Stop = llm.Stop
+type Stop = core.Stop
 
 const (
-	StopUnknown = llm.StopUnknown
-	StopEnd     = llm.StopEnd
-	StopLength  = llm.StopLength
-	StopToolUse = llm.StopToolUse
-	StopError   = llm.StopError
+	StopUnknown = core.StopUnknown
+	StopEnd     = core.StopEnd
+	StopLength  = core.StopLength
+	StopToolUse = core.StopToolUse
+	StopError   = core.StopError
 )
 
 type Usage struct {
@@ -42,7 +42,7 @@ type Result struct {
 	Content           string
 	Thinking          string
 	ThinkingSignature string
-	ToolCalls         []llm.ToolCall
+	ToolCalls         []core.ToolCall
 	Usage             Usage
 	FirstTokenMS      int64
 	Warnings          []string
@@ -127,7 +127,7 @@ func ReadStream(body io.Reader, oauth bool, onDelta, onThinking func(string)) (r
 	open := map[int]*openBlock{}
 	var text, thinking, signature strings.Builder
 	sawStart, sawTerminal, sawStop := false, false, false
-	defer func() { err = llm.CutAfter(text.String(), err) }()
+	defer func() { err = core.CutAfter(text.String(), err) }()
 
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, konst.StreamReadBytes), konst.StreamLineBytes)
@@ -150,7 +150,7 @@ func ReadStream(body io.Reader, oauth bool, onDelta, onThinking func(string)) (r
 		case "error":
 			var broke error
 			if event.Error.Type == "overloaded_error" || event.Error.Type == "api_error" {
-				broke = llm.ErrStreamBroke
+				broke = core.ErrStreamBroke
 			}
 			return result, transport.Fail("anthropic.ReadStream", transport.KindProvider, broke,
 				"the stream carried an error: %s: %s", event.Error.Type, event.Error.Message)
@@ -175,7 +175,7 @@ func ReadStream(body io.Reader, oauth bool, onDelta, onThinking func(string)) (r
 			}
 			if event.ContentBlock.Type == "tool_use" {
 				block.toolIndex = len(result.ToolCalls)
-				result.ToolCalls = append(result.ToolCalls, llm.ToolCall{
+				result.ToolCalls = append(result.ToolCalls, core.ToolCall{
 					ID:   event.ContentBlock.ID,
 					Name: DecodeToolName(event.ContentBlock.Name, oauth),
 				})
@@ -223,13 +223,13 @@ func ReadStream(body io.Reader, oauth bool, onDelta, onThinking func(string)) (r
 				result.Warnings = append(result.Warnings, "a stop reason arrived after the terminal envelope")
 				continue
 			}
-			if event.Delta.StopReason == llm.FinishContextWindowExceeded {
+			if event.Delta.StopReason == core.FinishContextWindowExceeded {
 				return result, transport.Fail("anthropic.ReadStream", transport.KindRequestTooLarge, transport.ErrContextOverflow,
-					"the stop reason is %s", llm.FinishContextWindowExceeded)
+					"the stop reason is %s", core.FinishContextWindowExceeded)
 			}
 			sawTerminal = true
 			result.StopReason = event.Delta.StopReason
-			stop, handled := llm.MapFinishReason(event.Delta.StopReason)
+			stop, handled := core.MapFinishReason(event.Delta.StopReason)
 			result.Stop = stop
 			if !handled {
 				result.Warnings = append(result.Warnings, "unhandled stop reason: "+event.Delta.StopReason)
@@ -244,15 +244,15 @@ func ReadStream(body io.Reader, oauth bool, onDelta, onThinking func(string)) (r
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return result, transport.Fail("anthropic.ReadStream", transport.KindProvider, fmt.Errorf("%w: %w", llm.ErrStreamBroke, err), "reading the stream")
+		return result, transport.Fail("anthropic.ReadStream", transport.KindProvider, fmt.Errorf("%w: %w", core.ErrStreamBroke, err), "reading the stream")
 	}
 
 	if !sawStart {
-		return result, transport.Fail("anthropic.ReadStream", transport.KindInvalidAnswer, llm.ErrStreamBroke,
+		return result, transport.Fail("anthropic.ReadStream", transport.KindInvalidAnswer, core.ErrStreamBroke,
 			"stream ended before message_start")
 	}
 	if !sawTerminal {
-		return result, transport.Fail("anthropic.ReadStream", transport.KindInvalidAnswer, llm.ErrStreamBroke,
+		return result, transport.Fail("anthropic.ReadStream", transport.KindInvalidAnswer, core.ErrStreamBroke,
 			"stream ended before message_stop")
 	}
 	if !sawStop {

@@ -9,7 +9,7 @@ import (
 	"testing"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	doctorverb "tofu/apps/cli/verbs/doctor"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/host"

@@ -63,19 +63,19 @@ func decisionLines(d Decision, width int) []string {
 	if d.Verdict == Allow {
 		return nil
 	}
-	body := max(width-widget.Cells(continuation), 1)
-	label := widget.Column(d.Answers, answerLabel, 0)
-	bars := min(barColumns, body-label-valueColumns-2*widget.Cells(gap))
+	body := max(width-render.Cells(continuation), 1)
+	label := render.Column(d.Answers, answerLabel, 0)
+	bars := min(barColumns, body-label-valueColumns-2*render.Cells(gap))
 	var lines []string
 	for _, answer := range d.Answers {
-		row := widget.Pad(answerLabel(answer), label) + gap + widget.Lead(number(answer.Value), valueColumns)
+		row := render.Pad(answerLabel(answer), label) + gap + render.Lead(number(answer.Value), valueColumns)
 		if bars > 0 {
-			row += gap + widget.Bar(answerFraction(answer), bars)
+			row += gap + render.Bar(answerFraction(answer), bars)
 		}
-		lines = append(lines, look.Muted(continuation+widget.Fit(row, body)))
+		lines = append(lines, look.Muted(continuation+render.Fit(row, body)))
 	}
 	for _, sentence := range sentences(d) {
-		for _, line := range widget.Wrap(sentence, body) {
+		for _, line := range render.Wrap(sentence, body) {
 			lines = append(lines, look.Faint(continuation+line))
 		}
 	}
@@ -144,7 +144,7 @@ func (m *Model) askLines() []string {
 	}
 	inner := m.width - 2*askPadX
 	typing := look.Faint(stillTakesTyping)
-	if widget.Cells(keys+askGap+stillTakesTyping) > inner {
+	if render.Cells(keys+askGap+stillTakesTyping) > inner {
 		typing = ""
 	}
 	block := spread(look.Style(look.Amber).Render(head), id, inner) + "\n" + spread(keys, typing, inner)
@@ -152,8 +152,8 @@ func (m *Model) askLines() []string {
 }
 
 func spread(left, right string, width int) string {
-	room := max(width-widget.Cells(right), 1)
-	return widget.Pad(widget.Fit(left, room), room) + right
+	room := max(width-render.Cells(right), 1)
+	return render.Pad(render.Fit(left, room), room) + right
 }
 
 func sentences(d Decision) []string {

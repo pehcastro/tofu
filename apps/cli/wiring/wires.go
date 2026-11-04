@@ -9,7 +9,7 @@ const (
 	WireSubscription = "anthropic"
 	WireCodex        = "codex"
 	WireKey          = openrouter.Name
-	WireMeta         = string(models.Meta)
+	WireMeta         = string(catalog.Meta)
 )
 
 func RunWires() []string { return []string{WireSubscription, WireCodex, WireKey} }

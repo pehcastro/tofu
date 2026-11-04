@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/render"
@@ -24,8 +24,8 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/llm/accounts"
-	"tofu/internal/models/llm/catalog"
+	cred "tofu/internal/models/llm/accounts"
+	models "tofu/internal/models/llm/catalog"
 	"tofu/internal/models/transport"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
@@ -283,12 +283,12 @@ func windowShort(tokens int) string {
 	case tokens >= wiring.TokensPerMillion:
 		return strings.TrimRight(strings.TrimRight(strconv.FormatFloat(float64(tokens)/wiring.TokensPerMillion, 'f', 2, 64), "0"), ".") + "M"
 	}
-	return widget.Count(tokens)
+	return render.Count(tokens)
 }
 
 type ModelReload struct {
 	host.ModelReload
-	Jev jev.PinCheck `json:"jev,omitzero"`
+	Jev core.PinCheck `json:"jev,omitzero"`
 }
 
 func modelChangeMark(c host.ModelChange) cli.Mark {
@@ -328,10 +328,10 @@ const (
 	jevPinRaised
 )
 
-func checkJevPin(ctx context.Context, keys jev.Keyring, listing *transport.Client, pinning jevPinning) jev.PinCheck {
-	route, err := classifier.Resolve(".", keys)
+func checkJevPin(ctx context.Context, keys core.Keyring, listing *transport.Client, pinning jevPinning) core.PinCheck {
+	route, err := classifiers.Resolve(".", keys)
 	if route.Model.Provider == "" {
-		return jev.PinCheck{Skipped: "the pin stays", Error: err.Error()}
+		return core.PinCheck{Skipped: "the pin stays", Error: err.Error()}
 	}
 	check, newest := route.CheckPin(ctx, listing)
 	switch pinning {
@@ -513,7 +513,7 @@ func unresolvedTiers() ([]string, error) {
 		return nil, err
 	}
 	var unresolved []string
-	for _, tier := range subagent.Tiers() {
+	for _, tier := range subagents.Tiers() {
 		if slug := strings.TrimSpace(store.Text(tier.Setting())); slug != "" {
 			if _, err := library.Select(slug); err != nil {
 				unresolved = append(unresolved, "tier @"+string(tier)+": "+err.Error())

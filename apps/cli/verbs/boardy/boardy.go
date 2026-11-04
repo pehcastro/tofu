@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/librarian/rules"
@@ -684,14 +684,14 @@ func (c boardyCall) tick() int {
 
 func (c boardyCall) fire() int {
 	if len(c.args) < 1 || len(c.args) > 2 {
-		return c.o.Usage(errors.New("name an event, and a " + c.words.Ticket + " unless it is " + string(rule.HookLeadAttach)))
+		return c.o.Usage(errors.New("name an event, and a " + c.words.Ticket + " unless it is " + string(rules.HookLeadAttach)))
 	}
-	event, when := rule.HookEvent(c.args[0]), rule.When(cmp.Or(c.flags["when"], string(rule.WhenAfter)))
-	if !slices.Contains([]rule.HookEvent{rule.HookAgentSpawn, rule.HookAgentReport, rule.HookLeadAttach}, event) {
-		return c.o.Usage(fmt.Errorf("%q is not fired by hand: %s, %s or %s, and every other event fires from the command that does it", event, rule.HookAgentSpawn, rule.HookAgentReport, rule.HookLeadAttach))
+	event, when := rules.HookEvent(c.args[0]), rules.When(cmp.Or(c.flags["when"], string(rules.WhenAfter)))
+	if !slices.Contains([]rules.HookEvent{rules.HookAgentSpawn, rules.HookAgentReport, rules.HookLeadAttach}, event) {
+		return c.o.Usage(fmt.Errorf("%q is not fired by hand: %s, %s or %s, and every other event fires from the command that does it", event, rules.HookAgentSpawn, rules.HookAgentReport, rules.HookLeadAttach))
 	}
-	if when != rule.WhenBefore && when != rule.WhenAfter {
-		return c.o.Usage(fmt.Errorf("--when is %s or %s", rule.WhenBefore, rule.WhenAfter))
+	if when != rules.WhenBefore && when != rules.WhenAfter {
+		return c.o.Usage(fmt.Errorf("--when is %s or %s", rules.WhenBefore, rules.WhenAfter))
 	}
 	id := ""
 	key, err := c.board()

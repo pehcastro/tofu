@@ -21,9 +21,9 @@ const (
 )
 
 type Fired struct {
-	rule.Fire
-	Checker string    `json:"checker"`
-	Then    rule.Then `json:"then"`
+	rules.Fire
+	Checker string     `json:"checker"`
+	Then    rules.Then `json:"then"`
 }
 
 func (f Fired) Text() string {
@@ -34,4 +34,4 @@ func (f Fired) Text() string {
 	return strings.Join(details, "; ")
 }
 
-func (f Fired) waits() bool { return f.Blocked && f.Then == rule.ThenAsk }
+func (f Fired) waits() bool { return f.Blocked && f.Then == rules.ThenAsk }

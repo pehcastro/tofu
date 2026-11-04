@@ -19,7 +19,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/state"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/testkit/cli"
@@ -109,7 +109,7 @@ func writeGateLedgerRowFixture(t *testing.T) {
 
 func gateThresholds(t *testing.T, dir string) gate.Thresholds {
 	t.Helper()
-	gate, err := toolGateOn(dir, logHere(t), jev.ReadKeyring())
+	gate, err := toolGateOn(dir, logHere(t), core.ReadKeyring())
 	if err != nil {
 		t.Fatalf("building the gate: %v", err)
 	}
@@ -131,7 +131,7 @@ func gateThresholdsAsDoctorReadsThem(point host.DoctorRule) gate.Thresholds {
 
 func gateScratch(t *testing.T, lockBuild string) (string, gate.Thresholds, gate.Thresholds) {
 	t.Helper()
-	dir := testkit.ChdirTemp(t)
+	dir := cli.ChdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("gate"))
 	bindTypeSafe(t)
 	enableGateAsking(t)
@@ -152,12 +152,12 @@ func enableGateAsking(t *testing.T) {
 func TestADecisionMadeNowCarriesTheFingerprintOfTheCallItJudged(t *testing.T) {
 	dir, _, _ := gateScratch(t, gateFixtureBuild)
 	stubJev(t, 200, middlingRiskAskReply)
-	gate, err := toolGateOn(dir, logHere(t), jev.ReadKeyring())
+	gate, err := toolGateOn(dir, logHere(t), core.ReadKeyring())
 	if err != nil {
 		t.Fatalf("toolGateOn:%v", err)
 	}
 
-	decision, err := gate.Decide(t.Context(), turn.GateRequest{
+	decision, err := gate.Decide(t.Context(), loop.GateRequest{
 		TurnID: "turn-fingerprint",
 		Task:   "write the note the README asked for",
 		Tool:   "write",
@@ -193,7 +193,7 @@ func TestADecisionMadeNowCarriesTheFingerprintOfTheCallItJudged(t *testing.T) {
 }
 
 func TestTheGateReadsTheRuleInTheBinaryWhenTheProjectHasNoLibrary(t *testing.T) {
-	dir := testkit.ChdirTemp(t)
+	dir := cli.ChdirTemp(t)
 	t.Setenv(envVarName(), fakeSecret("gate"))
 	bindTypeSafe(t)
 	shipped, err := gate.LoadFS(library.Files(), runGatePoint)
@@ -255,16 +255,16 @@ const lowRiskAllowReply = `{"model":"typesafe/jev-1.13-20260917","provider":"Typ
 func TestASettingsCallJevAllowsStillReachesThePersonAsAnAsk(t *testing.T) {
 	dir, _, _ := gateScratch(t, gateFixtureBuild)
 	stubJev(t, 200, lowRiskAllowReply)
-	gate, err := toolGateOn(dir, logHere(t), jev.ReadKeyring())
+	gate, err := toolGateOn(dir, logHere(t), core.ReadKeyring())
 	if err != nil {
 		t.Fatalf("toolGateOn:%v", err)
 	}
 	watched := map[string]ledger.Verdict{}
-	gate.watch = func(_ context.Context, tool string, decision turn.GateDecision, _ error) {
+	gate.watch = func(_ context.Context, tool string, decision loop.GateDecision, _ error) {
 		watched[tool] = decision.Verdict
 	}
 	for tool, want := range map[string]ledger.Verdict{"read": ledger.VerdictAllow, "settings": ledger.VerdictAsk} {
-		decision, err := gate.Decide(t.Context(), turn.GateRequest{
+		decision, err := gate.Decide(t.Context(), loop.GateRequest{
 			TurnID: "turn-settings",
 			Task:   "raise the sub-agent limit to 15",
 			Tool:   tool,
@@ -278,7 +278,7 @@ func TestASettingsCallJevAllowsStillReachesThePersonAsAnAsk(t *testing.T) {
 
 func autoModeGate(t *testing.T) string {
 	t.Helper()
-	dir := testkit.ChdirTemp(t)
+	dir := cli.ChdirTemp(t)
 	writeGateRuleFixture(t)
 	writeGateLedgerRowFixture(t)
 	writeGateLockFixture(t, gateFixtureBuild)
@@ -301,7 +301,7 @@ func TestAWriteToTofusOwnSettingsAsksThePersonInAutoModeAndASubAgentsIsRefused(t
 		dir := autoModeGate(t)
 		driver := driveApp(t)
 		stubbedTurn(dir, &queuedModel{decisions: []llm.Decision{writes("call-1"), reply("done")}}, false)(t.Context(), onTheSubscription, "set gatePrompt to auto", driver.emit)
-		if asked := driver.of(tui.EventAwaitPerson); len(asked) != 1 || asked[0].Tool != "write" {
+		if asked := driver.of(app.EventAwaitPerson); len(asked) != 1 || asked[0].Tool != "write" {
 			t.Errorf("the person was asked %d times, want once for the write: %+v", len(asked), asked)
 		}
 		if _, err := os.Stat(filepath.Join(dir, "~", ".tofu", "settings.json")); !os.IsNotExist(err) {
@@ -318,7 +318,7 @@ func TestAWriteToTofusOwnSettingsAsksThePersonInAutoModeAndASubAgentsIsRefused(t
 			subAgents: []llm.Decision{writes("call-2"), reply("could not")},
 		}
 		stubbedTurn(dir, model, false)(t.Context(), onTheSubscription, "hand the settings change to a sub-agent", driver.emit)
-		if asked := driver.of(tui.EventAwaitPerson); len(asked) != 0 {
+		if asked := driver.of(app.EventAwaitPerson); len(asked) != 0 {
 			t.Errorf("the person was asked %d times for a sub-agent's call: %+v", len(asked), asked)
 		}
 		if _, err := os.Stat(filepath.Join(dir, "~", ".tofu", "settings.json")); !os.IsNotExist(err) {

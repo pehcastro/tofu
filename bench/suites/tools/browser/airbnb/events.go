@@ -123,7 +123,7 @@ func RunFromEvents(arm Arm, paths ...string) (Run, error) {
 				return Run{}, fmt.Errorf("request %d: %w", event.Seq, err)
 			}
 			modelMS = append(modelMS, durationOf(event.Body))
-			tokens := llm.PromptAccountingFor(wires[event.Agent]).BilledTokens(step.PromptTokens, step.CacheReadTokens) + step.CompletionTokens + step.CacheWriteTokens
+			tokens := core.PromptAccountingFor(wires[event.Agent]).BilledTokens(step.PromptTokens, step.CacheReadTokens) + step.CompletionTokens + step.CacheWriteTokens
 			if browserAgents[event.Agent] {
 				browserTokens += tokens
 				browserBuilds = appendNew(browserBuilds, step.Model)

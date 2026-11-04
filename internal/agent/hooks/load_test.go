@@ -1,4 +1,4 @@
-package hook
+package hooks
 
 import (
 	"path/filepath"
@@ -49,7 +49,7 @@ command = "echo stop"
 [hooks.state]
 trusted = ["abc"]
 `)
-	engine := Load(project, shell.Choice{})
+	engine := Load(project, process.Choice{})
 	var read []string
 	for _, hook := range engine.Hooks() {
 		if hook.File == config {
@@ -65,7 +65,7 @@ trusted = ["abc"]
 	}
 
 	write("model = \"x\"\n\n[hooks\nbroken = \n")
-	problems := Load(project, shell.Choice{}).Problems()
+	problems := Load(project, process.Choice{}).Problems()
 	if len(problems) != 1 || !strings.Contains(problems[0], config) || !strings.Contains(problems[0], "line 3") {
 		t.Errorf("a broken config.toml gave problems %q, want one naming the file and line 3", problems)
 	}

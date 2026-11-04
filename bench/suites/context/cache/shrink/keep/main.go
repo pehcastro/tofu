@@ -109,7 +109,7 @@ func runArm(dir, home string, corpus []mockedSession) (tally, error) {
 	}
 	var t tally
 	for _, session := range corpus {
-		compacted, err := turn.CompactCarried(project, places, "", session.Task, "", conversationOf(session))
+		compacted, err := loop.CompactCarried(project, places, "", session.Task, "", conversationOf(session))
 		if err != nil {
 			return tally{}, fmt.Errorf("%s: %w", session.Name, err)
 		}
@@ -153,8 +153,8 @@ func runArm(dir, home string, corpus []mockedSession) (tally, error) {
 	return t, err
 }
 
-func conversationOf(session mockedSession) []llm.Message {
-	messages := []llm.Message{{Role: llm.RoleUser, Content: session.Task}}
+func conversationOf(session mockedSession) []core.Message {
+	messages := []core.Message{{Role: core.RoleUser, Content: session.Task}}
 	for i, step := range session.Steps {
 		id := fmt.Sprintf("%s-%d", session.Name, i)
 		result := step.Result
@@ -162,10 +162,10 @@ func conversationOf(session mockedSession) []llm.Message {
 			result += step.Result
 		}
 		messages = append(messages,
-			llm.Message{Role: llm.RoleAssistant, Content: step.Say, ToolCalls: []llm.ToolCall{{ID: id, Name: step.Tool, Arguments: step.Args}}},
-			llm.Message{Role: llm.RoleTool, ToolCallID: id, Content: result[:step.Bytes]})
+			core.Message{Role: core.RoleAssistant, Content: step.Say, ToolCalls: []core.ToolCall{{ID: id, Name: step.Tool, Arguments: step.Args}}},
+			core.Message{Role: core.RoleTool, ToolCallID: id, Content: result[:step.Bytes]})
 	}
-	return append(messages, llm.Message{Role: llm.RoleAssistant, Content: session.Latest})
+	return append(messages, core.Message{Role: core.RoleAssistant, Content: session.Latest})
 }
 
 func median(values []int64) int64 {

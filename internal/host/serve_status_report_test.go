@@ -24,7 +24,7 @@ func TestServeStatusNamesTheLeadNestedAgentsAndAShellsOwnReport(t *testing.T) {
 		<-release
 		live.Emit(Event{Kind: EventDone, Status: StatusFinished, Text: "finished in"})
 	}
-	registry := shell.OpenAt(filepath.Join(t.TempDir(), "shells"))
+	registry := process.OpenAt(filepath.Join(t.TempDir(), "shells"))
 	c, _, _ := serving(t, play, ServeConfig{Shells: registry})
 	latest := map[string]statusline.Record{}
 	statusOf := func(id string, wanted func(statusline.Record) bool) func(wireLine) bool {
@@ -65,14 +65,14 @@ func TestServeStatusNamesTheLeadNestedAgentsAndAShellsOwnReport(t *testing.T) {
 		t.Errorf("the nested sub-agent reads %+v, want blocked:question with app tofu", asking)
 	}
 
-	choice, err := shell.Resolve("")
+	choice, err := process.Resolve("")
 	if err != nil {
 		t.Fatal(err)
 	}
 	command := `printf 'up\033]7501;state=working:progress=40\aon\n'; sleep 2`
 	cmd := exec.Command(choice.Path, "-c", command)
 	cmd.Dir = t.TempDir()
-	kept, err := registry.YieldReady(context.Background(), cmd, command, "lead", shell.Wait{Within: 200 * time.Millisecond, Kept: shell.KeptBackground})
+	kept, err := registry.YieldReady(context.Background(), cmd, command, "lead", process.Wait{Within: 200 * time.Millisecond, Kept: process.KeptBackground})
 	if err != nil {
 		t.Fatal(err)
 	}

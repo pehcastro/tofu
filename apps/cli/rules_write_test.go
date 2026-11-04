@@ -42,7 +42,7 @@ func listedRule(t *testing.T, id string) host.RuleListing {
 }
 
 func TestRulesAddOffAndRemoveWriteTheHomeAndTheProjectLayers(t *testing.T) {
-	project := testkit.ChdirTemp(t)
+	project := cli.ChdirTemp(t)
 	home := os.Getenv("USERPROFILE")
 
 	if code, out, errOut := tofuRules(t, "add", "--global", "g1", "never write yaml by hand"); code != output.ExitOK || !strings.Contains(out, "tofu rules remove --global g1") {
@@ -90,7 +90,7 @@ func TestRulesAddOffAndRemoveWriteTheHomeAndTheProjectLayers(t *testing.T) {
 }
 
 func TestRunWithDirCarriesThatProjectsRulesFromAnotherDirectory(t *testing.T) {
-	project := testkit.ChdirTemp(t)
+	project := cli.ChdirTemp(t)
 	if code, _, errOut := tofuRules(t, "add", "p1", "answer in one line"); code != output.ExitOK {
 		t.Fatalf("add exited %d: %s", code, errOut)
 	}
@@ -111,7 +111,7 @@ func TestRunWithDirCarriesThatProjectsRulesFromAnotherDirectory(t *testing.T) {
 }
 
 func TestThePromptAndReloadSeeTheSameProjectRule(t *testing.T) {
-	project := testkit.ChdirTemp(t)
+	project := cli.ChdirTemp(t)
 	if _, err := reloadReport(project); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestThePromptAndReloadSeeTheSameProjectRule(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.ContainsFunc(prompt.composed.Parts, func(part turn.PromptPart) bool { return part.RuleID == "p1" && part.Text == "answer in one line" }) {
+	if !slices.ContainsFunc(prompt.composed.Parts, func(part loop.PromptPart) bool { return part.RuleID == "p1" && part.Text == "answer in one line" }) {
 		t.Error("the composed prompt does not carry the project rule p1")
 	}
 }
@@ -147,7 +147,7 @@ func overridesListed(t *testing.T) []host.OverrideListing {
 }
 
 func TestRulesOffNeedsAReasonIsMarkedEverywhereAndRestoreBringsTheRuleBack(t *testing.T) {
-	project := testkit.ChdirTemp(t)
+	project := cli.ChdirTemp(t)
 	id := "no_unit_test_after_code"
 	file := filepath.Join(project, ".tofu", "rules", id+"@1.yaml")
 
@@ -211,7 +211,7 @@ func TestRulesOffNeedsAReasonIsMarkedEverywhereAndRestoreBringsTheRuleBack(t *te
 }
 
 func TestRulesAddOverALibraryRuleNeedsAReasonAndWritesAnOverride(t *testing.T) {
-	project := testkit.ChdirTemp(t)
+	project := cli.ChdirTemp(t)
 	id := "no_unit_test_after_code"
 	if code, _, errOut := tofuRules(t, "add", id, "unit tests are the contract here"); code == output.ExitOK || !strings.Contains(errOut, "--reason") {
 		t.Errorf("add over a library rule without a reason exited %d, err %q", code, errOut)
@@ -229,7 +229,7 @@ func TestRulesAddOverALibraryRuleNeedsAReasonAndWritesAnOverride(t *testing.T) {
 }
 
 func TestRulesOverridesNamesAnOverrideTheLibraryMovedPast(t *testing.T) {
-	project := testkit.ChdirTemp(t)
+	project := cli.ChdirTemp(t)
 	files := map[string]string{
 		".tofu/library/qa/rules/no_unit_test_after_code@2.yaml": "id: no_unit_test_after_code\ndomain: qa\nkind: human\nconcern: code_rules\ntext: never a unit test after the code\n",
 		".tofu/rules/no_unit_test_after_code@1.yaml":            "id: no_unit_test_after_code\noverrides: no_unit_test_after_code@1\nmode: off\nreason: public SDK\nby: person\nat: 2026-10-05\n",

@@ -1,4 +1,4 @@
-package tui
+package app
 
 import (
 	"context"
@@ -212,7 +212,7 @@ func TestALongQueuedMessageIsCutOnScreenAndReachesTheModelWhole(t *testing.T) {
 	if strings.Contains(row, "and say so") {
 		t.Errorf("the queued row shows the whole message: %q", row)
 	}
-	if width := widget.Cells(ansi.Strip(row)); width > 80 {
+	if width := render.Cells(ansi.Strip(row)); width > 80 {
 		t.Errorf("the queued row is %d columns wide on an 80 column screen", width)
 	}
 

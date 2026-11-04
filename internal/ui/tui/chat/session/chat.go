@@ -95,7 +95,7 @@ func (m *Model) blockLines(start int) []string {
 	}
 	lines := append(make([]string, key.lead, key.lead+1), body...)
 	for index, line := range lines {
-		lines[index] = widget.Pad(line, m.width-trackCells)
+		lines[index] = render.Pad(line, m.width-trackCells)
 	}
 	if !live {
 		*cached = drawn{key: key, lines: lines}
@@ -159,7 +159,7 @@ func oneLine(text string) string { return strings.Join(strings.Fields(text), " "
 func (m *Model) callStatus(entry Entry) (string, lipgloss.Style) {
 	switch {
 	case entry.running():
-		return widget.Until(m.elapsed(entry.Started)), look.Style(look.Mint)
+		return render.Until(m.elapsed(entry.Started)), look.Style(look.Mint)
 	case entry.Failed:
 		return entry.Status, look.Style(look.Red)
 	}
@@ -173,7 +173,7 @@ func (m *Model) render(index int) []string {
 	entry := m.entries[index]
 	switch entry.Kind {
 	case User:
-		lines := strings.Split(look.Style(look.Text).Render(strings.Join(widget.Wrap(entry.Body, m.textWidth()), "\n")), "\n")
+		lines := strings.Split(look.Style(look.Text).Render(strings.Join(render.Wrap(entry.Body, m.textWidth()), "\n")), "\n")
 		return m.message(entry, look.Title(you), append(lines, m.chipLines(entry.Chips)...), m.latestUser(index))
 	case Assistant:
 		return m.message(entry, look.AgentRef(orchestrator), entry.displayLines(), false)
@@ -193,11 +193,11 @@ func (m *Model) render(index int) []string {
 		case entry.Head != "" && entry.ID != "":
 			reference = gap + look.TypedID(entry.Head, entry.ID)
 		}
-		lines := widget.Wrap(entry.Body, max(m.textWidth()-widget.Cells(noteMarker)-widget.Cells(reference), 1))
+		lines := render.Wrap(entry.Body, max(m.textWidth()-render.Cells(noteMarker)-render.Cells(reference), 1))
 		for index, line := range lines {
 			marker := noteMarker
 			if index > 0 {
-				marker = strings.Repeat(" ", widget.Cells(noteMarker))
+				marker = strings.Repeat(" ", render.Cells(noteMarker))
 			}
 			lines[index] = look.Faint(marker + line)
 		}
@@ -218,7 +218,7 @@ func (m *Model) message(entry Entry, label string, body []string, tinted bool) [
 		meta = look.Faint(clock+metaGap) + look.TypedID(messageKind, short)
 	}
 	lines := []string{label, meta}
-	if widget.Cells(label)+widget.Cells(meta)+len(metaGap) <= width {
+	if render.Cells(label)+render.Cells(meta)+len(metaGap) <= width {
 		lines = []string{look.Sides(label, meta, width)}
 	}
 	lines = append(lines, body...)
@@ -253,21 +253,21 @@ func (m *Model) failureLines(entry Entry) []string {
 	}
 	said, sentenced := transport.Sentenced(entry.Body)
 	if !sentenced {
-		room := max(m.textWidth()-widget.Cells(failureMarker+tail), 1)
-		return []string{look.Style(look.Red).Render(failureMarker+widget.Fit(oneLine(entry.Body), room)) + tail}
+		room := max(m.textWidth()-render.Cells(failureMarker+tail), 1)
+		return []string{look.Style(look.Red).Render(failureMarker+render.Fit(oneLine(entry.Body), room)) + tail}
 	}
-	room := max(m.textWidth()-widget.Cells(failureMarker), 1)
-	lines := widget.Wrap(said, room)
+	room := max(m.textWidth()-render.Cells(failureMarker), 1)
+	lines := render.Wrap(said, room)
 	last := len(lines) - 1
 	for index, line := range lines {
 		marker := failureMarker
 		if index > 0 {
-			marker = strings.Repeat(" ", widget.Cells(failureMarker))
+			marker = strings.Repeat(" ", render.Cells(failureMarker))
 		}
 		lines[index] = look.Style(look.Red).Render(marker + line)
 	}
-	if widget.Cells(lines[last])+widget.Cells(tail) > room+widget.Cells(failureMarker) {
-		return append(lines, strings.Repeat(" ", widget.Cells(failureMarker))+strings.TrimPrefix(tail, gap))
+	if render.Cells(lines[last])+render.Cells(tail) > room+render.Cells(failureMarker) {
+		return append(lines, strings.Repeat(" ", render.Cells(failureMarker))+strings.TrimPrefix(tail, gap))
 	}
 	lines[last] += tail
 	return lines
@@ -284,12 +284,12 @@ func (m *Model) toolLine(entry Entry) string {
 	if short := trace.Short(entry.recorded); short != "" {
 		right = gap + look.TypedID(messageKind, short) + right
 	}
-	if status = widget.Fit(oneLine(status), max(m.textWidth()/statusShare-widget.Cells(right), 0)); status != "" {
+	if status = render.Fit(oneLine(status), max(m.textWidth()/statusShare-render.Cells(right), 0)); status != "" {
 		right = gap + statusStyle.Render(status) + right
 	}
 	if word := entry.verdictShown(); word != "" {
 		right = gap + verdictStyle(entry.Decision.Verdict).Render(word) + right
 	}
-	room := max(m.textWidth()-widget.Cells(right), 1)
-	return look.Style(look.Blue).Render(widget.Pad(widget.Fit(marker+oneLine(label), room), room)) + right
+	room := max(m.textWidth()-render.Cells(right), 1)
+	return look.Style(look.Blue).Render(render.Pad(render.Fit(marker+oneLine(label), room), room)) + right
 }

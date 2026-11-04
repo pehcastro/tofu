@@ -75,7 +75,7 @@ func (s Store) SetSprint(key, id string, state SprintState) error {
 	}
 	m := Managed{Local: Local{Store: s}}
 	changed := func(sprint Sprint) subject {
-		event := map[SprintState]rule.HookEvent{Active: rule.HookSprintOpen, Closed: rule.HookSprintClose}[sprint.State]
+		event := map[SprintState]rules.HookEvent{Active: rules.HookSprintOpen, Closed: rules.HookSprintClose}[sprint.State]
 		return subject{event: event, key: key, ticket: Ticket{Front: Front{Title: sprint.Title, Sprint: sprint.ID}}}
 	}
 	asked := changed(Sprint{ID: id, State: state})

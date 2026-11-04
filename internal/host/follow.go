@@ -72,7 +72,7 @@ type followAsk struct {
 	Asked     string
 	Answer    Answer
 	Question  QuestionAnswer
-	Scope     memory.Scope `json:",omitempty"`
+	Scope     entries.Scope `json:",omitempty"`
 	By        string
 	Pick      Pick
 	Asking    AskingMode     `json:",omitempty"`
@@ -101,8 +101,8 @@ type followReply struct {
 	Failed    string           `json:",omitempty"`
 	Agents    []SubAgentRow    `json:",omitempty"`
 	Standing  []StandingAnswer `json:",omitempty"`
-	Hold      shell.Hold       `json:",omitzero"`
-	Shell     shell.Refused    `json:",omitempty"`
+	Hold      process.Hold     `json:",omitzero"`
+	Shell     process.Refused  `json:",omitempty"`
 	Compacted Compacted        `json:",omitzero"`
 }
 
@@ -238,7 +238,7 @@ func (h *Host) seat(conn net.Conn, in io.Reader) error {
 	if !seated {
 		return nil
 	}
-	safe.Go(h.report, "follow write", s.write)
+	recover.Go(h.report, "follow write", s.write)
 	return h.serveSeat(a, s, in)
 }
 
@@ -361,7 +361,7 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 			a.sending.Unlock()
 			break
 		}
-		h.emitter().emit(Event{Kind: EventTask, Text: ask.Text, Origin: wireOrigin(llm.Origin{Source: llm.SourceTask}), Images: shownPending(ask.Text, ask.Images)})
+		h.emitter().emit(Event{Kind: EventTask, Text: ask.Text, Origin: wireOrigin(core.Origin{Source: core.SourceTask}), Images: shownPending(ask.Text, ask.Images)})
 		if reply.OK = h.Send(pick, ask.Text); reply.OK {
 			reply.Turn, _ = h.Turn()
 		}
@@ -485,10 +485,10 @@ func (h *Host) join(id string) (*following, error) {
 func (h *Host) follow(f *following, id string) {
 	settled := followAsk{Op: followSettings, Asking: h.asking, Pick: h.pick}
 	h.following.Store(f)
-	safe.Go(h.report, "follow", func() { h.heed(f) })
-	safe.Go(h.report, "follow beat", f.beat)
+	recover.Go(h.report, "follow", func() { h.heed(f) })
+	recover.Go(h.report, "follow beat", f.beat)
 	_ = h.loadCron(id)
-	safe.Go(h.report, "follow attach", func() {
+	recover.Go(h.report, "follow attach", func() {
 		f.ask(followAsk{Op: followAttach, Terminals: h.shells != nil && h.shells.Terminals.Load()})
 		f.ask(settled)
 		if f.hub.Version != konst.Version {
@@ -725,7 +725,7 @@ func (h *Host) rejoin(f *following, now picture, seq uint64) {
 	select {
 	case <-f.joined:
 		said := "process " + strconv.Itoa(os.Getpid()) + " fell behind the tofu host, process " + strconv.Itoa(f.hub.PID) + ", on session " + id + " after event " + strconv.FormatUint(f.seq, 10) + ", so it read the session again as it stood at event " + strconv.FormatUint(seq, 10)
-		safe.Go(h.report, "follow trace", func() { f.ask(followAsk{Op: followTrace, Text: said}) })
+		recover.Go(h.report, "follow trace", func() { f.ask(followAsk{Op: followTrace, Text: said}) })
 	default:
 		close(f.joined)
 	}
@@ -745,7 +745,7 @@ func (h *Host) carries(task string) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for _, said := range h.carried {
-		if said.Role == llm.RoleUser && strings.Contains(said.Content, strings.TrimSpace(task)) {
+		if said.Role == core.RoleUser && strings.Contains(said.Content, strings.TrimSpace(task)) {
 			return true
 		}
 	}

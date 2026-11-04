@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -31,13 +31,13 @@ type timedModel struct {
 	asked []time.Time
 }
 
-func (m *timedModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (m *timedModel) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	m.asked = append(m.asked, time.Now())
 	return m.stubModel.Ask(ctx, request)
 }
 
-func besideARead(spawning llm.Decision) llm.Decision {
-	spawning.ToolCalls = append(slices.Clone(spawning.ToolCalls), llm.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"notes.txt"}`)})
+func besideARead(spawning core.Decision) core.Decision {
+	spawning.ToolCalls = append(slices.Clone(spawning.ToolCalls), core.ToolCall{ID: "call-read", Name: "read", Arguments: json.RawMessage(`{"path":"notes.txt"}`)})
 	return spawning
 }
 
@@ -46,7 +46,7 @@ func TestALeadStepOfOnlyStartedSpawnsEndsTheTurnWithoutAnAnnounceRequest(t *test
 	announcing.Content = "spawning a sub-agent to add the users route"
 	for _, c := range []struct {
 		name, spawnedFrom, endsOn string
-		first                     llm.Decision
+		first                     core.Decision
 		subAgentRuns              bool
 		leadRequests              int
 	}{
@@ -57,7 +57,7 @@ func TestALeadStepOfOnlyStartedSpawnsEndsTheTurnWithoutAnAnnounceRequest(t *test
 		{name: "a sub-agent's own spawn asks again", spawnedFrom: "turn-parent", first: announcing, subAgentRuns: true, leadRequests: 2, endsOn: "sub-1 is on it"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			model := newCrew(map[string][]llm.Decision{
+			model := newCrew(map[string][]core.Decision{
 				leadKey:    {c.first, claimDecision("sub-1 is on it")},
 				usersRoute: {claimDecision("the users route is added")},
 			})
@@ -70,10 +70,10 @@ func TestALeadStepOfOnlyStartedSpawnsEndsTheTurnWithoutAnAnnounceRequest(t *test
 			if c.subAgentRuns {
 				waitFor(t, "the sub-agent's answer", func() bool { return model.answered(usersRoute) == 1 })
 			}
-			var last llm.Message
+			var last core.Message
 			said := 0
 			for _, message := range row.Conversation {
-				if message.Role == llm.RoleAssistant {
+				if message.Role == core.RoleAssistant {
 					last = message
 					if message.Content == c.endsOn {
 						said++
@@ -89,13 +89,13 @@ func TestALeadStepOfOnlyStartedSpawnsEndsTheTurnWithoutAnAnnounceRequest(t *test
 
 func TestSpawnsInOneReplyAreNamedInTheOrderOfTheirCalls(t *testing.T) {
 	routes := []string{"add the users route", "add the orders route", "add the items route", "add the carts route"}
-	var calls []llm.ToolCall
-	scripts := map[string][]llm.Decision{leadKey: nil}
+	var calls []core.ToolCall
+	scripts := map[string][]core.Decision{leadKey: nil}
 	for i, route := range routes {
 		calls = append(calls, spawnCall("call-"+strconv.Itoa(i+1), route, "src/"+strconv.Itoa(i+1)+".ts").ToolCalls[0])
-		scripts[route] = []llm.Decision{claimDecision("done")}
+		scripts[route] = []core.Decision{claimDecision("done")}
 	}
-	scripts[leadKey] = []llm.Decision{toolCallDecision(calls...)}
+	scripts[leadKey] = []core.Decision{toolCallDecision(calls...)}
 	model := newCrew(scripts)
 	lead := crewLead(t, model)
 	if _, err := Run(context.Background(), lead); err != nil {
@@ -112,12 +112,12 @@ func TestSpawnsInOneReplyAreNamedInTheOrderOfTheirCalls(t *testing.T) {
 }
 
 func TestTheTextBesideAToolCallIsInTheNextRequestAndMovesNoEarlierMessage(t *testing.T) {
-	thinking := llm.Thinking{Text: "the note may be long", Signature: "signed"}
-	reading := toolCallDecision(llm.ToolCall{ID: "call-1", Name: "noop", Arguments: json.RawMessage(`{"n":1}`)})
+	thinking := core.Thinking{Text: "the note may be long", Signature: "signed"}
+	reading := toolCallDecision(core.ToolCall{ID: "call-1", Name: "noop", Arguments: json.RawMessage(`{"n":1}`)})
 	reading.Content, reading.Thinking = "reading the note first", thinking
-	blank := toolCallDecision(llm.ToolCall{ID: "call-2", Name: "noop", Arguments: json.RawMessage(`{"n":2}`)})
+	blank := toolCallDecision(core.ToolCall{ID: "call-2", Name: "noop", Arguments: json.RawMessage(`{"n":2}`)})
 	blank.Content = " \n"
-	model := &stubModel{decisions: []llm.Decision{reading, blank, messageDecision()}}
+	model := &stubModel{decisions: []core.Decision{reading, blank, messageDecision()}}
 	if _, err := Run(context.Background(), Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(namedTool("noop")), Task: "read the note",
 		ResultBytesCap: 4096, ArtifactDir: t.TempDir(), NoLastWord: true}); err != nil {
 		t.Fatal(err)
@@ -127,7 +127,7 @@ func TestTheTextBesideAToolCallIsInTheNextRequestAndMovesNoEarlierMessage(t *tes
 	}
 	second, third := model.requests[1].Messages, model.requests[2].Messages
 	said := second[len(second)-2]
-	if said.Role != llm.RoleAssistant || said.Content != reading.Content || said.Thinking != thinking || len(said.ToolCalls) != 1 {
+	if said.Role != core.RoleAssistant || said.Content != reading.Content || said.Thinking != thinking || len(said.ToolCalls) != 1 {
 		t.Errorf("request 2 carried the reply as %s %q thinking %+v with %d calls, want its text, thinking and call", said.Role, said.Content, said.Thinking, len(said.ToolCalls))
 	}
 	if !reflect.DeepEqual(third[:len(second)], second) {
@@ -157,8 +157,8 @@ func alwaysTrusting(context.Context, GateRequest, GateDecision) (PersonAnswer, e
 
 func TestHooksPreToolUseExitTwoIsTheRefusalTheModelSeesAndNothingRuns(t *testing.T) {
 	project, bash := hookedProject(t, `{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"echo 'pushing is not allowed here' >&2; exit 2"}]}]}`)
-	model := &stubModel{decisions: []llm.Decision{
-		toolCallDecision(llm.ToolCall{ID: "call-1", Name: bashToolName, Arguments: json.RawMessage(`{"command":"echo ran > ran.txt"}`)}),
+	model := &stubModel{decisions: []core.Decision{
+		toolCallDecision(core.ToolCall{ID: "call-1", Name: bashToolName, Arguments: json.RawMessage(`{"command":"echo ran > ran.txt"}`)}),
 		messageDecision(),
 	}}
 	if _, err := Run(context.Background(), Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(bash), Task: "push it", Person: alwaysTrusting,
@@ -176,7 +176,7 @@ func TestHooksPreToolUseExitTwoIsTheRefusalTheModelSeesAndNothingRuns(t *testing
 
 func TestHooksAStopHookThatBlocksForeverEndsTheTurnAtItsCap(t *testing.T) {
 	_, bash := hookedProject(t, `{"Stop":[{"hooks":[{"type":"command","command":"echo 'the tests are not run yet' >&2; exit 2"}]}]}`)
-	answers := make([]llm.Decision, konst.HookStopContinuations+2)
+	answers := make([]core.Decision, konst.HookStopContinuations+2)
 	for i := range answers {
 		answers[i] = messageDecision()
 	}
@@ -199,8 +199,8 @@ func TestHooksAStopHookThatBlocksForeverEndsTheTurnAtItsCap(t *testing.T) {
 
 func TestHooksAProjectHookWithNoPersonToAskDoesNotRunAndSaysHowToTrustIt(t *testing.T) {
 	project, bash := hookedProject(t, `{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"echo ran > hooked.txt"}]}]}`)
-	model := &stubModel{decisions: []llm.Decision{
-		toolCallDecision(llm.ToolCall{ID: "call-1", Name: bashToolName, Arguments: json.RawMessage(`{"command":"echo hi"}`)}),
+	model := &stubModel{decisions: []core.Decision{
+		toolCallDecision(core.ToolCall{ID: "call-1", Name: bashToolName, Arguments: json.RawMessage(`{"command":"echo hi"}`)}),
 		messageDecision(),
 	}}
 	var told []string
@@ -218,7 +218,7 @@ func TestHooksAProjectHookWithNoPersonToAskDoesNotRunAndSaysHowToTrustIt(t *test
 
 func TestHooksSubagentStopFiresForATofuSubAgentWithItsID(t *testing.T) {
 	project, bash := hookedProject(t, `{"SubagentStop":[{"hooks":[{"type":"command","command":"cat >> subagent-stop.log"}]}]}`)
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is on it")},
 		usersRoute: {claimDecision("the users route is added")},
 	})
@@ -238,8 +238,8 @@ func TestHooksSubagentStopFiresForATofuSubAgentWithItsID(t *testing.T) {
 }
 
 func TestAShadowGateThatTakes300MillisecondsAddsNoTimeToAStep(t *testing.T) {
-	model := &timedModel{stubModel: stubModel{decisions: []llm.Decision{
-		toolCallDecision(llm.ToolCall{ID: "call-1", Name: "noop", Arguments: json.RawMessage(`{}`)}),
+	model := &timedModel{stubModel: stubModel{decisions: []core.Decision{
+		toolCallDecision(core.ToolCall{ID: "call-1", Name: "noop", Arguments: json.RawMessage(`{}`)}),
 		messageDecision(),
 	}}}
 	row, err := Run(context.Background(), Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(namedTool("noop")), Task: "run noop",
@@ -262,8 +262,8 @@ type planSetting struct{ held *string }
 
 func (planSetting) Name() string { return "plan" }
 
-func (planSetting) Definition() llm.Tool {
-	return llm.Tool{Name: "plan", Parameters: map[string]any{"type": "object"}}
+func (planSetting) Definition() core.Tool {
+	return core.Tool{Name: "plan", Parameters: map[string]any{"type": "object"}}
 }
 
 func (p planSetting) Run(context.Context, json.RawMessage) (contract.Result, error) {
@@ -272,12 +272,12 @@ func (p planSetting) Run(context.Context, json.RawMessage) (contract.Result, err
 }
 
 func TestLoopShowsThePlanAfterTheCachedPrefixOfEveryLaterRequestAndKeepsItOutOfHistory(t *testing.T) {
-	call := func(id, name string) llm.ToolCall {
-		return llm.ToolCall{ID: id, Name: name, Arguments: json.RawMessage(`{}`)}
+	call := func(id, name string) core.ToolCall {
+		return core.ToolCall{ID: id, Name: name, Arguments: json.RawMessage(`{}`)}
 	}
 	for _, spawnedFrom := range []string{"", "turn-lead"} {
 		held := ""
-		model := &stubModel{decisions: []llm.Decision{
+		model := &stubModel{decisions: []core.Decision{
 			toolCallDecision(call("call-1", "read")),
 			toolCallDecision(call("call-2", "plan")),
 			toolCallDecision(call("call-3", "edit")),
@@ -298,7 +298,7 @@ func TestLoopShowsThePlanAfterTheCachedPrefixOfEveryLaterRequestAndKeepsItOutOfH
 		shown := 0
 		for index, request := range model.requests {
 			last := request.Messages[len(request.Messages)-1]
-			planned := held != "" && strings.HasSuffix(last.Content, held) && last.Origin.Source == llm.SourcePlan
+			planned := held != "" && strings.HasSuffix(last.Content, held) && last.Origin.Source == core.SourcePlan
 			if planned {
 				shown++
 			}
@@ -314,7 +314,7 @@ func TestLoopShowsThePlanAfterTheCachedPrefixOfEveryLaterRequestAndKeepsItOutOfH
 			}
 		}
 		for _, message := range row.Conversation {
-			if strings.HasSuffix(message.Content, held) && message.Role == llm.RoleUser {
+			if strings.HasSuffix(message.Content, held) && message.Role == core.RoleUser {
 				t.Errorf("spawned from %q: the conversation kept the plan as a message of its own", spawnedFrom)
 			}
 		}

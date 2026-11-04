@@ -41,7 +41,7 @@ func fillOf(t *testing.T, header session.Header, events []session.Event) recorde
 		if event.Kind != session.EventStep {
 			continue
 		}
-		var step turn.StepRow
+		var step loop.StepRow
 		if err := json.Unmarshal(event.Body, &step); err != nil {
 			t.Fatalf("a step of %s does not parse: %v", header.ID, err)
 		}

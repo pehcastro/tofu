@@ -316,7 +316,7 @@ func gitIdentity(dir string) (remote, root string) {
 	}
 	var both sync.WaitGroup
 	both.Go(func() {
-		_ = safe.Call(Crashes(dir), "git identity", func() error {
+		_ = recover.Call(Crashes(dir), "git identity", func() error {
 			root = git("rev-list", "--max-parents=0", "HEAD")
 			return nil
 		})

@@ -183,26 +183,26 @@ type MemoryReport struct {
 }
 
 type MemoryShelf struct {
-	memory.Shelf
+	entries.Shelf
 	Bytes int `json:"bytes"`
 	Limit int `json:"limit"`
 }
 
 type MemoryAddParams struct {
-	Text  string       `json:"text"`
-	Scope memory.Scope `json:"scope"`
-	Kind  memory.Kind  `json:"kind,omitempty"`
+	Text  string        `json:"text"`
+	Scope entries.Scope `json:"scope"`
+	Kind  entries.Kind  `json:"kind,omitempty"`
 }
 
 type MemoryEditParams struct {
-	Scope memory.Scope `json:"scope"`
-	ID    string       `json:"id"`
-	Text  string       `json:"text"`
+	Scope entries.Scope `json:"scope"`
+	ID    string        `json:"id"`
+	Text  string        `json:"text"`
 }
 
 type MemoryRemoveParams struct {
-	Scope memory.Scope `json:"scope"`
-	ID    string       `json:"id"`
+	Scope entries.Scope `json:"scope"`
+	ID    string        `json:"id"`
 }
 
 type ReloadDiff struct {
@@ -285,12 +285,12 @@ type SettingDoc struct {
 }
 
 type HooksReport struct {
-	Hooks    []hook.Hook `json:"hooks"`
-	Problems []string    `json:"problems"`
+	Hooks    []hooks.Hook `json:"hooks"`
+	Problems []string     `json:"problems"`
 }
 
 type HooksTrusted struct {
-	Trusted []hook.Hook `json:"trusted"`
+	Trusted []hooks.Hook `json:"trusted"`
 }
 
 type LearnParams struct {

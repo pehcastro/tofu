@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/subagents"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
@@ -25,8 +25,8 @@ type namedTool string
 
 func (n namedTool) Name() string { return string(n) }
 
-func (n namedTool) Definition() llm.Tool {
-	return llm.Tool{Name: string(n), Parameters: map[string]any{"type": "object"}}
+func (n namedTool) Definition() core.Tool {
+	return core.Tool{Name: string(n), Parameters: map[string]any{"type": "object"}}
 }
 
 func (namedTool) Run(context.Context, json.RawMessage) (contract.Result, error) {
@@ -48,7 +48,7 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 	for _, tool := range base {
 		names = append(names, tool.Name())
 	}
-	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: append(names, "spawn", "skill"), KnownTools: []string{"web_search"}})
+	found := subagents.Definitions(subagents.Scan{Library: library.Files(), Tools: append(names, "spawn", "skill"), KnownTools: []string{"web_search"}})
 	gates := map[string]string{"go-dev": "go vet, go test", "py-dev": "ruff check, pytest"}
 	for _, definition := range found.Definitions {
 		if gate, isLanguageAgent := gates[definition.Name]; isLanguageAgent && (len(definition.References) != 4 || len(definition.Cut) > 0 || strings.Join(definition.Gate, ", ") != gate) {
@@ -65,10 +65,10 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 		"qa":       "read write typecheck test glob search symbols bash reference",
 		"":         "read write edit typecheck test browser_tabs browser_observe browser_act browser_motion fetch glob search symbols bash spawn message subagents",
 	} {
-		model := &stubModel{decisions: []llm.Decision{claimDecision("did the piece")}}
+		model := &stubModel{decisions: []core.Decision{claimDecision("did the piece")}}
 		config := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(base...), Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096,
 			ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }}
-		spawn := NewSpawnTool("turn-orchestrator", config, &subagent.Roster{})
+		spawn := NewSpawnTool("turn-orchestrator", config, &subagents.Roster{})
 		spawn.SubAgents = SubAgents{Defined: found.Definitions}
 		if _, err := spawn.Run(context.Background(), json.RawMessage(`{"agent":"`+agent+`","task":"do the piece","owns":["piece/**"]}`)); err != nil {
 			t.Fatal(err)
@@ -118,8 +118,8 @@ type actReporting struct {
 
 func (actReporting) Name() string { return "browser_act" }
 
-func (actReporting) Definition() llm.Tool {
-	return llm.Tool{Name: "browser_act", Parameters: map[string]any{"type": "object"}}
+func (actReporting) Definition() core.Tool {
+	return core.Tool{Name: "browser_act", Parameters: map[string]any{"type": "object"}}
 }
 
 func (a actReporting) Run(context.Context, json.RawMessage) (contract.Result, error) {
@@ -130,28 +130,28 @@ func (a actReporting) Run(context.Context, json.RawMessage) (contract.Result, er
 }
 
 type foreverActing struct {
-	requests []llm.Request
+	requests []core.Request
 	acts     int
 }
 
-func (m *foreverActing) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+func (m *foreverActing) Ask(_ context.Context, request core.Request) (core.Decision, error) {
 	m.requests = append(m.requests, request)
 	if strings.HasSuffix(request.Messages[len(request.Messages)-1].Content, andThisIsItsLastStep) {
 		return claimDecision("stopped at the fork cap, the search for Atibaia is filled"), nil
 	}
 	m.acts++
 	if m.acts > 40 {
-		return llm.Decision{}, errors.New("the sub-agent is still acting after 40 steps")
+		return core.Decision{}, errors.New("the sub-agent is still acting after 40 steps")
 	}
 	args := json.RawMessage(`{"tab":1,"actions":[{"action":"fill","ref":"e5458","value":"Atibaia"}]}`)
-	return toolCallDecision(llm.ToolCall{ID: "act-" + strconv.Itoa(m.acts), Name: "browser_act", Arguments: args}), nil
+	return toolCallDecision(core.ToolCall{ID: "act-" + strconv.Itoa(m.acts), Name: "browser_act", Arguments: args}), nil
 }
 
 func TestASubAgentWhoseForksCannotShrinkStopsAtTheSecondForkAndItsCarrySaysWhatItTried(t *testing.T) {
 	model, acts := &foreverActing{}, 0
 	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(actReporting{acts: &acts}), ResultBytesCap: 4096,
 		ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }, Budget: recall.Budget{Bands: recall.Bands{Recent: 1}}}
-	spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
 	args, err := json.Marshal(spawnArgs{Task: "find a house in Atibaia", Owns: []string{"notes/**"}})
 	if err != nil {
 		t.Fatal(err)
@@ -186,8 +186,8 @@ func TestASubAgentWhoseForksCannotShrinkStopsAtTheSecondForkAndItsCarrySaysWhatI
 
 type forksTwiceThenAnswers struct{ asked int }
 
-func (m *forksTwiceThenAnswers) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
-	if request.Messages[len(request.Messages)-1].Origin.Source == llm.SourceForkState {
+func (m *forksTwiceThenAnswers) Ask(_ context.Context, request core.Request) (core.Decision, error) {
+	if request.Messages[len(request.Messages)-1].Origin.Source == core.SourceForkState {
 		return claimDecision("goal: find a house in Atibaia"), nil
 	}
 	m.asked++
@@ -196,8 +196,8 @@ func (m *forksTwiceThenAnswers) Ask(_ context.Context, request llm.Request) (llm
 	}
 	args := json.RawMessage(`{"tab":1,"actions":[{"action":"fill","ref":"e5458","value":"Atibaia"}]}`)
 	return toolCallDecision(
-		llm.ToolCall{ID: "act-" + strconv.Itoa(m.asked) + "a", Name: "browser_act", Arguments: args},
-		llm.ToolCall{ID: "act-" + strconv.Itoa(m.asked) + "b", Name: "browser_act", Arguments: args}), nil
+		core.ToolCall{ID: "act-" + strconv.Itoa(m.asked) + "a", Name: "browser_act", Arguments: args},
+		core.ToolCall{ID: "act-" + strconv.Itoa(m.asked) + "b", Name: "browser_act", Arguments: args}), nil
 }
 
 func TestAForkedSubAgentReportsEveryForkUnderTheNameMessageReaches(t *testing.T) {
@@ -205,7 +205,7 @@ func TestAForkedSubAgentReportsEveryForkUnderTheNameMessageReaches(t *testing.T)
 	model := &forksTwiceThenAnswers{}
 	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(actReporting{acts: &acts, listings: 60}), ResultBytesCap: 4096,
 		ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }, Budget: recall.Budget{Bands: recall.Bands{Recent: 1}}}
-	spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
 	args, err := json.Marshal(spawnArgs{Task: "find a house in Atibaia", Owns: []string{"notes/**"}})
 	if err != nil {
 		t.Fatal(err)
@@ -241,9 +241,9 @@ func sessionWithTwoFinishedSubAgents(t *testing.T) (*session.Store, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey: {
-			toolCallDecision(llm.ToolCall{ID: "call-users", Name: "spawn", Arguments: users}, llm.ToolCall{ID: "call-orders", Name: "spawn", Arguments: orders}),
+			toolCallDecision(core.ToolCall{ID: "call-users", Name: "spawn", Arguments: users}, core.ToolCall{ID: "call-orders", Name: "spawn", Arguments: orders}),
 			claimDecision("one reported"), claimDecision("both reported"), claimDecision("done"),
 		},
 		usersRoute:  {claimDecision("the users route is added")},
@@ -258,7 +258,7 @@ func sessionWithTwoFinishedSubAgents(t *testing.T) (*session.Store, string) {
 
 func TestASessionReadBackAsAResumeListsBothItsFinishedSubAgents(t *testing.T) {
 	store, id := sessionWithTwoFinishedSubAgents(t)
-	resumed := &subagent.Roster{}
+	resumed := &subagents.Roster{}
 	if err := RestoreSubAgents(store, id, resumed, NewInbox()); err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +298,7 @@ func TestEachPostedReportIsRecordedWithTheSubAgentsNameAndState(t *testing.T) {
 	}
 }
 
-func restoredWithout(t *testing.T, store *session.Store, id string, dropped func(session.Event) bool) *subagent.Roster {
+func restoredWithout(t *testing.T, store *session.Store, id string, dropped func(session.Event) bool) *subagents.Roster {
 	t.Helper()
 	header, err := store.Header(id)
 	if err != nil {
@@ -312,7 +312,7 @@ func restoredWithout(t *testing.T, store *session.Store, id string, dropped func
 	if err := rewritten.Write(header, slices.DeleteFunc(events, dropped)); err != nil {
 		t.Fatal(err)
 	}
-	resumed := &subagent.Roster{}
+	resumed := &subagents.Roster{}
 	if err := RestoreSubAgents(rewritten, id, resumed, NewInbox()); err != nil {
 		t.Fatal(err)
 	}
@@ -338,11 +338,11 @@ func TestAResumeReadsEachReportFromItsOwnEventAndFromTheLeadsMessagesOnlyInAnOld
 
 func TestAMessageAfterAResumeReachesAFinishedSubAgentWithItsConversation(t *testing.T) {
 	store, id := sessionWithTwoFinishedSubAgents(t)
-	resumed, inbox := &subagent.Roster{}, NewInbox()
+	resumed, inbox := &subagents.Roster{}, NewInbox()
 	if err := RestoreSubAgents(store, id, resumed, inbox); err != nil {
 		t.Fatal(err)
 	}
-	model := newCrew(map[string][]llm.Decision{usersRoute: {claimDecision("the health route is added")}})
+	model := newCrew(map[string][]core.Decision{usersRoute: {claimDecision("the health route is added")}})
 	spawn := NewSpawnTool("turn-lead", Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(), Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096, ArtifactDir: t.TempDir()}, resumed)
 	spawn.Inbox = inbox
 	if _, err := (messageTool{orchestrator: spawn}).Run(context.Background(), json.RawMessage(`{"to":"sub-1","text":"also add /health"}`)); err != nil {
@@ -352,7 +352,7 @@ func TestAMessageAfterAResumeReachesAFinishedSubAgentWithItsConversation(t *test
 		t.Errorf("sub-1 did not report after the message:\n%s", report)
 	}
 	asked := model.requests(usersRoute)
-	if len(asked) != 1 || !slices.ContainsFunc(asked[0].Messages, func(message llm.Message) bool { return message.Content == "the users route is added" }) {
+	if len(asked) != 1 || !slices.ContainsFunc(asked[0].Messages, func(message core.Message) bool { return message.Content == "the users route is added" }) {
 		t.Fatalf("sub-1 was asked %d times, want once carrying what it said before the resume", len(asked))
 	}
 }
@@ -367,7 +367,7 @@ func reported(t *testing.T, spawn *SpawnTool) string {
 }
 
 func TestTheLeadHasTheSpawnResultBeforeTheSubAgentsFirstRequestIsAnswered(t *testing.T) {
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is done")},
 		usersRoute: {claimDecision("the users route is added")},
 	})
@@ -386,7 +386,7 @@ func TestTheLeadHasTheSpawnResultBeforeTheSubAgentsFirstRequestIsAnswered(t *tes
 }
 
 func TestRustDevCarriesTheGpuiReferencesOnlyWhereItsOwnsReachGpuiCe(t *testing.T) {
-	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: []string{"read", "write", "edit", "glob", "search", "symbols", "bash", "skill"}})
+	found := subagents.Definitions(subagents.Scan{Library: library.Files(), Tools: []string{"read", "write", "edit", "glob", "search", "symbols", "bash", "skill"}})
 	for _, c := range []struct {
 		manifest, owns string
 		gpui           bool
@@ -402,10 +402,10 @@ func TestRustDevCarriesTheGpuiReferencesOnlyWhereItsOwnsReachGpuiCe(t *testing.T
 		if err := os.WriteFile(filepath.Join(root, "apps", "desk", "Cargo.toml"), []byte(c.manifest), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		model := &stubModel{decisions: []llm.Decision{claimDecision("did the piece")}}
+		model := &stubModel{decisions: []core.Decision{claimDecision("did the piece")}}
 		base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(namedTool("read")), ResultBytesCap: 4096,
 			ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }}
-		spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+		spawn := NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
 		spawn.SubAgents = SubAgents{Root: root, Defined: found.Definitions, Prompt: ComposeSpec{Environment: "e", ToolGuidance: "g"}}
 		if _, err := spawn.Run(context.Background(), json.RawMessage(`{"agent":"rust-dev","task":"fix the tab strip","owns":["`+c.owns+`"]}`)); err != nil {
 			t.Fatal(err)
@@ -427,7 +427,7 @@ func TestRustDevCarriesTheGpuiReferencesOnlyWhereItsOwnsReachGpuiCe(t *testing.T
 
 func TestASpawnWithNoOwnsStartsAndItsWriteEditAndNestedSpawnAreRefused(t *testing.T) {
 	names := []string{"read", "write", "edit", "typecheck", "test", "glob", "search", "symbols", "bash", "spawn", "skill"}
-	found := subagent.Definitions(subagent.Scan{Library: library.Files(), Tools: names})
+	found := subagents.Definitions(subagents.Scan{Library: library.Files(), Tools: names})
 	for spawned, nested := range map[string]string{
 		`{"agent":"ts-dev","task":"run ping and report"}`: `unknown tool "spawn"`,
 		`{"task":"run ping and report","owns":[]}`:        "spawned without owns, so a sub-agent you spawn holds none either",
@@ -437,14 +437,14 @@ func TestASpawnWithNoOwnsStartsAndItsWriteEditAndNestedSpawnAreRefused(t *testin
 		if err != nil {
 			t.Fatal(err)
 		}
-		model := &stubModel{decisions: []llm.Decision{toolCallDecision(
-			llm.ToolCall{ID: "w", Name: "write", Arguments: json.RawMessage(`{"path":"ping-run-1.txt","content":"placeholder"}`)},
-			llm.ToolCall{ID: "e", Name: "edit", Arguments: json.RawMessage(`{"path":"ping-run-1.txt","old_string":"a","new_string":"b"}`)},
-			llm.ToolCall{ID: "s", Name: "spawn", Arguments: json.RawMessage(`{"task":"write it for me","owns":["**"]}`)}),
+		model := &stubModel{decisions: []core.Decision{toolCallDecision(
+			core.ToolCall{ID: "w", Name: "write", Arguments: json.RawMessage(`{"path":"ping-run-1.txt","content":"placeholder"}`)},
+			core.ToolCall{ID: "e", Name: "edit", Arguments: json.RawMessage(`{"path":"ping-run-1.txt","old_string":"a","new_string":"b"}`)},
+			core.ToolCall{ID: "s", Name: "spawn", Arguments: json.RawMessage(`{"task":"write it for me","owns":["**"]}`)}),
 			claimDecision("ping answered three times")}}
 		base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write, namedTool("edit"), namedTool("bash")), ResultBytesCap: 4096,
 			ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }}
-		spawn := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+		spawn := NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
 		spawn.SubAgents = SubAgents{Defined: found.Definitions}
 		if _, err := spawn.Run(context.Background(), json.RawMessage(spawned)); err != nil {
 			t.Fatalf("%s did not start: %v", spawned, err)
@@ -455,7 +455,7 @@ func TestASpawnWithNoOwnsStartsAndItsWriteEditAndNestedSpawnAreRefused(t *testin
 		}
 		said := map[string]string{}
 		for _, message := range model.requests[1].Messages {
-			if message.Role == llm.RoleTool {
+			if message.Role == core.RoleTool {
 				said[message.ToolCallID] = message.Content
 			}
 		}
@@ -476,12 +476,12 @@ func TestASpawnWithNoOwnsStartsAndItsWriteEditAndNestedSpawnAreRefused(t *testin
 
 type heldModel struct{ release chan struct{} }
 
-func (m heldModel) Ask(ctx context.Context, _ llm.Request) (llm.Decision, error) {
+func (m heldModel) Ask(ctx context.Context, _ core.Request) (core.Decision, error) {
 	select {
 	case <-m.release:
 		return claimDecision("done"), nil
 	case <-ctx.Done():
-		return llm.Decision{}, ctx.Err()
+		return core.Decision{}, ctx.Err()
 	}
 }
 

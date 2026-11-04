@@ -109,7 +109,7 @@ func (s Store) Acceptance(ticket Ticket, leave []int) ([]AcceptanceLine, error) 
 	if err != nil {
 		return nil, err
 	}
-	return Accounted(subagent.InForce(ticket.Acceptance), events, leave), nil
+	return Accounted(subagents.InForce(ticket.Acceptance), events, leave), nil
 }
 
 func Accounted(lines []string, events []Event, leave []int) []AcceptanceLine {

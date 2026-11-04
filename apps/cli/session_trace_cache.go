@@ -66,15 +66,15 @@ func cacheTrace(events []session.Event, exchanges []session.Exchange) traceCache
 			continue
 		}
 		trace.Breaks = append(trace.Breaks, traceCacheBreak{Agent: exchange.Agent, Request: exchange.Request, After: before.Request,
-			Gap: widget.Until(exchange.At.Sub(before.At)), Read: use.Read, Cached: cached, Differs: firstDifference(before, exchange)})
+			Gap: render.Until(exchange.At.Sub(before.At)), Read: use.Read, Cached: cached, Differs: firstDifference(before, exchange)})
 	}
 	return trace
 }
 
-func cacheBreakRows(breaks []traceCacheBreak) []cli.Row {
-	rows := make([]cli.Row, len(breaks))
+func cacheBreakRows(breaks []traceCacheBreak) []page.Row {
+	rows := make([]page.Row, len(breaks))
 	for i, cut := range breaks {
-		rows[i] = cli.Row{Mark: cli.Warn, Cells: []string{cmp.Or(cut.Agent, session.AuthorOrchestrator), cut.Request,
+		rows[i] = page.Row{Mark: page.Warn, Cells: []string{cmp.Or(cut.Agent, session.AuthorOrchestrator), cut.Request,
 			"read " + strconv.Itoa(cut.Read) + " of " + strconv.Itoa(cut.Cached) + " cached", cut.Gap + " after " + cut.After}, Detail: "first difference: " + cut.Differs}
 	}
 	return rows

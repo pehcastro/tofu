@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -73,10 +73,10 @@ func toolRefLine(content string) string {
 
 func WithoutToolRef(content string) string { return strings.TrimPrefix(content, toolRefLine(content)) }
 
-func pointAtCopy(answer llm.Message, held ...[]llm.Message) (string, bool) {
+func pointAtCopy(answer core.Message, held ...[]core.Message) (string, bool) {
 	for _, messages := range held {
 		for _, message := range messages {
-			if content := WithoutToolRef(message.Content); message.Role == llm.RoleTool && (content == answer.Content || content == aRepeatRunsAgainNothing+answer.Content) {
+			if content := WithoutToolRef(message.Content); message.Role == core.RoleTool && (content == answer.Content || content == aRepeatRunsAgainNothing+answer.Content) {
 				named := cmp.Or(strings.TrimSpace(toolRefLine(message.Content)), message.ToolCallID)
 				return "unchanged: the same call as " + named + " earlier in this turn, with nothing written since, so its result above is this result word for word", true
 			}
@@ -86,8 +86,8 @@ func pointAtCopy(answer llm.Message, held ...[]llm.Message) (string, bool) {
 }
 
 type gatedCall struct {
-	call    llm.ToolCall
-	asked   llm.ToolCall
+	call    core.ToolCall
+	asked   core.ToolCall
 	proxy   *ProxyRow
 	id      string
 	parent  string
@@ -101,9 +101,9 @@ type gatedCall struct {
 	gateErr string
 	shadow  <-chan shadowVerdict
 	refusal string
-	fire    func(context.Context, hook.Input) hook.Verdict
+	fire    func(context.Context, hooks.Input) hooks.Verdict
 	hooks   []HookRun
-	before  []hook.Context
+	before  []hooks.Context
 }
 
 type shadowVerdict struct {
@@ -111,7 +111,7 @@ type shadowVerdict struct {
 	err      string
 }
 
-func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts, batch int) (ToolCallRow, llm.Message, bool) {
+func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts, batch int) (ToolCallRow, core.Message, bool) {
 	row, answer := rejectedCall(g.call, time.Now(), g.refusal, g.id, g.parent, g.author)
 	repeat := false
 	if g.refusal == "" {
@@ -119,7 +119,7 @@ func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, 
 	} else if spawner, spawning := tools.byName[g.call.Name].(*SpawnTool); spawning {
 		spawner.refused(g.call.ID)
 	}
-	answer.Content += hookMarked(llm.SourcePreTool, g.before)
+	answer.Content += hookMarked(core.SourcePreTool, g.before)
 	verdict, gateErr := g.verdict, g.gateErr
 	select {
 	case judged := <-g.shadow:
@@ -137,7 +137,7 @@ func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, 
 	return row, answer, repeat
 }
 
-func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts) (ToolCallRow, llm.Message, bool) {
+func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts) (ToolCallRow, core.Message, bool) {
 	call := g.call
 	started := time.Now()
 	ctx = context.WithValue(context.WithValue(context.WithValue(ctx, shellOwnerKey{}, g.author), spawnSiteKey{}, g.site), runningModelKey{}, g.model)
@@ -156,16 +156,16 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	}
 	if err != nil {
 		row, answer := rejectedCall(call, started, g.redact.Redact(err.Error()), g.id, g.parent, g.author)
-		var refused rule.Refusal
+		var refused rules.Refusal
 		if errors.As(err, &refused) {
 			row.Rules = ruleFindings(refused.Fires)
 		}
 		return row, answer, false
 	}
 	result.Content, result.FailureText = g.redact.Redact(result.Content), g.redact.Redact(result.FailureText)
-	var post hook.Verdict
+	var post hooks.Verdict
 	if !result.Repeat {
-		post = g.fire(ctx, hook.Input{Event: hook.PostToolUse, Tool: call.Name, Args: call.Arguments, CallID: call.ID, Response: result.Content, Failed: result.FailureText != ""})
+		post = g.fire(ctx, hooks.Input{Event: hooks.PostToolUse, Tool: call.Name, Args: call.Arguments, CallID: call.ID, Response: result.Content, Failed: result.FailureText != ""})
 	}
 
 	cut := g.cutShellResult(ctx, call.Name, result)
@@ -189,7 +189,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 		DurationMS:     time.Since(started).Milliseconds(),
 		Error:          result.FailureText,
 		SubAgentID:     result.SubAgent,
-		Hooks:          hookRunOf(hook.PostToolUse, post),
+		Hooks:          hookRunOf(hooks.PostToolUse, post),
 		Rules:          ruleFindings(result.Rules),
 	}
 	if storeErr != nil {
@@ -197,14 +197,14 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	}
 	outcome := row.Outcome()
 	if result.Outcome == contract.ResultAborted {
-		outcome = llm.ToolOutcomeAborted
+		outcome = core.ToolOutcomeAborted
 	}
 	body := rendered
 	if body == "" {
 		switch outcome {
-		case llm.ToolOutcomeAborted:
+		case core.ToolOutcomeAborted:
 			body = theToolWasAbortedAndPrintedNothing
-		case llm.ToolOutcomeFailed, llm.ToolOutcomeSkipped:
+		case core.ToolOutcomeFailed, core.ToolOutcomeSkipped:
 			body = theToolFailedAndPrintedNothing
 		default:
 			body = theToolSucceededAndPrintedNothing
@@ -213,9 +213,9 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	if post.Block != "" {
 		body += "\n\na PostToolUse hook says: " + post.Block
 	}
-	body += hookMarked(llm.SourcePostTool, post.Context)
-	return row, llm.Message{
-		Role:            llm.RoleTool,
+	body += hookMarked(core.SourcePostTool, post.Context)
+	return row, core.Message{
+		Role:            core.RoleTool,
 		ToolCallID:      call.ID,
 		Content:         body,
 		ToolOutcome:     outcome,
@@ -227,7 +227,7 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	}, result.Repeat
 }
 
-func ruleFindings(fires []rule.Fire) []session.RuleFinding {
+func ruleFindings(fires []rules.Fire) []session.RuleFinding {
 	var found []session.RuleFinding
 	for _, f := range fires {
 		for _, one := range f.Lines() {
@@ -237,15 +237,15 @@ func ruleFindings(fires []rule.Fire) []session.RuleFinding {
 	return found
 }
 
-func rejectedCall(call llm.ToolCall, started time.Time, reason, id, parent, author string) (ToolCallRow, llm.Message) {
+func rejectedCall(call core.ToolCall, started time.Time, reason, id, parent, author string) (ToolCallRow, core.Message) {
 	content := "error: " + reason
 	var asked struct {
 		Command string `json:"command"`
 	}
 	_ = json.Unmarshal(call.Arguments, &asked)
 	row := ToolCallRow{ID: id, Parent: parent, Author: author, Call: call.ID, Tool: call.Name, Args: call.Arguments, Command: asked.Command, Error: reason, DurationMS: time.Since(started).Milliseconds()}
-	return row, llm.Message{
-		Role:            llm.RoleTool,
+	return row, core.Message{
+		Role:            core.RoleTool,
 		ToolCallID:      call.ID,
 		Content:         content,
 		ToolOutcome:     row.Outcome(),

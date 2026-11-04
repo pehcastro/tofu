@@ -224,7 +224,7 @@ func (a API) Report(request ReportRequest) (ReportAnswer, error) {
 	var eventsErr error
 	var reading sync.WaitGroup
 	reading.Go(func() {
-		eventsErr = safe.Call(store.crashed, "boardy report events", func() (err error) {
+		eventsErr = recover.Call(store.crashed, "boardy report events", func() (err error) {
 			events, err = store.Events(key, 0)
 			return err
 		})

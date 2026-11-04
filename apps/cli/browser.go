@@ -17,14 +17,14 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
 	"tofu/internal/konst"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/tools/registry"
-	"tofu/internal/tools/web/browser/driver"
+	browser "tofu/internal/tools/web/browser/driver"
 	"tofu/internal/tools/web/browser/loop"
 	"tofu/internal/tools/web/browser/motion"
 	"tofu/internal/tools/web/browser/recipe"
@@ -224,10 +224,10 @@ func (o browserOutput) batch(home string, tab int, from string) int {
 	} else {
 		steps, err = os.ReadFile(from)
 	}
-	tabs := tools.NewBrowserTabs(home)
+	tabs := registry.NewBrowserTabs(home)
 	report, failed := "", 0
 	if err == nil {
-		report, failed, err = tools.BrowserBatch(context.Background(), browserEndpoint(home), tabs, tab, steps)
+		report, failed, err = registry.BrowserBatch(context.Background(), browserEndpoint(home), tabs, tab, steps)
 	}
 	if tab == 0 {
 		tabs.Close()
@@ -313,9 +313,9 @@ func (o browserOutput) bench(args []string) int {
 	}
 	report := benchReport{Chooser: "scripted", RowsFile: *rowsPath}
 	home, err := os.UserHomeDir()
-	var judge *jevloop.Jev
+	var judge *loop.Jev
 	if err == nil && *withJev {
-		report.Chooser, judge = "jev", &jevloop.Jev{}
+		report.Chooser, judge = "jev", &loop.Jev{}
 		*judge, err = wiring.BrowserJudge(".")
 	}
 	var address string
@@ -532,7 +532,7 @@ func relayPage(page cli.Page, state browser.Relay) []string {
 		verdict, hint = cli.Verdict{Mark: cli.Active, Text: "awake"}, "tofu settings set browserSleepMinutes <minutes> changes when it sleeps"
 	}
 	facts := []cli.Fact{{Label: "build", Text: state.Builds.Tofu}, {Label: "extension", Text: cmp.Or(state.Builds.Extension, "unknown")},
-		{Label: "memory", Text: widget.Size(int(state.HeldBytes)) + " held from the system"}, {Label: "sessions", Text: strconv.Itoa(state.OtherSessions) + " other tofu connected"},
+		{Label: "memory", Text: render.Size(int(state.HeldBytes)) + " held from the system"}, {Label: "sessions", Text: strconv.Itoa(state.OtherSessions) + " other tofu connected"},
 		{Label: "sleeps", Text: strings.TrimSuffix(state.SleepAfter.String(), "0s") + " after the last tofu leaves"}}
 	lines := append(append(page.Title("Chrome relay", nil, verdict), ""), cli.Indent(page.Facts(facts)...)...)
 	return append(append(lines, ""), cli.Indent(page.Hint(cmp.Or(state.Builds.Problem, hint)))...)
@@ -612,9 +612,9 @@ func benchPage(page cli.Page, report benchReport) []string {
 		numbers[i] = [2]string{strconv.FormatFloat(phase.P50, 'f', 2, 64), strconv.FormatFloat(phase.P90, 'f', 2, 64)}
 		width = max(width, len(numbers[i][0]), len(numbers[i][1]))
 	}
-	rows := []cli.Row{{Cells: []string{page.Label("phase"), page.Label(widget.Lead("p50", width)), page.Label(widget.Lead("p90", width))}}}
+	rows := []cli.Row{{Cells: []string{page.Label("phase"), page.Label(render.Lead("p50", width)), page.Label(render.Lead("p90", width))}}}
 	for i, phase := range report.Phases {
-		rows = append(rows, cli.Row{Cells: []string{phase.Name, widget.Lead(numbers[i][0], width), widget.Lead(numbers[i][1], width)}})
+		rows = append(rows, cli.Row{Cells: []string{phase.Name, render.Lead(numbers[i][0], width), render.Lead(numbers[i][1], width)}})
 	}
 	untimed := ""
 	if report.Untimed > 0 {

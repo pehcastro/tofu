@@ -192,7 +192,7 @@ func scanTree(req Request, into *sweep, matched map[string]string, declared map[
 	defer stop.Store(true)
 	report := sys.Crashes(req.Root)
 	for range min(runtime.GOMAXPROCS(0), len(req.Files)) {
-		safe.Go(report, "search scan", func() {
+		recover.Go(report, "search scan", func() {
 			var buffer []byte
 			for !stop.Load() {
 				index := int(next.Add(1)) - 1
@@ -204,7 +204,7 @@ func scanTree(req Request, into *sweep, matched map[string]string, declared map[
 					size = req.Sizes[index]
 				}
 				var file scannedFile
-				if err := safe.Call(report, "search scan", func() error {
+				if err := recover.Call(report, "search scan", func() error {
 					file, buffer = scanFile(req.Root, req.Files[index], size, into.pattern, buffer)
 					return nil
 				}); err != nil {

@@ -36,31 +36,31 @@ type hazardRule struct {
 	NeverRelaxedBy       string  `json:"never_relaxed_by"`
 }
 
-func loadHazards() (hazardRule, question.Set, error) {
+func loadHazards() (hazardRule, questions.Set, error) {
 	data, err := os.ReadFile(hazardRuleFile)
 	if err != nil {
-		return hazardRule{}, question.Set{}, err
+		return hazardRule{}, questions.Set{}, err
 	}
 	var rule hazardRule
 	if err := json.Unmarshal(data, &rule); err != nil {
-		return hazardRule{}, question.Set{}, fmt.Errorf("%s: %w", hazardRuleFile, err)
+		return hazardRule{}, questions.Set{}, fmt.Errorf("%s: %w", hazardRuleFile, err)
 	}
-	set, err := question.Load(rule.Questions)
+	set, err := questions.Load(rule.Questions)
 	if err != nil {
-		return hazardRule{}, question.Set{}, err
+		return hazardRule{}, questions.Set{}, err
 	}
-	if findings := question.Lint(set, question.DefaultCaps()); len(findings) > 0 {
-		return hazardRule{}, question.Set{}, fmt.Errorf("%s fails its own lint: %v", rule.Questions, findings[0])
+	if findings := questions.Lint(set, questions.DefaultCaps()); len(findings) > 0 {
+		return hazardRule{}, questions.Set{}, fmt.Errorf("%s fails its own lint: %v", rule.Questions, findings[0])
 	}
 	for _, name := range []string{rule.RelaxedBy, rule.NeverRelaxedBy} {
 		if _, ok := set.Question(name); !ok {
-			return hazardRule{}, question.Set{}, fmt.Errorf("%s names %q and %s does not ask it", hazardRuleFile, name, rule.Questions)
+			return hazardRule{}, questions.Set{}, fmt.Errorf("%s names %q and %s does not ask it", hazardRuleFile, name, rule.Questions)
 		}
 	}
 	return rule, set, nil
 }
 
-func (r hazardRule) decide(answers map[string]jev.Answer) (Verdict, error) {
+func (r hazardRule) decide(answers map[string]core.Answer) (Verdict, error) {
 	if answers[r.NeverRelaxedBy].Noul >= r.HazardAskAt {
 		return Block, nil
 	}
@@ -72,24 +72,24 @@ func (r hazardRule) decide(answers map[string]jev.Answer) (Verdict, error) {
 	return Proceed, nil
 }
 
-func shippedQuestions() (question.Set, error) {
-	layers, err := question.Layers(libraryquestions.Files(), "")
+func shippedQuestions() (questions.Set, error) {
+	layers, err := questions.Layers(libraryquestions.Files(), "")
 	if err != nil {
-		return question.Set{}, err
+		return questions.Set{}, err
 	}
-	set, _, err := question.Resolve(shippedQuestionSet, layers)
+	set, _, err := questions.Resolve(shippedQuestionSet, layers)
 	return set, err
 }
 
 type jevArm struct {
 	name      string
 	rule      string
-	set       question.Set
-	questions []jev.Question
-	decide    func(map[string]jev.Answer) (Verdict, error)
+	set       questions.Set
+	questions []core.Question
+	decide    func(map[string]core.Answer) (Verdict, error)
 }
 
-func armOf(name, rule string, set question.Set, decide func(map[string]jev.Answer) (Verdict, error)) jevArm {
+func armOf(name, rule string, set questions.Set, decide func(map[string]core.Answer) (Verdict, error)) jevArm {
 	arm := jevArm{name: name, rule: rule, set: set, decide: decide}
 	for _, q := range set.Questions {
 		arm.questions = append(arm.questions, q.ToJev())
@@ -110,7 +110,7 @@ func jevArms(root string) ([]jevArm, error) {
 	if err != nil {
 		return nil, err
 	}
-	decideShipped := func(answers map[string]jev.Answer) (Verdict, error) {
+	decideShipped := func(answers map[string]core.Answer) (Verdict, error) {
 		verdict, _, err := decide(answers, pol)
 		return verdict, err
 	}
@@ -188,18 +188,18 @@ func (r hazardRow) charge() ledger.Charge {
 	return ledger.ChargeOf(r.ProviderUSD, float64(r.InputTokens)*typesafe.DollarsPerInputToken)
 }
 
-func answersOf(set question.Set, values map[string]float64) (map[string]jev.Answer, error) {
-	answers := make(map[string]jev.Answer, len(set.Questions))
+func answersOf(set questions.Set, values map[string]float64) (map[string]core.Answer, error) {
+	answers := make(map[string]core.Answer, len(set.Questions))
 	for _, q := range set.Questions {
 		value, ok := values[q.Name]
 		if !ok {
 			return nil, fmt.Errorf("the row carries no %s answer", q.Name)
 		}
 		switch q.Kind {
-		case question.KindScore:
-			answers[q.Name] = jev.Answer{Kind: jev.QuestionScore, Score: value}
-		case question.KindNoul:
-			answers[q.Name] = jev.Answer{Kind: jev.QuestionNoul, Noul: value}
+		case questions.KindScore:
+			answers[q.Name] = core.Answer{Kind: core.QuestionScore, Score: value}
+		case questions.KindNoul:
+			answers[q.Name] = core.Answer{Kind: core.QuestionNoul, Noul: value}
 		default:
 			return nil, fmt.Errorf("%s is a %s and the bench reads only scores and nouls", q.Name, q.Kind)
 		}
@@ -224,7 +224,7 @@ func runHazardArms(ctx context.Context, key string, arms []jevArm, records []cor
 			order = []jevArm{arms[1], arms[0]}
 		}
 		for _, arm := range order {
-			call := typesafe.Ask(ctx, wire, jev.Request{State: built, Questions: arm.questions})
+			call := typesafe.Ask(ctx, wire, core.Request{State: built, Questions: arm.questions})
 			if call.Err != nil {
 				return rows, fmt.Errorf("case %s, arm %s: %w", record.ID, arm.name, call.Err)
 			}
@@ -243,7 +243,7 @@ func runHazardArms(ctx context.Context, key string, arms []jevArm, records []cor
 			for _, q := range arm.set.Questions {
 				answer := call.Response.Answers[q.Name]
 				row.Answers[q.Name] = answer.Noul
-				if q.Kind == question.KindScore {
+				if q.Kind == questions.KindScore {
 					row.Answers[q.Name] = answer.Score
 				}
 			}

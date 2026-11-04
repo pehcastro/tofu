@@ -241,7 +241,7 @@ func serveBranch(p host.SessionBranchParams) (host.SessionBranchResult, error) {
 	if err != nil {
 		return host.SessionBranchResult{}, err
 	}
-	ask := sessionBranchAsk{handle: p.Session, preset: p.Preset, owns: strings.Join(p.Owns, ","), seed: cmp.Or(p.Seed, string(turn.SeedSummary)), name: p.Name,
+	ask := sessionBranchAsk{handle: p.Session, preset: p.Preset, owns: strings.Join(p.Owns, ","), seed: cmp.Or(p.Seed, string(loop.SeedSummary)), name: p.Name,
 		model: p.Model, effort: string(p.Effort), side: true}
 	if p.At != nil {
 		ask.at = p.At.Item
@@ -266,14 +266,14 @@ func serveAccess(p host.SessionAccessParams) (host.SessionAccess, error) {
 	if err != nil {
 		return host.SessionAccess{}, err
 	}
-	access, err := turn.AccessOf(cmp.Or(p.Preset, turn.PresetRead))
+	access, err := loop.AccessOf(cmp.Or(p.Preset, loop.PresetRead))
 	switch {
 	case p.Preset != "" && len(p.Owns) > 0:
 		err = errors.New("name preset or owns, not both")
 	case len(p.Owns) > 0:
-		access, err = turn.OwnsAccess(p.Owns)
+		access, err = loop.OwnsAccess(p.Owns)
 	case err == nil && access.Preset == "":
-		err = fmt.Errorf("preset %q is none of %s, %s and %s", p.Preset, turn.PresetRead, turn.PresetNotes, turn.PresetFiles)
+		err = fmt.Errorf("preset %q is none of %s, %s and %s", p.Preset, loop.PresetRead, loop.PresetNotes, loop.PresetFiles)
 	}
 	if err != nil {
 		return host.SessionAccess{}, err
@@ -367,7 +367,7 @@ func serveLogout(p host.LogoutParams) (string, error) {
 }
 
 func wireSources() map[string]string {
-	return map[string]string{wiring.WireSubscription: string(models.ClaudeSub), wiring.WireCodex: string(models.CodexSub), wiring.WireKey: string(models.OpenRouter), wiring.WireMeta: string(models.Meta)}
+	return map[string]string{wiring.WireSubscription: string(catalog.ClaudeSub), wiring.WireCodex: string(catalog.CodexSub), wiring.WireKey: string(catalog.OpenRouter), wiring.WireMeta: string(catalog.Meta)}
 }
 
 func signedInWires() []string {

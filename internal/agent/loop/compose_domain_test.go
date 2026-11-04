@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"os"
@@ -10,7 +10,7 @@ import (
 	shipped "tofu/library"
 
 	"tofu/internal/agent/subagents"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 )
 
 func composedRuleIDs(t *testing.T, agent, task string, paths ...string) []string {
@@ -21,8 +21,8 @@ func composedRuleIDs(t *testing.T, agent, task string, paths ...string) []string
 	}
 	spec := ComposeSpec{Task: task, Paths: paths, Environment: "<env/>", ToolGuidance: "read reads a whole file", Rules: rules}
 	if agent != "" {
-		found := subagent.Definitions(subagent.Scan{Library: shipped.Files()})
-		index := slices.IndexFunc(found.Definitions, func(d subagent.Definition) bool { return d.Name == agent })
+		found := subagents.Definitions(subagents.Scan{Library: shipped.Files()})
+		index := slices.IndexFunc(found.Definitions, func(d subagents.Definition) bool { return d.Name == agent })
 		if index < 0 {
 			t.Fatalf("the library ships no sub-agent named %s: %+v", agent, found.Broken)
 		}
@@ -234,8 +234,8 @@ func TestEveryRuleTheQAAgentDoesNotFireIsHeldBackWithAReason(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadFS: %v", err)
 	}
-	found := subagent.Definitions(subagent.Scan{Library: shipped.Files()})
-	at := slices.IndexFunc(found.Definitions, func(d subagent.Definition) bool { return d.Name == "qa" })
+	found := subagents.Definitions(subagents.Scan{Library: shipped.Files()})
+	at := slices.IndexFunc(found.Definitions, func(d subagents.Definition) bool { return d.Name == "qa" })
 	composed, err := Compose(ComposeSpec{Task: "check the change", Environment: "<env/>", ToolGuidance: "g", Rules: rules, Role: rule.RoleSubAgent, Agent: found.Definitions[at]})
 	if err != nil {
 		t.Fatalf("Compose: %v", err)

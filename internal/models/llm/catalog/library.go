@@ -1,4 +1,4 @@
-package models
+package catalog
 
 import (
 	"cmp"
@@ -243,7 +243,7 @@ type Model struct {
 	Plan             PlanTool
 	Verbosity        Verbosity
 	ReasoningContext ReasoningContext
-	Efforts          []llm.Effort
+	Efforts          []core.Effort
 	Reason           string
 	Notice           string
 	ServedAs         string
@@ -259,7 +259,7 @@ type PublishedWindow struct {
 	File   string
 }
 
-func (m Model) EffortTaken(asked llm.Effort) llm.Effort {
+func (m Model) EffortTaken(asked core.Effort) core.Effort {
 	if len(m.Efforts) == 0 {
 		return ""
 	}

@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"reflect"
@@ -8,8 +8,8 @@ import (
 	"tofu/internal/models/llm/core"
 )
 
-func thought(decision llm.Decision, signature string) llm.Decision {
-	decision.Thinking = llm.Thinking{Text: "reasoning before " + signature, Signature: signature}
+func thought(decision core.Decision, signature string) core.Decision {
+	decision.Thinking = core.Thinking{Text: "reasoning before " + signature, Signature: signature}
 	return decision
 }
 

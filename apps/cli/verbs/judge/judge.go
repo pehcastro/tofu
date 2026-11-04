@@ -39,12 +39,12 @@ type judgeReport struct {
 }
 
 type questionFinding struct {
-	File     string        `json:"file"`
-	Line     int           `json:"line"`
-	Set      string        `json:"set"`
-	Question string        `json:"question,omitempty"`
-	Rule     question.Rule `json:"rule"`
-	Detail   string        `json:"detail"`
+	File     string         `json:"file"`
+	Line     int            `json:"line"`
+	Set      string         `json:"set"`
+	Question string         `json:"question,omitempty"`
+	Rule     questions.Rule `json:"rule"`
+	Detail   string         `json:"detail"`
 }
 
 func Verb(args []string, in io.Reader, out, errOut io.Writer) int {
@@ -87,14 +87,14 @@ func Verb(args []string, in io.Reader, out, errOut io.Writer) int {
 		set.Mode = res.Mode
 		set.ModeReason = res.Reason
 	}
-	jevRequest := jev.Request{State: input.State, Questions: set.Questions}
+	jevRequest := core.Request{State: input.State, Questions: set.Questions}
 
 	if opts.dryRun {
 		bound, err := wiring.BoundClassifier()
 		if err != nil {
 			return wiring.Failed(o, err)
 		}
-		model, err := classifier.Route{Model: bound}.Alias()
+		model, err := classifiers.Route{Model: bound}.Alias()
 		if err != nil {
 			return wiring.Failed(o, err)
 		}
@@ -156,7 +156,7 @@ func parseJudgeArgs(args []string) (judgeOpts, error) {
 }
 
 func judgeLint(o output.Verb, path string) int {
-	findings, err := question.LintFile(path, question.DefaultCaps())
+	findings, err := questions.LintFile(path, questions.DefaultCaps())
 	if err != nil {
 		return wiring.Failed(o, err)
 	}

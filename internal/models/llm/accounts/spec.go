@@ -1,4 +1,4 @@
-package cred
+package accounts
 
 import (
 	"cmp"

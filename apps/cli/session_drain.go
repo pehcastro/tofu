@@ -12,10 +12,10 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/context/recall"
-	"tofu/internal/cli/render"
+	widget "tofu/internal/cli/render"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/store/session"
 	"tofu/internal/store/session/drain"

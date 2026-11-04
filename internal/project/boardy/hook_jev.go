@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
@@ -85,7 +85,7 @@ func (m Managed) askJev(ref string, s subject) (string, string) {
 	}
 	request := asked.ToJev()
 	for _, epic := range state.Epics {
-		request.Options = append(request.Options, jev.Option{Name: epic.ID, Criteria: strings.TrimSpace(epic.Title + ". " + epic.Text)})
+		request.Options = append(request.Options, core.Option{Name: epic.ID, Criteria: strings.TrimSpace(epic.Title + ". " + epic.Text)})
 	}
 	body, err := json.Marshal(state)
 	if err != nil {
@@ -97,10 +97,10 @@ func (m Managed) askJev(ref string, s subject) (string, string) {
 	if err != nil {
 		return "", err.Error()
 	}
-	client, err := classifier.Open(m.Store.Root, jev.ReadKeyring(), 1)
-	var decision jev.Decision
+	client, err := classifiers.Open(m.Store.Root, core.ReadKeyring(), 1)
+	var decision core.Decision
 	if err == nil {
-		decision, err = client.Ask(context.Background(), jev.Request{State: state, Questions: []jev.Question{request}})
+		decision, err = client.Ask(context.Background(), core.Request{State: state, Questions: []core.Question{request}})
 	}
 	answer := decision.Answers[asked.Name]
 	p := answer.Probabilities[answer.Choice]
@@ -110,7 +110,7 @@ func (m Managed) askJev(ref string, s subject) (string, string) {
 		row.Reason.ModeReason = &said
 	} else {
 		said = fmt.Sprintf("Jev chose %s at %.2f, and %s sets it at %.2f or above", answer.Choice, p, ref, threshold)
-		decision.Record(&row, []jev.Question{request}, set.QuestionsVersion)
+		decision.Record(&row, []core.Question{request}, set.QuestionsVersion)
 		row.Reason.Value = p
 		if answer.Choice != asked.Escape && p >= threshold {
 			row.Verdict = ledger.VerdictAllow

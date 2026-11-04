@@ -108,9 +108,9 @@ func (m *Model) queueLines() []string {
 	}
 	lines := []string{margin + look.Faint(queueHead+strconv.Itoa(len(m.queue))+queueHeadTail)}
 	start := min(max(len(m.queue)-queueShownRows, 0), m.pick)
-	room := max(m.width-len(margin)-widget.Cells(pickedMarker), 1)
+	room := max(m.width-len(margin)-render.Cells(pickedMarker), 1)
 	for index, row := range m.queue[start:min(start+queueShownRows, len(m.queue))] {
-		marker, text := unpickedMarker, look.Muted(widget.Fit(oneLine(row.shown), room))
+		marker, text := unpickedMarker, look.Muted(render.Fit(oneLine(row.shown), room))
 		if start+index == m.pick {
 			marker = look.Accent(pickedMarker)
 		}

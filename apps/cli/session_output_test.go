@@ -19,7 +19,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
-	testkit "tofu/internal/testkit/cli"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 	"tofu/internal/tools/shell/process"
 )
@@ -60,7 +60,7 @@ func rawJSON(t *testing.T, value any) json.RawMessage {
 
 func sessionOutputProject(t *testing.T) string {
 	t.Helper()
-	testkit.IsolateHome(t)
+	cli.IsolateHome(t)
 	home := os.Getenv("USERPROFILE")
 	project := filepath.Join(home, "project")
 	if err := os.MkdirAll(project, 0o755); err != nil {
@@ -72,7 +72,7 @@ func sessionOutputProject(t *testing.T) string {
 		t.Fatal(err)
 	}
 	now := time.Now()
-	step := turn.StepRow{Index: 1, AssistantText: "looking at the store", Model: "claude-opus-5", PromptTokens: 1200, CompletionTokens: 300, CostUSD: 0.0042,
+	step := loop.StepRow{Index: 1, AssistantText: "looking at the store", Model: "claude-opus-5", PromptTokens: 1200, CompletionTokens: 300, CostUSD: 0.0042,
 		Occupancy: &recall.Occupancy{Identity: 3300, Facts: 1200, WorkingSet: 9000, Recent: 4000, Target: 50000}}
 	storeWalk, olderTask := "store-walk", "older-task"
 	one := session.Header{ID: "turn-one", Name: &storeWalk, At: now.Add(-10 * time.Minute), Task: "explain the session store", Root: "turn-one",
@@ -80,13 +80,13 @@ func sessionOutputProject(t *testing.T) string {
 		Agents: []session.AgentRun{{Agent: "agent-1", Definition: "planner", Model: "claude-sub/claude-opus-5", SpawnCall: "call-2", SpawnTurn: "turn-one", Status: "done", CostUSD: 0.0012}}}
 	at := func(minutes int) time.Time { return now.Add(time.Duration(minutes-10) * time.Minute) }
 	events := []session.Event{
-		{ID: "ev-task", At: at(0), Kind: session.EventMessage, Body: rawJSON(t, turn.MessageRow{Role: "user", Content: "explain the session store"})},
+		{ID: "ev-task", At: at(0), Kind: session.EventMessage, Body: rawJSON(t, loop.MessageRow{Role: "user", Content: "explain the session store"})},
 		{ID: "req-1", At: at(1), Turn: "turn-one", Kind: session.EventStep, Body: rawJSON(t, step)},
 		{ID: "ev-call-1", At: at(2), Turn: "turn-one", Call: "call-1", Request: "req-1", Kind: session.EventToolCall,
 			Body: rawJSON(t, session.CallBody{Tool: "read", Args: json.RawMessage(`{"path":"internal/session/store.go"}`)})},
 		{ID: "res-1", At: at(3), Turn: "turn-one", Call: "call-1", Kind: session.EventToolResult, Body: rawJSON(t, session.ResultBody{ToolOutcome: "ran", ResultBytes: 2048})},
 		{ID: "ev-call-3", At: at(4), Turn: "turn-one", Agent: "agent-1", Call: "call-3", Kind: session.EventToolCall, Body: rawJSON(t, session.CallBody{Tool: "search"})},
-		{ID: "ev-answer", At: at(5), Kind: session.EventMessage, Body: rawJSON(t, turn.MessageRow{Role: "assistant", Content: "it keeps one log per session"})},
+		{ID: "ev-answer", At: at(5), Kind: session.EventMessage, Body: rawJSON(t, loop.MessageRow{Role: "assistant", Content: "it keeps one log per session"})},
 	}
 	two := session.Header{ID: "turn-two", Name: &olderTask, At: now.Add(-3 * time.Hour), Task: "the older task", Root: "turn-two", Outcome: "done"}
 	for _, err := range []error{store.Write(one, events), store.Write(two, nil), store.SetHead("turn-one")} {
@@ -103,9 +103,9 @@ func sessionOutputProject(t *testing.T) string {
 	}
 	exit := 0
 	ended := now.Add(-time.Minute)
-	for _, entry := range []shell.Shell{
-		{Name: "build", Command: "go build ./...", Dir: project, PID: 4242, State: shell.Exited, Started: now.Add(-2 * time.Minute), Ended: &ended, ExitCode: &exit},
-		{Name: "web", Command: "npm run dev", Dir: project, Owner: "tofu", PID: 4343, State: shell.Killed, Started: now.Add(-time.Minute), Ended: &ended},
+	for _, entry := range []process.Shell{
+		{Name: "build", Command: "go build ./...", Dir: project, PID: 4242, State: process.Exited, Started: now.Add(-2 * time.Minute), Ended: &ended, ExitCode: &exit},
+		{Name: "web", Command: "npm run dev", Dir: project, Owner: "tofu", PID: 4343, State: process.Killed, Started: now.Add(-time.Minute), Ended: &ended},
 	} {
 		if err := sys.WriteFile(filepath.Join(state, "shells", entry.Name+".json"), rawJSON(t, entry), 0o644); err != nil {
 			t.Fatal(err)

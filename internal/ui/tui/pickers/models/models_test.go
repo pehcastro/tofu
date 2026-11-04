@@ -31,11 +31,11 @@ func shippedLibrary(t *testing.T) library.Library {
 	return loaded
 }
 
-func sourceEfforts(id library.Subscription) []llm.Effort {
+func sourceEfforts(id library.Subscription) []core.Effort {
 	if id == claudeSub {
-		return []llm.Effort{llm.EffortLow, llm.EffortMedium, llm.EffortHigh, llm.EffortXHigh, llm.EffortMax}
+		return []core.Effort{core.EffortLow, core.EffortMedium, core.EffortHigh, core.EffortXHigh, core.EffortMax}
 	}
-	return llm.Efforts()
+	return core.Efforts()
 }
 
 func everySource(loaded library.Library) []Source {
@@ -127,11 +127,11 @@ func TestAnEffortOneSubscriptionRefusesFallsBackOnTheOther(t *testing.T) {
 		}
 		built.Key("down")
 	}
-	for range len(llm.Efforts()) {
+	for range len(core.Efforts()) {
 		built.Key("shift+left")
 	}
-	if built.Effort() != llm.EffortNone {
-		t.Fatalf("the codex-sub group offers %s and the walk stopped at %q", llm.EffortList(llm.Efforts()), built.Effort())
+	if built.Effort() != core.EffortNone {
+		t.Fatalf("the codex-sub group offers %s and the walk stopped at %q", core.EffortList(core.Efforts()), built.Effort())
 	}
 	for range 20 {
 		if row, _ := built.Picked(); strings.HasPrefix(row.Slug, "claude-sub/") {
@@ -139,8 +139,8 @@ func TestAnEffortOneSubscriptionRefusesFallsBackOnTheOther(t *testing.T) {
 		}
 		built.Key("up")
 	}
-	if built.Effort() != llm.EffortDefault {
-		t.Fatalf("the pick moved to a group that refuses %s and the effort stayed %q", llm.EffortNone, built.Effort())
+	if built.Effort() != core.EffortDefault {
+		t.Fatalf("the pick moved to a group that refuses %s and the effort stayed %q", core.EffortNone, built.Effort())
 	}
 }
 

@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
@@ -99,7 +99,7 @@ func contextOf(store *session.Store, handle string, build recall.Bands, nextCeil
 	if err != nil {
 		return contextReport{}, err
 	}
-	conversation, err := turn.RecordedContext(events)
+	conversation, err := loop.RecordedContext(events)
 	if err != nil {
 		return contextReport{}, err
 	}
@@ -162,7 +162,7 @@ func contextOf(store *session.Store, handle string, build recall.Bands, nextCeil
 		if err != nil {
 			return contextReport{}, err
 		}
-		given, err := turn.ConversationFrom(part)
+		given, err := loop.ConversationFrom(part)
 		if err != nil {
 			return contextReport{}, err
 		}
@@ -177,7 +177,7 @@ func contextBand(tokens, capacity int) contextBandReport {
 	return contextBandReport{Tokens: tokens, Cap: capacity, Percent: recall.FillPercent(tokens, capacity)}
 }
 
-func contextSteps(events []session.Event) ([]turn.StepRow, error) {
+func contextSteps(events []session.Event) ([]loop.StepRow, error) {
 	reading, err := session.ReadEvents(events)
 	if err != nil {
 		return nil, err
@@ -185,8 +185,8 @@ func contextSteps(events []session.Event) ([]turn.StepRow, error) {
 	return stepRowsOf(reading)
 }
 
-func stepRowsOf(reading session.Reading) ([]turn.StepRow, error) {
-	steps := make([]turn.StepRow, len(reading.Steps))
+func stepRowsOf(reading session.Reading) ([]loop.StepRow, error) {
+	steps := make([]loop.StepRow, len(reading.Steps))
 	for i, step := range reading.Steps {
 		if err := json.Unmarshal(step.Raw, &steps[i]); err != nil {
 			return nil, fmt.Errorf("step %d does not read as a turn row: %w", i+1, err)

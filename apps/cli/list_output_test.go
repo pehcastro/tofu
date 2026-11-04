@@ -12,7 +12,7 @@ import (
 	"tofu/apps/cli/output"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
-	testkit "tofu/internal/testkit/cli"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 )
 
@@ -43,7 +43,7 @@ func listCases() []listCase {
 
 func listProject(t *testing.T) string {
 	t.Helper()
-	testkit.IsolateHome(t)
+	cli.IsolateHome(t)
 	home := os.Getenv("USERPROFILE")
 	project := filepath.Join(home, "project")
 	files := map[string]string{

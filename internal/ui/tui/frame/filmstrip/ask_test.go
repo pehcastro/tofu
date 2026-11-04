@@ -16,15 +16,15 @@ const (
 	assumedLine = "orchestrator did not answer, assumed: use port 3004"
 )
 
-func askWork() []tui.Event {
+func askWork() []app.Event {
 	asking := []subagent.Row{{Name: "ts-dev-2", Doing: "build the hono routes", Owns: []string{"src/routes/**"}, Since: time.Second, Steps: 2, Total: 40, State: roster.Working}}
-	return append([]tui.Event{
-		{Kind: tui.EventToolCall, ID: "5e06aa", Tool: "spawn", Text: "build the hono routes", Promote: true},
-		{Kind: tui.EventSubAgent, SubAgents: asking},
-		{Kind: tui.EventToolCall, ID: "a5c001", Tool: "ask", Text: "may I start the dev server?", Agent: "ts-dev-2"},
-		{Kind: tui.EventToolResult, ID: "a5c001", Text: answerLine, Agent: "ts-dev-2"},
-		{Kind: tui.EventToolCall, ID: "a5c002", Tool: "ask", Text: "may I bind port 3004?", Agent: "ts-dev-2"},
-		{Kind: tui.EventToolResult, ID: "a5c002", Text: assumedLine, Agent: "ts-dev-2"},
+	return append([]app.Event{
+		{Kind: app.EventToolCall, ID: "5e06aa", Tool: "spawn", Text: "build the hono routes", Promote: true},
+		{Kind: app.EventSubAgent, SubAgents: asking},
+		{Kind: app.EventToolCall, ID: "a5c001", Tool: "ask", Text: "may I start the dev server?", Agent: "ts-dev-2"},
+		{Kind: app.EventToolResult, ID: "a5c001", Text: answerLine, Agent: "ts-dev-2"},
+		{Kind: app.EventToolCall, ID: "a5c002", Tool: "ask", Text: "may I bind port 3004?", Agent: "ts-dev-2"},
+		{Kind: app.EventToolResult, ID: "a5c002", Text: assumedLine, Agent: "ts-dev-2"},
 		result("5e06aa", "spawned [&ts-dev-2]"),
 	}, done()...)
 }

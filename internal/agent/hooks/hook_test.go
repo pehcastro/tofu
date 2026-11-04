@@ -1,4 +1,4 @@
-package hook
+package hooks
 
 import (
 	"context"
@@ -17,9 +17,9 @@ import (
 	"tofu/internal/tools/shell/process"
 )
 
-func bashOrSkip(t *testing.T) shell.Choice {
+func bashOrSkip(t *testing.T) process.Choice {
 	t.Helper()
-	choice, err := shell.Resolve("")
+	choice, err := process.Resolve("")
 	if err != nil || strings.Contains(choice.Label, "powershell") || strings.Contains(choice.Label, "pwsh") {
 		t.Skip("no bash resolved on this machine")
 	}
@@ -50,7 +50,7 @@ func settings(t *testing.T, path string, entries ...entry) {
 	}
 }
 
-func trusted(t *testing.T, project string, bash shell.Choice) *Engine {
+func trusted(t *testing.T, project string, bash process.Choice) *Engine {
 	t.Helper()
 	engine := Load(project, bash)
 	if err := engine.Answer(engine.Untrusted(), AnswerAlways); err != nil {
@@ -155,7 +155,7 @@ func TestHooksABashHookOnAPowerShellOnlyMachineIsNotRunAndSaysWhy(t *testing.T) 
 	project := t.TempDir()
 	settings(t, filepath.Join(project, ".claude", "settings.json"), entry{event: "PreToolUse", matcher: "Bash",
 		command: `powershell -File "$CLAUDE_PROJECT_DIR\.claude\hooks\x.ps1"; exit 2`})
-	verdict := trusted(t, project, shell.Choice{Path: powershell, Label: "powershell"}).Fire(context.Background(), Input{Event: PreToolUse, Tool: "bash", Args: json.RawMessage(`{"command":"ls"}`)})
+	verdict := trusted(t, project, process.Choice{Path: powershell, Label: "powershell"}).Fire(context.Background(), Input{Event: PreToolUse, Tool: "bash", Args: json.RawMessage(`{"command":"ls"}`)})
 	if verdict.Block != "" || verdict.Ran != 0 || !strings.Contains(strings.Join(verdict.Warnings, "\n"), "needs bash") {
 		t.Errorf("a bash hook under powershell gave %+v, want it not run and a warning saying it needs bash", verdict)
 	}

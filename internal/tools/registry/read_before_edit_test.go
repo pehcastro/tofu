@@ -1,4 +1,4 @@
-package tools_test
+package registry_test
 
 import (
 	"context"
@@ -16,13 +16,13 @@ import (
 
 const packageJSON = "{\n  \"name\": \"moth\"\n}\n"
 
-func sessionDir(t *testing.T) (string, *turn.ReadLedger) {
+func sessionDir(t *testing.T) (string, *loop.ReadLedger) {
 	t.Helper()
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(packageJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return dir, turn.NewReadLedger()
+	return dir, loop.NewReadLedger()
 }
 
 func call(t *testing.T, tool contract.Tool, args map[string]string) error {
@@ -35,11 +35,11 @@ func call(t *testing.T, tool contract.Tool, args map[string]string) error {
 	return err
 }
 
-func turnTools(t *testing.T, dir string, ledger *turn.ReadLedger) (contract.Tool, contract.Tool, contract.Tool) {
+func turnTools(t *testing.T, dir string, ledger *loop.ReadLedger) (contract.Tool, contract.Tool, contract.Tool) {
 	t.Helper()
-	read, readErr := turn.NewReadTool(dir)
-	write, writeErr := turn.NewWriteTool(dir)
-	edit, editErr := tools.NewEdit(dir)
+	read, readErr := loop.NewReadTool(dir)
+	write, writeErr := loop.NewWriteTool(dir)
+	edit, editErr := registry.NewEdit(dir)
 	for _, err := range []error{readErr, writeErr, editErr} {
 		if err != nil {
 			t.Fatal(err)
@@ -180,7 +180,7 @@ func TestAnEditOrWriteReachingLinesNoReadShowedIsRefused(t *testing.T) {
 			if err := os.WriteFile(target, []byte(goFile(50, row.ending)), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			read, write, edit := turnTools(t, dir, turn.NewReadLedger())
+			read, write, edit := turnTools(t, dir, loop.NewReadLedger())
 			byName := map[string]contract.Tool{"read": read, "write": write, "edit": edit}
 			for i, step := range row.steps {
 				raw, _ := json.Marshal(step.args)
@@ -239,7 +239,7 @@ func TestARefusalOfALargeFileNamesTheReadThatLetsTheRetryThrough(t *testing.T) {
 			if err := os.WriteFile(target, []byte(body), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			read, write, edit := turnTools(t, dir, turn.NewReadLedger())
+			read, write, edit := turnTools(t, dir, loop.NewReadLedger())
 			tool := map[string]contract.Tool{"write": write, "edit": edit}[row.tool]
 			run := func(using contract.Tool, args map[string]any) error {
 				raw, _ := json.Marshal(args)
@@ -285,7 +285,7 @@ func TestARefusalOfAnEditThatMatchesNothingStillSaysWhatToRead(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte(goFile(1500, "\n")), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, _, edit := turnTools(t, dir, turn.NewReadLedger())
+	_, _, edit := turnTools(t, dir, loop.NewReadLedger())
 	err := call(t, edit, map[string]string{"path": "a.go", "old_string": "return -1 }", "new_string": "return 1 }"})
 	if err == nil || len(err.Error()) > 1024 || !strings.Contains(err.Error(), "has 1500 lines") || !strings.Contains(err.Error(), "has not been read") {
 		t.Fatalf("want a refusal under 1024 bytes saying the file has 1500 lines, got %d bytes: %.600v", len(fmt.Sprint(err)), err)

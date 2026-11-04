@@ -147,7 +147,7 @@ func (m Managed) Ask(id string, q Question, actor string) (Ticket, error) {
 	if err := q.complete(); err != nil {
 		return ticket, RefusedError{Ticket: id, Why: err.Error()}
 	}
-	s := m.subjectOf(rule.HookQuestionAsk, board.Key, ticket, ticket.Status, actor, 0)
+	s := m.subjectOf(rules.HookQuestionAsk, board.Key, ticket, ticket.Status, actor, 0)
 	if err := m.gate(&s); err != nil {
 		return ticket, err
 	}
@@ -191,9 +191,9 @@ func (m Managed) ReportNotPossible(id string, q Question, actor string) (Ticket,
 	}
 	prospect := ticket
 	prospect.Questions = append(slices.Clone(ticket.Questions), q.tidy())
-	dry := m.subjectOf(rule.HookTicketMove, board.Key, prospect, NeedsDecision, actor, 0)
+	dry := m.subjectOf(rules.HookTicketMove, board.Key, prospect, NeedsDecision, actor, 0)
 	dry.dry = true
-	if _, _, err := m.weigh(slices.DeleteFunc(hooks, func(h rule.Hook) bool { return runsCheck(h, "may_move") }), rule.WhenBefore, dry); err != nil {
+	if _, _, err := m.weigh(slices.DeleteFunc(hooks, func(h rules.Hook) bool { return runsCheck(h, "may_move") }), rules.WhenBefore, dry); err != nil {
 		return ticket, err
 	}
 	if ticket, err = m.Ask(id, q, actor); err != nil {

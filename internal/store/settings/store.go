@@ -270,9 +270,9 @@ func (s *Store) Save(scope Scope, write Write) error {
 		}
 		return s.Set(scope, write.Key, number)
 	case WriteRole:
-		return models.BindRole(stateDir, models.RoleID(write.Key), write.Value)
+		return catalog.BindRole(stateDir, catalog.RoleID(write.Key), write.Value)
 	case WriteSubAgent:
-		_, err := subagent.Assign(filepath.Dir(stateDir), write.Key, write.Value)
+		_, err := subagents.Assign(filepath.Dir(stateDir), write.Key, write.Value)
 		return err
 	case WriteFingerprint:
 		return s.saveFingerprint(scope, write.Key, write.Value)

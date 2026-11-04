@@ -109,7 +109,7 @@ func scanWith(t *testing.T, store *session.Store, handle string, known Known) Ru
 	return run
 }
 
-func scanOf(t *testing.T, store *session.Store, handle string, known ...memory.Entry) Run {
+func scanOf(t *testing.T, store *session.Store, handle string, known ...entries.Entry) Run {
 	t.Helper()
 	return scanWith(t, store, handle, Known{Memory: known})
 }
@@ -359,11 +359,11 @@ func TestAnEntryNeededAgainInLaterSessionsIsProposedAsARuleThatRetiresIt(t *test
 		recorded{id: "s2", parent: "s1", lines: []line{lead(5, "Your call on the order."), request(6), said(7, typed, second)}},
 		recorded{id: "s3", parent: "s2", lines: []line{lead(9, "Which ticket should go first?"), request(10), said(11, typed, "again, decide the order of the tickets yourself")}},
 	)
-	entry := memory.Entry{ID: "m4", Scope: memory.Global, Kind: memory.KindPerson, Text: "The lead decides the order of the tickets itself.", Said: first, At: start()}
+	entry := entries.Entry{ID: "m4", Scope: entries.Global, Kind: entries.KindPerson, Text: "The lead decides the order of the tickets itself.", Said: first, At: start()}
 	run := scanOf(t, store, "s3", entry)
 	for _, f := range append(run.Findings, run.Held...) {
 		if f.Target() == TargetRule {
-			if f.Retire != "m4" || f.Scope != memory.Global {
+			if f.Retire != "m4" || f.Scope != entries.Global {
 				t.Errorf("the rule finding retires %q in %s, want m4 in the global scope", f.Retire, f.Scope)
 			}
 			return

@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -25,8 +25,8 @@ func NewGitHubPRDiff(dir string) (GitHubPRDiff, error) {
 
 func (GitHubPRDiff) Name() string { return "github_pr_diff" }
 
-func (GitHubPRDiff) Definition() llm.Tool {
-	return llm.Tool{
+func (GitHubPRDiff) Definition() core.Tool {
+	return core.Tool{
 		Name: "github_pr_diff",
 		Description: "returns the unified diff of a github pull request by running the gh command line, which already holds the owner's credential: " +
 			"this tool never calls the github api itself and never holds a token. " +

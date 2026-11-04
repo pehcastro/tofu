@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -184,8 +184,8 @@ func proxiedTurn(t *testing.T, proxy *CommandProxy, tool *BashTool) (Row, *stubG
 	store := session.NewStore(t.TempDir())
 	gate := gateSaying(ledger.VerdictAsk)
 	person := &recordingPerson{}
-	model := &stubModel{decisions: []llm.Decision{
-		toolCallDecision(llm.ToolCall{ID: "c1", Name: bashToolName, Arguments: json.RawMessage(`{"command":"echo hi"}`)}),
+	model := &stubModel{decisions: []core.Decision{
+		toolCallDecision(core.ToolCall{ID: "c1", Name: bashToolName, Arguments: json.RawMessage(`{"command":"echo hi"}`)}),
 		messageDecision(),
 	}}
 	config := Config{
@@ -369,8 +369,8 @@ func TestARealProxyMeasuresWhatTheModelSawWithTheSettingOnAndOff(t *testing.T) {
 	}
 
 	for _, sheet := range []string{proxyOff, proxyOn} {
-		model := &stubModel{decisions: []llm.Decision{
-			toolCallDecision(llm.ToolCall{ID: "c1", Name: bashToolName, Arguments: json.RawMessage(`{"command":"go test -v -count=1 ./internal/agent/context/recall/...","timeout_ms":600000}`)}),
+		model := &stubModel{decisions: []core.Decision{
+			toolCallDecision(core.ToolCall{ID: "c1", Name: bashToolName, Arguments: json.RawMessage(`{"command":"go test -v -count=1 ./internal/agent/context/recall/...","timeout_ms":600000}`)}),
 			messageDecision(),
 		}}
 		row, err := Run(context.Background(), Config{
@@ -388,7 +388,7 @@ func TestARealProxyMeasuresWhatTheModelSawWithTheSettingOnAndOff(t *testing.T) {
 		}
 		seen := ""
 		for _, message := range model.requests[len(model.requests)-1].Messages {
-			if message.Role == llm.RoleTool {
+			if message.Role == core.RoleTool {
 				seen = message.Content
 			}
 		}
@@ -412,7 +412,7 @@ func TestARewriteWhoseFilterLosesOutputRunsTheCommandAsAsked(t *testing.T) {
 		{"go test ./pkg/", "", false},
 	} {
 		asked, _ := json.Marshal(map[string]string{"command": row.command})
-		ran, proxied := proxy.rewrite(context.Background(), llm.ToolCall{Name: bashToolName, Arguments: asked})
+		ran, proxied := proxy.rewrite(context.Background(), core.ToolCall{Name: bashToolName, Arguments: asked})
 		if kept := string(ran) == string(asked); kept != row.kept {
 			t.Errorf("%q ran as %s, kept as asked %v, want %v", row.command, ran, kept, row.kept)
 			continue
@@ -427,7 +427,7 @@ func TestARewriteWhoseFilterLosesOutputRunsTheCommandAsAsked(t *testing.T) {
 func TestOutputOfACommandThatCanMoveToABackgroundShellIsNotHeldByRtk(t *testing.T) {
 	fakeProxyOnPath(t)
 	proxy := proxyFrom(t, t.TempDir(), proxyOn)
-	movable := WithShellRegistry(context.Background(), shell.OpenAt(t.TempDir()))
+	movable := WithShellRegistry(context.Background(), process.OpenAt(t.TempDir()))
 	for _, row := range []struct {
 		ctx       context.Context
 		arguments string
@@ -442,7 +442,7 @@ func TestOutputOfACommandThatCanMoveToABackgroundShellIsNotHeldByRtk(t *testing.
 		{movable, `{"command":"go version"}`, false},
 		{context.Background(), `{"command":"go test ./pkg/"}`, false},
 	} {
-		ran, proxied := proxy.rewrite(row.ctx, llm.ToolCall{Name: bashToolName, Arguments: json.RawMessage(row.arguments)})
+		ran, proxied := proxy.rewrite(row.ctx, core.ToolCall{Name: bashToolName, Arguments: json.RawMessage(row.arguments)})
 		if kept := string(ran) == row.arguments; kept != row.kept {
 			t.Errorf("%s ran as %s, kept as asked %v, want %v", row.arguments, ran, kept, row.kept)
 			continue
@@ -524,7 +524,7 @@ func TestTheRewriteKeepsEveryFieldAndLeavesBackgroundPipedAndRedirectedCommandsA
 		`{"command":"go test ./pkg/ >> out.txt"}`:                                      `{"command":"go test ./pkg/ >> out.txt"}`,
 		`{"command":"cargo test 2>&1"}`:                                                `{"command":"cargo test 2>&1"}`,
 	} {
-		ran, row := proxy.rewrite(context.Background(), llm.ToolCall{Name: bashToolName, Arguments: json.RawMessage(asked)})
+		ran, row := proxy.rewrite(context.Background(), core.ToolCall{Name: bashToolName, Arguments: json.RawMessage(asked)})
 		if string(ran) != want {
 			t.Errorf("%s ran as %s, want %s", asked, ran, want)
 		}

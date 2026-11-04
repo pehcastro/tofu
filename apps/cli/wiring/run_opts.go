@@ -22,7 +22,7 @@ type RunOpts struct {
 	DoneArm          string
 	Model            string
 	ToolSet          string
-	Effort           llm.Effort
+	Effort           core.Effort
 	MaxSteps         int
 	LoopGuardRepeats int
 	LoopGuardWindow  int
@@ -34,5 +34,5 @@ type RunOpts struct {
 	SubAgentList     string
 	LeadMayWorkAlone bool
 	LeadAlone        bool
-	Shell            turn.RunShell
+	Shell            loop.RunShell
 }

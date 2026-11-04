@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -25,8 +25,8 @@ func TestEveryTextEnteringTheSessionSaysWhereItCameFrom(t *testing.T) {
 		t.Fatal(err)
 	}
 	bash.softLimit = 200 * time.Millisecond
-	backup := llm.ToolCall{ID: "b", Name: "bash", Arguments: json.RawMessage(`{"command":"sleep 2 && echo backup done","timeout_ms":60000}`)}
-	model := newCrew(map[string][]llm.Decision{
+	backup := core.ToolCall{ID: "b", Name: "bash", Arguments: json.RawMessage(`{"command":"sleep 2 && echo backup done","timeout_ms":60000}`)}
+	model := newCrew(map[string][]core.Decision{
 		leadKey: {toolCallDecision(spawnCall("s", usersRoute, "src/users.ts").ToolCalls[0], backup),
 			claimDecision("both started"), claimDecision("read what came in"), claimDecision("read what came in"), claimDecision("read what came in")},
 		usersRoute: {claimDecision("the users route is added")},
@@ -34,11 +34,11 @@ func TestEveryTextEnteringTheSessionSaysWhereItCameFrom(t *testing.T) {
 	store, id := session.NewStore(t.TempDir()), session.NewEventID()
 	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(read, bash), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
 		ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" }, Sessions: store, Session: id}
-	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	lead := base
 	lead.Task, lead.Tools, lead.Inbox = "start the backup and hand the users route to a sub-agent", NewRegistry(read, bash, spawn), spawn.Inbox
 	typed := make(chan string, 1)
-	led := startLead(WithShellRegistry(context.Background(), shell.OpenAt(t.TempDir())), lead, typed)
+	led := startLead(WithShellRegistry(context.Background(), process.OpenAt(t.TempDir())), lead, typed)
 	waitFor(t, "the lead's first turn to end", func() bool { return len(led.turns()) >= 1 })
 	typed <- "and keep the old route too"
 	select {
@@ -73,7 +73,7 @@ func TestEveryTextEnteringTheSessionSaysWhereItCameFrom(t *testing.T) {
 		}
 		if event.Kind == session.EventMessage && event.Agent == "" {
 			seen[said.From.Kind+"/"+said.From.Sub] = true
-			if said.From.Kind != string(llm.OriginPerson) && strings.Contains(said.Content, TheTaskFollows) {
+			if said.From.Kind != string(core.OriginPerson) && strings.Contains(said.Content, TheTaskFollows) {
 				t.Errorf("seq %d, from %s/%s, is sent under the task heading: %q", event.Seq, said.From.Kind, said.From.Sub, said.Content)
 			}
 		}

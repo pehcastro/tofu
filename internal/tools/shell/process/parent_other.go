@@ -1,6 +1,6 @@
 //go:build !windows && !linux
 
-package shell
+package process
 
 import "syscall"
 

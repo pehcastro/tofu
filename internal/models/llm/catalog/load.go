@@ -1,4 +1,4 @@
-package models
+package catalog
 
 import (
 	"cmp"
@@ -366,7 +366,7 @@ func buildModel(slug string, from *sheet, known map[Subscription]SubscriptionSpe
 		return model, &Broken{File: from.file, Field: "reasoning_context", Why: fmt.Sprintf("reasoning_context is %s or %s, or left out to let the endpoint choose, found %q", ReasoningAllTurns, ReasoningCurrentTurn, model.ReasoningContext)}
 	}
 	for _, raw := range commas(from.values["efforts"]) {
-		effort, err := llm.ParseEffort(raw)
+		effort, err := core.ParseEffort(raw)
 		if err != nil {
 			return model, &Broken{File: from.file, Field: "efforts", Why: err.Error()}
 		}

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"tofu/internal/agent/context/recall"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/sys"
@@ -122,7 +122,7 @@ func TestJevAgainstTheWordList(t *testing.T) {
 		t.Skip("set TOFU_LIVE=1 to put the question to the real jev route")
 	}
 	sys.AllowLiveCredential(t)
-	key, err := jev.TypeSafeKey(filepath.Join(sys.SourceRoot(), ".env"))
+	key, err := core.TypeSafeKey(filepath.Join(sys.SourceRoot(), ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestJevAgainstTheWordList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+	client, err := core.NewClient(core.Config{Wire: wire})
 	if err != nil {
 		t.Fatal(err)
 	}

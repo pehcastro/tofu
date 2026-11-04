@@ -48,18 +48,18 @@ func wireConfig(endpoint string) typesafe.Config {
 	}
 }
 
-func gateBattery() jev.Request {
-	return jev.Request{
+func gateBattery() core.Request {
+	return core.Request{
 		State: map[string]any{"tool": "bash", "input": "ls -la", "context": "the user asked what is in the folder"},
-		Questions: []jev.Question{
-			{ID: "risk", Kind: jev.QuestionScore, Instructions: "how much damage could running `tool` with `input` do",
+		Questions: []core.Question{
+			{ID: "risk", Kind: core.QuestionScore, Instructions: "how much damage could running `tool` with `input` do",
 				Levels: []string{"none", "reversible", "costly", "destructive"}},
-			{ID: "approval", Kind: jev.QuestionNoul, Instructions: "should a person approve `input` before it runs",
+			{ID: "approval", Kind: core.QuestionNoul, Instructions: "should a person approve `input` before it runs",
 				True: "a person should be asked first", False: "it can run without asking"},
-			{ID: "user_requested", Kind: jev.QuestionNoul, Instructions: "did the user ask for `input` in `context`",
+			{ID: "user_requested", Kind: core.QuestionNoul, Instructions: "did the user ask for `input` in `context`",
 				True: "the user asked for it", False: "the user did not ask for it"},
-			{ID: "act", Kind: jev.QuestionChoice, Instructions: "what does `input` do",
-				Options: []jev.Option{
+			{ID: "act", Kind: core.QuestionChoice, Instructions: "what does `input` do",
+				Options: []core.Option{
 					{Name: "read", Criteria: "it only reads"},
 					{Name: "write", Criteria: "it changes something"},
 					{Name: "network", Criteria: "it reaches the network"},
@@ -83,13 +83,13 @@ func TestTheWireCarriesItsOwnNameAndTheSharedCeilings(t *testing.T) {
 	if caps.MaxStateTokens != konst.JudgeStateTokenCeiling || caps.MaxRequestTokens != konst.JudgeRequestTokenCeiling {
 		t.Fatalf("token ceilings are %d and %d", caps.MaxStateTokens, caps.MaxRequestTokens)
 	}
-	if caps.MaxRequestBytes != jev.EstimateBytes(konst.JudgeStateTokenCeiling) {
+	if caps.MaxRequestBytes != core.EstimateBytes(konst.JudgeStateTokenCeiling) {
 		t.Fatalf("byte cap is %d, expected the state ceiling converted through the estimator", caps.MaxRequestBytes)
 	}
 	if caps.MaxChoiceOptions != konst.ChoiceCeiling || caps.MaxScoreLevels != konst.JudgeScoreLevelCeiling {
 		t.Fatalf("option ceiling %d, score level ceiling %d", caps.MaxChoiceOptions, caps.MaxScoreLevels)
 	}
-	for _, kind := range []jev.CriteriaKind{jev.CriteriaString, jev.CriteriaObject, jev.CriteriaNull} {
+	for _, kind := range []core.CriteriaKind{core.CriteriaString, core.CriteriaObject, core.CriteriaNull} {
 		if !caps.Accepts(kind) {
 			t.Fatalf("bench-001 measured %s criteria accepted", kind)
 		}
@@ -146,7 +146,7 @@ func TestTheWireValidatesTheAnswersThroughTheClient(t *testing.T) {
 	if err != nil {
 		t.Fatalf("building the wire: %v", err)
 	}
-	client, err := jev.NewClient(jev.Config{Wire: built})
+	client, err := core.NewClient(core.Config{Wire: built})
 	if err != nil {
 		t.Fatalf("building the client: %v", err)
 	}
@@ -174,7 +174,7 @@ func TestTheWireRefusesAnOversizeRequestBeforeTheCall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("building the wire: %v", err)
 	}
-	client, err := jev.NewClient(jev.Config{Wire: built})
+	client, err := core.NewClient(core.Config{Wire: built})
 	if err != nil {
 		t.Fatalf("building the client: %v", err)
 	}
@@ -230,7 +230,7 @@ func TestLiveGate(t *testing.T) {
 		t.Skip("set TOFU_LIVE=1 to call the real route")
 	}
 	sys.AllowLiveCredential(t)
-	key, err := jev.TypeSafeKey("../../../../.env")
+	key, err := core.TypeSafeKey("../../../../.env")
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestLiveGate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("building the wire: %v", err)
 	}
-	client, err := jev.NewClient(jev.Config{Wire: built})
+	client, err := core.NewClient(core.Config{Wire: built})
 	if err != nil {
 		t.Fatalf("building the client: %v", err)
 	}
@@ -266,15 +266,15 @@ func TestLiveGate(t *testing.T) {
 		answer := decision.Answers[id]
 		distribution, _ := json.Marshal(answer.Probabilities)
 		switch answer.Kind {
-		case jev.QuestionNoul:
+		case core.QuestionNoul:
 			t.Logf("answer %-14s noul %.2f", id, answer.Noul)
-		case jev.QuestionChoice:
+		case core.QuestionChoice:
 			t.Logf("answer %-14s choice %q confidence %.2f %s", id, answer.Choice, answer.Confidence, distribution)
-		case jev.QuestionScore:
+		case core.QuestionScore:
 			t.Logf("answer %-14s score %.2f confidence %.2f %s", id, answer.Score, answer.Confidence, distribution)
 		}
 	}
-	estimate := jev.EstimateTokens(len(body))
+	estimate := core.EstimateTokens(len(body))
 	t.Logf("build %s request id %s transport id %s attempts %d", decision.Build, decision.RequestID, decision.TransportID, decision.Attempts)
 	t.Logf("request %d bytes, estimated %d input tokens, billed %d input tokens, %d output tokens, latency %d ms",
 		len(body), estimate, decision.Usage.InputTokens, decision.Usage.OutputTokens, elapsed.Milliseconds())

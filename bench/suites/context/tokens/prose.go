@@ -23,7 +23,7 @@ type ProseWhole struct {
 	SchemaBytes     int
 }
 
-func MeasureProse(defs []llm.Tool, whole schemas.Whole) ProseWhole {
+func MeasureProse(defs []core.Tool, whole schemas.Whole) ProseWhole {
 	byName := map[string]int{}
 	for _, tc := range whole.Tools {
 		byName[tc.Name] = tc.Bytes

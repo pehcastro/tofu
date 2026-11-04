@@ -52,9 +52,9 @@ func TestAForeignSchemaIsNotLintedAgainstTheGatesFourRoles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	set, err := question.Load(path)
+	set, err := questions.Load(path)
 	if err != nil {
-		t.Fatalf("question.Load: %v", err)
+		t.Fatalf("questions.Load: %v", err)
 	}
 	t.Chdir(t.TempDir())
 	r, origin, err := LoadPoint(shipped.Files(), "shell_sift@1", set, "")

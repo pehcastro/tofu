@@ -33,8 +33,8 @@ type endpoint struct {
 }
 
 var endpoints = []endpoint{
-	{"typesafe", typesafe.Endpoint, "jev-latest", jev.TypeSafeVariable},
-	{"openrouter", openrouter.Endpoint, "~typesafe/jev-latest", jev.OpenRouterVariable},
+	{"typesafe", typesafe.Endpoint, "jev-latest", core.TypeSafeVariable},
+	{"openrouter", openrouter.Endpoint, "~typesafe/jev-latest", core.OpenRouterVariable},
 }
 
 func picture() []byte {
@@ -126,7 +126,7 @@ func main() {
 	fmt.Println("| wire | arm | http | build | input tokens | wire cost | wall | image tokens | image dollars | answer or refusal |")
 	fmt.Println("|---|---|---|---|---|---|---|---|---|---|")
 	for _, at := range endpoints {
-		key, err := jev.KeyFor(".env", at.variable)
+		key, err := core.KeyFor(".env", at.variable)
 		if err != nil {
 			fmt.Printf("| %s | skipped | | | | | | | | no credential: %v |\n", at.wire, err)
 			continue

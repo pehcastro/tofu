@@ -108,7 +108,7 @@ func (b Board) copyFile(index int, files []string) (Outcome, error) {
 		return Outcome{}, err
 	}
 	if len(body) > sys.ClipboardMaxBytes {
-		return Outcome{}, errors.New(filepath.Base(files[0]) + " is " + widget.Size(len(body)) + ", past the paste ceiling")
+		return Outcome{}, errors.New(filepath.Base(files[0]) + " is " + render.Size(len(body)) + ", past the paste ceiling")
 	}
 	return b.store(index, body, suffix)
 }
@@ -157,13 +157,13 @@ func (o Outcome) Render(width int) string {
 	head := marker + "image " + strconv.Itoa(o.Index) + gap
 	switch o.State {
 	case Working:
-		return theme.Faint().Render(widget.Fit(head+"pasting", width))
+		return theme.Faint().Render(render.Fit(head+"pasting", width))
 	case Ready:
-		return theme.Tool().Render(widget.Fit(head+o.Format()+gap+widget.Size(o.Bytes)+gap+o.Name, width))
+		return theme.Tool().Render(render.Fit(head+o.Format()+gap+render.Size(o.Bytes)+gap+o.Name, width))
 	case Failed:
-		return theme.Fail().Render(widget.Fit(head+"could not be pasted: "+o.Cause, width))
+		return theme.Fail().Render(render.Fit(head+"could not be pasted: "+o.Cause, width))
 	case Textual:
-		return theme.Faint().Render(widget.Fit(head+"pasted as text", width))
+		return theme.Faint().Render(render.Fit(head+"pasted as text", width))
 	}
 	panic("paste: unknown paste state")
 }

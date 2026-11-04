@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -17,11 +17,11 @@ import (
 
 type Shells struct{}
 
-func (Shells) Name() string { return turn.ShellToolName }
+func (Shells) Name() string { return loop.ShellToolName }
 
-func (Shells) Definition() llm.Tool {
-	return llm.Tool{
-		Name: turn.ShellToolName,
+func (Shells) Definition() core.Tool {
+	return core.Tool{
+		Name: loop.ShellToolName,
 		Description: fmt.Sprintf("controls a process bash kept running, by the name that call returned, such as bash-1: a background: true start, or a command bash moved to a background shell because it was still running. "+
 			"wait returns as soon as it ends, as soon as its last lines hold the until text, or after %d s, with whether it is still running, its exit code and its last lines: one wait covers a long build, never sleep in bash. "+
 			"logs returns the last lines it printed now, and the end of a log file its command names, such as -Log build.log or > build.log. "+
@@ -50,13 +50,13 @@ func (Shells) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("shell: arguments are not the expected shape: %w", err)
 	}
-	registry := turn.ShellRegistryFrom(ctx)
+	registry := loop.ShellRegistryFrom(ctx)
 	if registry == nil {
 		return contract.Result{}, errors.New("shell: no shell registry is attached to this turn")
 	}
 	command := args.Op + " " + args.Name
 	content, exitCode, err := runShellOp(ctx, registry, args)
-	var held shell.HeldError
+	var held process.HeldError
 	switch {
 	case errors.As(err, &held):
 		return contract.Result{Content: held.Error(), Command: command}, nil
@@ -66,7 +66,7 @@ func (Shells) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 	return contract.Result{Content: content, Command: command, ExitCode: exitCode}, nil
 }
 
-func runShellOp(ctx context.Context, registry *shell.Registry, args shellArgs) (string, *int, error) {
+func runShellOp(ctx context.Context, registry *process.Registry, args shellArgs) (string, *int, error) {
 	switch args.Op {
 	case "stop":
 		return args.Name + " stopped, with every process it started", nil, registry.AgentKill(args.Name)
@@ -78,14 +78,14 @@ func runShellOp(ctx context.Context, registry *shell.Registry, args shellArgs) (
 		if err != nil {
 			return "", nil, err
 		}
-		tail, err := registry.Tail(args.Name, shell.DefaultTail)
+		tail, err := registry.Tail(args.Name, process.DefaultTail)
 		now := time.Now()
 		return fmt.Sprintf("%s is %s, %s. its last lines:\n%s", args.Name, entry.State, registry.Timing(entry, now).Words(now), tail), nil, err
 	case "wait":
 		if _, err := registry.AgentRead(args.Name); err != nil {
 			return "", nil, err
 		}
-		if turn.ExitComesBack(ctx, args.Name) {
+		if loop.ExitComesBack(ctx, args.Name) {
 			return args.Name + " is your own command, moved to the background, and its exit comes back to you as a message when it ends, so this does not wait: answer the person, go on with other work, or end your turn", nil, nil
 		}
 		ended, tail, err := awaitEndOrText(ctx, registry, args.Name, args.Until)
@@ -96,13 +96,13 @@ func runShellOp(ctx context.Context, registry *shell.Registry, args shellArgs) (
 		switch {
 		case ended.HeldByPerson():
 			return args.Name + " was taken over by the person; no longer waiting", nil, nil
-		case ended.State == shell.Running && args.Until != "" && strings.Contains(tail, args.Until):
+		case ended.State == process.Running && args.Until != "" && strings.Contains(tail, args.Until):
 			state = fmt.Sprintf("%s printed %q and is still running", args.Name, args.Until)
-		case ended.State == shell.Killed:
+		case ended.State == process.Killed:
 			state = args.Name + " was stopped"
 		case ended.ExitCode != nil:
 			state = fmt.Sprintf("%s exited %d", args.Name, *ended.ExitCode)
-		case ended.State == shell.Exited:
+		case ended.State == process.Exited:
 			state = args.Name + " ended, with an exit code tofu did not see"
 		}
 		now := time.Now()
@@ -111,7 +111,7 @@ func runShellOp(ctx context.Context, registry *shell.Registry, args shellArgs) (
 	return "", nil, fmt.Errorf("op %q is not wait, logs, stop or restart", args.Op)
 }
 
-func awaitEndOrText(ctx context.Context, registry *shell.Registry, name, until string) (shell.Shell, string, error) {
+func awaitEndOrText(ctx context.Context, registry *process.Registry, name, until string) (process.Shell, string, error) {
 	deadline := time.Now().Add(konst.ShellWaitMillis * time.Millisecond)
 	for {
 		step := time.Until(deadline)
@@ -122,8 +122,8 @@ func awaitEndOrText(ctx context.Context, registry *shell.Registry, name, until s
 		if err != nil || ended.HeldByPerson() {
 			return ended, "", err
 		}
-		tail, err := registry.Tail(name, shell.DefaultTail)
-		if err != nil || ended.State != shell.Running || ctx.Err() != nil || time.Until(deadline) <= 0 || until != "" && strings.Contains(tail, until) {
+		tail, err := registry.Tail(name, process.DefaultTail)
+		if err != nil || ended.State != process.Running || ctx.Err() != nil || time.Until(deadline) <= 0 || until != "" && strings.Contains(tail, until) {
 			return ended, tail, err
 		}
 	}

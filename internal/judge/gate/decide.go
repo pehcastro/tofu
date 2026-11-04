@@ -6,11 +6,11 @@ import (
 	"tofu/internal/models/transport"
 )
 
-func Decide(answers map[string]jev.Answer, r Rule) (Verdict, Reason, error) {
-	riskAnswer, errRisk := questionAnswer(answers, r.RiskQuestion, jev.QuestionScore)
-	approvalAnswer, errApproval := questionAnswer(answers, r.ApprovalQuestion, jev.QuestionNoul)
-	userRequestedAnswer, errUserRequested := questionAnswer(answers, r.UserRequestedQuestion, jev.QuestionNoul)
-	fromUntrustedAnswer, errFromUntrusted := questionAnswer(answers, r.FromUntrustedQuestion, jev.QuestionNoul)
+func Decide(answers map[string]core.Answer, r Rule) (Verdict, Reason, error) {
+	riskAnswer, errRisk := questionAnswer(answers, r.RiskQuestion, core.QuestionScore)
+	approvalAnswer, errApproval := questionAnswer(answers, r.ApprovalQuestion, core.QuestionNoul)
+	userRequestedAnswer, errUserRequested := questionAnswer(answers, r.UserRequestedQuestion, core.QuestionNoul)
+	fromUntrustedAnswer, errFromUntrusted := questionAnswer(answers, r.FromUntrustedQuestion, core.QuestionNoul)
 	for _, err := range []error{errRisk, errApproval, errUserRequested, errFromUntrusted} {
 		if err != nil {
 			return "", Reason{}, err
@@ -87,13 +87,13 @@ func withinBand(value, threshold float64) bool {
 	return d <= konst.ThresholdDeadBand
 }
 
-func questionAnswer(answers map[string]jev.Answer, question string, kind jev.QuestionKind) (jev.Answer, error) {
+func questionAnswer(answers map[string]core.Answer, question string, kind core.QuestionKind) (core.Answer, error) {
 	a, ok := answers[question]
 	if !ok {
-		return jev.Answer{}, transport.Fail("gate.Decide", transport.KindInvalidAnswer, nil, "the rule needs a %s answer for %q and none was given", kind, question)
+		return core.Answer{}, transport.Fail("gate.Decide", transport.KindInvalidAnswer, nil, "the rule needs a %s answer for %q and none was given", kind, question)
 	}
 	if a.Kind != kind {
-		return jev.Answer{}, transport.Fail("gate.Decide", transport.KindInvalidAnswer, nil, "the rule needs %q to be a %s, found %s", question, kind, a.Kind)
+		return core.Answer{}, transport.Fail("gate.Decide", transport.KindInvalidAnswer, nil, "the rule needs %q to be a %s, found %s", question, kind, a.Kind)
 	}
 	return a, nil
 }

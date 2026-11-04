@@ -1,4 +1,4 @@
-package subagent
+package subagents
 
 import (
 	"context"
@@ -14,8 +14,8 @@ const AskStateBuilder = "subagent.AskState@2"
 const OutcomeKindAskAnswer = "ask-answer"
 
 type AskJudge struct {
-	Client *jev.Client
-	Set    question.Set
+	Client *core.Client
+	Set    questions.Set
 	Rule   AskRule
 	Ledger *ledger.Writer
 }
@@ -25,7 +25,7 @@ func (j AskJudge) Record(ctx context.Context, state AskState) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	asked := make([]jev.Question, len(j.Set.Questions))
+	asked := make([]core.Question, len(j.Set.Questions))
 	for i, q := range j.Set.Questions {
 		asked[i] = q.ToJev()
 	}
@@ -35,7 +35,7 @@ func (j AskJudge) Record(ctx context.Context, state AskState) (string, error) {
 		Verdict: ledger.VerdictAsk, Policy: j.Rule.Name, PolicyVersion: j.Rule.RuleVersion,
 		Reason: &ledger.Reason{Question: DeterminedQuestion, Comparison: ">=", Threshold: j.Rule.DeterminedLowAt, Mode: j.Rule.Mode.Ledger()},
 	}
-	decision, askErr := j.Client.Ask(ctx, jev.Request{State: json.RawMessage(body), Questions: asked})
+	decision, askErr := j.Client.Ask(ctx, core.Request{State: json.RawMessage(body), Questions: asked})
 	if askErr != nil {
 		failed := "jev could not answer, so the code's ask_now stands: " + askErr.Error()
 		row.Reason.ModeReason = &failed

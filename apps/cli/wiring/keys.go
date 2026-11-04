@@ -18,9 +18,9 @@ import (
 )
 
 const (
-	OpenRouterName    = string(models.OpenRouter)
-	TypeSafeName      = string(models.TypeSafe)
-	MetaName          = string(models.Meta)
+	OpenRouterName    = string(catalog.OpenRouter)
+	TypeSafeName      = string(catalog.TypeSafe)
+	MetaName          = string(catalog.Meta)
 	BraveName         = "brave"
 	BraveDisplay      = "Brave"
 	OpenRouterFix     = "run tofu login classifier openrouter and paste the key when it asks"
@@ -41,21 +41,21 @@ func (f KeyFacts) Hint() string { return CommandFor("login", f.Role, f.Provider)
 func (f KeyFacts) Status(resolve func(variable string) string) host.KeyStatus {
 	key := host.KeyStatus{Role: f.Role, Provider: f.Provider, Variable: f.Variable, ProviderReports: f.Reports, Model: f.Model}
 	if value := resolve(f.Variable); value != "" {
-		key.Key = widget.Mask(value)
+		key.Key = render.Mask(value)
 	}
 	return key
 }
 
-func classifierKeyUse(bound models.Model, err error, provider models.Provider) string {
+func classifierKeyUse(bound catalog.Model, err error, provider catalog.Provider) string {
 	switch {
-	case jev.IsUnbound(err):
+	case core.IsUnbound(err):
 		return "unused, no classifier is bound: pick one in Models"
 	case err != nil:
 		return "unused, the classifier is unreadable: " + err.Error()
 	case bound.Provider != provider:
 		return "unused, the classifier is " + bound.Slug()
 	}
-	model, err := classifier.Route{Model: bound}.Alias()
+	model, err := classifiers.Route{Model: bound}.Alias()
 	if err != nil {
 		return "bound, the pin is unreadable: " + err.Error()
 	}
@@ -69,17 +69,17 @@ func BraveReports() string {
 
 func KeyTable() []KeyFacts {
 	bound, err := BoundClassifier()
-	boundOn := func(provider models.Provider) string {
+	boundOn := func(provider catalog.Provider) string {
 		if err != nil || bound.Provider != provider {
 			return ""
 		}
 		return bound.Slug()
 	}
 	return []KeyFacts{
-		{host.RoleLLM, MetaName, sys.MetaMuseKeyName, models.Meta.Display(), "serves the meta models", metaReports, ""},
-		{host.RoleLLM, OpenRouterName, sys.OpenRouterKeyName, models.OpenRouter.Display(), "serves the openrouter models on your own key", openRouterReports, ""},
-		{host.RoleClassifier, TypeSafeName, classifier.KeyName(models.TypeSafe), models.TypeSafe.Display(), classifierKeyUse(bound, err, models.TypeSafe), typeSafeReports, boundOn(models.TypeSafe)},
-		{host.RoleClassifier, OpenRouterName, classifier.KeyName(models.OpenRouter), models.OpenRouter.Display(), classifierKeyUse(bound, err, models.OpenRouter), openRouterReports, boundOn(models.OpenRouter)},
+		{host.RoleLLM, MetaName, sys.MetaMuseKeyName, catalog.Meta.Display(), "serves the meta models", metaReports, ""},
+		{host.RoleLLM, OpenRouterName, sys.OpenRouterKeyName, catalog.OpenRouter.Display(), "serves the openrouter models on your own key", openRouterReports, ""},
+		{host.RoleClassifier, TypeSafeName, classifiers.KeyName(catalog.TypeSafe), catalog.TypeSafe.Display(), classifierKeyUse(bound, err, catalog.TypeSafe), typeSafeReports, boundOn(catalog.TypeSafe)},
+		{host.RoleClassifier, OpenRouterName, classifiers.KeyName(catalog.OpenRouter), catalog.OpenRouter.Display(), classifierKeyUse(bound, err, catalog.OpenRouter), openRouterReports, boundOn(catalog.OpenRouter)},
 		{host.RoleSearch, BraveName, sys.BraveSearchKeyName, BraveDisplay, "backs the web search tool", BraveReports(), ""},
 	}
 }
@@ -109,18 +109,18 @@ func LoginWords(provider string) []string { return []string{string(firstRoleOf(p
 
 func LoginHint(provider string) string { return CommandFor("login", firstRoleOf(provider), provider) }
 
-func AccountName(identity cred.Identity, redact bool) string {
+func AccountName(identity accounts.Identity, redact bool) string {
 	if redact {
 		return cmp.Or(MaskedAccount(identity), noAccountYet)
 	}
 	return cmp.Or(identity.Email, identity.AccountID, noAccountYet)
 }
 
-func MaskedAccount(identity cred.Identity) string {
+func MaskedAccount(identity accounts.Identity) string {
 	account := cmp.Or(identity.Email, identity.AccountID)
 	if account == "" {
 		return ""
 	}
 	sum := sha256.Sum256([]byte(account))
-	return widget.Mask(account) + "#" + hex.EncodeToString(sum[:accountMarkBytes])
+	return render.Mask(account) + "#" + hex.EncodeToString(sum[:accountMarkBytes])
 }

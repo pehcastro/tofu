@@ -29,7 +29,7 @@ func Expand(typed, root string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	_, body := skill.FrontMatter(string(data))
+	_, body := skills.FrontMatter(string(data))
 	prompt := "The person typed " + typed + ". Follow this skill for it.\n\n" + strings.TrimSpace(body)
 	switch one.Needs {
 	case Turn:

@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"bytes"
@@ -111,7 +111,7 @@ type replayedRead map[string]contract.Result
 
 func (r replayedRead) Name() string { return "read" }
 
-func (r replayedRead) Definition() llm.Tool { return llm.Tool{Name: "read"} }
+func (r replayedRead) Definition() core.Tool { return core.Tool{Name: "read"} }
 
 func (r replayedRead) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct{ Call string }
@@ -119,8 +119,8 @@ func (r replayedRead) Run(_ context.Context, raw json.RawMessage) (contract.Resu
 	return r[args.Call], err
 }
 
-func readOf(id string) llm.ToolCall {
-	return llm.ToolCall{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"a.go","call":"` + id + `"}`)}
+func readOf(id string) core.ToolCall {
+	return core.ToolCall{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"a.go","call":"` + id + `"}`)}
 }
 
 type sentAs struct {
@@ -134,20 +134,20 @@ func TestARepeatedReadPointsAtTheCopyTheNextRequestStillCarries(t *testing.T) {
 	rows := []struct {
 		name      string
 		answers   replayedRead
-		decisions []llm.Decision
+		decisions []core.Decision
 		want      []sentAs
 	}{
 		{"a repeat in a later step", replayedRead{"call-1": first, "call-2": repeat},
-			[]llm.Decision{toolCallDecision(readOf("call-1")), toolCallDecision(readOf("call-2")), messageDecision()},
+			[]core.Decision{toolCallDecision(readOf("call-1")), toolCallDecision(readOf("call-2")), messageDecision()},
 			[]sentAs{{whole: file}, {pointed: true}}},
 		{"a repeat in the same parallel wave", replayedRead{"call-1": first, "call-2": repeat},
-			[]llm.Decision{toolCallDecision(readOf("call-1"), readOf("call-2")), messageDecision()},
+			[]core.Decision{toolCallDecision(readOf("call-1"), readOf("call-2")), messageDecision()},
 			[]sentAs{{whole: file}, {pointed: true}}},
 		{"a repeat whose copy this history never held", replayedRead{"call-1": repeat},
-			[]llm.Decision{toolCallDecision(readOf("call-1")), messageDecision()},
+			[]core.Decision{toolCallDecision(readOf("call-1")), messageDecision()},
 			[]sentAs{{whole: file}}},
 		{"a repeat whose earlier copy is not word for word the text", replayedRead{"call-1": {Content: file[:100]}, "call-2": repeat},
-			[]llm.Decision{toolCallDecision(readOf("call-1")), toolCallDecision(readOf("call-2")), messageDecision()},
+			[]core.Decision{toolCallDecision(readOf("call-1")), toolCallDecision(readOf("call-2")), messageDecision()},
 			[]sentAs{{whole: file[:100]}, {whole: file}}},
 	}
 	for _, row := range rows {
@@ -160,7 +160,7 @@ func TestARepeatedReadPointsAtTheCopyTheNextRequestStillCarries(t *testing.T) {
 			}
 			var sent, refs []string
 			for _, message := range model.requests[len(model.requests)-1].Messages {
-				if message.Role == llm.RoleTool {
+				if message.Role == core.RoleTool {
 					sent = append(sent, WithoutToolRef(message.Content))
 					refs = append(refs, strings.TrimSpace(toolRefLine(message.Content)))
 				}

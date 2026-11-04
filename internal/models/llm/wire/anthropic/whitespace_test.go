@@ -51,7 +51,7 @@ func assertNoBlankTextBlock(t *testing.T, messages []sentMessage) {
 	}
 }
 
-func encodedMessages(t *testing.T, messages []llm.Message) []sentMessage {
+func encodedMessages(t *testing.T, messages []core.Message) []sentMessage {
 	t.Helper()
 	body, err := anthropic.Request{Model: "claude-test", Messages: messages}.Encode(false)
 	if err != nil {
@@ -101,13 +101,13 @@ func TestTheRequestAfterATruncatedBlankReplyBesideAToolCallCarriesNoBlankTextBlo
 	if err := os.WriteFile(filepath.Join(root, "note.txt"), []byte("hello\n"), 0o600); err != nil {
 		t.Fatalf("writing the note: %v", err)
 	}
-	read, err := turn.NewReadTool(root)
+	read, err := loop.NewReadTool(root)
 	if err != nil {
 		t.Fatalf("building read: %v", err)
 	}
-	row, err := turn.Run(context.Background(), turn.Config{
-		Model: turn.Subscription{Wire: wire}, Spend: turn.SpendSubscription, Tools: turn.NewRegistry(read),
-		System: "you read files", Task: "what does note.txt say", Caps: turn.Caps{MaxSteps: 3},
+	row, err := loop.Run(context.Background(), loop.Config{
+		Model: loop.Subscription{Wire: wire}, Spend: loop.SpendSubscription, Tools: loop.NewRegistry(read),
+		System: "you read files", Task: "what does note.txt say", Caps: loop.Caps{MaxSteps: 3},
 		ResultBytesCap: 1 << 16, ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-test" },
 	})
 	if err != nil {
@@ -128,20 +128,20 @@ func TestTheRequestAfterATruncatedBlankReplyBesideAToolCallCarriesNoBlankTextBlo
 }
 
 func TestAStoredBlankAssistantMessageIsNotSent(t *testing.T) {
-	stored := []llm.Message{
-		{Role: llm.RoleUser, Content: "read it"},
-		{Role: llm.RoleAssistant, Content: "\n\n", ToolCalls: []llm.ToolCall{{ID: "toolu_lost", Name: "read", Arguments: json.RawMessage(`{}`)}}},
-		{Role: llm.RoleUser, Content: "again"},
-		{Role: llm.RoleAssistant, Content: "  　\t"},
-		{Role: llm.RoleUser, Content: "and again"},
+	stored := []core.Message{
+		{Role: core.RoleUser, Content: "read it"},
+		{Role: core.RoleAssistant, Content: "\n\n", ToolCalls: []core.ToolCall{{ID: "toolu_lost", Name: "read", Arguments: json.RawMessage(`{}`)}}},
+		{Role: core.RoleUser, Content: "again"},
+		{Role: core.RoleAssistant, Content: "  　\t"},
+		{Role: core.RoleUser, Content: "and again"},
 	}
-	sendable := turn.Sendable(stored)
+	sendable := loop.Sendable(stored)
 	for _, message := range sendable {
-		if message.Role == llm.RoleAssistant {
+		if message.Role == core.RoleAssistant {
 			t.Fatalf("Sendable kept the blank assistant message %q", message.Content)
 		}
 	}
-	answered := slices.Insert(slices.Clone(stored), 2, llm.Message{Role: llm.RoleTool, ToolCallID: "toolu_lost", Content: "found"})
+	answered := slices.Insert(slices.Clone(stored), 2, core.Message{Role: core.RoleTool, ToolCallID: "toolu_lost", Content: "found"})
 	sent := encodedMessages(t, answered)
 	assertNoBlankTextBlock(t, sent)
 	var roles []string
@@ -154,12 +154,12 @@ func TestAStoredBlankAssistantMessageIsNotSent(t *testing.T) {
 }
 
 func TestBlankTextGoesAndEverythingBesideItStaysInOrder(t *testing.T) {
-	sent := encodedMessages(t, []llm.Message{
-		{Role: llm.RoleUser, Content: " \n", Images: []llm.Image{{MediaType: "image/png", Data: []byte("png")}}},
-		{Role: llm.RoleAssistant, Content: "\n\n", Thinking: llm.Thinking{Text: "read it first", Signature: "sig"},
-			ToolCalls: []llm.ToolCall{{ID: "toolu_1", Name: "read", Arguments: json.RawMessage(`{"path":"a"}`)}}},
-		{Role: llm.RoleTool, ToolCallID: "toolu_1", Content: "a"},
-		{Role: llm.RoleAssistant, Content: "  it says a\n"},
+	sent := encodedMessages(t, []core.Message{
+		{Role: core.RoleUser, Content: " \n", Images: []core.Image{{MediaType: "image/png", Data: []byte("png")}}},
+		{Role: core.RoleAssistant, Content: "\n\n", Thinking: core.Thinking{Text: "read it first", Signature: "sig"},
+			ToolCalls: []core.ToolCall{{ID: "toolu_1", Name: "read", Arguments: json.RawMessage(`{"path":"a"}`)}}},
+		{Role: core.RoleTool, ToolCallID: "toolu_1", Content: "a"},
+		{Role: core.RoleAssistant, Content: "  it says a\n"},
 	})
 	var shape []string
 	for _, message := range sent {
@@ -176,7 +176,7 @@ func TestBlankTextGoesAndEverythingBesideItStaysInOrder(t *testing.T) {
 }
 
 func TestAUserMessageOfWhitespaceAloneIsRefused(t *testing.T) {
-	_, err := anthropic.Request{Model: "claude-test", Messages: []llm.Message{{Role: llm.RoleUser, Content: " \n\t"}}}.Encode(false)
+	_, err := anthropic.Request{Model: "claude-test", Messages: []core.Message{{Role: core.RoleUser, Content: " \n\t"}}}.Encode(false)
 	if err == nil {
 		t.Fatal("a whitespace-only user message encoded")
 	}

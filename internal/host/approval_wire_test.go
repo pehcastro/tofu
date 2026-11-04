@@ -18,17 +18,17 @@ import (
 	"tofu/internal/sys"
 )
 
-func settingsAsk(value string) turn.GateRequest {
-	return turn.GateRequest{Tool: turn.SettingsToolName, Args: json.RawMessage(`{"key":"subAgentsPerTurn","value":` + value + `}`)}
+func settingsAsk(value string) loop.GateRequest {
+	return loop.GateRequest{Tool: loop.SettingsToolName, Args: json.RawMessage(`{"key":"subAgentsPerTurn","value":` + value + `}`)}
 }
 
 func TestAnApprovalNamesItsAnswersRefusesAWrongOneAndAStandingRefusalIsARow(t *testing.T) {
 	var h *Host
-	answers := make(chan turn.PersonAnswer, 8)
+	answers := make(chan loop.PersonAnswer, 8)
 	play := func(ctx context.Context, _ Pick, _ string, live Live) {
-		person := awaitPerson(live.Emit, h.asks, &turn.Config{})
-		for _, request := range []turn.GateRequest{settingsAsk("3"), {Tool: hookTrustTool, Args: json.RawMessage(`{"command":"PreToolUse *: make lint"}`)}, settingsAsk("9"), settingsAsk("9")} {
-			answer, _ := person(ctx, request, turn.GateDecision{Verdict: ledger.VerdictAsk, PersonOnly: true})
+		person := awaitPerson(live.Emit, h.asks, &loop.Config{})
+		for _, request := range []loop.GateRequest{settingsAsk("3"), {Tool: hookTrustTool, Args: json.RawMessage(`{"command":"PreToolUse *: make lint"}`)}, settingsAsk("9"), settingsAsk("9")} {
+			answer, _ := person(ctx, request, loop.GateDecision{Verdict: ledger.VerdictAsk, PersonOnly: true})
 			answers <- answer
 		}
 	}
@@ -113,8 +113,8 @@ func TestAnApprovalNamesItsAnswersRefusesAWrongOneAndAStandingRefusalIsARow(t *t
 	reply(trust.Approval, `"result":{"decision":"allow_always"}`)
 	never := requested()
 	reply(never.Approval, `"result":{"decision":"reject_always"}`)
-	got := []turn.PersonAnswer{<-answers, <-answers, <-answers, <-answers}
-	if want := []turn.PersonAnswer{turn.PersonAlwaysHere, turn.PersonAlwaysHere, turn.PersonDenied, turn.PersonDenied}; !slices.Equal(got, want) {
+	got := []loop.PersonAnswer{<-answers, <-answers, <-answers, <-answers}
+	if want := []loop.PersonAnswer{loop.PersonAlwaysHere, loop.PersonAlwaysHere, loop.PersonDenied, loop.PersonDenied}; !slices.Equal(got, want) {
 		t.Fatalf("the four asks answered %v, want %v", got, want)
 	}
 	c.ask("5", "session.state", `{}`)
@@ -141,12 +141,12 @@ func TestAnApprovalNamesItsAnswersRefusesAWrongOneAndAStandingRefusalIsARow(t *t
 
 func TestATimedAllowStandsUntilRevokedAndTheRequestSaysWhyAndHowRisky(t *testing.T) {
 	var h *Host
-	answers, revoked := make(chan turn.PersonAnswer, 4), make(chan struct{})
+	answers, revoked := make(chan loop.PersonAnswer, 4), make(chan struct{})
 	play := func(ctx context.Context, _ Pick, _ string, live Live) {
-		person := awaitPerson(live.Emit, h.asks, &turn.Config{})
+		person := awaitPerson(live.Emit, h.asks, &loop.Config{})
 		asked := settingsAsk("3")
 		asked.Reason = "I need   three sub-agents\nto split the work."
-		judged := turn.GateDecision{Verdict: ledger.VerdictAsk, Reason: &ledger.Reason{Question: "risky", Comparison: ">=", Threshold: 0.5, Value: 0.7}}
+		judged := loop.GateDecision{Verdict: ledger.VerdictAsk, Reason: &ledger.Reason{Question: "risky", Comparison: ">=", Threshold: 0.5, Value: 0.7}}
 		for round := range 3 {
 			if round == 2 {
 				<-revoked
@@ -188,7 +188,7 @@ func TestATimedAllowStandsUntilRevokedAndTheRequestSaysWhyAndHowRisky(t *testing
 	if left := time.Until(resolved.Until); resolved.Decision != AllowFor || !resolved.Standing || left <= 0 || left > konst.ApprovalAllowForSeconds*time.Second {
 		t.Errorf("approval.resolved = %+v, want allow_for standing until about an hour from now", resolved)
 	}
-	if got := []turn.PersonAnswer{<-answers, <-answers}; !slices.Equal(got, []turn.PersonAnswer{turn.PersonAllowedOnce, turn.PersonAllowedOnce}) {
+	if got := []loop.PersonAnswer{<-answers, <-answers}; !slices.Equal(got, []loop.PersonAnswer{loop.PersonAllowedOnce, loop.PersonAllowedOnce}) {
 		t.Fatalf("the allowed call and its repeat answered %v, want both run, the repeat unasked", got)
 	}
 	target, _ := json.Marshal(ApprovalRevokeParams{Target: asked.Target})
@@ -210,7 +210,7 @@ func TestStoppingTheLeadResolvesItsWaitingApprovalCancelled(t *testing.T) {
 	var h *Host
 	answered := make(chan error, 1)
 	play := func(ctx context.Context, _ Pick, _ string, live Live) {
-		_, err := h.inbox.LeadAsks(awaitPerson(live.Emit, h.asks, &turn.Config{}))(ctx, settingsAsk("4"), turn.GateDecision{Verdict: ledger.VerdictAsk, PersonOnly: true})
+		_, err := h.inbox.LeadAsks(awaitPerson(live.Emit, h.asks, &loop.Config{}))(ctx, settingsAsk("4"), loop.GateDecision{Verdict: ledger.VerdictAsk, PersonOnly: true})
 		answered <- err
 	}
 	c, live, _ := serving(t, play, ServeConfig{})
@@ -257,18 +257,18 @@ func TestACronTurnRefusesWhatWouldAskAndNothingWaits(t *testing.T) {
 	caught := make(caughtHooks, 1)
 	h, _ := New(Config{Dir: t.TempDir(), Engine: caught})
 	t.Cleanup(h.Close)
-	for _, origin := range []llm.Origin{{Source: llm.SourceCronFire, ID: "c1"}, {Source: llm.SourceTask}} {
+	for _, origin := range []core.Origin{{Source: core.SourceCronFire, ID: "c1"}, {Source: core.SourceTask}} {
 		h.mu.Lock()
 		h.begin(Pick{}, "check the build", origin)
 		h.mu.Unlock()
 		hooks := <-caught
 		ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
-		answer, err := hooks.Person(ctx, settingsAsk("5"), turn.GateDecision{Verdict: ledger.VerdictAsk, PersonOnly: true})
+		answer, err := hooks.Person(ctx, settingsAsk("5"), loop.GateDecision{Verdict: ledger.VerdictAsk, PersonOnly: true})
 		cancel()
 		waited := errors.Is(err, context.DeadlineExceeded)
 		switch origin.Kind() {
 		case OriginCron:
-			if waited || answer != turn.PersonDenied || err == nil || !strings.Contains(err.Error(), "no person") {
+			if waited || answer != loop.PersonDenied || err == nil || !strings.Contains(err.Error(), "no person") {
 				t.Errorf("a cron turn's ask answered %v, %v, want refused at once with no person", answer, err)
 			}
 		default:

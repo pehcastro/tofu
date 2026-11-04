@@ -11,7 +11,7 @@ import (
 	"tofu/bench/corpus"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
@@ -69,9 +69,9 @@ type Result struct {
 }
 
 type Battery struct {
-	client   *jev.Client
+	client   *core.Client
 	model    string
-	battery  []jev.Question
+	battery  []core.Question
 	wording  int
 	pol      gate.Rule
 	mode     gate.Mode
@@ -117,7 +117,7 @@ func New(root, key string) (Battery, error) {
 	if err != nil {
 		return Battery{}, err
 	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+	client, err := core.NewClient(core.Config{Wire: wire})
 	if err != nil {
 		return Battery{}, err
 	}
@@ -127,7 +127,7 @@ func New(root, key string) (Battery, error) {
 	}
 	cacheDir := filepath.Join(stateDir, "cache")
 	logDir := filepath.Join(stateDir, "log")
-	questions := make([]jev.Question, 0, len(set.Questions))
+	questions := make([]core.Question, 0, len(set.Questions))
 	for _, q := range set.Questions {
 		questions = append(questions, q.ToJev())
 	}
@@ -223,7 +223,7 @@ func (b Battery) decide(ctx context.Context, turn Turn, at int) (StepResult, err
 			out.LatencyMS, out.Cost = measured.LatencyMS, measured.Cost
 		}
 	} else {
-		decision, err := b.client.Ask(ctx, jev.Request{State: raw, Questions: b.battery})
+		decision, err := b.client.Ask(ctx, core.Request{State: raw, Questions: b.battery})
 		if err != nil {
 			return StepResult{}, err
 		}

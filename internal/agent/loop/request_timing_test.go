@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -15,13 +15,13 @@ type slowModel struct {
 	firstToken int64
 }
 
-func (m slowModel) Ask(ctx context.Context, _ llm.Request) (llm.Decision, error) {
+func (m slowModel) Ask(ctx context.Context, _ core.Request) (core.Decision, error) {
 	select {
 	case <-ctx.Done():
-		return llm.Decision{}, ctx.Err()
+		return core.Decision{}, ctx.Err()
 	case <-time.After(m.flight):
 	}
-	return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: "done", FirstTokenMS: m.firstToken}, nil
+	return core.Decision{Build: "m1", Outcome: core.OutcomeMessage, Content: "done", FirstTokenMS: m.firstToken}, nil
 }
 
 func TestARecordedRequestEventCarriesItsDurationAndItsFirstToken(t *testing.T) {

@@ -31,7 +31,7 @@ func agentsLine(t *testing.T, name string) string {
 }
 
 func TestAgentsAddSetAndRemoveWriteTheHomeAndTheProjectLayers(t *testing.T) {
-	project := testkit.ChdirTemp(t)
+	project := cli.ChdirTemp(t)
 	home := os.Getenv("USERPROFILE")
 	added := map[string]string{"planner": "claude-sub/claude-opus-5", "coder": "claude-sub/claude-sonnet-5", "checker": "codex-sub/gpt-5.6-sol"}
 	for name, model := range added {
@@ -126,7 +126,7 @@ func TestAgentsAddSetAndRemoveWriteTheHomeAndTheProjectLayers(t *testing.T) {
 }
 
 func TestAgentsAddWithDirWritesThatProjectFromAnotherDirectory(t *testing.T) {
-	project := testkit.ChdirTemp(t)
+	project := cli.ChdirTemp(t)
 	t.Chdir(t.TempDir())
 	if code, out, errOut := tofuAgents(t, "add", "--dir", project, "planner", "--description", "plans", "--model", "claude-sub/claude-opus-5"); code != output.ExitOK || !strings.Contains(out, "tofu agents remove --dir "+project+" planner") {
 		t.Fatalf("add --dir exited %d, out %q, err %q", code, out, errOut)

@@ -171,11 +171,11 @@ func (m *Model) commandLines() []string {
 		}
 		name := marker + sigil + row.Name
 		if row.What == "" {
-			lines = append(lines, style.Render(widget.Fit(name, m.width)))
+			lines = append(lines, style.Render(render.Fit(name, m.width)))
 			continue
 		}
-		what := widget.Fit(row.What, max(m.width-commandColumn, 1))
-		lines = append(lines, style.Render(widget.Pad(name, commandColumn))+look.Faint(what))
+		what := render.Fit(row.What, max(m.width-commandColumn, 1))
+		lines = append(lines, style.Render(render.Pad(name, commandColumn))+look.Faint(what))
 	}
 	return lines
 }

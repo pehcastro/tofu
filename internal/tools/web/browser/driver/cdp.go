@@ -1,4 +1,4 @@
-package browser
+package driver
 
 import (
 	"encoding/json"
@@ -38,9 +38,9 @@ type cdpMessage struct {
 func newCDPConn(ws *websocket.Conn) *cdpConn {
 	c := &cdpConn{ws: ws, waiting: map[int64]chan cdpMessage{}, events: map[string]func(json.RawMessage){}, done: make(chan struct{})}
 	report := sys.Crashes(".")
-	safe.Go(report, "browser reader", func() {
+	recover.Go(report, "browser reader", func() {
 		defer close(c.done)
-		c.lost = safe.Call(report, "browser reader", c.read)
+		c.lost = recover.Call(report, "browser reader", c.read)
 	})
 	return c
 }

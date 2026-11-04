@@ -30,7 +30,7 @@ func defaultWeights() Weights {
 	return Weights{Input: inputWeight, Write5m: write5mWeight, Write1h: write1hWeight, Read: readWeight, Output: outputWeight, From: "list price ratios"}
 }
 
-func WeightsFrom(registry models.Registry) func(model string) Weights {
+func WeightsFrom(registry catalog.Registry) func(model string) Weights {
 	bySlug := map[string]Weights{}
 	for slug, price := range registry.Prices {
 		if price.Input <= 0 {
@@ -50,7 +50,7 @@ func WeightsFrom(registry models.Registry) func(model string) Weights {
 	return func(model string) Weights { return cmp.Or(priced(model), defaultWeights()) }
 }
 
-func WindowsFrom(registry models.Registry) func(model string) int {
+func WindowsFrom(registry catalog.Registry) func(model string) int {
 	return bySource(registry.Windows)
 }
 

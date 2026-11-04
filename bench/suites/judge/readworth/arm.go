@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/tools/shell/sift"
 )
@@ -21,8 +21,8 @@ type Answered struct {
 	Err     error
 }
 
-func Ask(ctx context.Context, client *jev.Client, set question.Set, row Row) Answered {
-	questions := make([]jev.Question, len(set.Questions))
+func Ask(ctx context.Context, client *core.Client, set question.Set, row Row) Answered {
+	questions := make([]core.Question, len(set.Questions))
 	for i, q := range set.Questions {
 		questions[i] = q.ToJev()
 	}
@@ -35,7 +35,7 @@ func Ask(ctx context.Context, client *jev.Client, set question.Set, row Row) Ans
 	if err != nil {
 		return Answered{Row: row, Err: err}
 	}
-	decision, err := client.Ask(ctx, jev.Request{State: json.RawMessage(state), Questions: questions})
+	decision, err := client.Ask(ctx, core.Request{State: json.RawMessage(state), Questions: questions})
 	if err != nil {
 		return Answered{Row: row, Err: err}
 	}

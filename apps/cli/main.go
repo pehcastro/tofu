@@ -12,7 +12,7 @@ import (
 	"unicode"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	boardyverb "tofu/apps/cli/verbs/boardy"
 	doctorverb "tofu/apps/cli/verbs/doctor"
 	guardverb "tofu/apps/cli/verbs/guard"
@@ -122,7 +122,7 @@ Every verb that reports state takes --json and prints one JSON document.
 func loadLocalTimeZone() { _ = time.Local.String() }
 
 func main() {
-	safe.Go(wiring.CrashTold(".", func(said string) { _, _ = fmt.Fprintln(os.Stderr, "tofu: "+said) }), "time zone load", loadLocalTimeZone)
+	recover.Go(wiring.CrashTold(".", func(said string) { _, _ = fmt.Fprintln(os.Stderr, "tofu: "+said) }), "time zone load", loadLocalTimeZone)
 	stopProfile := sys.StartProfile()
 	reapTemporaryProjects(os.Stderr)
 	args, temporary := temporaryProject(os.Args[1:])

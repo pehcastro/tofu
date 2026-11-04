@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -29,7 +29,7 @@ func (t *SpawnTool) Advise(ctx context.Context, plan string) {
 	t.Inbox.watched[waiting] = true
 	t.Inbox.mu.Unlock()
 	reading, cancel := outlivingTheWave(ctx)
-	safe.Go(sys.Crashes(t.Project), waiting, func() {
+	recover.Go(sys.Crashes(t.Project), waiting, func() {
 		defer func() {
 			cancel()
 			t.Inbox.mu.Lock()
@@ -42,17 +42,17 @@ func (t *SpawnTool) Advise(ctx context.Context, plan string) {
 		if read.Error != "" {
 			said = "the advisor did not read the plan: " + read.Error
 		}
-		notice := session.AdvisorNotice{NoticeBody: session.NoticeBody{Text: said, From: RecordedOrigin(llm.Origin{Source: llm.SourceNotice})}, Advisor: &read}
+		notice := session.AdvisorNotice{NoticeBody: session.NoticeBody{Text: said, From: RecordedOrigin(core.Origin{Source: core.SourceNotice})}, Advisor: &read}
 		if _, err := site.log.Append(session.Event{Turn: site.turn, Agent: site.agent, Kind: session.EventNotice}, notice); err != nil && t.base.Notify != nil {
 			t.base.Notify("the advisor's read of the plan was not recorded: " + err.Error())
 		}
 	})
 }
 
-func personWords(conversation []llm.Message) []string {
+func personWords(conversation []core.Message) []string {
 	var words []string
 	for _, message := range conversation {
-		if message.Role != llm.RoleUser || message.Origin.Source.Kind() != llm.OriginPerson {
+		if message.Role != core.RoleUser || message.Origin.Source.Kind() != core.OriginPerson {
 			continue
 		}
 		if said, typed := TaskIn(message.Content); typed && strings.TrimSpace(said) != "" {
@@ -104,11 +104,11 @@ func (t *SpawnTool) advised(ctx context.Context, log *session.Log, turnID string
 	brief := "the person's words, oldest first:\n\n" + strings.Join(words, "\n\n") + "\n\nthe plan the lead set:\n\n" + plan
 	within, stop := context.WithTimeout(ctx, konst.SubAgentAskMillis*time.Millisecond)
 	defer stop()
-	request := llm.Request{Turn: turnID, Messages: []llm.Message{
-		{Role: llm.RoleSystem, Content: definition.Instructions},
-		{Role: llm.RoleUser, Content: brief, Origin: llm.Origin{Source: llm.SourceBrief, Name: t.orchestratorID}},
+	request := core.Request{Turn: turnID, Messages: []core.Message{
+		{Role: core.RoleSystem, Content: definition.Instructions},
+		{Role: core.RoleUser, Content: brief, Origin: core.Origin{Source: core.SourceBrief, Name: t.orchestratorID}},
 	}}
-	tapped, tap := llm.Tapped(within)
+	tapped, tap := core.Tapped(within)
 	asked := time.Now()
 	decision, err := model.Ask(tapped, request)
 	read.Model, read.CostUSD = cmp.Or(decision.Build, read.Model), decision.Usage.Cost
@@ -126,7 +126,7 @@ func (t *SpawnTool) advised(ctx context.Context, log *session.Log, turnID string
 	if err != nil {
 		return failed(err)
 	}
-	if decision.Outcome != llm.OutcomeMessage {
+	if decision.Outcome != core.OutcomeMessage {
 		return failed(fmt.Errorf("the advisor's reply ended as %s, stop reason %q, with no answer", decision.Outcome, decision.Stop))
 	}
 	named := false

@@ -17,31 +17,31 @@ import (
 
 const doneReviewPoint = state.StopCheckRuleRef
 
-func newDoneReview(arm string, say func(string)) turn.DoneReview {
+func newDoneReview(arm string, say func(string)) loop.DoneReview {
 	switch arm {
 	case settingspkg.DoneReviewOff:
 		return nil
 	case settingspkg.DoneReviewCheap:
-		return turn.CheapDoneReview{}
+		return loop.CheapDoneReview{}
 	case settingspkg.DoneReviewScreen:
-		return turn.ContractDoneReview{}
+		return loop.ContractDoneReview{}
 	case settingspkg.DoneReviewTyped:
 		typed, err := newTypedDoneReview()
 		if err == nil {
 			return typed
 		}
 		reason := err.Error()
-		if jev.IsUnbound(err) {
+		if core.IsUnbound(err) {
 			reason = "no Jev classifier is bound"
 		}
 		say("the typed done review fell back to screen because " + reason + "; screen reads the acceptance lines with no Jev call")
-		return turn.ContractDoneReview{}
+		return loop.ContractDoneReview{}
 	}
 	panic("tofu run: unknown done review arm " + arm)
 }
 
 type typedDoneReview struct {
-	client *jev.Client
+	client *core.Client
 	set    wiring.Battery
 }
 
@@ -83,51 +83,51 @@ func resolveStopCheckPoint() (wiring.Battery, error) {
 	return set, nil
 }
 
-func (r typedDoneReview) Review(ctx context.Context, subAgent turn.Row) (turn.DoneDecision, error) {
-	screened, _ := (turn.ContractDoneReview{}).Review(ctx, subAgent)
+func (r typedDoneReview) Review(ctx context.Context, subAgent loop.Row) (loop.DoneDecision, error) {
+	screened, _ := (loop.ContractDoneReview{}).Review(ctx, subAgent)
 	built, builder, err := state.BuildStopCheck(doneState(subAgent))
 	if err != nil {
-		return turn.DoneDecision{}, err
+		return loop.DoneDecision{}, err
 	}
 	asked := json.RawMessage(built)
 	in := wiring.RowInput{TurnID: subAgent.ID, StateBuilder: builder}
 
-	decision, askErr := r.client.Ask(ctx, jev.Request{State: asked, Questions: r.set.Questions})
+	decision, askErr := r.client.Ask(ctx, core.Request{State: asked, Questions: r.set.Questions})
 	if askErr != nil {
 		row, writeErr := wiring.AppendFallbackRow(asked, r.set, in, askErr)
 		if writeErr != nil {
-			return turn.DoneDecision{}, fmt.Errorf("%w, and the row saying so did not write either: %w", askErr, writeErr)
+			return loop.DoneDecision{}, fmt.Errorf("%w, and the row saying so did not write either: %w", askErr, writeErr)
 		}
-		if screened.Verdict == turn.DoneReopen {
+		if screened.Verdict == loop.DoneReopen {
 			screened.ID = row.ID
 			return screened, nil
 		}
-		return turn.DoneDecision{}, askErr
+		return loop.DoneDecision{}, askErr
 	}
 
 	in.Decision = &decision
 	in.Answers = wiring.ToLedgerAnswers(r.set.QuestionsVersion, decision.Answers)
 	row, err := wiring.AppendRow(asked, r.set, in)
 	if err != nil {
-		return turn.DoneDecision{}, err
+		return loop.DoneDecision{}, err
 	}
 	screened.ID = row.ID
 	switch {
-	case screened.Verdict == turn.DoneReopen:
+	case screened.Verdict == loop.DoneReopen:
 		return screened, nil
 	case r.set.Mode == gate.ModeEnforced:
-		return turn.DoneDecision{ID: row.ID, Verdict: doneVerdict(row.Verdict), Reason: doneReason(row)}, nil
+		return loop.DoneDecision{ID: row.ID, Verdict: doneVerdict(row.Verdict), Reason: doneReason(row)}, nil
 	}
 	screened.Reason += "; stop_check ran in " + r.set.Mode.String() + ", so this decides nothing: " + doneReason(row)
 	return screened, nil
 }
 
-func doneVerdict(verdict ledger.Verdict) turn.DoneVerdict {
+func doneVerdict(verdict ledger.Verdict) loop.DoneVerdict {
 	switch verdict {
 	case ledger.VerdictAllow:
-		return turn.DoneReopen
+		return loop.DoneReopen
 	case ledger.VerdictAsk, ledger.VerdictDeny:
-		return turn.DoneAccepted
+		return loop.DoneAccepted
 	}
 	panic("tofu run: the done review cannot read the verdict " + verdict.String())
 }
@@ -148,13 +148,13 @@ func doneReason(row ledger.Row) string {
 		doneReviewPoint, strings.Join(answered, ", "), row.Verdict.String(), row.ID)
 }
 
-func doneState(subAgent turn.Row) state.StopCheckState {
+func doneState(subAgent loop.Row) state.StopCheckState {
 	built := state.StopCheckState{
 		Task: subAgent.Task,
 		Budget: state.StopCheckBudget{
-			AtStepCap:      subAgent.Outcome == turn.OutcomeStepCap || subAgent.Outcome == turn.OutcomeForkStop,
-			AtDecisionCap:  subAgent.Outcome == turn.OutcomeDecisionCap,
-			AtWallClockCap: subAgent.Outcome == turn.OutcomeRetiredWallClockCap,
+			AtStepCap:      subAgent.Outcome == loop.OutcomeStepCap || subAgent.Outcome == loop.OutcomeForkStop,
+			AtDecisionCap:  subAgent.Outcome == loop.OutcomeDecisionCap,
+			AtWallClockCap: subAgent.Outcome == loop.OutcomeRetiredWallClockCap,
 		},
 	}
 	for at, step := range subAgent.Steps {
@@ -176,7 +176,7 @@ func doneState(subAgent turn.Row) state.StopCheckState {
 	return built
 }
 
-func repeatsEarlierStep(steps []turn.StepRow, at int) bool {
+func repeatsEarlierStep(steps []loop.StepRow, at int) bool {
 	if len(steps[at].ToolCalls) == 0 {
 		return false
 	}
@@ -188,7 +188,7 @@ func repeatsEarlierStep(steps []turn.StepRow, at int) bool {
 	return true
 }
 
-func ranEarlier(earlier []turn.StepRow, command string) bool {
+func ranEarlier(earlier []loop.StepRow, command string) bool {
 	for _, step := range earlier {
 		for _, call := range step.ToolCalls {
 			if strings.Contains(call.Command, command) {

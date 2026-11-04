@@ -90,7 +90,7 @@ func (m *Model) footer() []string {
 	lines = append(lines, m.composerLines()...)
 	lines = append(lines, m.commandLines()...)
 	for index, line := range lines {
-		lines[index] = widget.Pad(line, m.width)
+		lines[index] = render.Pad(line, m.width)
 	}
 	return lines
 }

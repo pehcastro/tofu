@@ -28,32 +28,32 @@ func TestTheDeskReadsEveryScopeOfMemoryAndItsTree(t *testing.T) {
 
 	refused("2", "memory.add", `{"text":"no scope given"}`, "scope")
 	c.ask("3", "memory.add", `{"text":"tickets before code | always","scope":"user-local"}`)
-	var added memory.Entry
+	var added entries.Entry
 	c.answer("3", &added)
-	if added.Scope != memory.UserLocal || added.Kind != memory.KindPerson {
+	if added.Scope != entries.UserLocal || added.Kind != entries.KindPerson {
 		t.Errorf("memory.add on user-local kept %+v, want a person entry in user-local", added)
 	}
 
 	c.ask("4", "memory.view", `{"scope":"user-local"}`)
 	var view MemoryView
 	c.answer("4", &view)
-	if view.Store != string(memory.UserLocal) || len(view.Lines) != 1 || view.Lines[0] != (MemoryLine{ID: 0, N: 1, Text: "person: [memory#" + added.ID + "] tickets before code | always"}) {
+	if view.Store != string(entries.UserLocal) || len(view.Lines) != 1 || view.Lines[0] != (MemoryLine{ID: 0, N: 1, Text: "person: [memory#" + added.ID + "] tickets before code | always"}) {
 		t.Errorf("memory.view of user-local answered %+v, want the one entry as line 0+1 with its text whole", view)
 	}
 
 	home := os.Getenv("HOME")
 	c.ask("5", "memory.view", `{"scope":"global"}`)
 	c.answer("5", &view)
-	if view.Store != string(memory.Global) || view.Lines == nil || len(view.Lines) != 0 {
+	if view.Store != string(entries.Global) || view.Lines == nil || len(view.Lines) != 0 {
 		t.Errorf("memory.view of global answered %+v, want user-global with no lines", view)
 	}
 	c.ask("6", "memory.view", `{"scope":"episodes"}`)
 	c.answer("6", &view)
-	if view.Store != memory.EpisodesStore || len(view.Lines) != 0 {
+	if view.Store != entries.EpisodesStore || len(view.Lines) != 0 {
 		t.Errorf("memory.view of episodes answered %+v, want the episodes store with no lines", view)
 	}
 	_ = filepath.WalkDir(home, func(path string, entry fs.DirEntry, _ error) error {
-		empty := strings.HasPrefix(path, filepath.Join(home, ".tofu", "memory")) || strings.Contains(path, memory.EpisodesStore)
+		empty := strings.HasPrefix(path, filepath.Join(home, ".tofu", "memory")) || strings.Contains(path, entries.EpisodesStore)
 		if empty && strings.HasSuffix(path, ".jsonl") {
 			t.Errorf("a view wrote %s", path)
 		}
@@ -79,7 +79,7 @@ func TestTheDeskReadsEveryScopeOfMemoryAndItsTree(t *testing.T) {
 	refused("12", "memory.recall", `{"store":"user-local","regex":"("}`, "regex")
 
 	c.ask("13", "memory.remove", `{"scope":"user-local","id":"`+added.ID+`"}`)
-	var removed memory.Entry
+	var removed entries.Entry
 	c.answer("13", &removed)
 	if removed.ID != added.ID {
 		t.Errorf("memory.remove on user-local answered %+v", removed)
@@ -87,20 +87,20 @@ func TestTheDeskReadsEveryScopeOfMemoryAndItsTree(t *testing.T) {
 }
 
 func TestARememberPickSendsMemoryScoped(t *testing.T) {
-	book := &replies[memory.Scope]{}
-	offer := tools.MemoryOffer{Statement: "tabs, not spaces", Said: "I prefer tabs", Scope: memory.UserLocal, Scopes: []memory.Scope{memory.Global, memory.UserLocal}}
+	book := &replies[entries.Scope]{}
+	offer := registry.MemoryOffer{Statement: "tabs, not spaces", Said: "I prefer tabs", Scope: entries.UserLocal, Scopes: []entries.Scope{entries.Global, entries.UserLocal}}
 	for _, c := range []struct {
 		name   string
-		answer *memory.Scope
+		answer *entries.Scope
 		picked string
 	}{
-		{"a scope", new(memory.Scope), string(memory.Global)},
-		{"no", new(memory.Scope), MemoryNone},
+		{"a scope", new(entries.Scope), string(entries.Global)},
+		{"no", new(entries.Scope), MemoryNone},
 		{"cancelled", nil, ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			if c.answer != nil && c.picked != MemoryNone {
-				*c.answer = memory.Scope(c.picked)
+				*c.answer = entries.Scope(c.picked)
 			}
 			var scoped []Event
 			asked := make(chan string, 1)
@@ -135,7 +135,7 @@ func TestARememberPickSendsMemoryScoped(t *testing.T) {
 				}
 				return
 			}
-			if len(scoped) != 1 || scoped[0].Scoped == nil || scoped[0].Scoped.Offered != memory.UserLocal || scoped[0].Scoped.Picked != c.picked {
+			if len(scoped) != 1 || scoped[0].Scoped == nil || scoped[0].Scoped.Offered != entries.UserLocal || scoped[0].Scoped.Picked != c.picked {
 				t.Fatalf("the pick sent %+v, want one memory.scoped offering user-local and picking %s", scoped, c.picked)
 			}
 			feed := newItems("s")

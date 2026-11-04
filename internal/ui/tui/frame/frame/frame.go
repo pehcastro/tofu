@@ -92,7 +92,7 @@ func panel(text string, fg look.Color) span {
 func cells(spans []span) int {
 	total := 0
 	for _, part := range spans {
-		total += widget.Cells(part.text)
+		total += render.Cells(part.text)
 	}
 	return total
 }

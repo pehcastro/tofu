@@ -19,7 +19,7 @@ import (
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/tools/shell/process"
-	app "tofu/internal/ui/tui/app"
+	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/frame/frame"
 	"tofu/internal/ui/tui/panels/shells"
 	"tofu/internal/ui/tui/panels/subagent"
@@ -283,14 +283,14 @@ func summary(content string, bytes int) string {
 }
 
 func recordedShells() []shells.Entry {
-	registry := shell.OpenAt(filepath.Join(filepath.Dir(filepath.Dir(sys.SourceRoot())), "admin-template", ".tofu", "shells"))
+	registry := process.OpenAt(filepath.Join(filepath.Dir(filepath.Dir(sys.SourceRoot())), "admin-template", ".tofu", "shells"))
 	found, err := registry.List()
 	if err != nil {
 		return nil
 	}
 	entries := make([]shells.Entry, 0, len(found))
 	for _, one := range found {
-		log, _ := registry.Tail(one.Name, shell.DefaultTail)
+		log, _ := registry.Tail(one.Name, process.DefaultTail)
 		entries = append(entries, shells.Entry{Name: one.Name, Command: one.Command, State: shells.State(one.State), Started: one.Started,
 			Ended: one.Ended, ExitCode: one.ExitCode, PID: one.PID, Dir: one.Dir, Owner: one.Owner, Log: log})
 	}

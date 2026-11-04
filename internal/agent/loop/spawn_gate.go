@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"encoding/json"
@@ -15,14 +15,14 @@ import (
 	"tofu/internal/models/llm/core"
 )
 
-func editedSince(project string, definition subagent.Definition, rounds []Row) ([]ToolCallRow, string) {
+func editedSince(project string, definition subagents.Definition, rounds []Row) ([]ToolCallRow, string) {
 	var sinceEdit []ToolCallRow
 	lastEdit := ""
 	for _, round := range rounds {
 		for _, step := range round.Steps {
 			for _, call := range step.ToolCalls {
 				sinceEdit = append(sinceEdit, call)
-				if path := writtenPath(call); path != "" && definition.Language != "" && rule.LanguageOf(path) == definition.Language {
+				if path := writtenPath(call); path != "" && definition.Language != "" && rules.LanguageOf(path) == definition.Language {
 					sinceEdit, lastEdit = nil, path
 				}
 			}
@@ -34,7 +34,7 @@ func editedSince(project string, definition subagent.Definition, rounds []Row) (
 	return sinceEdit, lastEdit
 }
 
-func gateExemptions(project string, definition subagent.Definition, rounds []Row) map[string]string {
+func gateExemptions(project string, definition subagents.Definition, rounds []Row) map[string]string {
 	sinceEdit, lastEdit := editedSince(project, definition, rounds)
 	exempt := map[string]string{}
 	if lastEdit == "" {
@@ -127,11 +127,11 @@ func cargoOwned(project, lastEdit string, owns []string, printedPath string) boo
 	if !found || err != nil {
 		return true
 	}
-	mine, _ := subagent.Matches(filepath.ToSlash(relative), owns)
+	mine, _ := subagents.Matches(filepath.ToSlash(relative), owns)
 	return mine
 }
 
-func gateMissed(project string, recipes map[string]string, definition subagent.Definition, owns []string, rounds []Row) []string {
+func gateMissed(project string, recipes map[string]string, definition subagents.Definition, owns []string, rounds []Row) []string {
 	sinceEdit, lastEdit := editedSince(project, definition, rounds)
 	if lastEdit == "" {
 		return nil
@@ -241,7 +241,7 @@ func printedBy(rounds []Row, call string) string {
 	printed := ""
 	for _, round := range rounds {
 		for _, message := range round.Conversation {
-			if message.Role == llm.RoleTool && message.ToolCallID == call {
+			if message.Role == core.RoleTool && message.ToolCallID == call {
 				printed = message.Content
 			}
 		}
@@ -284,7 +284,7 @@ func typecheckOwnError(project string, owns []string, printed, scope string) (qu
 			continue
 		}
 		relative, err := filepath.Rel(project, filepath.Join(filepath.Dir(tsconfig), path))
-		if owned, _ := subagent.Matches(filepath.ToSlash(relative), owns); path == "" || err != nil {
+		if owned, _ := subagents.Matches(filepath.ToSlash(relative), owns); path == "" || err != nil {
 			unplaced = append(unplaced, line)
 		} else if owned {
 			return line, true

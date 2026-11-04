@@ -1,4 +1,4 @@
-package turn_test
+package loop_test
 
 import (
 	"context"
@@ -16,30 +16,30 @@ import (
 	"tofu/internal/tools/registry"
 )
 
-func subAgentShellAnswers(t *testing.T, root string, bash *turn.BashTool, commands []string) []string {
+func subAgentShellAnswers(t *testing.T, root string, bash *loop.BashTool, commands []string) []string {
 	t.Helper()
 	brief := "Read the desk sources and report what you find."
-	script := &prefetchScript{brief: brief, lead: []llm.Decision{calling("spawn", map[string]any{"task": brief})}}
+	script := &prefetchScript{brief: brief, lead: []core.Decision{calling("spawn", map[string]any{"task": brief})}}
 	for _, command := range commands {
 		script.subAgent = append(script.subAgent, calling("bash", map[string]any{"command": command}))
 	}
-	checked, err := tools.Checked(root, []contract.Tool{bash})
+	checked, err := registry.Checked(root, []contract.Tool{bash})
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := turn.Config{
+	base := loop.Config{
 		Model:          script,
-		Spend:          turn.SpendAPIKey,
-		Tools:          turn.NewRegistry(tools.NewMemo().Wrap(checked)...),
-		Caps:           turn.Caps{MaxSteps: len(commands) + 4},
+		Spend:          loop.SpendAPIKey,
+		Tools:          loop.NewRegistry(registry.NewMemo().Wrap(checked)...),
+		Caps:           loop.Caps{MaxSteps: len(commands) + 4},
 		ResultBytesCap: 4096,
 		ArtifactDir:    filepath.Join(t.TempDir(), "artifacts"),
 		NewID:          func() string { return "turn-orchestrator" },
 	}
-	spawner := turn.NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
+	spawner := loop.NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
 	orchestrator := base
-	orchestrator.Task, orchestrator.Tools, orchestrator.Inbox = "hand the reading to a sub-agent", turn.NewRegistry(spawner), spawner.Inbox
-	if err := turn.Lead(context.Background(), orchestrator, nil, nil, func(turn.Row, error) {}); err != nil {
+	orchestrator.Task, orchestrator.Tools, orchestrator.Inbox = "hand the reading to a sub-agent", loop.NewRegistry(spawner), spawner.Inbox
+	if err := loop.Lead(context.Background(), orchestrator, nil, nil, func(loop.Row, error) {}); err != nil {
 		t.Fatalf("Lead: %v", err)
 	}
 	if len(script.asked) != len(commands)+1 {
@@ -69,7 +69,7 @@ func TestASubAgentGrepWithABraceRunsUnderAPosixShell(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	bash, err := turn.NewBashTool(root)
+	bash, err := loop.NewBashTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,11 +103,11 @@ func TestAPowerShellScriptBlockIsStillRefusedUnderPowerShell(t *testing.T) {
 	}
 	t.Setenv("USERPROFILE", t.TempDir())
 	t.Setenv("PATH", filepath.Dir(powershell))
-	shell, err := turn.ResolveRunShell("")
+	shell, err := loop.ResolveRunShell("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	bash, err := turn.NewBashToolFromShell(root, shell)
+	bash, err := loop.NewBashToolFromShell(root, shell)
 	if err != nil {
 		t.Fatal(err)
 	}

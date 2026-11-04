@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
@@ -85,7 +85,7 @@ func State(now time.Time) host.DoctorReport {
 	if err != nil {
 		root = "."
 	}
-	located, _ := wiring.LocateGateKey(jev.ReadKeyring())
+	located, _ := wiring.LocateGateKey(core.ReadKeyring())
 	library, rules := wiring.ReadLibrary()
 	for i, point := range rules {
 		if point.Point == wiring.ShellSiftPoint {
@@ -100,7 +100,7 @@ func State(now time.Time) host.DoctorReport {
 		Verdict:     host.DoctorReady,
 		Blockers:    wiring.DoctorBlockers(),
 		Credentials: credentials(now),
-		Store:       cred.DoctorState(now),
+		Store:       accounts.DoctorState(now),
 		Gate:        host.DoctorGate{Variable: located.Name, Source: gateSource(located), Path: located.Path},
 		Library:     library,
 		Rules:       rules,
@@ -109,7 +109,7 @@ func State(now time.Time) host.DoctorReport {
 		SpendLimit:  quota.SpendLimitLine(),
 		Wires:       wireSpends(located.Name),
 		Proxy:       proxyState(root),
-		Browser:     browser.Hosts(home, browser.ChromeHostsKey),
+		Browser:     driver.Hosts(home, driver.ChromeHostsKey),
 		Root:        root,
 		Go:          sys.GoVersion(),
 		OS:          sys.OS() + "/" + sys.Arch(),
@@ -179,7 +179,7 @@ func wireSpends(keyName string) []host.DoctorWire {
 	wires := make([]host.DoctorWire, 0, len(names))
 	for _, name := range names {
 		spend := "the " + name + " subscription quota, no money"
-		if wiring.WireSpend(name) == turn.SpendAPIKey {
+		if wiring.WireSpend(name) == loop.SpendAPIKey {
 			spend = "money, every call is billed to the account that issued " + keyName
 		}
 		wires = append(wires, host.DoctorWire{Name: name, Spend: spend})
@@ -214,15 +214,15 @@ func RtkInstall() string {
 	return "cargo install --git https://github.com/rtk-ai/rtk"
 }
 
-func gateSource(located jev.Located) string {
+func gateSource(located core.Located) string {
 	switch located.Source {
-	case jev.SourceEnvironment:
+	case core.SourceEnvironment:
 		return gateEnv
-	case jev.SourceDotEnv:
+	case core.SourceDotEnv:
 		return gateDotEnv
-	case jev.SourceDatabase:
+	case core.SourceDatabase:
 		return gateStore
-	case jev.SourceMissing:
+	case core.SourceMissing:
 		return gateMissing
 	}
 	panic("tofu doctor: unknown key source")

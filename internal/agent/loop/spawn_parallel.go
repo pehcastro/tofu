@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -84,7 +84,7 @@ type warmingModel struct {
 	warmup *warmup
 }
 
-func (m warmingModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (m warmingModel) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	decision, err := m.model.Ask(ctx, request)
 	m.warmup.warmed()
 	return decision, err
@@ -95,13 +95,13 @@ type stagger struct {
 	why     string
 }
 
-func cacheSays(cache models.PromptCache) string {
+func cacheSays(cache catalog.PromptCache) string {
 	switch cache {
-	case models.PromptCachePrefix:
+	case catalog.PromptCachePrefix:
 		return "the model caches a shared prompt prefix"
-	case models.PromptCacheNone:
+	case catalog.PromptCacheNone:
 		return "the model caches no prompt prefix, so a wait would only delay it"
-	case models.PromptCacheUnknown:
+	case catalog.PromptCacheUnknown:
 		return "the model does not declare prompt_cache, so cache support is unknown and it staggers as if the prefix were cached"
 	}
 	panic("turn: no words for prompt cache " + string(cache))
@@ -112,7 +112,7 @@ func (w *warmup) stagger(ctx context.Context, call string, subAgent Config) (Con
 	switch {
 	case w == nil:
 		return subAgent, stagger{}
-	case subAgent.PromptCache == models.PromptCacheNone:
+	case subAgent.PromptCache == catalog.PromptCacheNone:
 		return subAgent, stagger{decided: "runs at once", why: says}
 	case w.leader == call:
 		if subAgent.Model != nil {
@@ -138,14 +138,14 @@ func (w *warmup) stagger(ctx context.Context, call string, subAgent Config) (Con
 	return subAgent, stagger{decided: "waited " + time.Since(began).Round(time.Millisecond).String(), why: says + ", so it waited for " + w.leader + " to answer first"}
 }
 
-func (t *SpawnTool) disjointPrefix(calls []llm.ToolCall) int {
+func (t *SpawnTool) disjointPrefix(calls []core.ToolCall) int {
 	limit := t.limits().Running
-	var wave subagent.Roster
+	var wave subagents.Roster
 	width, firsts, warmups := len(calls), map[string]*warmup{}, map[string]*warmup{}
 	for i, call := range calls {
 		var args spawnArgs
 		if i == limit || call.Name != t.Name() || json.Unmarshal(call.Arguments, &args) != nil ||
-			wave.Hold(subagent.SubAgent{ID: call.ID, Owns: args.Owns}) != nil {
+			wave.Hold(subagents.SubAgent{ID: call.ID, Owns: args.Owns}) != nil {
 			width = i
 			break
 		}

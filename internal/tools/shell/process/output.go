@@ -1,4 +1,4 @@
-package shell
+package process
 
 import (
 	"bytes"
@@ -163,14 +163,14 @@ func (r *Registry) Timing(entry Shell, now time.Time) Timing {
 }
 
 func (t Timing) Words(now time.Time) string {
-	ran := "ran " + widget.Until(t.Ran)
+	ran := "ran " + render.Until(t.Ran)
 	switch {
 	case t.Last.IsZero():
 		return ran + ", no output"
 	case !t.Ended.IsZero():
-		return ran + ", last output " + widget.Until(t.Ended.Sub(t.Last)) + " before it ended"
+		return ran + ", last output " + render.Until(t.Ended.Sub(t.Last)) + " before it ended"
 	}
-	return ran + ", last output " + widget.Until(now.Sub(t.Last)) + " ago"
+	return ran + ", last output " + render.Until(now.Sub(t.Last)) + " ago"
 }
 
 type Cursor struct {

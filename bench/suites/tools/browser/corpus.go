@@ -16,8 +16,8 @@ type Case struct {
 	ID     string
 	Source string
 	Goal   string
-	Page   browser.Page
-	Want   browser.Action
+	Page   driver.Page
+	Want   driver.Action
 }
 
 func Load(dir string) ([]Case, error) {
@@ -40,7 +40,7 @@ func Load(dir string) ([]Case, error) {
 	}
 	cases := make([]Case, 0, len(rows))
 	for _, row := range rows {
-		op, err := browser.ParseOp(row.Want.Op)
+		op, err := driver.ParseOp(row.Want.Op)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", row.ID, err)
 		}
@@ -48,11 +48,11 @@ func Load(dir string) ([]Case, error) {
 		if err != nil {
 			return nil, err
 		}
-		page, err := browser.ParsePage(snapshot)
+		page, err := driver.ParsePage(snapshot)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", row.ID, err)
 		}
-		want := browser.Action{Op: op, Element: row.Want.Element, Value: row.Want.Value}
+		want := driver.Action{Op: op, Element: row.Want.Element, Value: row.Want.Value}
 		if target, found := page.Element(want.Element); want.Element != 0 && (!found || !op.Accepts(target.Role)) {
 			return nil, fmt.Errorf("%s wants %s on element %d, which the page does not offer for it", row.ID, op, want.Element)
 		}

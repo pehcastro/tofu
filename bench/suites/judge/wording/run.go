@@ -102,7 +102,7 @@ type caseRun struct {
 	build string
 }
 
-func runCase(ctx context.Context, wire jev.Wire, gateCase benchapi.GateCase, batteryV1, batteryV2 []jev.Question) (caseRun, error) {
+func runCase(ctx context.Context, wire core.Wire, gateCase benchapi.GateCase, batteryV1, batteryV2 []core.Question) (caseRun, error) {
 	v1Values := make([]float64, 0, repsPerCase)
 	v2MatchValues := make([]float64, 0, repsPerCase)
 	v2ServeValues := make([]float64, 0, repsPerCase)
@@ -112,11 +112,11 @@ func runCase(ctx context.Context, wire jev.Wire, gateCase benchapi.GateCase, bat
 	var build string
 
 	for rep := 0; rep < repsPerCase; rep++ {
-		callV1 := typesafe.Ask(ctx, wire, jev.Request{State: gateCase.State, Questions: batteryV1})
+		callV1 := typesafe.Ask(ctx, wire, core.Request{State: gateCase.State, Questions: batteryV1})
 		if callV1.Err != nil {
 			return caseRun{}, fmt.Errorf("%s v1 rep %d: %w", gateCase.Name, rep, callV1.Err)
 		}
-		callV2 := typesafe.Ask(ctx, wire, jev.Request{State: gateCase.State, Questions: batteryV2})
+		callV2 := typesafe.Ask(ctx, wire, core.Request{State: gateCase.State, Questions: batteryV2})
 		if callV2.Err != nil {
 			return caseRun{}, fmt.Errorf("%s v2 rep %d: %w", gateCase.Name, rep, callV2.Err)
 		}

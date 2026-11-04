@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/konst"
 	"tofu/library/changelog"
@@ -179,8 +179,8 @@ func TestTheRenderedFormWrapsToTheWidthAndCarriesNoRawMarkdown(t *testing.T) {
 	const width = konst.ProseWidthChars
 	page := cli.Detect(&bytes.Buffer{}, nil)
 	for _, line := range changelogLines(page, true, "", changelog.Parse(changelog.Markdown)) {
-		if widget.Cells(line) > width {
-			t.Fatalf("a line is %d cells wide at width %d:\n%s", widget.Cells(line), width, line)
+		if render.Cells(line) > width {
+			t.Fatalf("a line is %d cells wide at width %d:\n%s", render.Cells(line), width, line)
 		}
 		for _, syntax := range []string{"**", "`", "](", "### ", "## "} {
 			if strings.Contains(line, syntax) {
@@ -266,7 +266,7 @@ func TestDownAPipeTheChangelogWrapsToTheProseWidth(t *testing.T) {
 	}
 	widest := 0
 	for _, line := range strings.Split(out.String(), "\n") {
-		widest = max(widest, widget.Cells(line))
+		widest = max(widest, render.Cells(line))
 	}
 	if widest > konst.ProseWidthChars {
 		t.Fatalf("the widest line is %d cells, over the prose width %d", widest, konst.ProseWidthChars)

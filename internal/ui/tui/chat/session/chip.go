@@ -206,7 +206,7 @@ func (m *Model) chipLines(chips []Chip) []string {
 		lines = append(lines, branch+text)
 	}
 	for index, line := range lines {
-		lines[index] = look.Faint(widget.Fit(line, m.textWidth()))
+		lines[index] = look.Faint(render.Fit(line, m.textWidth()))
 	}
 	return lines
 }

@@ -1,4 +1,4 @@
-package shell
+package process
 
 import (
 	"context"
@@ -215,12 +215,12 @@ func (r *Registry) spawn(cmd *exec.Cmd, command string, logFile *os.File) (*live
 		return nil, nil, false, err
 	}
 	waited := make(chan error, 1)
-	safe.Go(report, "shell wait", func() { waited <- safe.Call(report, "shell wait", cmd.Wait) })
+	recover.Go(report, "shell wait", func() { waited <- recover.Call(report, "shell wait", cmd.Wait) })
 	return &live{tree: spawned, log: log, drained: drained, finished: make(chan struct{})}, waited, false, nil
 }
 
-func (r *Registry) toldIn(log io.Writer) safe.Report {
-	return func(p safe.Panic) {
+func (r *Registry) toldIn(log io.Writer) recover.Report {
+	return func(p recover.Panic) {
 		_, _ = io.WriteString(log, "\ntofu: "+p.Saved(filepath.Dir(r.dir))+"\n")
 	}
 }
@@ -234,7 +234,7 @@ func (r *Registry) list(entry Shell, process *live) error {
 
 func (r *Registry) keep(entry Shell, process *live, waited <-chan error) error {
 	err := r.list(entry, process)
-	safe.Go(r.toldIn(process.log), "shell await", func() { r.await(waited, entry, process) })
+	recover.Go(r.toldIn(process.log), "shell await", func() { r.await(waited, entry, process) })
 	return err
 }
 

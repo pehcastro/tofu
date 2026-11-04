@@ -13,7 +13,7 @@ import (
 	"tofu/internal/models/llm/core"
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
-	testkit "tofu/internal/testkit/cli"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/frame/frame"
 )
@@ -24,7 +24,7 @@ type streamingModel struct {
 	cancel  context.CancelFunc
 }
 
-func (m *streamingModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (m *streamingModel) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	for _, delta := range m.deltas {
 		if request.OnDelta != nil {
 			request.OnDelta(delta)
@@ -32,55 +32,55 @@ func (m *streamingModel) Ask(ctx context.Context, request llm.Request) (llm.Deci
 	}
 	if m.cancel != nil {
 		m.cancel()
-		return llm.Decision{}, context.Canceled
+		return core.Decision{}, context.Canceled
 	}
-	return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: m.content}, nil
+	return core.Decision{Build: "stub-model", Outcome: core.OutcomeMessage, Content: m.content}, nil
 }
 
 func TestAStreamedResponseDrawsEveryDeltaAndNoDuplicateFinalText(t *testing.T) {
-	dir := testkit.ScratchProject(t)
+	dir := cli.ScratchProject(t)
 	model := &streamingModel{deltas: []string{"the gate reads ", "toolgate.go "}, content: "the gate reads toolgate.go"}
 	driver := driveApp(t)
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "explain the gate", driver.emit)
 
-	deltas := driver.of(tui.EventTextDelta)
+	deltas := driver.of(app.EventTextDelta)
 	if len(deltas) != 2 {
 		t.Fatalf("%d deltas reached the interface, want 2", len(deltas))
 	}
 	if deltas[0].Text != "the gate reads " || deltas[1].Text != "toolgate.go " {
 		t.Fatalf("deltas read %+v", deltas)
 	}
-	if texts := driver.of(tui.EventText); len(texts) != 0 {
+	if texts := driver.of(app.EventText); len(texts) != 0 {
 		t.Fatalf("a streamed answer also drew %d whole EventText entries, want 0: %+v", len(texts), texts)
 	}
 }
 
 func TestAWireThatDoesNotStreamDrawsNoDeltaAndBehavesAsBefore(t *testing.T) {
-	dir := testkit.ScratchProject(t)
-	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the whole answer at once"}}}
+	dir := cli.ScratchProject(t)
+	model := &sendModel{queued: []core.Decision{{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "the whole answer at once"}}}
 	driver := driveApp(t)
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, "explain the gate", driver.emit)
 
-	if deltas := driver.of(tui.EventTextDelta); len(deltas) != 0 {
+	if deltas := driver.of(app.EventTextDelta); len(deltas) != 0 {
 		t.Fatalf("a model that never called OnDelta still drew %d deltas", len(deltas))
 	}
-	texts := driver.of(tui.EventText)
+	texts := driver.of(app.EventText)
 	if len(texts) != 1 || texts[0].Text != "the whole answer at once" {
 		t.Fatalf("the unstreamed answer arrived as %+v, want the whole text in one EventText", texts)
 	}
 }
 
 func TestACancelledStreamSealsTheEntryItWasWriting(t *testing.T) {
-	dir := testkit.ScratchProject(t)
+	dir := cli.ScratchProject(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	model := &streamingModel{deltas: []string{"The **gate** reads ", "`toolgate.go` before the policy."}, cancel: cancel}
 	driver := driveApp(t)
 	stubbedTurn(dir, model)(ctx, onTheSubscription, "explain the gate", driver.emit)
 
-	if deltas := driver.of(tui.EventTextDelta); len(deltas) != 2 {
+	if deltas := driver.of(app.EventTextDelta); len(deltas) != 2 {
 		t.Fatalf("%d deltas reached the interface before the cancel, want 2", len(deltas))
 	}
-	if done := driver.of(tui.EventDone); len(done) != 1 {
+	if done := driver.of(app.EventDone); len(done) != 1 {
 		t.Fatalf("a cancelled stream ended with %d done events, want 1", len(done))
 	}
 	screen := driver.view()
@@ -90,10 +90,10 @@ func TestACancelledStreamSealsTheEntryItWasWriting(t *testing.T) {
 }
 
 func TestACacheHitCarriesTheReadSeparatelyFromTheFreshInput(t *testing.T) {
-	cached := testkit.ScratchProject(t)
-	cachedModel := &sendModel{queued: []llm.Decision{{
-		Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the answer",
-		Usage: llm.Usage{InputTokens: 400}, CacheReadTokens: 9603,
+	cached := cli.ScratchProject(t)
+	cachedModel := &sendModel{queued: []core.Decision{{
+		Build: "stub-model", Outcome: core.OutcomeMessage, Content: "the answer",
+		Usage: core.Usage{InputTokens: 400}, CacheReadTokens: 9603,
 	}}}
 	detailed, err := settingspkg.OpenFor(cached)
 	if err != nil {
@@ -105,15 +105,15 @@ func TestACacheHitCarriesTheReadSeparatelyFromTheFreshInput(t *testing.T) {
 	cachedDriver := driveAppOn(t, detailed)
 	stubbedTurn(cached, cachedModel)(t.Context(), onTheSubscription, "explain the gate", cachedDriver.emit)
 
-	fresh := testkit.ScratchProject(t)
-	freshModel := &sendModel{queued: []llm.Decision{{
-		Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the answer",
-		Usage: llm.Usage{InputTokens: 400},
+	fresh := cli.ScratchProject(t)
+	freshModel := &sendModel{queued: []core.Decision{{
+		Build: "stub-model", Outcome: core.OutcomeMessage, Content: "the answer",
+		Usage: core.Usage{InputTokens: 400},
 	}}}
 	freshDriver := driveAppOn(t, detailed)
 	stubbedTurn(fresh, freshModel)(t.Context(), onTheSubscription, "explain the gate", freshDriver.emit)
 
-	stats := cachedDriver.of(tui.EventStats)
+	stats := cachedDriver.of(app.EventStats)
 	if len(stats) == 0 || stats[len(stats)-1].CacheRead != 9603 {
 		t.Fatalf("the stats event does not carry the cached read: %+v", stats)
 	}
@@ -159,14 +159,14 @@ func recordedEventKinds(t *testing.T, dir string) []sessionstore.EventKind {
 }
 
 func TestAStreamedTurnRecordsTheSameEventKindsAsAnUnstreamedOne(t *testing.T) {
-	without := testkit.ScratchProject(t)
-	stubbedTurn(without, &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the answer"}}})(
-		t.Context(), onTheSubscription, "explain the gate", func(tui.Event) {})
+	without := cli.ScratchProject(t)
+	stubbedTurn(without, &sendModel{queued: []core.Decision{{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "the answer"}}})(
+		t.Context(), onTheSubscription, "explain the gate", func(app.Event) {})
 	withoutKinds := recordedEventKinds(t, without)
 
-	streamed := testkit.ScratchProject(t)
+	streamed := cli.ScratchProject(t)
 	stubbedTurn(streamed, &streamingModel{deltas: []string{"the ", "answer"}, content: "the answer"})(
-		t.Context(), onTheSubscription, "explain the gate", func(tui.Event) {})
+		t.Context(), onTheSubscription, "explain the gate", func(app.Event) {})
 	streamedKinds := recordedEventKinds(t, streamed)
 
 	if len(withoutKinds) != len(streamedKinds) {

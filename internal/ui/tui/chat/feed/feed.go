@@ -512,7 +512,7 @@ func (m Model) railView() (string, []railTarget) {
 	if m.folded > 0 && !m.foldedOpen {
 		counted = fmt.Sprintf("%d agents · %d", len(m.agents), m.folded) + foldedWord
 	}
-	write("\n" + look.PaneTitle("Sub-agents", m.railFocused) + "\n" + look.Muted(widget.Fit(counted, width)) + "\n\n" + look.SectionLabel("Overview") + "\n")
+	write("\n" + look.PaneTitle("Sub-agents", m.railFocused) + "\n" + look.Muted(render.Fit(counted, width)) + "\n\n" + look.SectionLabel("Overview") + "\n")
 	targets := []railTarget{{rows, identity{}}}
 	write(look.SidebarItem(width, m.filter == identity{}, allActivity, strconv.Itoa(between(m.sheet().unheldAll, time.Time{}, time.Time{})+m.sheet().kept)) + "\n")
 	entries := m.entries()
@@ -530,7 +530,7 @@ func (m Model) railView() (string, []railTarget) {
 			targets = append(targets, railTarget{rows, e.who})
 			write(m.cards.railEntry(railRow{width, m.filter == e.who, e.label, e.glyph, e.doing}) + "\n")
 			if e.who.name == orchestrator && m.plan != "" {
-				write("  " + look.Faint(widget.Fit(m.plan, width-2)) + "\n")
+				write("  " + look.Faint(render.Fit(m.plan, width-2)) + "\n")
 			}
 		}
 	}

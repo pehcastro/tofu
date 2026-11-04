@@ -10,14 +10,14 @@ import (
 	loginverb "tofu/apps/cli/verbs/login"
 	"tofu/internal/konst"
 	"tofu/internal/sys"
-	testkit "tofu/internal/testkit/cli"
+	"tofu/internal/testkit/cli"
 	"tofu/internal/testkit/golden"
 )
 
 func TestLoginStatusJSONIsOneEnvelopeOfCodes(t *testing.T) {
 	var out bytes.Buffer
 	t.Run("in a scratch home", func(t *testing.T) {
-		testkit.ScratchProject(t)
+		cli.ScratchProject(t)
 		for _, variable := range sys.KeyNames() {
 			t.Setenv(variable, "")
 		}
@@ -32,7 +32,7 @@ func TestLoginStatusJSONIsOneEnvelopeOfCodes(t *testing.T) {
 }
 
 func TestDisableJSONIsOneEnvelope(t *testing.T) {
-	testkit.ScratchProject(t)
+	cli.ScratchProject(t)
 	savedAccount(t)
 	var out, errOut bytes.Buffer
 	if code := loginverb.Verb([]string{"--disable", "1", output.JSONFlag}, nil, &out, &errOut); code != output.ExitOK {

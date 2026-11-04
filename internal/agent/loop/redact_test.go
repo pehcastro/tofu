@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -35,8 +35,8 @@ func keyedTurn(t *testing.T, command string) (row Row, seen string, recorded map
 		}
 	}
 	sessionDir := t.TempDir()
-	model := &stubModel{decisions: []llm.Decision{
-		toolCallDecision(llm.ToolCall{ID: "c1", Name: bashToolName, Arguments: json.RawMessage(`{"command":` + strconv.Quote(command) + `}`)}),
+	model := &stubModel{decisions: []core.Decision{
+		toolCallDecision(core.ToolCall{ID: "c1", Name: bashToolName, Arguments: json.RawMessage(`{"command":` + strconv.Quote(command) + `}`)}),
 		messageDecision(),
 	}}
 	row, err := Run(context.Background(), Config{
@@ -56,7 +56,7 @@ func keyedTurn(t *testing.T, command string) (row Row, seen string, recorded map
 		t.Fatalf("the model was asked %d times, want a second request carrying the result", len(model.requests))
 	}
 	for _, message := range model.requests[1].Messages {
-		if message.Role == llm.RoleTool {
+		if message.Role == core.RoleTool {
 			seen += message.Content
 		}
 	}

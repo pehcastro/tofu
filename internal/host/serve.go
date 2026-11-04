@@ -36,7 +36,7 @@ type ServeConfig struct {
 	Dir      string
 	In       io.Reader
 	Out      io.Writer
-	Shells   *shell.Registry
+	Shells   *process.Registry
 	Carry    func(handle string) (Carry, error)
 	Verb     func(args []string) (VerbResult, error)
 	Quota    func() []QuotaWindow
@@ -164,12 +164,12 @@ func Serve(cfg ServeConfig) error {
 	first.stop, first.pumped = make(chan struct{}), make(chan struct{})
 	s.lanes.Store(&[]*lane{first})
 	written, read := make(chan error, 1), make(chan error, 1)
-	safe.Fatal(s.report, "serve outbox", func(died error) { written <- died }, func() { written <- s.box.drain(cfg.Out) })
+	recover.Fatal(s.report, "serve outbox", func(died error) { written <- died }, func() { written <- s.box.drain(cfg.Out) })
 	quit := make(chan struct{})
 	var workers sync.WaitGroup
 	s.pumpOn(first)
 	watch := func(unit string, watcher func(quit <-chan struct{})) {
-		workers.Go(func() { safe.Loop(s.report, unit, quit, func() { watcher(quit) }) })
+		workers.Go(func() { recover.Loop(s.report, unit, quit, func() { watcher(quit) }) })
 	}
 	watch("serve shells", s.watchShells)
 	watch("serve quota", s.pollQuota)
@@ -178,7 +178,7 @@ func Serve(cfg ServeConfig) error {
 	watch("serve settings", s.watchSettings)
 	watch("serve memory", s.watchMemory)
 	watch("serve sessions", s.watchSessions)
-	safe.Fatal(s.report, "serve read", func(died error) { read <- died }, func() { read <- s.read() })
+	recover.Fatal(s.report, "serve read", func(died error) { read <- died }, func() { read <- s.read() })
 	var err error
 	select {
 	case err = <-read:
@@ -217,7 +217,7 @@ func (s *server) read() error {
 	lines.Buffer(nil, konst.ServeLineBytes)
 	for lines.Scan() {
 		if line := bytes.TrimSpace(lines.Bytes()); len(line) > 0 {
-			_ = safe.Call(s.report, "serve receive", func() error {
+			_ = recover.Call(s.report, "serve receive", func() error {
 				s.receive(line)
 				return nil
 			})
@@ -248,10 +248,10 @@ func (s *server) receive(line []byte) {
 		}
 	case in.ID == nil:
 	case strings.HasPrefix(in.Method, queryPrefix) || slices.Contains([]string{"login.start", "login.key", "login.logout", "session.info", "session.find", "session.trace", "session.turns", "session.turn", "mention.resolve", "shell.run", "session.list", "session.history", "memory.view", "memory.zoom", "memory.recall", "reload", "models.reload", "hooks.trust", "learn.scan", "setup.check"}, in.Method):
-		safe.Go(s.report, in.Method, func() { s.answer(in.ID, in.Method, in.Params) })
+		recover.Go(s.report, in.Method, func() { s.answer(in.ID, in.Method, in.Params) })
 	case in.Method == "session.open":
 		s.opening.Lock()
-		safe.Go(s.report, in.Method, func() {
+		recover.Go(s.report, in.Method, func() {
 			defer s.opening.Unlock()
 			s.answer(in.ID, in.Method, in.Params)
 		})
@@ -264,14 +264,14 @@ func (s *server) receive(line []byte) {
 
 func (s *server) answer(id json.RawMessage, method string, params json.RawMessage) {
 	var result any
-	err := safe.Call(s.report, method, func() (err error) {
+	err := recover.Call(s.report, method, func() (err error) {
 		result, err = s.call(method, params)
 		return err
 	})
 	s.respond(id, result, err)
 }
 
-func (s *server) report(p safe.Panic) {
+func (s *server) report(p recover.Panic) {
 	s.focus().host.report(p)
 }
 
@@ -324,7 +324,7 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 	case "session.open":
 		result, err := handle(raw, s.open)
 		if err == nil {
-			safe.Go(s.report, "serve quota", s.quota)
+			recover.Go(s.report, "serve quota", s.quota)
 		}
 		if opened, ok := result.(SessionOpenResult); ok {
 			opened.Members = s.focus().host.seen().Members
@@ -360,12 +360,12 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, s.shellRun)
 	case "session.compact":
 		return handle(raw, func(p SessionCompactParams) (any, error) {
-			compacted, err := s.handFork(p.Session, HandFork{Kind: turn.ForkCompact, By: s.asker("session.compact"), Focus: p.Focus})
+			compacted, err := s.handFork(p.Session, HandFork{Kind: loop.ForkCompact, By: s.asker("session.compact"), Focus: p.Focus})
 			return compacted.Compaction, err
 		})
 	case "session.fork":
 		return handle(raw, func(p SessionParams) (any, error) {
-			forked, err := s.handFork(p.Session, HandFork{Kind: turn.ForkByHand, By: s.asker("session.fork")})
+			forked, err := s.handFork(p.Session, HandFork{Kind: loop.ForkByHand, By: s.asker("session.fork")})
 			return forked.Compaction, err
 		})
 	case "session.history":
@@ -493,13 +493,13 @@ func (s *server) handFork(id string, ask HandFork) (Compacted, error) {
 	}
 	forked, err := s.Fork(named.host, ask)
 	if err == nil && forked.Into != "" {
-		safe.Go(s.report, "serve list", func() { s.listed(named) })
+		recover.Go(s.report, "serve list", func() { s.listed(named) })
 	}
 	return forked, err
 }
 
 type HandFork struct {
-	Kind    turn.ForkKind
+	Kind    loop.ForkKind
 	By      string
 	Focus   string `json:",omitempty"`
 	Message int    `json:",omitempty"`
@@ -533,7 +533,7 @@ func (h *Host) Fork(ask HandFork) (Compacted, error) {
 	}
 	id, carried := h.ID(), h.Carried()
 	if id == "" || len(carried) == 0 {
-		if ask.Kind == turn.ForkCompact {
+		if ask.Kind == loop.ForkCompact {
 			return Compacted{}, nil
 		}
 		return Compacted{}, errors.New(nothingToFork)
@@ -550,25 +550,25 @@ func (h *Host) Fork(ask HandFork) (Compacted, error) {
 	if err != nil {
 		return Compacted{}, err
 	}
-	var shrunk turn.Compacted
+	var shrunk loop.Compacted
 	switch ask.Kind {
-	case turn.ForkBranch:
-		shrunk, err = turn.BranchCarried(header.Wire, carried, ask.Message)
-	case turn.ForkCompact, turn.ForkByHand:
-		shrunk, err = turn.CompactCarried(h.dir, places, header.Wire, cmp.Or(turn.NewestTask(carried), header.Task), ask.Focus, carried)
+	case loop.ForkBranch:
+		shrunk, err = loop.BranchCarried(header.Wire, carried, ask.Message)
+	case loop.ForkCompact, loop.ForkByHand:
+		shrunk, err = loop.CompactCarried(h.dir, places, header.Wire, cmp.Or(loop.NewestTask(carried), header.Task), ask.Focus, carried)
 	default:
-		err = errors.New("a hand fork is " + string(turn.ForkCompact) + ", " + string(turn.ForkByHand) + " or " + string(turn.ForkBranch) + ", not " + strconv.Quote(string(ask.Kind)))
+		err = errors.New("a hand fork is " + string(loop.ForkCompact) + ", " + string(loop.ForkByHand) + " or " + string(loop.ForkBranch) + ", not " + strconv.Quote(string(ask.Kind)))
 	}
 	if err != nil {
 		return Compacted{}, err
 	}
 	compacted := Compacted{Compaction: Compaction{Kind: ask.Kind, Results: shrunk.Results, Focus: shrunk.Focus, Focused: shrunk.Focused, TokensBefore: shrunk.TokensBefore, TokensAfter: shrunk.TokensAfter},
 		Kept: shrunk.Kept, Words: shrunk.Words}
-	if shrunk.Results == 0 && ask.Kind == turn.ForkCompact {
+	if shrunk.Results == 0 && ask.Kind == loop.ForkCompact {
 		return compacted, nil
 	}
 	shrunk.Kind = ask.Kind
-	into, err := turn.RecordCarried(store, id, shrunk, ask.By, h.now())
+	into, err := loop.RecordCarried(store, id, shrunk, ask.By, h.now())
 	if err == nil {
 		err = store.SetHead(into)
 	}
@@ -616,7 +616,7 @@ func (s *server) rename(p SessionRenameParams) (any, error) {
 	}
 	s.relabelled(labelledAs(store, Event{Kind: EventSession, ID: header.ID, Root: header.ID}))
 	focused := s.focus()
-	safe.Go(s.report, "serve list", func() { s.listed(focused) })
+	recover.Go(s.report, "serve list", func() { s.listed(focused) })
 	return Ack{OK: true}, nil
 }
 
@@ -636,7 +636,7 @@ func (s *server) send(p TurnSendParams) (any, error) {
 		item, asked := l.items.loggedAs(mention)
 		s.mu.Unlock()
 		if item != "" {
-			quoted := tools.QuoteRef(strings.TrimPrefix(asked, "#"))
+			quoted := registry.QuoteRef(strings.TrimPrefix(asked, "#"))
 			task, mention = strings.ReplaceAll(task, mention, quoted), quoted
 		}
 		if !strings.HasPrefix(mention, "[") {
@@ -770,7 +770,7 @@ func (s *server) shellRead(p ShellParams) (any, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	read := s.shells[p.Shell]
-	if read == nil || read.state != shell.Running {
+	if read == nil || read.state != process.Running {
 		read = &watchedShell{}
 	}
 	if err := s.follow(p.Shell, read, sys.LoadKeyRedactor().Redact); err != nil {
@@ -794,9 +794,9 @@ func (s *server) shellKill(p ShellParams) (any, error) {
 	return Ack{OK: true}, err
 }
 
-func endedWhileHeld(one shell.Shell) string {
+func endedWhileHeld(one process.Shell) string {
 	switch {
-	case one.State == shell.Killed:
+	case one.State == process.Killed:
 		return one.Name + " was killed while the person held it."
 	case one.ExitCode != nil:
 		return one.Name + " exited with code " + strconv.Itoa(*one.ExitCode) + " while the person held it."
@@ -809,21 +809,21 @@ type RefusalReason struct {
 }
 
 func shellRefusal(name string, err error) error {
-	var refused shell.Refused
+	var refused process.Refused
 	if !errors.As(err, &refused) {
 		return err
 	}
 	return &Refusal{Code: CodeRefused, Message: name + ": " + refused.Error(), Data: RefusalReason{Reason: string(refused)}}
 }
 
-func (s *server) shellSize(p ShellSizeParams) (shell.Size, error) {
+func (s *server) shellSize(p ShellSizeParams) (process.Size, error) {
 	if s.Shells == nil {
-		return shell.Size{}, &Refusal{Code: CodeRefused, Message: noShellRegistry}
+		return process.Size{}, &Refusal{Code: CodeRefused, Message: noShellRegistry}
 	}
 	if p.Shell == "" {
-		return shell.Size{}, &Refusal{Code: CodeBadParams, Message: "shell is the name of a kept shell, such as bash-3"}
+		return process.Size{}, &Refusal{Code: CodeBadParams, Message: "shell is the name of a kept shell, such as bash-3"}
 	}
-	size, err := shell.NewSize(p.Cols, p.Rows)
+	size, err := process.NewSize(p.Cols, p.Rows)
 	if err != nil {
 		return size, &Refusal{Code: CodeBadParams, Message: err.Error()}
 	}
@@ -831,7 +831,7 @@ func (s *server) shellSize(p ShellSizeParams) (shell.Size, error) {
 }
 
 func (s *server) changeHolder(owner string, held ShellHeld, note, notice string) {
-	s.watched(held.Shell).holder = shell.Holder(held.Holder)
+	s.watched(held.Shell).holder = process.Holder(held.Holder)
 	focus := s.focus()
 	s.box.push(kept("shell.holder", &ShellHolderChanged{Identity: focus.items.identity(owner, held.Shell), ShellHeld: held, Note: note}))
 	focus.host.shellNotice(held.Shell, notice)
@@ -856,8 +856,8 @@ func (s *server) shellTakeOver(p ShellSizeParams) (any, error) {
 		return nil, shellRefusal(p.Shell, err)
 	}
 	watched := s.caughtUp(p.Shell)
-	held := ShellHeld{Shell: p.Shell, Holder: ShellHolder(shell.HolderPerson), Since: *hold.Shell.HeldSince, Offset: watched.next()}
-	if watched.holder != shell.HolderPerson {
+	held := ShellHeld{Shell: p.Shell, Holder: ShellHolder(process.HolderPerson), Since: *hold.Shell.HeldSince, Offset: watched.next()}
+	if watched.holder != process.HolderPerson {
 		s.changeHolder(hold.Shell.Owner, held, "", "The person took over "+p.Shell+" ("+sys.LoadKeyRedactor().Redact(hold.Shell.Command)+"). Do not read, wait on, stop or restart it until it is handed back.")
 	}
 	watched.raw = hold.Next
@@ -889,10 +889,10 @@ func (s *server) shellResize(p ShellSizeParams) (any, error) {
 	return Ack{OK: true}, shellRefusal(p.Shell, err)
 }
 
-func (s *server) elsewhere(name string, refused error, ask followAsk) (shell.Hold, error) {
+func (s *server) elsewhere(name string, refused error, ask followAsk) (process.Hold, error) {
 	entry, err := s.Shells.Read(name)
 	if err != nil {
-		return shell.Hold{}, refused
+		return process.Hold{}, refused
 	}
 	for _, l := range s.tracked() {
 		if hub, joined := l.host.joined(); joined && hub.PID == entry.TofuPID && hub.Session == entry.Session {
@@ -900,7 +900,7 @@ func (s *server) elsewhere(name string, refused error, ask followAsk) (shell.Hol
 			return l.host.heldShell(ask)
 		}
 	}
-	return shell.Hold{}, refused
+	return process.Hold{}, refused
 }
 
 func (s *server) rawCame(l *lane, raw ShellRaw) {
@@ -923,7 +923,7 @@ func (s *server) shellRelease(p ShellReleaseParams) (any, error) {
 	defer s.mu.Unlock()
 	entry, err := s.Shells.HandBack(p.Shell)
 	if err != nil {
-		var hold shell.Hold
+		var hold process.Hold
 		hold, err = s.elsewhere(p.Shell, err, followAsk{Op: followRelease})
 		entry = hold.Shell
 	}
@@ -934,7 +934,7 @@ func (s *server) shellRelease(p ShellReleaseParams) (any, error) {
 	if p.Note != "" {
 		notice += " Note from them: " + strconv.Quote(p.Note) + "."
 	}
-	held := ShellHeld{Shell: p.Shell, Holder: ShellHolder(shell.HolderAgent), Since: time.Now(), Offset: s.caughtUp(p.Shell).next()}
+	held := ShellHeld{Shell: p.Shell, Holder: ShellHolder(process.HolderAgent), Since: time.Now(), Offset: s.caughtUp(p.Shell).next()}
 	s.changeHolder(entry.Owner, held, p.Note, notice+" It is running. Its output while they held it is in shell logs.")
 	return held, nil
 }
@@ -980,7 +980,7 @@ func (s *server) approvalAnswered(l *lane, asked Event, result json.RawMessage) 
 		answered, stands = l.host.AllowAskFor(approval, until, said)
 	case answer.Decision == Cancelled:
 		answered = l.host.cancelAsk(approval, *said, StopAsked{By: s.asker("approval " + approval + " answered cancelled"), Why: "the person cancelled the ask about " + asked.Tool})
-	case asked.Tool == turn.RememberToolName:
+	case asked.Tool == loop.RememberToolName:
 		answered = l.host.answerMemory(approval, keptAs(answer.Decision), said)
 	default:
 		answered, stands = l.host.AnswerAsk(approval, personAnswerOf(answer.Decision), said)
@@ -1038,14 +1038,14 @@ func (s *server) questionAnswered(l *lane, asked Event, result json.RawMessage) 
 	return nil
 }
 
-func offered(questions []turn.PersonQuestion, answers []turn.PersonReply) bool {
+func offered(questions []loop.PersonQuestion, answers []loop.PersonReply) bool {
 	for _, reply := range answers {
-		at := slices.IndexFunc(questions, func(q turn.PersonQuestion) bool { return q.ID == reply.ID })
+		at := slices.IndexFunc(questions, func(q loop.PersonQuestion) bool { return q.ID == reply.ID })
 		if at < 0 {
 			return false
 		}
 		for _, chosen := range reply.Chosen {
-			if !slices.ContainsFunc(questions[at].Options, func(o turn.PersonOption) bool { return o.Label == chosen }) {
+			if !slices.ContainsFunc(questions[at].Options, func(o loop.PersonOption) bool { return o.Label == chosen }) {
 				return false
 			}
 		}
@@ -1061,7 +1061,7 @@ func (s *server) publish(event Event) {
 	case EventAwaitPerson:
 		if event.Questions != nil && !s.answers {
 			by := cmp.Or(s.client, "this client")
-			safe.Go(s.report, "serve undelivered question", func() {
+			recover.Go(s.report, "serve undelivered question", func() {
 				l.host.AnswerQuestion(event.ID, QuestionAnswer{Outcome: QuestionUndelivered}, by)
 			})
 			return
@@ -1072,22 +1072,22 @@ func (s *server) publish(event Event) {
 		}
 	case EventTurnEnded:
 		ended := l.items.turn
-		safe.Go(s.report, "serve quota", s.quota)
-		safe.Go(s.report, "serve list", func() { s.listed(l) })
-		safe.Go(s.report, "serve turn ended", func() { s.turnEnded(l, ended) })
-		safe.Go(s.report, "serve replay", func() { s.rebuild(l) })
+		recover.Go(s.report, "serve quota", s.quota)
+		recover.Go(s.report, "serve list", func() { s.listed(l) })
+		recover.Go(s.report, "serve turn ended", func() { s.turnEnded(l, ended) })
+		recover.Go(s.report, "serve replay", func() { s.rebuild(l) })
 	case EventTurnStarted, EventForkEnd:
-		safe.Go(s.report, "serve list", func() { s.listed(l) })
+		recover.Go(s.report, "serve list", func() { s.listed(l) })
 	case EventAccount:
-		if event.Account.Reason == AccountReason(turn.AccountMoved) {
-			safe.Go(s.report, "serve quota", s.quota)
+		if event.Account.Reason == AccountReason(loop.AccountMoved) {
+			recover.Go(s.report, "serve quota", s.quota)
 		}
 	}
 	was := l.items.session
 	lines := l.items.translate(event, time.Now())
 	if l.items.session != was {
 		l.replace(nil)
-		safe.Go(s.report, "serve replay", func() { s.rebuild(l) })
+		recover.Go(s.report, "serve replay", func() { s.rebuild(l) })
 	}
 	for _, out := range lines {
 		if l.replay != nil && out.merge == "" && out.msg.Method != "message.delta" && l.replay.add(out) != nil {
@@ -1149,18 +1149,18 @@ func (s *server) pollQuota(quit <-chan struct{}) {
 }
 
 type watchedShell struct {
-	state     shell.State
+	state     process.State
 	owner     string
 	announced bool
 	sent      int
-	cursor    shell.Cursor
+	cursor    process.Cursor
 	stream    string
 	base      int
 	command   string
 	exitCode  *int
 	status    shellStatus
 	portFrom  int
-	holder    shell.Holder
+	holder    process.Holder
 	raw       int64
 }
 
@@ -1180,15 +1180,15 @@ func (w *watchedShell) keepTail() {
 }
 
 func (w *watchedShell) portPrinted() int {
-	port := shell.PortInOutput(w.since(w.portFrom))
+	port := process.PortInOutput(w.since(w.portFrom))
 	w.portFrom = max(w.portFrom, w.base+strings.LastIndexByte(w.stream, '\n')+1)
 	return port
 }
 
-func (s *server) listenersOf(found []shell.Shell) map[string]int {
+func (s *server) listenersOf(found []process.Shell) map[string]int {
 	window := konst.BackgroundYieldMillis * time.Millisecond
-	waiting := slices.DeleteFunc(slices.Clone(found), func(one shell.Shell) bool {
-		return one.State != shell.Running || one.Kept == "" || one.Port != 0 || time.Since(one.Started) < window
+	waiting := slices.DeleteFunc(slices.Clone(found), func(one process.Shell) bool {
+		return one.State != process.Running || one.Kept == "" || one.Port != 0 || time.Since(one.Started) < window
 	})
 	if len(waiting) == 0 || time.Since(s.probed) < window {
 		return nil
@@ -1247,7 +1247,7 @@ func (s *server) sendHeldRaw() {
 	defer s.mu.Unlock()
 	focus := s.focus()
 	for name, watched := range s.shells {
-		if watched.holder == shell.HolderPerson {
+		if watched.holder == process.HolderPerson {
 			s.sendRaw(focus.items.identity(watched.owner, name), name, watched)
 		}
 	}
@@ -1268,7 +1268,7 @@ func (s *server) scanShells(first bool) {
 	var ended []string
 	s.mu.Lock()
 	for name, watched := range s.shells {
-		if watched.state == shell.Running && !slices.ContainsFunc(found, func(one shell.Shell) bool { return one.Name == name }) {
+		if watched.state == process.Running && !slices.ContainsFunc(found, func(one process.Shell) bool { return one.Name == name }) {
 			ended = append(ended, name)
 		}
 	}
@@ -1279,7 +1279,7 @@ func (s *server) scanShells(first bool) {
 		}
 	}
 	listening := s.listenersOf(found)
-	background := slices.DeleteFunc(found, shell.Shell.OneShot)
+	background := slices.DeleteFunc(found, process.Shell.OneShot)
 	mask := func(text string) string { return text }
 	if len(background) > 0 {
 		mask = sys.LoadKeyRedactor().Redact
@@ -1292,12 +1292,12 @@ func (s *server) scanShells(first bool) {
 		listed[one.Name] = true
 		watched := s.watched(one.Name)
 		watched.owner, watched.command, watched.exitCode = one.Owner, mask(one.Command), one.ExitCode
-		watched.status.ranHere = watched.status.ranHere || one.State == shell.Running
-		if watched.announced && watched.state != shell.Running || !watched.announced && first && one.State != shell.Running {
+		watched.status.ranHere = watched.status.ranHere || one.State == process.Running
+		if watched.announced && watched.state != process.Running || !watched.announced && first && one.State != process.Running {
 			watched.announced, watched.state = true, one.State
 			continue
 		}
-		if !watched.announced && one.State == shell.Running && one.Ready == "" && time.Since(one.Started) < (konst.BackgroundReadyMillis+konst.ServeShellPollMillis)*time.Millisecond {
+		if !watched.announced && one.State == process.Running && one.Ready == "" && time.Since(one.Started) < (konst.BackgroundReadyMillis+konst.ServeShellPollMillis)*time.Millisecond {
 			continue
 		}
 		id := focus.items.identity(one.Owner, one.Name)
@@ -1321,14 +1321,14 @@ func (s *server) scanShells(first bool) {
 			watched.sent = watched.next()
 		}
 		watched.keepTail()
-		if watched.holder == shell.HolderPerson {
+		if watched.holder == process.HolderPerson {
 			s.sendRaw(id, one.Name, watched)
-			if one.State != shell.Running {
-				s.changeHolder(one.Owner, ShellHeld{Shell: one.Name, Holder: ShellHolder(shell.HolderAgent), Since: time.Now(), Offset: watched.next()}, "", endedWhileHeld(one))
+			if one.State != process.Running {
+				s.changeHolder(one.Owner, ShellHeld{Shell: one.Name, Holder: ShellHolder(process.HolderAgent), Since: time.Now(), Offset: watched.next()}, "", endedWhileHeld(one))
 			}
 		}
-		if one.State != shell.Running {
-			s.box.push(kept("shell.exited", &ShellExited{Identity: id, Shell: one.Name, ExitCode: one.ExitCode, Killed: one.State == shell.Killed, EndedAt: one.Ended}))
+		if one.State != process.Running {
+			s.box.push(kept("shell.exited", &ShellExited{Identity: id, Shell: one.Name, ExitCode: one.ExitCode, Killed: one.State == process.Killed, EndedAt: one.Ended}))
 		}
 		watched.announced, watched.state = true, one.State
 	}
@@ -1336,15 +1336,15 @@ func (s *server) scanShells(first bool) {
 		if !watched.announced {
 			continue
 		}
-		if !listed[name] && watched.state == shell.Running {
+		if !listed[name] && watched.state == process.Running {
 			ended := time.Now()
 			s.box.push(kept("shell.exited", &ShellExited{Identity: focus.items.identity(watched.owner, name), Shell: name, EndedAt: &ended}))
-			watched.state = shell.Exited
+			watched.state = process.Exited
 		}
-		if watched.state == shell.Running {
+		if watched.state == process.Running {
 			continue
 		}
-		watched.stream, watched.base, watched.cursor = "", watched.next(), shell.Cursor{}
+		watched.stream, watched.base, watched.cursor = "", watched.next(), process.Cursor{}
 		if !slices.ContainsFunc(watched.records(name), func(record statusline.Record) bool { return !focus.status.acked[record.ID] }) {
 			delete(s.shells, name)
 		}

@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -50,7 +50,7 @@ type claimed struct {
 
 func (t claimed) Name() string { return t.tool.Name() }
 
-func (t claimed) Definition() llm.Tool { return t.tool.Definition() }
+func (t claimed) Definition() core.Tool { return t.tool.Definition() }
 
 func (t claimed) check(raw json.RawMessage) (string, error) {
 	if inner, checks := t.tool.(bounded); checks {
@@ -89,7 +89,7 @@ func (t claimed) check(raw json.RawMessage) (string, error) {
 			}
 		}
 		for _, claim := range claims {
-			if held, _ := subagent.Matches(path, claim.Owns); held {
+			if held, _ := subagents.Matches(path, claim.Owns); held {
 				return "", fmt.Errorf("%s refused: %s is held by side chat %s while its turn runs: write it when that turn ends, or leave it to that chat%s", t.Name(), path, sideName(claim), NoneWritten(len(written)))
 			}
 		}
@@ -118,22 +118,22 @@ func shellWrites(command string) ([]string, string) {
 	var written []string
 	unread := ""
 	for _, read := range []string{command, strings.ReplaceAll(command, `\`, "/")} {
-		targets, err := subagent.ShellWrites(read)
+		targets, err := subagents.ShellWrites(read)
 		if err != nil {
 			unread = err.Error()
 		}
 		written = append(written, targets...)
-		for _, step := range subagent.ShellSteps(read) {
+		for _, step := range subagents.ShellSteps(read) {
 			written = append(written, step.Changes...)
 			if step.Program == "touch" || step.Program == "mkdir" {
 				written = append(written, slices.DeleteFunc(slices.Clone(step.Args), func(arg string) bool { return strings.HasPrefix(arg, "-") })...)
 			}
 		}
 	}
-	for _, grammar := range []subagent.Grammar{subagent.POSIX, subagent.PowerShell} {
-		err := subagent.NewBoundary("", "", nil).Bash(command, grammar)
-		var denied subagent.DeniedError
-		var listed subagent.ReadListError
+	for _, grammar := range []subagents.Grammar{subagents.POSIX, subagents.PowerShell} {
+		err := subagents.NewBoundary("", "", nil).Bash(command, grammar)
+		var denied subagents.DeniedError
+		var listed subagents.ReadListError
 		switch {
 		case errors.As(err, &listed):
 			unread = listed.Program + " " + listed.Why
@@ -161,12 +161,12 @@ func sideHeldOwns(tool string, store *session.Store, own string, owns []string) 
 		return err
 	}
 	for _, claim := range claims {
-		var meets subagent.Roster
-		err := meets.Hold(subagent.SubAgent{ID: sideName(claim), Owns: claim.Owns})
+		var meets subagents.Roster
+		err := meets.Hold(subagents.SubAgent{ID: sideName(claim), Owns: claim.Owns})
 		if err == nil {
-			err = meets.Hold(subagent.SubAgent{ID: tool, Owns: owns})
+			err = meets.Hold(subagents.SubAgent{ID: tool, Owns: owns})
 		}
-		var collision subagent.CollisionError
+		var collision subagents.CollisionError
 		if errors.As(err, &collision) {
 			return fmt.Errorf("%s refused: owns %q meets %q, which side chat %s holds while its turn runs: leave those paths out, or ask again when that turn ends", tool, collision.Glob, collision.HolderGlob, collision.Holder)
 		}

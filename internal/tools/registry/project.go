@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"cmp"
@@ -28,8 +28,8 @@ func NewProject(dir string) (Project, error) {
 
 func (p Project) Name() string { return "project_report" }
 
-func (p Project) Definition() llm.Tool {
-	return llm.Tool{
+func (p Project) Definition() core.Tool {
+	return core.Tool{
 		Name: p.Name(),
 		Description: "answers what is this repository in one call. when the task already names the files or symbols to change, read or search those instead; otherwise send it in the same reply as the glob, search or read calls you already know you need. " +
 			"it returns how many files there are and how many bytes they hold, the languages by file count, the top level directories by file count, " +

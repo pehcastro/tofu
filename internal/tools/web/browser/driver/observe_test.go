@@ -1,4 +1,4 @@
-package browser_test
+package driver_test
 
 import (
 	"regexp"

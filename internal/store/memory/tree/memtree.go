@@ -1,4 +1,4 @@
-package memtree
+package tree
 
 import (
 	"bytes"

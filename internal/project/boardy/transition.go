@@ -15,7 +15,7 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
@@ -81,7 +81,7 @@ func (m Managed) created(key string, ticket Ticket, actor, replaces string, dept
 	}
 	_, err = preview.Write(ticket.Markdown())
 	err = errors.Join(err, preview.Close())
-	s := subject{event: rule.HookTicketCreate, key: key, ticket: ticket, path: preview.Name(), to: cmp.Or(ticket.Status, Backlog), actor: actor, depth: depth,
+	s := subject{event: rules.HookTicketCreate, key: key, ticket: ticket, path: preview.Name(), to: cmp.Or(ticket.Status, Backlog), actor: actor, depth: depth,
 		owns: ticket.Owns, fields: filled(ticket), replaces: replaces}
 	if err == nil {
 		err = m.gate(&s)
@@ -139,7 +139,7 @@ func (m Managed) move(board Board, ticket Ticket, to Status, reason, actor strin
 	return moved, m.after(s)
 }
 
-func (m Managed) Check(event rule.Event, id string, to Status, actor string) ([]Fired, error) {
+func (m Managed) Check(event rules.Event, id string, to Status, actor string) ([]Fired, error) {
 	ticket, board, err := m.ticketOnBoard(id)
 	if err != nil {
 		return nil, err
@@ -148,11 +148,11 @@ func (m Managed) Check(event rule.Event, id string, to Status, actor string) ([]
 	s := m.subjectOf(event.Hook(), board.Key, ticket, to, actor, 0)
 	s.dry = true
 	switch event {
-	case rule.EventMove, rule.EventClose:
+	case rules.EventMove, rules.EventClose:
 		s.event, err = moveEvent(to), m.validMove(ticket, to)
-	case rule.EventCreate:
+	case rules.EventCreate:
 		s.from, s.fields, err = "", filled(ticket), m.referencesResolve(ticket)
-	case rule.EventWiden:
+	case rules.EventWiden:
 		err = m.Manages(board.Key, actor, "widen owns")
 	default:
 		return nil, fmt.Errorf("%q is not a board event", event)
@@ -164,15 +164,15 @@ func (m Managed) Check(event rule.Event, id string, to Status, actor string) ([]
 	if err != nil {
 		return nil, err
 	}
-	fired, _, err := m.weigh(hooks, rule.WhenBefore, s)
+	fired, _, err := m.weigh(hooks, rules.WhenBefore, s)
 	return fired, err
 }
 
-func moveEvent(to Status) rule.HookEvent {
+func moveEvent(to Status) rules.HookEvent {
 	if !to.Live() {
-		return rule.HookTicketClose
+		return rules.HookTicketClose
 	}
-	return rule.HookTicketMove
+	return rules.HookTicketMove
 }
 
 func (m Managed) Comment(id, text, actor string) (Ticket, error) {
@@ -184,7 +184,7 @@ func (m Managed) Evidence(id, text, actor string, line int) (Ticket, error) {
 	if err != nil {
 		return ticket, err
 	}
-	if lines := len(subagent.InForce(ticket.Acceptance)); line < 0 || line > lines {
+	if lines := len(subagents.InForce(ticket.Acceptance)); line < 0 || line > lines {
 		return ticket, fmt.Errorf("line counts %s's acceptance lines from 1, and it has %d", id, lines)
 	}
 	return m.entry(board, ticket, Event{Kind: Evidence, Text: text, Line: line}, actor, 0)
@@ -245,12 +245,12 @@ func (m Managed) comment(board Board, ticket Ticket, text, actor string, depth i
 }
 
 func (m Managed) entry(board Board, ticket Ticket, event Event, actor string, depth int) (Ticket, error) {
-	events := []rule.HookEvent{rule.HookTicketLog}
+	events := []rules.HookEvent{rules.HookTicketLog}
 	switch event.Kind {
 	case Evidence:
-		events = []rule.HookEvent{rule.HookTicketEvidence, rule.HookTicketLog}
+		events = []rules.HookEvent{rules.HookTicketEvidence, rules.HookTicketLog}
 	case Commented:
-		events = []rule.HookEvent{rule.HookTicketComment, rule.HookTicketLog}
+		events = []rules.HookEvent{rules.HookTicketComment, rules.HookTicketLog}
 	}
 	subjects := make([]subject, len(events))
 	for i, on := range events {
@@ -302,7 +302,7 @@ func (m Managed) Widen(id string, owns []string, actor string) (Ticket, error) {
 	if len(added) == 0 {
 		return ticket, fmt.Errorf("%s already owns %s", id, strings.Join(owns, ", "))
 	}
-	s := m.subjectOf(rule.HookTicketWiden, board.Key, ticket, ticket.Status, actor, 0)
+	s := m.subjectOf(rules.HookTicketWiden, board.Key, ticket, ticket.Status, actor, 0)
 	s.owns = added
 	if err := m.gate(&s); err != nil {
 		return ticket, err
@@ -436,7 +436,7 @@ const (
 
 var reasonBreak = sys.LazyRegexp(`[,;!?\n]|\.(?:\s|$)`)
 
-func openPart(answers map[string]jev.Answer, reason string, parts []string, threshold float64) (string, bool) {
+func openPart(answers map[string]core.Answer, reason string, parts []string, threshold float64) (string, bool) {
 	if answers[doneReasonDecides].Noul < threshold {
 		return "", false
 	}
@@ -481,41 +481,41 @@ func draftedSection(field, body string) (int, error) {
 
 func (m Managed) heldForPerson(s subject, ref, unread string) error {
 	subjectName := cmp.Or(s.ticket.ID, strconv.Quote(s.ticket.Title))
-	if m.actorKind(s.actor) != rule.ActorPerson {
+	if m.actorKind(s.actor) != rules.ActorPerson {
 		return WaitingError{Ticket: subjectName, Rule: ref, Detail: "Jev could not answer, so the person decides: " + unread}
 	}
-	return m.Store.Record(s.key, Event{Ticket: s.ticket.ID, Kind: RuleFired, Actor: s.actor, To: s.to, Text: hookText(ref, string(rule.ThenNudge), s.event, subjectName+" went ahead unjudged: "+unread)})
+	return m.Store.Record(s.key, Event{Ticket: s.ticket.ID, Kind: RuleFired, Actor: s.actor, To: s.to, Text: hookText(ref, string(rules.ThenNudge), s.event, subjectName+" went ahead unjudged: "+unread)})
 }
 
 type ruling struct {
-	answers   map[string]jev.Answer
+	answers   map[string]core.Answer
 	threshold float64
 	unread    string
 }
 
-func (m Managed) judged(ref, decides string, state any, options []jev.Option) ruling {
+func (m Managed) judged(ref, decides string, state any, options []core.Option) ruling {
 	name, _, _ := strings.Cut(ref, "@")
 	body, err := json.Marshal(state)
 	row := ledger.Row{Point: name, Questions: name, StateHash: ledger.HashOf(body), StateBuilder: name + "_state@1", State: body,
 		Verdict: ledger.VerdictAsk, Reason: &ledger.Reason{Question: decides, Mode: ledger.ModeEnforced}}
 	var ruled ruling
 	var set question.Set
-	var asked []jev.Question
-	var decision jev.Decision
+	var asked []core.Question
+	var decision core.Decision
 	if err == nil {
 		set, asked, ruled.threshold, err = m.library(ref, decides, options)
 	}
 	if err == nil {
 		row.Version, row.Reason.Threshold, row.Reason.Comparison = set.QuestionsVersion, ruled.threshold, decides+"_at"
-		var client *jev.Client
-		if client, err = classifier.Open(m.Store.Root, jev.ReadKeyring(), 1); err == nil {
-			decision, err = client.Ask(context.Background(), jev.Request{State: json.RawMessage(body), Questions: asked})
+		var client *core.Client
+		if client, err = classifiers.Open(m.Store.Root, core.ReadKeyring(), 1); err == nil {
+			decision, err = client.Ask(context.Background(), core.Request{State: json.RawMessage(body), Questions: asked})
 		}
 	}
 	if err != nil {
 		cause := err.Error()
 		row.Reason.ModeReason, ruled.unread = &cause, cause
-		if jev.IsUnbound(err) {
+		if core.IsUnbound(err) {
 			ruled.unread = "no classifier is bound, so Jev did not answer: tofu models bind classifier <source/model>"
 		}
 	} else {
@@ -535,7 +535,7 @@ func (m Managed) judged(ref, decides string, state any, options []jev.Option) ru
 	return ruled
 }
 
-func (m Managed) library(ref, decides string, options []jev.Option) (question.Set, []jev.Question, float64, error) {
+func (m Managed) library(ref, decides string, options []core.Option) (question.Set, []core.Question, float64, error) {
 	layers, err := question.Layers(questions.Files(), m.Store.Root)
 	if err != nil {
 		return question.Set{}, nil, 0, err
@@ -552,10 +552,10 @@ func (m Managed) library(ref, decides string, options []jev.Option) (question.Se
 	if at < 0 || err != nil || threshold <= 0 || threshold > 1 {
 		return set, nil, 0, fmt.Errorf("%s declares no thresholds.%s_at above 0 and at or below 1", ref, decides)
 	}
-	asked := make([]jev.Question, len(set.Questions))
+	asked := make([]core.Question, len(set.Questions))
 	for i, q := range set.Questions {
 		asked[i] = q.ToJev()
-		if asked[i].Kind == jev.QuestionChoice {
+		if asked[i].Kind == core.QuestionChoice {
 			asked[i].Options = append(asked[i].Options, options...)
 		}
 	}

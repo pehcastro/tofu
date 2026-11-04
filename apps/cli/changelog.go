@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/konst"
@@ -126,7 +126,7 @@ func plainMarkdown(text string) string {
 }
 
 func changelogWrap(text, first, rest string, width int) []string {
-	lines := widget.Wrap(text, width-widget.Cells(first))
+	lines := render.Wrap(text, width-render.Cells(first))
 	for i := range lines {
 		if i == 0 {
 			lines[i] = first + lines[i]

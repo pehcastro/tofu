@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
@@ -159,12 +159,12 @@ func transcriptEntryOf(event session.Event) (transcriptEntry, bool) {
 		if event.Agent != "" || json.Unmarshal(event.Body, &said) != nil || strings.TrimSpace(said.Content) == "" {
 			return entry, false
 		}
-		origin := turn.OriginOf(said)
+		origin := loop.OriginOf(said)
 		switch {
 		case said.Role == session.RoleAssistant:
 			entry.Speaker, entry.Text = speakerLead, said.Content
-		case said.Role == session.RoleUser && origin.Kind() == llm.OriginPerson && origin.Source != llm.SourceForkTask:
-			text, typed := turn.TaskIn(said.Content)
+		case said.Role == session.RoleUser && origin.Kind() == core.OriginPerson && origin.Source != core.SourceForkTask:
+			text, typed := loop.TaskIn(said.Content)
 			if !typed {
 				text = said.Content
 			}

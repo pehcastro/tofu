@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
 	"tofu/internal/konst"
@@ -168,8 +168,8 @@ func removeScratch(dir string, folders []sys.ScratchFolder) error {
 	return sys.RemoveScratch(folders, func(dir string) { registry.StopUnder(dir) }, konst.ScratchRemoveTries, konst.ScratchRemoveRetryMillis*time.Millisecond)
 }
 
-func LeadScratch(ctx context.Context, config turn.Config, errOut io.Writer) (context.Context, error) {
-	leading, err := turn.WithLeadScratch(ctx, config)
+func LeadScratch(ctx context.Context, config loop.Config, errOut io.Writer) (context.Context, error) {
+	leading, err := loop.WithLeadScratch(ctx, config)
 	if err != nil {
 		return ctx, fmt.Errorf("the scratchpad was not made: %w", err)
 	}

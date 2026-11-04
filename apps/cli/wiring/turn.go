@@ -17,7 +17,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/catalog"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
 	"tofu/internal/models/llm/wire/openrouter"
@@ -41,36 +41,36 @@ func WireEfforts(wire string) []llm.Effort {
 	return nil
 }
 
-func WireSpend(wire string) turn.Spend {
+func WireSpend(wire string) loop.Spend {
 	if wire == WireKey || wire == WireMeta {
-		return turn.SpendAPIKey
+		return loop.SpendAPIKey
 	}
-	return turn.SpendSubscription
+	return loop.SpendSubscription
 }
 
-func ChooseModel(opts RunOpts) (models.Model, error) {
+func ChooseModel(opts RunOpts) (catalog.Model, error) {
 	switch opts.Wire {
 	case "":
-		return models.Model{}, models.RoleOrchestrator.Unset()
+		return catalog.Model{}, catalog.RoleOrchestrator.Unset()
 	case WireKey:
 		if opts.Model == "" {
-			return models.Model{}, errors.New("--wire openrouter names no model: pass --model, or bind the orchestrator to an openrouter model")
+			return catalog.Model{}, errors.New("--wire openrouter names no model: pass --model, or bind the orchestrator to an openrouter model")
 		}
 		library, err := ModelLibrary(opts.Dir)
 		if err != nil {
-			return models.Model{}, err
+			return catalog.Model{}, err
 		}
-		if listed, known := library.Resolve(opts.Model); known && listed.Provider == models.OpenRouter {
+		if listed, known := library.Resolve(opts.Model); known && listed.Provider == catalog.OpenRouter {
 			return library.Select(listed.Slug())
 		}
-		return models.Model{ID: opts.Model}, nil
+		return catalog.Model{ID: opts.Model}, nil
 	case WireMeta:
 		library, err := ModelLibrary(opts.Dir)
 		if err != nil {
-			return models.Model{}, err
+			return catalog.Model{}, err
 		}
 		if opts.Model == "" {
-			return library.Default(models.Subscription(models.Meta))
+			return library.Default(catalog.Subscription(catalog.Meta))
 		}
 		return library.Select(opts.Model)
 	}
@@ -79,11 +79,11 @@ func ChooseModel(opts RunOpts) (models.Model, error) {
 	}
 	bound, err := BoundRoles(opts.Wire, opts.Dir)
 	if err != nil {
-		return models.Model{}, err
+		return catalog.Model{}, err
 	}
-	orchestrator := bound[models.RoleOrchestrator]
+	orchestrator := bound[catalog.RoleOrchestrator]
 	if orchestrator.Wire != opts.Wire {
-		return models.Model{}, fmt.Errorf(
+		return catalog.Model{}, fmt.Errorf(
 			"%s, and --wire %s reaches another subscription: run --wire %s instead, or bind the orchestrator role to a model --wire %s serves",
 			orchestrator.Says(), opts.Wire, orchestrator.Wire, opts.Wire)
 	}
@@ -104,18 +104,18 @@ func OnTheBoundWire(opts RunOpts) RunOpts {
 		}
 		return opts
 	}
-	if orchestrator, bound := library.Bound(models.RoleOrchestrator); bound && (opts.Wire == "" || opts.Wire == library.WireOf(orchestrator)) {
+	if orchestrator, bound := library.Bound(catalog.RoleOrchestrator); bound && (opts.Wire == "" || opts.Wire == library.WireOf(orchestrator)) {
 		opts.Wire, opts.Model = library.WireOf(orchestrator), orchestrator.Slug()
 	}
 	return opts
 }
 
-func ContextBudget(opts RunOpts, model models.Model) (recall.Budget, error) {
+func ContextBudget(opts RunOpts, model catalog.Model) (recall.Budget, error) {
 	registry, err := ModelRegistry()
 	if err != nil {
 		return recall.Budget{}, err
 	}
-	windowTokens, windowSource := models.WindowFor(model, registry, models.Served{})
+	windowTokens, windowSource := catalog.WindowFor(model, registry, catalog.Served{})
 	budget, err := recall.BudgetUnder(model.ID, windowTokens, settingspkg.IntSaying(opts.Dir, settingspkg.ContextCeiling, nil))
 	if err != nil {
 		return recall.Budget{}, err
@@ -141,9 +141,9 @@ func TurnTransport() transport.Config {
 	}
 }
 
-func KeyModel(model string) (turn.Model, error) {
+func KeyModel(model string) (loop.Model, error) {
 	facts := KeyFactsOf(host.RoleLLM, OpenRouterName)
-	key, err := jev.KeyFor(sys.CredentialFileName, facts.Variable)
+	key, err := core.KeyFor(sys.CredentialFileName, facts.Variable)
 	if err != nil {
 		return nil, fmt.Errorf("no %s %s key, run %s: %w", facts.Name, facts.Role, facts.Hint(), err)
 	}
@@ -163,8 +163,8 @@ func KeyModel(model string) (turn.Model, error) {
 type CodexTurn struct {
 	Wire             *codex.Wire
 	Effort           llm.Effort
-	Verbosity        models.Verbosity
-	ReasoningContext models.ReasoningContext
+	Verbosity        catalog.Verbosity
+	ReasoningContext catalog.ReasoningContext
 }
 
 func (c CodexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {

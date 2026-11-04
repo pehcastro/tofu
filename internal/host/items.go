@@ -79,7 +79,7 @@ func (s *items) bind(logged session.Event) {
 func (s *items) loggedAs(ref string) (item, asked string) {
 	asked = ref
 	for minted, id := range s.logged {
-		if tools.QuoteRef(minted) != ref {
+		if registry.QuoteRef(minted) != ref {
 			continue
 		}
 		if item != "" {
@@ -161,9 +161,9 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 			id.Item = s.mint("steered")
 		}
 		s.awaitLog(id.Item, session.RoleUser, event.Text)
-		return append(out, kept("turn.steered", &Steered{Identity: id, Text: event.Text, Origin: event.originOr(llm.SourceSteer), Step: event.Step, ReadAt: now, Images: event.Images}))
+		return append(out, kept("turn.steered", &Steered{Identity: id, Text: event.Text, Origin: event.originOr(core.SourceSteer), Step: event.Step, ReadAt: now, Images: event.Images}))
 	case EventSteerQueued:
-		return append(out, notify("turn.steerQueued", &SteerQueued{Identity: id, Text: event.Text, Origin: event.originOr(llm.SourceSteer), Images: event.Images}))
+		return append(out, notify("turn.steerQueued", &SteerQueued{Identity: id, Text: event.Text, Origin: event.originOr(core.SourceSteer), Images: event.Images}))
 	case EventToolCall:
 		var args struct {
 			Path  string `json:"path"`
@@ -271,11 +271,11 @@ func (s *items) said(id Identity, event Event, kind SaidKind) *Said {
 	return &Said{Identity: id, Kind: kind, Text: event.Text, Origin: event.originOr(kind.source())}
 }
 
-func (e Event) originOr(source llm.Source) Origin {
+func (e Event) originOr(source core.Source) Origin {
 	if e.Origin.Kind != "" {
 		return e.Origin
 	}
-	return wireOrigin(llm.Origin{Source: source})
+	return wireOrigin(core.Origin{Source: source})
 }
 
 func sessionUpdated(id Identity, event Event) outgoing {

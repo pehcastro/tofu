@@ -1,4 +1,4 @@
-package question
+package questions
 
 import (
 	"fmt"
@@ -8,8 +8,8 @@ import (
 	"tofu/internal/models/classifiers/core"
 )
 
-func DefaultCaps() jev.WireCaps {
-	return jev.WireCaps{
+func DefaultCaps() core.WireCaps {
+	return core.WireCaps{
 		MaxChoiceOptions: konst.ChoiceCeiling,
 		MaxStateTokens:   konst.JudgeStateTokenCeiling,
 		MaxRequestTokens: konst.JudgeRequestTokenCeiling,
@@ -17,7 +17,7 @@ func DefaultCaps() jev.WireCaps {
 	}
 }
 
-func LintFile(path string, caps jev.WireCaps) ([]Finding, error) {
+func LintFile(path string, caps core.WireCaps) ([]Finding, error) {
 	set, err := Load(path)
 	if err != nil {
 		return nil, err
@@ -25,7 +25,7 @@ func LintFile(path string, caps jev.WireCaps) ([]Finding, error) {
 	return Lint(set, caps), nil
 }
 
-func Lint(set Set, caps jev.WireCaps) []Finding {
+func Lint(set Set, caps core.WireCaps) []Finding {
 	var out []Finding
 	add := func(rule Rule, question string, line int, detail string) {
 		out = append(out, Finding{Rule: rule, Set: set.Name, Question: question, File: set.File, Line: line, Detail: detail})
@@ -61,7 +61,7 @@ func Lint(set Set, caps jev.WireCaps) []Finding {
 	return out
 }
 
-func lintQuestion(set Set, q Question, caps jev.WireCaps) []Finding {
+func lintQuestion(set Set, q Question, caps core.WireCaps) []Finding {
 	var out []Finding
 	add := func(rule Rule, detail string) {
 		out = append(out, Finding{Rule: rule, Set: set.Name, Question: q.Name, File: q.File, Line: q.Line, Detail: detail})

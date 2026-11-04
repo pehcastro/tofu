@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -18,14 +18,14 @@ import (
 	"time"
 
 	"tofu/internal/agent/context/recall"
-	"tofu/internal/agent/hooks"
+	hook "tofu/internal/agent/hooks"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
-	"tofu/internal/librarian/skills"
+	skill "tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/transport"
-	"tofu/internal/platform/recover"
+	safe "tofu/internal/platform/recover"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
@@ -45,7 +45,7 @@ type ListedOnly struct {
 
 func (t ListedOnly) Name() string { return t.Tool.Name() }
 
-func (t ListedOnly) Definition() llm.Tool { return t.Tool.Definition() }
+func (t ListedOnly) Definition() core.Tool { return t.Tool.Definition() }
 
 func (t ListedOnly) Run(context.Context, json.RawMessage) (contract.Result, error) {
 	return contract.Result{}, fmt.Errorf("%s refused: %s. it stays listed so the tool list matches the one this session's cache was written with", t.Tool.Name(), t.Why)
@@ -53,7 +53,7 @@ func (t ListedOnly) Run(context.Context, json.RawMessage) (contract.Result, erro
 
 const memoryAddedSince = "added to memory outside this session since its memory was sent, and held from now on:\n"
 
-func memoryUnsent(memory string, carried []llm.Message, inbox *Inbox) []string {
+func memoryUnsent(memory string, carried []core.Message, inbox *Inbox) []string {
 	said := make([]string, 0, len(carried))
 	for _, message := range carried {
 		said = append(said, message.Content)
@@ -210,7 +210,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		source = func() Registry { return config.Tools }
 	}
 	var recorded *record
-	personAnswers := config.Person != nil && config.SpawnedFrom == "" && config.TaskOrigin.Source != llm.SourceCronFire
+	personAnswers := config.Person != nil && config.SpawnedFrom == "" && config.TaskOrigin.Source != core.SourceCronFire
 	unoffered := func(name string) bool { return config.SpawnedFrom != "" && name == AskPersonToolName }
 	referencesOffered := slices.ContainsFunc(config.Parts, func(part PromptPart) bool {
 		return part.Concern == ConcernReferences && part.State == session.PartOffered
@@ -253,8 +253,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	currentTools := func() Registry {
 		return NewRegistry(answerable(withLoopTools(source().tools))...)
 	}
-	sending := func(definitions []llm.Tool) []llm.Tool {
-		return slices.DeleteFunc(slices.Clone(config.Prefix.toolsOr(definitions)), func(tool llm.Tool) bool { return unoffered(tool.Name) })
+	sending := func(definitions []core.Tool) []core.Tool {
+		return slices.DeleteFunc(slices.Clone(config.Prefix.toolsOr(definitions)), func(tool core.Tool) bool { return unoffered(tool.Name) })
 	}
 	now := config.Now
 	if now == nil {
@@ -359,9 +359,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	ctx = context.WithValue(ctx, hookFireKey{}, fire)
 
-	messages := make([]llm.Message, 0, len(config.History)+2)
+	messages := make([]core.Message, 0, len(config.History)+2)
 	if held.system != "" {
-		messages = append(messages, llm.Message{Role: llm.RoleSystem, Content: held.system})
+		messages = append(messages, core.Message{Role: core.RoleSystem, Content: held.system})
 	}
 	afterSystem := len(messages)
 	var keeper episodeKeeper
@@ -385,15 +385,15 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if into != nil {
 			compactions = &record{log: into.log, scope: into.scope, turn: into.turn, agent: into.agent, spawnedBy: into.spawnedBy, said: map[string]string{}, announce: into.announce, lastSent: &messagesKept{}}
 		}
-		return func(ctx context.Context, why, wire string, model Model, request llm.Request) (llm.Decision, error) {
+		return func(ctx context.Context, why, wire string, model Model, request core.Request) (core.Decision, error) {
 			if err := compacting.Err(); err != nil {
-				return llm.Decision{}, err
+				return core.Decision{}, err
 			}
 			id, started := session.NewEventID(), time.Now()
 			recording.Lock()
 			compactions.sent(id, why, request, artifacts.preview.OnWire(wire))
 			recording.Unlock()
-			tapped, tap := llm.Tapped(ctx)
+			tapped, tap := core.Tapped(ctx)
 			decision, timing, err := askCountingAttempts(tapped, model, request)
 			recording.Lock()
 			defer recording.Unlock()
@@ -443,7 +443,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			row.Warnings = append(row.Warnings, notSummarized+err.Error())
 		}
 	}
-	episodesFor := func(sized recall.Budget, head []llm.Message, saidElsewhere []string) string {
+	episodesFor := func(sized recall.Budget, head []core.Message, saidElsewhere []string) string {
 		config.Inbox.compacted()
 		room := (sized.Bands.Target() - sized.Tokens(artifacts.preview, historyOf(head))) * artifacts.preview.BytesPerThousandTokens / 1000
 		allowed := min(room*konst.EpisodeViewPercentOfRoom/100, konst.MemtreeViewBytes)
@@ -456,9 +456,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		return view
 	}
-	carried, view := slices.DeleteFunc(slices.Clone(config.History), func(message llm.Message) bool {
-		return message.Origin.Source == llm.SourceSpawnLine || held.composedNow && promptChange(message)
-	}), []llm.Message(nil)
+	carried, view := slices.DeleteFunc(slices.Clone(config.History), func(message core.Message) bool {
+		return message.Origin.Source == core.SourceSpawnLine || held.composedNow && promptChange(message)
+	}), []core.Message(nil)
 	fresh, was := config.MemoryMessage(), newestMemoryView(carried)
 	if config.Prefix.memoryTurnedBackOn(fresh, was) || config.opensGeneration() || len(fresh) == 0 {
 		if len(fresh) > 0 && (len(was) == 0 || was[0].Content != fresh[0].Content) {
@@ -468,7 +468,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	} else {
 		carried = withMemoryViewAtHead(carried, was)
 		if unsent := memoryUnsent(config.Memory, carried, config.Inbox); len(unsent) > 0 {
-			view = []llm.Message{{Role: llm.RoleUser, Content: memoryAddedSince + strings.Join(unsent, "\n"), Origin: llm.Origin{Source: llm.SourceMemorySaved, TakenAt: start}}}
+			view = []core.Message{{Role: core.RoleUser, Content: memoryAddedSince + strings.Join(unsent, "\n"), Origin: core.Origin{Source: core.SourceMemorySaved, TakenAt: start}}}
 		}
 	}
 	if schemas, err := json.Marshal(headTools); err == nil && keeper != nil && len(config.History) == 0 {
@@ -476,7 +476,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	messages = slices.Concat(messages, carried, view)
 	if held.changed != "" {
-		messages = append(messages, llm.Message{Role: llm.RoleUser, Content: held.changed, Origin: llm.Origin{Source: llm.SourceEnvironment, TakenAt: start}})
+		messages = append(messages, core.Message{Role: core.RoleUser, Content: held.changed, Origin: core.Origin{Source: core.SourceEnvironment, TakenAt: start}})
 	}
 	concluding, taken := "", ""
 	var lead *SpawnTool
@@ -494,7 +494,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 	}
 	var promptRefused string
-	var hooked []llm.Message
+	var hooked []core.Message
 	if config.SpawnedFrom == "" {
 		if config.SessionSource != "" {
 			hooked = sessionStartMessages(config.SessionSource, fire(ctx, hook.Input{Event: hook.SessionStart, Source: config.SessionSource}).Context, start)
@@ -504,7 +504,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			carried, messages = withoutOlderCompactContext(carried, hooked), withoutOlderCompactContext(messages, hooked)
 		}
 		prompted := fire(ctx, hook.Input{Event: hook.UserPromptSubmit, Prompt: config.Task})
-		promptRefused, hooked = prompted.Block, append(hooked, hookMessages(llm.SourcePromptSubmit, prompted.Context, start)...)
+		promptRefused, hooked = prompted.Block, append(hooked, hookMessages(core.SourcePromptSubmit, prompted.Context, start)...)
 	}
 	var boardLine string
 	arm, _ := ctx.Value(leadCheckInKey{}).(func(*LeadCheckIn))
@@ -527,7 +527,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	var forkWriteErrs []string
 	sent, answering := afterSystem+len(carried), ""
 	results := map[string]ToolCallRow{}
-	refuse := func(step *StepRow, calls []llm.ToolCall, why string) {
+	refuse := func(step *StepRow, calls []core.ToolCall, why string) {
 		for _, call := range calls {
 			callRow, resultMessage := rejectedCall(call, time.Now(), "tool call "+strconv.Quote(call.Name)+" was not executed: "+why,
 				session.EventIDFor(origin, call.ID), step.id, row.author())
@@ -543,24 +543,24 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		sent = max(sent, len(messages))
 	}
-	sentTokens := func(messages []llm.Message) int {
+	sentTokens := func(messages []core.Message) int {
 		return budget.Tokens(artifacts.preview, historyOf(messages))
 	}
 	var lastAnswered time.Time
-	var lastAttempts []llm.Attempt
-	ask := func(ctx context.Context, why string, on Model, request llm.Request) (llm.Decision, requestTiming, string, error) {
+	var lastAttempts []core.Attempt
+	ask := func(ctx context.Context, why string, on Model, request core.Request) (core.Decision, requestTiming, string, error) {
 		id, started := session.NewEventID(), time.Now()
 		request.Turn = row.ID
 		if tokens := sentTokens(request.Messages); tokens > budget.Ceiling() {
 			err := fmt.Errorf("this request is about %d tokens, past the %d token ceiling after the trim and the fork, so it was not sent", tokens, budget.Ceiling())
-			recorded.exchange(id, why, config.Wire, request, started, nil, llm.Decision{}, err)
-			return llm.Decision{}, requestTiming{}, id, err
+			recorded.exchange(id, why, config.Wire, request, started, nil, core.Decision{}, err)
+			return core.Decision{}, requestTiming{}, id, err
 		}
 		recorded.sent(id, why, request, artifacts.preview)
 		if keptPrefix != nil {
 			*keptPrefix = *config.Prefix
 		}
-		tapped, tap := llm.Tapped(ctx)
+		tapped, tap := core.Tapped(ctx)
 		decision, timing, err := askCountingAttempts(tapped, on, request)
 		lastAttempts = tap.Attempts()
 		recorded.exchange(id, why, config.Wire, request, started, lastAttempts, decision, err)
@@ -569,11 +569,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		return decision, timing, id, err
 	}
-	inserted := func(origin llm.Origin, text string) llm.Message {
+	inserted := func(origin core.Origin, text string) core.Message {
 		origin.TakenAt = now()
-		return llm.Message{Role: llm.RoleUser, Content: text, Origin: origin}
+		return core.Message{Role: core.RoleUser, Content: text, Origin: origin}
 	}
-	withPlan := func(messages []llm.Message) []llm.Message {
+	withPlan := func(messages []core.Message) []core.Message {
 		if config.Plan == nil {
 			return messages
 		}
@@ -581,9 +581,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if shown == "" {
 			return messages
 		}
-		return append(slices.Clip(messages), inserted(llm.Origin{Source: llm.SourcePlan}, thePlanAsItStands+shown))
+		return append(slices.Clip(messages), inserted(core.Origin{Source: core.SourcePlan}, thePlanAsItStands+shown))
 	}
-	compactContext := func() []llm.Message {
+	compactContext := func() []core.Message {
 		if config.SpawnedFrom != "" {
 			return nil
 		}
@@ -647,11 +647,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			recorded.notice(when + ": the conversation crossed its fork threshold and fork is off, so it carries on unforked this turn")
 		}
 	}
-	stateCarried := func(fork *Fork, step int, beforeFork, begun []llm.Message, tools []llm.Tool, moved *Account) ([]llm.Message, string) {
+	stateCarried := func(fork *Fork, step int, beforeFork, begun []core.Message, tools []core.Tool, moved *Account) ([]core.Message, string) {
 		begun = withMemoryViewAtHead(begun, config.MemoryMessage())
 		if running := runningSubAgents(source().tools); len(running) > 0 {
-			at := slices.IndexFunc(begun, func(message llm.Message) bool {
-				return message.Origin.Source == llm.SourceForkCarry && message.Content == fork.Carry.Text
+			at := slices.IndexFunc(begun, func(message core.Message) bool {
+				return message.Origin.Source == core.SourceForkCarry && message.Content == fork.Carry.Text
 			})
 			fork.Carry = fork.Carry.WithSubAgents(running)
 			begun[at].Content = fork.Carry.Text
@@ -668,9 +668,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if sentTokens(asked) > budget.Ceiling() {
 			asked, budget = begun, unreported
 		}
-		request := llm.Request{Messages: append(slices.Clone(asked), inserted(llm.Origin{Source: llm.SourceForkState}, forkStateAsk())), Tools: tools}
+		request := core.Request{Messages: append(slices.Clone(asked), inserted(core.Origin{Source: core.SourceForkState}, forkStateAsk())), Tools: tools}
 		if len(tools) > 0 {
-			request.ToolChoice = llm.ToolChoiceNone
+			request.ToolChoice = core.ToolChoiceNone
 		}
 		asking, why := model, "the working state the fork carries"
 		if moved != nil {
@@ -690,7 +690,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		switch {
 		case err != nil:
 			missing = "the fork carries no working state, because asking for it failed: " + err.Error()
-		case decision.Outcome != llm.OutcomeMessage || strings.TrimSpace(decision.Content) == "":
+		case decision.Outcome != core.OutcomeMessage || strings.TrimSpace(decision.Content) == "":
 			missing = "the fork carries no working state, because the model answered with none"
 		default:
 			state = runeSafeHead(strings.TrimSpace(decision.Content), konst.ForkStateBytes)
@@ -757,15 +757,15 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			ran, runErr = fail(panicked{value: value, stack: stack})
 		}
 	}()
-	endAt := func(outcome Outcome, lead string, history []llm.Message) Row {
+	endAt := func(outcome Outcome, lead string, history []core.Message) Row {
 		messages = history
 		if config.NoLastWord {
 			return finish(outcome)
 		}
-		messages = append(slices.Clone(history), inserted(llm.Origin{Source: llm.SourceLastWord}, lead+andThisIsItsLastStep))
-		request := llm.Request{Messages: messages, Tools: sending(currentTools().Definitions())}
+		messages = append(slices.Clone(history), inserted(core.Origin{Source: core.SourceLastWord}, lead+andThisIsItsLastStep))
+		request := core.Request{Messages: messages, Tools: sending(currentTools().Definitions())}
 		if len(request.Tools) > 0 {
-			request.ToolChoice = llm.ToolChoiceNone
+			request.ToolChoice = core.ToolChoiceNone
 		}
 		decision, timing, id, err := ask(ctx, "the last word: "+lead, model, request)
 		row.TotalCostUSD += decision.Usage.Cost
@@ -777,11 +777,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		last := stepFrom(id, len(row.Steps)+1, timing, decision)
 		answering = last.id
 		if decision.Content != "" || len(decision.ToolCalls) > 0 {
-			messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content, ToolCalls: decision.ToolCalls, Thinking: decision.Thinking})
+			messages = append(messages, core.Message{Role: core.RoleAssistant, Content: decision.Content, ToolCalls: decision.ToolCalls, Thinking: decision.Thinking})
 		}
 		refuse(&last, decision.ToolCalls, theLastStepRunsNoTool)
 		switch {
-		case decision.Outcome == llm.OutcomeTruncated:
+		case decision.Outcome == core.OutcomeTruncated:
 			row.Warnings = append(row.Warnings, lead+", and the last answer hit the output token limit partway through")
 		case strings.TrimSpace(decision.Content) == "":
 			row.Warnings = append(row.Warnings, lead+", and the last answer carried no text")
@@ -834,7 +834,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			forks+1, fork.TokensAfter, budget.Bands.Target())
 	}
 	heldForStep := 0
-	forkFrom := func(forced ForkKind) (*Fork, []llm.Message, error) {
+	forkFrom := func(forced ForkKind) (*Fork, []core.Message, error) {
 		landing := budget
 		heldForStep = 0
 		if forced == "" && budget.Crossed(artifacts.preview, historyOf(messages)) {
@@ -847,17 +847,17 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		return forkHistory(artifacts, landing, config.forkOpening(taskOrigin), messages, forced, forks+1, config.Caps.MaxForks)
 	}
-	var recordedGrants []subagent.Question
+	var recordedGrants []subagents.Question
 	if config.Boundary != nil {
 		recordedGrants = config.Boundary.Asked()
 	}
 	crashes := sys.Crashes(config.Project)
-	recordPictureDrops := func(step, tokensBefore int, after []llm.Message, drops []recall.Drop) {
+	recordPictureDrops := func(step, tokensBefore int, after []core.Message, drops []recall.Drop) {
 		artifacts.keep.remember(drops)
 		recorded.add(session.Event{Kind: session.EventCompaction}, compactionRow{Compaction: &Compaction{Step: step,
 			TokensBefore: tokensBefore, TokensAfter: sentTokens(after), Drops: drops}})
 	}
-	forkInto := func(fork *Fork, when string, beforeFork, begun []llm.Message, moved *Account) {
+	forkInto := func(fork *Fork, when string, beforeFork, begun []core.Message, moved *Account) {
 		ended := row
 		ended.Outcome, ended.ForkedInto, ended.EndedInFork, ended.Conversation = OutcomeForked, fork.Into, fork, messages[afterSystem:]
 		ended.WallClockMS = now().Sub(start).Milliseconds()
@@ -918,7 +918,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			recordPictureDrops(fork.Step, sentTokens(beforeFork), messages, drops)
 		}
 	}
-	endForked := func(fork *Fork, when string, beforeFork, begun []llm.Message, moved *Account, why string) Row {
+	endForked := func(fork *Fork, when string, beforeFork, begun []core.Message, moved *Account, why string) Row {
 		forks++
 		fork.Into = origin + "-f" + strconv.Itoa(forks+1)
 		forkInto(fork, when, beforeFork, begun, moved)
@@ -933,7 +933,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		told := why + ", so it was sent back to answer the person's message from step " + strconv.Itoa(asked.step)
 		stepRow.Warnings = append(stepRow.Warnings, told)
 		recorded.notice(told)
-		messages = append(messages, inserted(llm.Origin{Source: llm.SourceAnswerFirst}, asked.sendBack()))
+		messages = append(messages, inserted(core.Origin{Source: core.SourceAnswerFirst}, asked.sendBack()))
 	}
 	var steer *oneQuestion
 	answeredBy := func(reply string) (bool, error) {
@@ -962,13 +962,13 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if config.Steering != nil {
 			for _, steered := range config.Steering() {
 				if steeredAt != step {
-					messages = append(messages, inserted(llm.Origin{Source: llm.SourceAnswerFirst}, aMessageArrivedMidTurn))
+					messages = append(messages, inserted(core.Origin{Source: core.SourceAnswerFirst}, aMessageArrivedMidTurn))
 					first, _, _ := strings.Cut(strings.TrimSpace(steered), "\n")
 					asked = &openQuestion{said: runeSafeHead(first, konst.LeadHandbackQuoteBytes), step: step}
 					recorded.notice("open question from the person at step " + strconv.Itoa(step) + ": " + asked.said)
 				}
 				steeredAt = step
-				said := inserted(llm.Origin{Source: llm.SourceSteer}, steered)
+				said := inserted(core.Origin{Source: core.SourceSteer}, steered)
 				if config.Inbox != nil {
 					notes := config.Inbox.notesOn(ctx, config.Sessions, cmp.Or(row.Session, config.Session), steered)
 					asked.restated = asked.restated || strings.Contains(notes, requestOpenNote)
@@ -990,7 +990,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				}
 				messages = append(messages, inserted(item.origin, item.text))
 				episode(episodeKind(item.origin), item.text)
-				if item.origin.Source == llm.SourceMemorySaved {
+				if item.origin.Source == core.SourceMemorySaved {
 					recorded.noted(item.origin, item.text)
 				}
 			}
@@ -1005,7 +1005,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			lead := "this turn reached its step cap of " + strconv.Itoa(config.Caps.MaxSteps) + ", and the work is not finished"
 			return endAt(OutcomeStepCap, lead, messages), nil
 		case capped && step == noticeStep:
-			messages = append(messages, inserted(llm.Origin{Source: llm.SourceStepCap}, "this turn has "+strconv.Itoa(config.Caps.MaxSteps-step+1)+
+			messages = append(messages, inserted(core.Origin{Source: core.SourceStepCap}, "this turn has "+strconv.Itoa(config.Caps.MaxSteps-step+1)+
 				" steps left before its step cap of "+strconv.Itoa(config.Caps.MaxSteps)+", and the last of them runs no tool: "+
 				"finish what you are doing, or stop and report what is done and what is left."))
 		}
@@ -1064,7 +1064,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			return recall.Measure(artifacts.preview, budget.Bands, sent)
 		}
 		asSent := measureSent()
-		decision, timing, requestID, err := ask(ctx, "step "+strconv.Itoa(step), model, llm.Request{Messages: withPlan(messages), Tools: definitions})
+		decision, timing, requestID, err := ask(ctx, "step "+strconv.Itoa(step), model, core.Request{Messages: withPlan(messages), Tools: definitions})
 		if errors.Is(err, SentNow{}) {
 			step--
 			continue
@@ -1087,7 +1087,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					config.Notify(told)
 				}
 				asSent = measureSent()
-				decision, timing, requestID, err = ask(ctx, "step "+strconv.Itoa(step)+", asked again after the overflow shrink", model, llm.Request{Messages: withPlan(messages), Tools: definitions})
+				decision, timing, requestID, err = ask(ctx, "step "+strconv.Itoa(step)+", asked again after the overflow shrink", model, core.Request{Messages: withPlan(messages), Tools: definitions})
 				if overflowed(err) {
 					err = fmt.Errorf("the context window overflowed again after tofu %s, so the turn ends: %w", shrink, err)
 				}
@@ -1125,13 +1125,13 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				model = next.Model
 			}
 			decision, timing, requestID, err = ask(ctx, "step "+strconv.Itoa(step)+", asked again on "+on+" after a rate limit", model,
-				llm.Request{Messages: withPlan(messages), Tools: definitions})
+				core.Request{Messages: withPlan(messages), Tools: definitions})
 		}
 		if err != nil {
-			var cut llm.CutReply
+			var cut core.CutReply
 			if errors.As(err, &cut) {
 				answering = requestID
-				messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: cut.Streamed}, inserted(llm.Origin{Source: llm.SourceReplyCut}, theReplyWasCut))
+				messages = append(messages, core.Message{Role: core.RoleAssistant, Content: cut.Streamed}, inserted(core.Origin{Source: core.SourceReplyCut}, theReplyWasCut))
 			}
 			return fail(err)
 		}
@@ -1145,7 +1145,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		answering = stepRow.id
 		measuredAgainst := budget.Bands
 		stepRow.Occupancy, stepRow.Bands = &asSent, &measuredAgainst
-		if decision.Outcome == llm.OutcomeMessage && strings.TrimSpace(decision.Content) == "" {
+		if decision.Outcome == core.OutcomeMessage && strings.TrimSpace(decision.Content) == "" {
 			if reasoned, _, _ := strings.Cut(strings.TrimSpace(decision.Thinking.Text), "\n"); reasoned != "" {
 				told := "the model ended its turn with nothing to say, so the turn ends here; its reasoning was: " + reasoned
 				stepRow.Warnings = append(stepRow.Warnings, told)
@@ -1164,7 +1164,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			}
 			askedAgainAfterBlank = true
 			stepRow.Warnings = append(stepRow.Warnings, "the model answered with no text and no tool call, so it was asked again")
-			messages = append(messages, inserted(llm.Origin{Source: llm.SourceBlankAnswer}, yourLastReplyWasEmpty))
+			messages = append(messages, inserted(core.Origin{Source: core.SourceBlankAnswer}, yourLastReplyWasEmpty))
 			keep(stepRow)
 			continue
 		}
@@ -1185,8 +1185,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 
 		switch decision.Outcome {
-		case llm.OutcomeMessage:
-			messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content})
+		case core.OutcomeMessage:
+			messages = append(messages, core.Message{Role: core.RoleAssistant, Content: decision.Content})
 			stop := hook.Stop
 			if config.SpawnedFrom != "" {
 				stop = hook.SubagentStop
@@ -1194,7 +1194,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			blocked := fire(ctx, hook.Input{Event: stop, LastMessage: decision.Content, StopActive: stopContinuations > 0}).Block
 			if blocked != "" && stopContinuations < konst.HookStopContinuations {
 				stopContinuations++
-				messages = append(messages, inserted(llm.Origin{Source: llm.SourceStopHook}, "a "+string(stop)+" hook kept this turn going: "+blocked))
+				messages = append(messages, inserted(core.Origin{Source: core.SourceStopHook}, "a "+string(stop)+" hook kept this turn going: "+blocked))
 				keep(stepRow)
 				continue
 			}
@@ -1214,13 +1214,13 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				if !personAnswers {
 					asking = NewRegistry()
 				}
-				messages = append(messages, inserted(llm.Origin{Source: llm.SourceHandback}, handbackNote(offered, asking)))
+				messages = append(messages, inserted(core.Origin{Source: core.SourceHandback}, handbackNote(offered, asking)))
 				keep(stepRow)
 				continue
 			}
 			if open := config.Inbox.stillAsked(); len(open) > 0 && !polled {
 				polled = true
-				messages = append(messages, inserted(llm.Origin{Source: llm.SourceHandback}, pollNote(open)))
+				messages = append(messages, inserted(core.Origin{Source: core.SourceHandback}, pollNote(open)))
 				keep(stepRow)
 				continue
 			}
@@ -1242,7 +1242,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					recorded.notice("stop_check did not run on the lead's stop, so the board nudge alone decides it: " + err.Error())
 				case checked.Verdict == DoneReopen:
 					stepRow.Warnings = append(stepRow.Warnings, "stop_check read the lead's stop as unfinished with board work open, so it was sent back: "+checked.Reason)
-					messages = append(messages, inserted(llm.Origin{Source: llm.SourceSlots}, asks+" "+checked.Reason))
+					messages = append(messages, inserted(core.Origin{Source: core.SourceSlots}, asks+" "+checked.Reason))
 					keep(stepRow)
 					continue
 				case checked.ID != "":
@@ -1252,21 +1252,21 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					recorded.notice("the board nudge stayed quiet: " + quiet)
 				} else {
 					stepRow.Warnings = append(stepRow.Warnings, "the lead ended with board work open, so it was asked to take it")
-					messages = append(messages, inserted(llm.Origin{Source: llm.SourceSlots}, asks))
+					messages = append(messages, inserted(core.Origin{Source: core.SourceSlots}, asks))
 					keep(stepRow)
 					continue
 				}
 			}
 			keep(stepRow)
 			answered(decision.Content)
-			if arm != nil && config.TaskOrigin.Source != llm.SourceSlots {
+			if arm != nil && config.TaskOrigin.Source != core.SourceSlots {
 				arm(lead.leadCheckIn(work, held))
 			}
 			return finish(OutcomeStopped), nil
 
-		case llm.OutcomeTruncated:
+		case core.OutcomeTruncated:
 			if decision.Content != "" || len(decision.ToolCalls) > 0 {
-				messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content,
+				messages = append(messages, core.Message{Role: core.RoleAssistant, Content: decision.Content,
 					ToolCalls: decision.ToolCalls, Thinking: decision.Thinking})
 			}
 			if len(decision.ToolCalls) == 0 {
@@ -1276,8 +1276,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			refuse(&stepRow, decision.ToolCalls, theResponseHitTheOutputTokenLimit)
 			keep(stepRow)
 
-		case llm.OutcomeToolCalls:
-			messages = append(messages, llm.Message{Role: llm.RoleAssistant, Content: decision.Content, ToolCalls: decision.ToolCalls, Thinking: decision.Thinking})
+		case core.OutcomeToolCalls:
+			messages = append(messages, core.Message{Role: core.RoleAssistant, Content: decision.Content, ToolCalls: decision.ToolCalls, Thinking: decision.Thinking})
 			flush()
 			if concluding != "" {
 				refuse(&stepRow, decision.ToolCalls, theTurnEndsOnACleanReport)
@@ -1391,7 +1391,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				}
 
 				rows := make([]ToolCallRow, len(wave))
-				answers := make([]llm.Message, len(wave))
+				answers := make([]core.Message, len(wave))
 				memoHits := make([]bool, len(wave))
 				waveCtx, waveEnded := config.Inbox.stoppableWave(ctx)
 				runAt := func(i, batch int) {
@@ -1420,7 +1420,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					}
 				}
 				leadStop = waveEnded()
-				shown := make([]llm.Message, 0, len(answers))
+				shown := make([]core.Message, 0, len(answers))
 				for i := range answers {
 					pointer := false
 					if memoHits[i] {
@@ -1460,7 +1460,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			}
 			if config.Boundary != nil {
 				asked := config.Boundary.Asked()
-				stepRow.Grants = slices.DeleteFunc(slices.Clone(asked), func(question subagent.Question) bool { return slices.Contains(recordedGrants, question) })
+				stepRow.Grants = slices.DeleteFunc(slices.Clone(asked), func(question subagents.Question) bool { return slices.Contains(recordedGrants, question) })
 				recordedGrants = asked
 			}
 			if leadStop != nil {
@@ -1479,7 +1479,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				keep(stepRow)
 				return endAt(OutcomeLoopGuard, stopped, messages), nil
 			}
-			if config.TaskOrigin.Source == llm.SourceAsk && answeredAsksOnly(stepRow.ToolCalls) {
+			if config.TaskOrigin.Source == core.SourceAsk && answeredAsksOnly(stepRow.ToolCalls) {
 				keep(stepRow)
 				answered(decision.Content)
 				return finish(OutcomeStopped), nil
@@ -1554,7 +1554,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				return fail(err)
 			}
 
-		case llm.OutcomeRefusal:
+		case core.OutcomeRefusal:
 			keep(stepRow)
 			return fail(transport.Fail("turn.Run", transport.KindProvider, nil, "the model refused: %s", decision.Refusal))
 
@@ -1564,7 +1564,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 }
 
-func registrySnapshot(registry *shell.Registry) map[string]bool {
+func registrySnapshot(registry *process.Registry) map[string]bool {
 	if registry == nil {
 		return nil
 	}
@@ -1579,7 +1579,7 @@ func registrySnapshot(registry *shell.Registry) map[string]bool {
 	return names
 }
 
-func backgroundSurvivors(registry *shell.Registry, before map[string]bool) string {
+func backgroundSurvivors(registry *process.Registry, before map[string]bool) string {
 	if registry == nil {
 		return ""
 	}
@@ -1589,7 +1589,7 @@ func backgroundSurvivors(registry *shell.Registry, before map[string]bool) strin
 	}
 	var named []string
 	for _, entry := range list {
-		if before[entry.Name] || entry.State != shell.Running {
+		if before[entry.Name] || entry.State != process.Running {
 			continue
 		}
 		named = append(named, entry.Name+" ("+entry.Command+")")
@@ -1624,7 +1624,7 @@ func NewID(at time.Time) string {
 	return session.IDPrefix + strconv.FormatInt(at.UnixNano(), 16)
 }
 
-func stepFrom(id string, index int, timing requestTiming, decision llm.Decision) StepRow {
+func stepFrom(id string, index int, timing requestTiming, decision core.Decision) StepRow {
 	return StepRow{
 		id:               id,
 		attempt:          timing.attempt,
@@ -1653,7 +1653,7 @@ type loadedReferences struct {
 
 func (*loadedReferences) Name() string { return ReferenceToolName }
 
-func (*loadedReferences) Definition() llm.Tool { return referenceTool{}.Definition() }
+func (*loadedReferences) Definition() core.Tool { return referenceTool{}.Definition() }
 
 func (r *loadedReferences) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	r.mutex.Lock()
@@ -1668,7 +1668,7 @@ type skillLoading struct {
 
 func (s skillLoading) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	result, err := s.Tool.Run(ctx, raw)
-	if err != nil || result.Origin.Source != llm.SourceSkillLoad || result.Origin.ID != "" {
+	if err != nil || result.Origin.Source != core.SourceSkillLoad || result.Origin.ID != "" {
 		return result, err
 	}
 	skills, err := skill.Shipped(shipped.Files(), "")
@@ -1698,9 +1698,9 @@ func runningSubAgents(tools []contract.Tool) []string {
 		}
 		for _, agent := range spawner.roster.SubAgents() {
 			switch agent.State {
-			case subagent.Errored, subagent.Finished:
+			case subagents.Errored, subagents.Finished:
 				continue
-			case subagent.Working, subagent.WaitingAnswer, subagent.InReview, subagent.Reopened, subagent.Parked:
+			case subagents.Working, subagents.WaitingAnswer, subagents.InReview, subagents.Reopened, subagents.Parked:
 			}
 			held := "holds no path"
 			if agent.Holds() && len(agent.Owns) > 0 {
@@ -1714,27 +1714,27 @@ func runningSubAgents(tools []contract.Tool) []string {
 	return running
 }
 
-func sessionStartMessages(source hook.SessionSource, added []hook.Context, at time.Time) []llm.Message {
-	messages := hookMessages(llm.SourceSessionStart, added, at)
+func sessionStartMessages(source hook.SessionSource, added []hook.Context, at time.Time) []core.Message {
+	messages := hookMessages(core.SourceSessionStart, added, at)
 	for i := range messages {
 		messages[i].Origin.ID = string(source)
 	}
 	return messages
 }
 
-func withoutOlderCompactContext(messages, added []llm.Message) []llm.Message {
-	compact := func(message llm.Message) bool {
-		return message.Origin.Source == llm.SourceSessionStart && message.Origin.ID == string(hook.SessionCompact)
+func withoutOlderCompactContext(messages, added []core.Message) []core.Message {
+	compact := func(message core.Message) bool {
+		return message.Origin.Source == core.SourceSessionStart && message.Origin.ID == string(hook.SessionCompact)
 	}
 	if !slices.ContainsFunc(added, compact) {
 		return messages
 	}
-	writtenBeforeTheID := func(message llm.Message) bool {
-		return message.Origin.Source == llm.SourceSessionStart && message.Origin.ID == "" && slices.ContainsFunc(added, func(newer llm.Message) bool {
+	writtenBeforeTheID := func(message core.Message) bool {
+		return message.Origin.Source == core.SourceSessionStart && message.Origin.ID == "" && slices.ContainsFunc(added, func(newer core.Message) bool {
 			return newer.Origin.Name == message.Origin.Name && newer.Content == message.Content
 		})
 	}
-	return slices.DeleteFunc(slices.Clone(messages), func(message llm.Message) bool { return compact(message) || writtenBeforeTheID(message) })
+	return slices.DeleteFunc(slices.Clone(messages), func(message core.Message) bool { return compact(message) || writtenBeforeTheID(message) })
 }
 
 type EveryAccountSpent struct {

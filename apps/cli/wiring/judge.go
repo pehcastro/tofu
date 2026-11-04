@@ -6,7 +6,7 @@ import (
 
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/judge/state"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
@@ -15,7 +15,7 @@ import (
 )
 
 type Battery struct {
-	Questions        []jev.Question
+	Questions        []core.Question
 	Kinds            map[string]question.Kind
 	SetName          string
 	QuestionsVersion int
@@ -70,7 +70,7 @@ func ResolveLibrary(ref, dir string) (Battery, error) {
 	if err != nil {
 		return Battery{}, err
 	}
-	jevQuestions := make([]jev.Question, 0, len(set.Questions))
+	jevQuestions := make([]core.Question, 0, len(set.Questions))
 	kinds := make(map[string]question.Kind, len(set.Questions))
 	for _, q := range set.Questions {
 		jevQuestions = append(jevQuestions, q.ToJev())

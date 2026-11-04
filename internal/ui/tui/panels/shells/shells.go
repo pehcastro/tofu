@@ -315,8 +315,8 @@ func (m Model) facts(entry Entry, detail int) []string {
 	room := max(1, processWidth(detail)-2*processPadding-factLabel)
 	var lines []string
 	for _, fact := range [][2]string{{"PID", strconv.Itoa(entry.PID)}, {"Runtime", m.runtime(entry)}, {"CWD", entry.Dir}, {"Command", entry.Command}} {
-		name := widget.Pad(fact[0], factLabel)
-		for _, part := range widget.Wrap(fact[1], room) {
+		name := render.Pad(fact[0], factLabel)
+		for _, part := range render.Wrap(fact[1], room) {
 			lines = append(lines, name+part)
 			name = strings.Repeat(" ", factLabel)
 		}

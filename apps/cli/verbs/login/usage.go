@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
@@ -302,14 +302,14 @@ func windowPace(page cli.Page, spends []host.WindowSpend, account, window string
 	switch {
 	case spend.UsedPerDay == nil:
 	case spend.RunsOutAt == nil:
-		text = widget.Percent(*spend.UsedPerDay) + "/day, lasts to the reset"
+		text = render.Percent(*spend.UsedPerDay) + "/day, lasts to the reset"
 	default:
-		text = widget.Percent(*spend.UsedPerDay) + "/day, out " + spend.RunsOutAt.Local().Format(usageRunOutFormat)
+		text = render.Percent(*spend.UsedPerDay) + "/day, out " + spend.RunsOutAt.Local().Format(usageRunOutFormat)
 	}
 	if spend.Requests == 0 {
 		return cli.Fact{Text: page.Label(text + "; tofu spent nothing")}, true
 	}
-	return cli.Fact{Text: page.Label(text + "; tofu " + widget.Weighted(spend.Weighted) + " weighted, " + widget.Weighted(spend.PerDay) + "/day")}, true
+	return cli.Fact{Text: page.Label(text + "; tofu " + render.Weighted(spend.Weighted) + " weighted, " + render.Weighted(spend.PerDay) + "/day")}, true
 }
 
 func usagePage(page cli.Page, report host.UsageReport, now time.Time) []string {
@@ -339,7 +339,7 @@ func usagePage(page cli.Page, report host.UsageReport, now time.Time) []string {
 			if window.Reported {
 				text = page.Bar(window.Used)
 				if left := window.ResetsAt.Sub(now); left > 0 {
-					text += cli.Gap + page.Label("resets in "+widget.Until(left))
+					text += cli.Gap + page.Label("resets in "+render.Until(left))
 				}
 			}
 			facts = append(facts, cli.Fact{Label: window.ID, Text: text})
@@ -348,14 +348,14 @@ func usagePage(page cli.Page, report host.UsageReport, now time.Time) []string {
 			}
 		}
 		if !provider.ReadAt.IsZero() {
-			text := provider.ReadAt.Format(time.RFC3339) + ", " + widget.Until(now.Sub(provider.ReadAt)) + " ago, from the " + provider.Source
+			text := provider.ReadAt.Format(time.RFC3339) + ", " + render.Until(now.Sub(provider.ReadAt)) + " ago, from the " + provider.Source
 			if provider.Stale {
 				text += ", stale"
 			}
 			facts = append(facts, cli.Fact{Label: "read", Text: page.Label(text)})
 		}
 		if left := provider.RetryAt.Sub(now); left > 0 {
-			facts = append(facts, cli.Fact{Label: "retry", Text: page.Label("in " + widget.Until(left))})
+			facts = append(facts, cli.Fact{Label: "retry", Text: page.Label("in " + render.Until(left))})
 		}
 		lines = append(lines, page.Card(page.Subject(cmp.Or(provider.Plan, "plan not reported")), cardVerdict, page.Facts(facts))...)
 	}

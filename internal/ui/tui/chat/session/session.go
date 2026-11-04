@@ -199,7 +199,7 @@ func New(now func() time.Time, prose Prose) Model {
 	styles := look.ComposerStyles()
 	styles.Cursor.Shape = tea.CursorBar
 	composer.SetStyles(styles)
-	return Model{now: now, prose: prose, composer: composer, following: true, began: now(), unshown: map[string]bool{}, opened: map[string]bool{}, FeedID: tools.ShortID}
+	return Model{now: now, prose: prose, composer: composer, following: true, began: now(), unshown: map[string]bool{}, opened: map[string]bool{}, FeedID: registry.ShortID}
 }
 
 func (m *Model) Focus() tea.Cmd { return m.composer.Focus() }
@@ -331,7 +331,7 @@ func (m *Model) mint() string {
 }
 
 func (m *Model) Append(entry Entry) {
-	if entry.Kind == Tool && entry.Head == tools.PlanToolName {
+	if entry.Kind == Tool && entry.Head == registry.PlanToolName {
 		if entry.ID != "" {
 			m.unshown[entry.ID] = true
 		}
@@ -348,7 +348,7 @@ func (m *Model) Append(entry Entry) {
 	if entry.streaming {
 		m.rerender(&entry)
 	} else if entry.assistant() {
-		entry.undrawn, entry.rendered = true, widget.Wrap(entry.Body, m.textWidth())
+		entry.undrawn, entry.rendered = true, render.Wrap(entry.Body, m.textWidth())
 	}
 	m.entries = append(m.entries, entry)
 	m.frameAround(m.top.entry)
@@ -580,9 +580,9 @@ func (m *Model) dropGreeting() {
 }
 
 func (m *Model) Close(words, id string) {
-	m.cooked = words + " " + widget.Until(m.elapsed(m.began))
+	m.cooked = words + " " + render.Until(m.elapsed(m.began))
 	if !m.Stopping {
-		m.cooked += requestSeparator + "waited " + widget.Until(m.waited)
+		m.cooked += requestSeparator + "waited " + render.Until(m.waited)
 	}
 	m.cookedID = id
 	m.seal()

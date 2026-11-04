@@ -10,7 +10,7 @@ import (
 
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
-	"tofu/internal/models/llm/accounts"
+	cred "tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/platform/recover"
 	"tofu/internal/store/session"
@@ -61,12 +61,12 @@ func (c *startupClock) step(name string) {
 	}
 }
 
-func (c *startupClock) picking(accounts turn.Accounts, store *cred.Store) turn.Accounts {
+func (c *startupClock) picking(accounts loop.Accounts, store *cred.Store) loop.Accounts {
 	pick := accounts.Pick
 	if pick == nil {
 		return accounts
 	}
-	accounts.Pick = func(ctx context.Context) (turn.Account, error) {
+	accounts.Pick = func(ctx context.Context) (loop.Account, error) {
 		c.step("turn opening")
 		account, err := pick(ctx)
 		c.mu.Lock()
@@ -100,7 +100,7 @@ func (c *startupClock) checkUsageAlongside(a *wiring.Accounts) (wait func()) {
 	mine := slices.DeleteFunc(rows, func(row cred.Row) bool { return row.Credential.Provider != a.Provider })
 	began := time.Now()
 	checking.Go(func() {
-		_ = safe.Call(sys.Crashes("."), "usage check alongside", func() error {
+		_ = recover.Call(sys.Crashes("."), "usage check alongside", func() error {
 			results, _ := wiring.PollRowsOn(context.Background(), a.Store, mine, a.Now, a.URLs, poller)
 			c.mu.Lock()
 			defer c.mu.Unlock()
@@ -116,11 +116,11 @@ func (c *startupClock) checkUsageAlongside(a *wiring.Accounts) (wait func()) {
 }
 
 type firstRequestModel struct {
-	inner turn.Model
+	inner loop.Model
 	clock *startupClock
 }
 
-func (m firstRequestModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (m firstRequestModel) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	m.clock.mu.Lock()
 	if m.clock.asked.IsZero() {
 		m.clock.add("turn before the first request: session, hooks and prompt")
@@ -130,7 +130,7 @@ func (m firstRequestModel) Ask(ctx context.Context, request llm.Request) (llm.De
 	return m.inner.Ask(ctx, request)
 }
 
-func (c *startupClock) leading(model turn.Model) turn.Model {
+func (c *startupClock) leading(model loop.Model) loop.Model {
 	return firstRequestModel{inner: model, clock: c}
 }
 
@@ -154,6 +154,6 @@ func (c *startupClock) record(store *session.Store, id string) error {
 	head := log.Header().Head
 	_, err = log.Append(session.Event{Kind: session.EventNotice, At: c.asked},
 		session.NoticeBody{Text: "startup took " + c.asked.Sub(c.began).Round(time.Millisecond).String() + " before the first request: " + strings.Join(said, " · "),
-			From: turn.RecordedOrigin(llm.Origin{Source: llm.SourceNotice})})
+			From: loop.RecordedOrigin(core.Origin{Source: core.SourceNotice})})
 	return errors.Join(err, log.Edit(func(header *session.Header) { header.Head = head }), log.Close())
 }

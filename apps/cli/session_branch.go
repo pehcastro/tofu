@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
@@ -29,17 +29,17 @@ type sessionBranchReport struct {
 	Parent  session.Carried `json:"parent"`
 	Owns    []string        `json:"owns"`
 	Preset  string          `json:"preset,omitempty"`
-	Seed    turn.Seed       `json:"seed"`
+	Seed    loop.Seed       `json:"seed"`
 	Carried int             `json:"carried_messages"`
 	NoTask  bool            `json:"carries_no_task,omitempty"`
 	Model   string          `json:"model,omitempty"`
-	Effort  llm.Effort      `json:"effort,omitempty"`
+	Effort  core.Effort     `json:"effort,omitempty"`
 
 	parentHandle string
 }
 
 func sessionBranchArgs(args []string) (sessionBranchAsk, error) {
-	ask := sessionBranchAsk{seed: string(turn.SeedSummary)}
+	ask := sessionBranchAsk{seed: string(loop.SeedSummary)}
 	valued := map[string]*string{"--preset": &ask.preset, "--owns": &ask.owns, "--seed": &ask.seed, "--name": &ask.name, "--model": &ask.model, "--effort": &ask.effort, "--at": &ask.at}
 	for index := 0; index < len(args); index++ {
 		arg := args[index]
@@ -69,16 +69,16 @@ func sessionBranchArgs(args []string) (sessionBranchAsk, error) {
 	return ask, nil
 }
 
-func sessionBranchAccess(ask sessionBranchAsk) (turn.Access, error) {
+func sessionBranchAccess(ask sessionBranchAsk) (loop.Access, error) {
 	switch {
 	case ask.owns != "":
-		return turn.OwnsAccess(strings.Split(ask.owns, ","))
+		return loop.OwnsAccess(strings.Split(ask.owns, ","))
 	case ask.preset == "":
-		return turn.AccessOf(settingspkg.TextSaying(".", settingspkg.SideChatAccess, nil))
+		return loop.AccessOf(settingspkg.TextSaying(".", settingspkg.SideChatAccess, nil))
 	}
-	access, err := turn.AccessOf(ask.preset)
+	access, err := loop.AccessOf(ask.preset)
 	if err == nil && access.Preset == "" {
-		err = fmt.Errorf("preset %q is none of %s, %s and %s", ask.preset, turn.PresetRead, turn.PresetNotes, turn.PresetFiles)
+		err = fmt.Errorf("preset %q is none of %s, %s and %s", ask.preset, loop.PresetRead, loop.PresetNotes, loop.PresetFiles)
 	}
 	return access, err
 }
@@ -92,9 +92,9 @@ func sessionBranch(store *session.Store, ask sessionBranchAsk) (sessionBranchRep
 	if err != nil {
 		return sessionBranchReport{}, err
 	}
-	var effort llm.Effort
+	var effort core.Effort
 	if ask.effort != "" {
-		if effort, err = llm.ParseEffort(ask.effort); err != nil {
+		if effort, err = core.ParseEffort(ask.effort); err != nil {
 			return sessionBranchReport{}, err
 		}
 	}
@@ -110,7 +110,7 @@ func sessionBranch(store *session.Store, ask sessionBranchAsk) (sessionBranchRep
 		}
 		chosen = &session.Chosen{Wire: library.WireOf(model), Model: model.Slug()}
 	}
-	opened, err := turn.BranchSide(store, parent, turn.SideBranch{Access: access, Seed: turn.Seed(ask.seed), Chosen: chosen, Effort: effort, From: ask.at}, time.Now())
+	opened, err := loop.BranchSide(store, parent, loop.SideBranch{Access: access, Seed: loop.Seed(ask.seed), Chosen: chosen, Effort: effort, From: ask.at}, time.Now())
 	if err != nil {
 		return sessionBranchReport{}, err
 	}
@@ -121,7 +121,7 @@ func sessionBranch(store *session.Store, ask sessionBranchAsk) (sessionBranchRep
 		}
 	}
 	return sessionBranchReport{Session: header.ID, Handle: handleOf(store, header.ID), Kind: header.Kind, Parent: *header.BranchedFrom, Owns: append([]string{}, header.Owns...),
-		Preset: header.Preset, Seed: turn.Seed(ask.seed), Carried: opened.Carried, NoTask: opened.NoTask, Model: header.Model, Effort: llm.Effort(header.Effort), parentHandle: handleOf(store, parent.ID)}, nil
+		Preset: header.Preset, Seed: loop.Seed(ask.seed), Carried: opened.Carried, NoTask: opened.NoTask, Model: header.Model, Effort: core.Effort(header.Effort), parentHandle: handleOf(store, parent.ID)}, nil
 }
 
 func sessionBranchLines(page cli.Page, report sessionBranchReport) []string {
@@ -134,7 +134,7 @@ func sessionBranchLines(page cli.Page, report sessionBranchReport) []string {
 	}
 	seed := string(report.Seed) + ", " + output.Plural(report.Carried, "message")
 	if report.NoTask {
-		seed += ": " + turn.SideNoTask
+		seed += ": " + loop.SideNoTask
 	}
 	lines := append(page.Title("Side chat", []string{report.Handle}, cli.Verdict{Mark: cli.Changed, Text: "branched"}), "")
 	facts := []cli.Fact{

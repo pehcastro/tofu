@@ -67,7 +67,7 @@ func TestCheckMoveIsTheMoveWithoutWriting(t *testing.T) {
 	before, _ := os.ReadFile(path)
 	events, _ := m.Store.Events("DEMO", 0)
 
-	_, checkErr := m.Check(rule.EventMove, b.ID, Doing, manager)
+	_, checkErr := m.Check(rules.EventMove, b.ID, Doing, manager)
 	refused(t, checkErr, a.ID)
 	after, _ := os.ReadFile(path)
 	still, _ := m.Store.Events("DEMO", 0)
@@ -80,10 +80,10 @@ func TestCheckMoveIsTheMoveWithoutWriting(t *testing.T) {
 	}
 
 	free := holding(t, m, "DEMO", "free", Todo, "docs/**")
-	if _, err := m.Check(rule.EventMove, free.ID, Doing, manager); err != nil {
+	if _, err := m.Check(rules.EventMove, free.ID, Doing, manager); err != nil {
 		t.Fatalf("a free ticket checks clean: %v", err)
 	}
-	_, err := m.Check(rule.EventMove, free.ID, Doing, agent)
+	_, err := m.Check(rules.EventMove, free.ID, Doing, agent)
 	refused(t, err, "agent")
 }
 
@@ -92,7 +92,7 @@ func TestCheckDoesNotRecordAFiredRule(t *testing.T) {
 	boardRule(t, m, "never@1.yaml", "id: never\ndomain: general\nkind: structural\nconcern: process_discipline\nchecker: command\ncommand: go nosuchverb {ticket}\nmode: enforced\ntext: never to doing\non: move\nto: doing\n")
 	ticket := holding(t, m, "DEMO", "x", Todo)
 	events, _ := m.Store.Events("DEMO", 0)
-	fired, err := m.Check(rule.EventMove, ticket.ID, Doing, manager)
+	fired, err := m.Check(rules.EventMove, ticket.ID, Doing, manager)
 	refused(t, err, "never")
 	if len(fired) != 1 || !fired[0].Blocked {
 		t.Fatalf("the check reports the blocking rule, got %+v", fired)
@@ -125,7 +125,7 @@ func TestBoardRulesLogAndSource(t *testing.T) {
 	if _, err := m.Comment(ticket.ID, strings.Repeat("said ", 50), manager); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Check(rule.EventMove, ticket.ID, Review, manager); err != nil {
+	if _, err := m.Check(rules.EventMove, ticket.ID, Review, manager); err != nil {
 		t.Fatalf("with no floor any Log reaches review: %v", err)
 	}
 
@@ -137,7 +137,7 @@ func TestBoardRulesLogAndSource(t *testing.T) {
 	if _, err := m.Evidence(ticket.ID, strings.Repeat("evidence ", 25), manager, 0); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.Check(rule.EventMove, ticket.ID, Review, manager); err != nil {
+	if _, err := m.Check(rules.EventMove, ticket.ID, Review, manager); err != nil {
 		t.Fatalf("200 characters of evidence reach review: %v", err)
 	}
 

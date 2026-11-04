@@ -12,9 +12,9 @@ import (
 type MentionOutcome string
 
 const (
-	MentionItem      MentionOutcome = MentionOutcome(tools.QuoteItem)
-	MentionNotFound  MentionOutcome = MentionOutcome(tools.QuoteNotFound)
-	MentionAmbiguous MentionOutcome = MentionOutcome(tools.QuoteAmbiguous)
+	MentionItem      MentionOutcome = MentionOutcome(registry.QuoteItem)
+	MentionNotFound  MentionOutcome = MentionOutcome(registry.QuoteNotFound)
+	MentionAmbiguous MentionOutcome = MentionOutcome(registry.QuoteAmbiguous)
 )
 
 func (MentionOutcome) enum() []string {
@@ -52,15 +52,15 @@ func (s *server) resolveMention(p MentionParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	found, err := tools.ResolveQuote(store, recorded, asked)
-	if errors.Is(err, tools.ErrQuoteNoID) {
+	found, err := registry.ResolveQuote(store, recorded, asked)
+	if errors.Is(err, registry.ErrQuoteNoID) {
 		return nil, &Refusal{Code: CodeBadParams, Message: err.Error()}
 	}
 	if err != nil {
 		return nil, err
 	}
 	resolved := MentionResolved{Outcome: MentionOutcome(found.Outcome), Ref: ref, Session: found.Session}
-	if found.Outcome == tools.QuoteItem {
+	if found.Outcome == registry.QuoteItem {
 		line, _, _ := strings.Cut(strings.TrimSpace(found.Words), "\n")
 		resolved.Ref, resolved.Item, resolved.Speaker, resolved.Line = found.Ref, cmp.Or(item, found.Event), found.Speaker, line
 	}

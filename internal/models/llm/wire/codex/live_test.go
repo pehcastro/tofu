@@ -19,23 +19,23 @@ func liveWire(t *testing.T) *Wire {
 			"on 2026-09-19 tofu usage read the codex 7d window at 100% with a reset at 2026-09-19T18:44:30Z, " +
 			"so a request before that reset answers with a quota rejection rather than a completion")
 	}
-	path, err := cred.Path()
+	path, err := accounts.Path()
 	if err != nil {
 		t.Fatalf("locating the credential store: %v", err)
 	}
-	store, err := cred.Open(path)
+	store, err := accounts.Open(path)
 	if err != nil {
 		t.Skipf("no credential store, run tofu login codex-sub: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	spec, err := cred.Lookup(string(cred.CodexSub))
+	spec, err := accounts.Lookup(string(accounts.CodexSub))
 	if err != nil {
 		t.Fatalf("looking up the codex spec: %v", err)
 	}
 
 	wire, err := New(Config{
 		Model:          cmp.Or(os.Getenv("TOFU_LIVE_CODEX_MODEL"), liveModel),
-		Token:          cred.NewManager(store, spec).Token,
+		Token:          accounts.NewManager(store, spec).Token,
 		InstallationID: "tofu-live-test",
 		SessionID:      "00000000-0000-4000-8000-000000000002",
 	})
@@ -49,7 +49,7 @@ func TestLiveCompletion(t *testing.T) {
 	wire := liveWire(t)
 	result, dump, err := wire.Ask(context.Background(), Request{
 		Instructions: "Answer in one word.",
-		Messages:     []llm.Message{{Role: llm.RoleUser, Content: "Reply with the single word: ok"}},
+		Messages:     []core.Message{{Role: core.RoleUser, Content: "Reply with the single word: ok"}},
 	})
 	t.Logf("request dump:\n%s", dump)
 	if err != nil {
@@ -67,7 +67,7 @@ func TestLiveCompletion(t *testing.T) {
 
 func TestLiveToolCallRoundTrip(t *testing.T) {
 	wire := liveWire(t)
-	tools := []llm.Tool{{
+	tools := []core.Tool{{
 		Name:        "probe",
 		Description: "Return the answer to a fixed question.",
 		Parameters: map[string]any{
@@ -76,7 +76,7 @@ func TestLiveToolCallRoundTrip(t *testing.T) {
 			"required":   []string{"question"},
 		},
 	}}
-	messages := []llm.Message{{Role: llm.RoleUser,
+	messages := []core.Message{{Role: core.RoleUser,
 		Content: "Call the probe tool once with question=\"colour\", then reply with its answer and nothing else."}}
 
 	first, dump, err := wire.Ask(context.Background(), Request{Tools: tools, Messages: messages})
@@ -91,8 +91,8 @@ func TestLiveToolCallRoundTrip(t *testing.T) {
 		first.ToolCalls[0].ID, first.ToolCalls[0].Name, first.ToolCalls[0].Arguments)
 
 	messages = append(messages,
-		llm.Message{Role: llm.RoleAssistant, Content: first.Content, ToolCalls: first.ToolCalls},
-		llm.Message{Role: llm.RoleTool, ToolCallID: first.ToolCalls[0].ID, Content: "chartreuse"},
+		core.Message{Role: core.RoleAssistant, Content: first.Content, ToolCalls: first.ToolCalls},
+		core.Message{Role: core.RoleTool, ToolCallID: first.ToolCalls[0].ID, Content: "chartreuse"},
 	)
 	second, secondDump, err := wire.Ask(context.Background(), Request{Tools: tools, Messages: messages})
 	t.Logf("second request dump:\n%s", secondDump)

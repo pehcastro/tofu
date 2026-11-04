@@ -12,7 +12,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/method"
-	"tofu/internal/librarian/rules"
+	rule "tofu/internal/librarian/rules"
 	"tofu/internal/project/boardy"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
@@ -210,7 +210,7 @@ func ShellSiftRule(point host.DoctorRule) host.DoctorRule {
 			err = method.UnwiredError{Choice: chosen, File: sifter.Methods.File}
 		}
 	}
-	var contradiction turn.RuleContradictsTheTableError
+	var contradiction loop.RuleContradictsTheTableError
 	var unwired method.UnwiredError
 	switch {
 	case errors.As(err, &contradiction) || errors.As(err, &unwired):

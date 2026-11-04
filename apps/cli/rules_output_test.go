@@ -51,7 +51,7 @@ func outputCases() []outputCase {
 
 func outputProject(t *testing.T) string {
 	t.Helper()
-	testkit.IsolateHome(t)
+	cli.IsolateHome(t)
 	home := os.Getenv("USERPROFILE")
 	project := filepath.Join(home, "project")
 	dash := string(rune(0x2014))

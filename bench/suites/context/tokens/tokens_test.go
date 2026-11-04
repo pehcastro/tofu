@@ -52,7 +52,7 @@ func TestGlobStarOnThePinnedTreeReturnsACappedList(t *testing.T) {
 		t.Fatalf("extracting %s: %v", PinnedCommit, err)
 	}
 	defer remove()
-	glob, err := tools.NewGlob(tree)
+	glob, err := registry.NewGlob(tree)
 	if err != nil {
 		t.Fatalf("building the tool: %v", err)
 	}

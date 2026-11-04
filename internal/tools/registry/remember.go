@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"cmp"
@@ -15,11 +15,11 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/judge/state"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
@@ -36,18 +36,18 @@ const (
 )
 
 type ScopeJudge struct {
-	Client *jev.Client
+	Client *core.Client
 	Set    question.Set
 	Ledger *ledger.Writer
 }
 
 type scopeJudgement struct {
 	row          ledger.Row
-	pick         memory.Scope
+	pick         entries.Scope
 	refusesLocal bool
 }
 
-func (j *ScopeJudge) judge(ctx context.Context, entry memory.Entry, project string) scopeJudgement {
+func (j *ScopeJudge) judge(ctx context.Context, entry entries.Entry, project string) scopeJudgement {
 	if j == nil {
 		return scopeJudgement{refusesLocal: true}
 	}
@@ -60,11 +60,11 @@ func (j *ScopeJudge) judge(ctx context.Context, entry memory.Entry, project stri
 	shadow := "the person's pick on the card is the label; a names_private yes refuses project local"
 	row := ledger.Row{Point: state.MemoryScopePoint, Questions: j.Set.Name, Version: j.Set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: builder, State: body,
 		Reason: &ledger.Reason{Question: state.MemoryNamesPrivateQuestion, Comparison: ">= its no", Mode: ledger.ModeShadow, ModeReason: &shadow}}
-	asked := make([]jev.Question, len(j.Set.Questions))
+	asked := make([]core.Question, len(j.Set.Questions))
 	for i, q := range j.Set.Questions {
 		asked[i] = q.ToJev()
 	}
-	decision, err := j.Client.Ask(ctx, jev.Request{State: json.RawMessage(body), Questions: asked})
+	decision, err := j.Client.Ask(ctx, core.Request{State: json.RawMessage(body), Questions: asked})
 	if err != nil {
 		failed := "jev could not answer, so project local is refused: " + err.Error()
 		row.Reason.ModeReason = &failed
@@ -74,7 +74,7 @@ func (j *ScopeJudge) judge(ctx context.Context, entry memory.Entry, project stri
 	private := decision.Answers[state.MemoryNamesPrivateQuestion].Noul
 	row.Reason.Value, row.Reason.Threshold = private, 1-private
 	judged := scopeJudgement{row: row, refusesLocal: state.RefusesProjectLocal(private, true)}
-	if picked, err := memory.ParseScope(state.MemoryScopeOf(decision.Answers[state.MemoryScopeQuestion].Choice)); err == nil && (picked != memory.ProjectLocal || !judged.refusesLocal) {
+	if picked, err := entries.ParseScope(state.MemoryScopeOf(decision.Answers[state.MemoryScopeQuestion].Choice)); err == nil && (picked != entries.ProjectLocal || !judged.refusesLocal) {
 		judged.pick = picked
 	}
 	return judged
@@ -96,7 +96,7 @@ func (j *ScopeJudge) label(row, pick string) error {
 	return j.Ledger.Backfill(row, ledger.Outcome{Kind: OutcomeKindMemoryScope, Detail: pick})
 }
 
-func (j *ScopeJudge) duplicate(ctx context.Context, candidate string, kept []memory.Entry, project string) (int, error) {
+func (j *ScopeJudge) duplicate(ctx context.Context, candidate string, kept []entries.Entry, project string) (int, error) {
 	if len(kept) == 0 {
 		return -1, nil
 	}
@@ -129,10 +129,10 @@ func (j *ScopeJudge) duplicate(ctx context.Context, candidate string, kept []mem
 		Existing  []existing `json:"existing"`
 	}{Candidate: candidate}
 	rubric := asked.ToJev()
-	var each []jev.Question
+	var each []core.Question
 	for i, e := range kept {
 		asking.Existing = append(asking.Existing, existing{ID: e.ID, Text: e.Text})
-		each = append(each, jev.Question{ID: memorySameName + "_" + strconv.Itoa(i), Kind: jev.QuestionNoul, Instructions: rubric.Instructions + " The existing rule is existing[" + strconv.Itoa(i) + "].", True: rubric.True, False: rubric.False})
+		each = append(each, core.Question{ID: memorySameName + "_" + strconv.Itoa(i), Kind: core.QuestionNoul, Instructions: rubric.Instructions + " The existing rule is existing[" + strconv.Itoa(i) + "].", True: rubric.True, False: rubric.False})
 	}
 	body, err := json.Marshal(asking)
 	if err != nil {
@@ -140,7 +140,7 @@ func (j *ScopeJudge) duplicate(ctx context.Context, candidate string, kept []mem
 	}
 	row := ledger.Row{Point: set.Name, Questions: set.Name, Version: set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: memorySameBuilder, State: body, Verdict: ledger.VerdictAllow,
 		Reason: &ledger.Reason{Comparison: ">= " + fields[at].Value, Threshold: threshold, Mode: ledger.ModeEnforced}}
-	decision, err := j.Client.Ask(ctx, jev.Request{State: json.RawMessage(body), Questions: each})
+	decision, err := j.Client.Ask(ctx, core.Request{State: json.RawMessage(body), Questions: each})
 	if err != nil {
 		failed := "jev could not answer, so the person is asked: " + err.Error()
 		row.Verdict, row.Reason.ModeReason = ledger.VerdictAsk, &failed
@@ -164,11 +164,11 @@ func (j *ScopeJudge) duplicate(ctx context.Context, candidate string, kept []mem
 type MemoryOffer struct {
 	Statement string
 	Said      string
-	Scope     memory.Scope
-	Scopes    []memory.Scope
+	Scope     entries.Scope
+	Scopes    []entries.Scope
 }
 
-type MemoryPick func(ctx context.Context, offer MemoryOffer) (memory.Scope, error)
+type MemoryPick func(ctx context.Context, offer MemoryOffer) (entries.Scope, error)
 
 type memoryPickKey struct{}
 
@@ -178,8 +178,8 @@ func WithMemoryPick(ctx context.Context, pick MemoryPick) context.Context {
 
 type MemoryKept struct {
 	Statement string
-	Offered   memory.Scope
-	Kept      memory.Scope
+	Offered   entries.Scope
+	Kept      entries.Scope
 }
 
 type memoryKeptKey struct{}
@@ -192,16 +192,16 @@ type Remember struct {
 	Store   *session.Store
 	Session string
 	Project string
-	Inbox   *turn.Inbox
+	Inbox   *loop.Inbox
 	Auto    func() bool
 	Judge   *ScopeJudge
 }
 
-func (Remember) Name() string { return turn.RememberToolName }
+func (Remember) Name() string { return loop.RememberToolName }
 
 func (Remember) Definition() llm.Tool {
 	return llm.Tool{
-		Name: turn.RememberToolName,
+		Name: loop.RememberToolName,
 		Description: "offers the person to keep one short rule for every later session. call it only for a standing rule the person stated, such as a correction or how things are always done here; never to save a whole message, a task, or a summary. " +
 			"said must be their own words, copied exactly from a message they typed in this conversation, or fragments of one such message joined by ... in the order typed; anything else is refused. " +
 			"statement is the rule itself and nothing else: one line, at most " + strconv.Itoa(konst.MemoryRuleWordsMost) + " words, imperative or declarative, naming no one: no name, no the person, the user, he or she, such as: " +
@@ -213,8 +213,8 @@ func (Remember) Definition() llm.Tool {
 			"properties": map[string]any{
 				"statement": map[string]any{"type": "string", "description": "the rule itself, one line of at most " + strconv.Itoa(konst.MemoryRuleWordsMost) + " words, naming no one"},
 				"said":      map[string]any{"type": "string", "description": "the person's exact words this comes from; fragments of one message may be joined by ... in the order they were typed"},
-				"kind":      map[string]any{"type": "string", "enum": []string{string(memory.KindPerson), string(memory.KindProject), string(memory.KindReference)}},
-				"scope":     map[string]any{"type": "string", "enum": []string{string(memory.UserLocal), string(memory.ProjectLocal), string(memory.Project), string(memory.Global)}},
+				"kind":      map[string]any{"type": "string", "enum": []string{string(entries.KindPerson), string(entries.KindProject), string(entries.KindReference)}},
+				"scope":     map[string]any{"type": "string", "enum": []string{string(entries.UserLocal), string(entries.ProjectLocal), string(entries.Project), string(entries.Global)}},
 				"replaces":  map[string]any{"type": "string", "description": "the id of the entry this one takes the place of, as a refusal named it"},
 				"keep_both": map[string]any{"type": "boolean", "description": "keep this entry beside the one a refusal named, because the two differ"},
 			},
@@ -242,17 +242,17 @@ func quotes(message, quote string) bool {
 
 func (r Remember) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
-		Statement string       `json:"statement"`
-		Said      string       `json:"said"`
-		Kind      memory.Kind  `json:"kind"`
-		Scope     memory.Scope `json:"scope"`
-		Replaces  string       `json:"replaces"`
-		KeepBoth  bool         `json:"keep_both"`
+		Statement string        `json:"statement"`
+		Said      string        `json:"said"`
+		Kind      entries.Kind  `json:"kind"`
+		Scope     entries.Scope `json:"scope"`
+		Replaces  string        `json:"replaces"`
+		KeepBoth  bool          `json:"keep_both"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("remember: arguments are not the expected shape: %w", err)
 	}
-	rule, err := memory.Rule(args.Statement)
+	rule, err := entries.Rule(args.Statement)
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("remember: %w", err)
 	}
@@ -260,19 +260,19 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (contract.Result
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("remember: %w", err)
 	}
-	if !slices.ContainsFunc(typed, func(said turn.PersonSaid) bool { return quotes(said.Words, args.Said) }) {
+	if !slices.ContainsFunc(typed, func(said loop.PersonSaid) bool { return quotes(said.Words, args.Said) }) {
 		return contract.Result{}, fmt.Errorf("remember: %q is not in any message the person typed in this conversation, whole or as fragments of one message joined by ... in their order; copy their words exactly, or do not offer it", args.Said)
 	}
-	entry := memory.Entry{Scope: cmp.Or(args.Scope, args.Kind.Scope()), Kind: args.Kind, Text: rule, Said: args.Said, Session: r.Session, At: time.Now(), By: memory.ByLead}
+	entry := entries.Entry{Scope: cmp.Or(args.Scope, args.Kind.Scope()), Kind: args.Kind, Text: rule, Said: args.Said, Session: r.Session, At: time.Now(), By: entries.ByLead}
 	if family, err := r.Store.Identity(r.Session); err == nil {
 		entry.Session = family.Family
 	}
-	shelves, err := memory.Open(r.Project)
+	shelves, err := entries.Open(r.Project)
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("remember: %w", err)
 	}
 	kept := shelves.All()
-	replaced := slices.IndexFunc(kept, func(e memory.Entry) bool { return args.Replaces != "" && e.ID == args.Replaces })
+	replaced := slices.IndexFunc(kept, func(e entries.Entry) bool { return args.Replaces != "" && e.ID == args.Replaces })
 	unsure := false
 	switch {
 	case args.Replaces != "" && replaced < 0:
@@ -291,8 +291,8 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (contract.Result
 	if replaced >= 0 {
 		offered = entry.Scope
 	}
-	refused := entry.Scope == memory.ProjectLocal && judged.refusesLocal
-	asks := !r.Auto() || entry.Scope == memory.ProjectLocal || unsure
+	refused := entry.Scope == entries.ProjectLocal && judged.refusesLocal
+	asks := !r.Auto() || entry.Scope == entries.ProjectLocal || unsure
 	verdict := ledger.VerdictAllow
 	switch {
 	case refused:
@@ -311,7 +311,7 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (contract.Result
 	case asks && pick == nil:
 		return contract.Result{Content: "no person is here to answer, so nothing was kept"}, nil
 	case asks:
-		scopes := []memory.Scope{memory.Global, memory.UserLocal, memory.Project, memory.ProjectLocal}
+		scopes := []entries.Scope{entries.Global, entries.UserLocal, entries.Project, entries.ProjectLocal}
 		if judged.refusesLocal {
 			scopes = scopes[:3]
 		}

@@ -7,7 +7,7 @@ import (
 	"tofu/internal/store/session/drain"
 )
 
-func PricedByProvider(registry models.Registry) (func(slug string) drain.Weights, error) {
+func PricedByProvider(registry catalog.Registry) (func(slug string) drain.Weights, error) {
 	library, err := ModelLibrary("")
 	weights := drain.WeightsFrom(registry)
 	return func(slug string) drain.Weights {

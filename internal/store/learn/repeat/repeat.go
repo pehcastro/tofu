@@ -12,7 +12,7 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/store/learn/words"
@@ -68,9 +68,9 @@ type Found struct {
 }
 
 type Judge struct {
-	client     *jev.Client
+	client     *core.Client
 	set        question.Set
-	standing   jev.Question
+	standing   core.Question
 	rubric     Rubric
 	keptRubric Rubric
 	thresholds Thresholds
@@ -102,7 +102,7 @@ func New(project, log string) (*Judge, error) {
 	if thresholds.Kept, err = thresholdIn(questions.Files(), keptName+"_at:"); err != nil {
 		return nil, err
 	}
-	client, err := classifier.Open(project, jev.ReadKeyring(), 1)
+	client, err := classifiers.Open(project, core.ReadKeyring(), 1)
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +182,7 @@ func (j *Judge) Repeats(ctx context.Context, said string, earlier []Earlier, kep
 		if err != nil {
 			return none, err
 		}
-		if len(body) <= caps.MaxRequestBytes && jev.EstimateTokens(len(body)) <= caps.MaxRequestTokens {
+		if len(body) <= caps.MaxRequestBytes && core.EstimateTokens(len(body)) <= caps.MaxRequestTokens {
 			break
 		}
 		if len(state.Earlier) > 0 {
@@ -250,13 +250,13 @@ func KeptNear(said string, kept []Kept, sharedStemsAtLeast int) []int {
 	return near
 }
 
-func (j *Judge) request(state State) jev.Request {
-	questions := []jev.Question{j.standing}
+func (j *Judge) request(state State) core.Request {
+	questions := []core.Question{j.standing}
 	for i := range state.Earlier {
 		earlier := "earlier[" + strconv.Itoa(i) + "]"
-		questions = append(questions, jev.Question{
+		questions = append(questions, core.Question{
 			ID:           repeatsName + "_" + strconv.Itoa(i),
-			Kind:         jev.QuestionNoul,
+			Kind:         core.QuestionNoul,
 			Instructions: "Apply the rubric in the state to said and " + earlier + ", and to no other earlier message.",
 			True:         "rubric.true holds for said and " + earlier + ".",
 			False:        "rubric.false holds for said and " + earlier + ".",
@@ -264,15 +264,15 @@ func (j *Judge) request(state State) jev.Request {
 	}
 	for i := range state.Kept {
 		kept := "kept[" + strconv.Itoa(i) + "]"
-		questions = append(questions, jev.Question{
+		questions = append(questions, core.Question{
 			ID:           keptName + "_" + strconv.Itoa(i),
-			Kind:         jev.QuestionNoul,
+			Kind:         core.QuestionNoul,
 			Instructions: "Apply kept_rubric in the state to said and " + kept + ", and to no other kept rule.",
 			True:         "kept_rubric.true holds for said and " + kept + ".",
 			False:        "kept_rubric.false holds for said and " + kept + ".",
 		})
 	}
-	return jev.Request{State: state, Questions: questions}
+	return core.Request{State: state, Questions: questions}
 }
 
 func cut(text string, most int) string {

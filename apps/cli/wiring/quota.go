@@ -36,7 +36,7 @@ func WindowPercent(w host.WindowReport) string {
 	if !w.Reported {
 		return "use not reported"
 	}
-	return widget.Percent(w.Used)
+	return render.Percent(w.Used)
 }
 
 func CredentialReports(results []PollResult, now time.Time) []host.CredentialReport {
@@ -108,7 +108,7 @@ func quotaState(result PollResult, now time.Time) string {
 }
 
 func PollCredentials(ctx context.Context, now func() time.Time, kept *quota.Poller) ([]PollResult, error) {
-	path, err := cred.Path()
+	path, err := accounts.Path()
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +116,7 @@ func PollCredentials(ctx context.Context, now func() time.Time, kept *quota.Poll
 	if err != nil || !present {
 		return nil, err
 	}
-	store, err := cred.Open(path)
+	store, err := accounts.Open(path)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,7 @@ func PollCredentials(ctx context.Context, now func() time.Time, kept *quota.Poll
 	return pollStore(ctx, store, now, kept)
 }
 
-func pollStore(ctx context.Context, store *cred.Store, now func() time.Time, kept *quota.Poller) ([]PollResult, error) {
+func pollStore(ctx context.Context, store *accounts.Store, now func() time.Time, kept *quota.Poller) ([]PollResult, error) {
 	rows, err := store.List()
 	if err != nil {
 		return nil, err
@@ -135,7 +135,7 @@ func pollStore(ctx context.Context, store *cred.Store, now func() time.Time, kep
 	return PollRows(ctx, store, rows, now, nil)
 }
 
-func PollRows(ctx context.Context, store *cred.Store, rows []cred.Row, now func() time.Time, urls map[quota.Provider]string) ([]PollResult, error) {
+func PollRows(ctx context.Context, store *accounts.Store, rows []accounts.Row, now func() time.Time, urls map[quota.Provider]string) ([]PollResult, error) {
 	readings, recordErr := sys.QuotaDir()
 	var recording sync.Mutex
 	record := func(reading quota.Reading) error {
@@ -158,7 +158,7 @@ func PollRows(ctx context.Context, store *cred.Store, rows []cred.Row, now func(
 	return results, err
 }
 
-func PollRowsOn(ctx context.Context, store *cred.Store, rows []cred.Row, now func() time.Time, urls map[quota.Provider]string, poller *quota.Poller) ([]PollResult, error) {
+func PollRowsOn(ctx context.Context, store *accounts.Store, rows []accounts.Row, now func() time.Time, urls map[quota.Provider]string, poller *quota.Poller) ([]PollResult, error) {
 	results := make([]PollResult, len(rows))
 	versions, _ := SubFingerprint(".")
 	var polling sync.WaitGroup
@@ -173,17 +173,17 @@ func PollRowsOn(ctx context.Context, store *cred.Store, rows []cred.Row, now fun
 		if results[i].Unusable = row.Unusable(now()); results[i].Unusable != "" {
 			continue
 		}
-		spec, err := cred.Lookup(string(row.Credential.Provider))
+		spec, err := accounts.Lookup(string(row.Credential.Provider))
 		if err != nil {
 			return nil, err
 		}
 		polling.Go(func() {
-			results[i].Err = sys.Crashed(".", safe.Call(nil, "quota poll", func() (err error) {
+			results[i].Err = sys.Crashed(".", recover.Call(nil, "quota poll", func() (err error) {
 				results[i].Report, err = poller.Poll(ctx, quota.Account{
 					Provider:      provider,
 					AccountID:     row.Credential.Identity.AccountID,
 					Row:           row.ID,
-					Credential:    cred.NewAccountManager(store, spec, row.ID),
+					Credential:    accounts.NewAccountManager(store, spec, row.ID),
 					ClientVersion: ClientVersion(versions, row.Credential.Provider),
 				})
 				return err

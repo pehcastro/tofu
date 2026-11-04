@@ -63,9 +63,9 @@ func TestServeStopsTheLeadUnsteersRunsCommandsCompactsAndPagesHistory(t *testing
 	compacted := Compaction{Into: "turn-compacted", Results: 2, TokensBefore: 900, TokensAfter: 300}
 	resumed := session.Header{ID: session.NewEventID(), At: time.Now()}
 	carry := func(handle string) (Carry, error) {
-		return Carry{Session: resumed.ID, Tasks: []string{"first task", "second task"}, Messages: []llm.Message{
-			{Role: llm.RoleUser, Content: "first task"}, {Role: llm.RoleAssistant, Content: "first answer"},
-			{Role: llm.RoleUser, Content: "second task"}, {Role: llm.RoleAssistant, Content: "second answer"},
+		return Carry{Session: resumed.ID, Tasks: []string{"first task", "second task"}, Messages: []core.Message{
+			{Role: core.RoleUser, Content: "first task"}, {Role: core.RoleAssistant, Content: "first answer"},
+			{Role: core.RoleUser, Content: "second task"}, {Role: core.RoleAssistant, Content: "second answer"},
 		}}, nil
 	}
 	c, live, project := serving(t, play, ServeConfig{Ledger: read, Run: run, Carry: carry, Fork: func(lead *Host, _ HandFork) (Compacted, error) {

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"tofu/internal/agent/subagents"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
 )
 
@@ -19,8 +19,8 @@ type Judged struct {
 	Cost       float64
 }
 
-func Ask(ctx context.Context, client *jev.Client, set question.Set, state subagent.AskState) (Judged, error) {
-	questions := make([]jev.Question, len(set.Questions))
+func Ask(ctx context.Context, client *core.Client, set question.Set, state subagents.AskState) (Judged, error) {
+	questions := make([]core.Question, len(set.Questions))
 	for i, q := range set.Questions {
 		questions[i] = q.ToJev()
 	}
@@ -28,21 +28,21 @@ func Ask(ctx context.Context, client *jev.Client, set question.Set, state subage
 	if err != nil {
 		return Judged{}, err
 	}
-	decision, err := client.Ask(ctx, jev.Request{State: json.RawMessage(raw), Questions: questions})
+	decision, err := client.Ask(ctx, core.Request{State: json.RawMessage(raw), Questions: questions})
 	if err != nil {
 		return Judged{}, err
 	}
 	return Judged{
-		Action:     decision.Answers[subagent.ActionQuestion].Choice,
-		Determined: decision.Answers[subagent.DeterminedQuestion].Noul,
+		Action:     decision.Answers[subagents.ActionQuestion].Choice,
+		Determined: decision.Answers[subagents.DeterminedQuestion].Noul,
 		Latency:    decision.Latency,
 		Cost:       decision.Usage.Cost,
 	}, nil
 }
 
-func Free(state subagent.AskState) string {
+func Free(state subagents.AskState) string {
 	if !state.InOwns {
-		return subagent.ActionAskNow
+		return subagents.ActionAskNow
 	}
-	return subagent.ActionProceed
+	return subagents.ActionProceed
 }

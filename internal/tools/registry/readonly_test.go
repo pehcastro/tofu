@@ -1,4 +1,4 @@
-package tools_test
+package registry_test
 
 import (
 	"go/ast"
@@ -54,8 +54,8 @@ func TestTheTwoListsOfReadOnlyToolsSayTheSameThing(t *testing.T) {
 	batched := caseNames(t, filepath.Join("..", "..", "agent", "loop", "tool.go"), "readOnly")
 	cached := caseNames(t, "memo.go", "SideEffectFree")
 	batchedAndRerunBecauseTheAnswerMovesWithoutAWrite := []string{"test", "typecheck", "subagents"}
-	t.Logf("turn.readOnly batches %v", batched)
-	t.Logf("tools.SideEffectFree caches %v", cached)
+	t.Logf("loop.readOnly batches %v", batched)
+	t.Logf("registry.SideEffectFree caches %v", cached)
 
 	for _, name := range batchedAndRerunBecauseTheAnswerMovesWithoutAWrite {
 		if slices.Contains(cached, name) {
@@ -67,11 +67,11 @@ func TestTheTwoListsOfReadOnlyToolsSayTheSameThing(t *testing.T) {
 			"turn/tool.go readOnly: %v\ntools/memo.go SideEffectFree plus the rerun list: %v", batched, accounted)
 	}
 	for _, name := range cached {
-		if !tools.SideEffectFree(name) {
+		if !registry.SideEffectFree(name) {
 			t.Fatalf("%s is in the switch but SideEffectFree refuses it, so this test is reading the wrong function", name)
 		}
 	}
-	if tools.SideEffectFree("write") || tools.SideEffectFree("bash") {
+	if registry.SideEffectFree("write") || registry.SideEffectFree("bash") {
 		t.Fatal("a tool that changes the tree reads as side effect free")
 	}
 }

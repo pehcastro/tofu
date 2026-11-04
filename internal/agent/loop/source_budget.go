@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -43,7 +43,7 @@ type SourceBudgetError struct {
 	Spent   int
 	Spawn   []string
 	Reason  BudgetRefusal
-	Step    subagent.ShellStep
+	Step    subagents.ShellStep
 	Scripts []ScriptSpend
 }
 
@@ -81,7 +81,7 @@ func (e SourceBudgetError) refusedShellWrite(why, spawn string) string {
 }
 
 func sourceLanguage(path string) string {
-	language := rule.LanguageOf(path)
+	language := rules.LanguageOf(path)
 	if language == "markdown" || language == "yaml" {
 		return ""
 	}
@@ -95,17 +95,17 @@ func linesIn(text string) int {
 	return strings.Count(strings.TrimSuffix(text, "\n"), "\n") + 1
 }
 
-func shellWriter(step subagent.ShellStep) bool {
+func shellWriter(step subagents.ShellStep) bool {
 	return slices.Contains([]string{"", "echo", "printf", "cat", "tee", "sed", "perl", "cp", "mv"}, step.Program)
 }
 
 func shellRefusal(command string) (SourceBudgetError, bool) {
-	steps := subagent.ShellSteps(command)
-	if _, err := subagent.ShellWrites(command); err != nil {
-		var unreadable subagent.UnparseablePathError
+	steps := subagents.ShellSteps(command)
+	if _, err := subagents.ShellWrites(command); err != nil {
+		var unreadable subagents.UnparseablePathError
 		errors.As(err, &unreadable)
 		refusal := SourceBudgetError{Path: unreadable.Path, Reason: RefusedUnreadablePath}
-		if at := slices.IndexFunc(steps, func(step subagent.ShellStep) bool { return slices.Contains(step.Changes, unreadable.Path) }); at >= 0 {
+		if at := slices.IndexFunc(steps, func(step subagents.ShellStep) bool { return slices.Contains(step.Changes, unreadable.Path) }); at >= 0 {
 			refusal.Step = steps[at]
 		}
 		return refusal, true
@@ -118,7 +118,7 @@ func shellRefusal(command string) (SourceBudgetError, bool) {
 	return SourceBudgetError{}, false
 }
 
-func substitution(step subagent.ShellStep) (string, string, []string, bool) {
+func substitution(step subagents.ShellStep) (string, string, []string, bool) {
 	if step.Program != "sed" && step.Program != "perl" {
 		return "", "", nil, false
 	}
@@ -136,7 +136,7 @@ func substitution(step subagent.ShellStep) (string, string, []string, bool) {
 	return "", "", nil, false
 }
 
-func sameChangeByTool(step subagent.ShellStep, path string) string {
+func sameChangeByTool(step subagents.ShellStep, path string) string {
 	if !shellWriter(step) {
 		return "that command with every file it writes named literally, or edit and write calls for source"
 	}
@@ -170,12 +170,12 @@ func scriptRunner(name string) bool {
 	return scriptFile(name) || slices.Contains([]string{"python", "py", "pypy", "node", "bun", "deno", "tsx", "ts-node", "bash", "sh", "zsh", "dash", "ksh", "fish", "ruby", "perl", "php", "lua", "pwsh", "powershell", "awk", "gawk"}, strings.TrimRight(name, "0123456789."))
 }
 
-func runsScript(step subagent.ShellStep) bool {
+func runsScript(step subagents.ShellStep) bool {
 	launched := slices.Contains([]string{"env", "xargs", "timeout", "nice", "time", "uv", "uvx", "npx", "bunx"}, step.Program) && slices.ContainsFunc(step.Args, scriptRunner)
 	return scriptRunner(step.Program) || launched || step.Program == "go" && len(step.Args) > 0 && step.Args[0] == "run"
 }
 
-func scriptsOutsideSource(r contract.Root, steps []subagent.ShellStep) bool {
+func scriptsOutsideSource(r contract.Root, steps []subagents.ShellStep) bool {
 	for _, step := range steps {
 		if !runsScript(step) {
 			continue
@@ -201,7 +201,7 @@ func scriptsOutsideSource(r contract.Root, steps []subagent.ShellStep) bool {
 	return true
 }
 
-func generatedFiles(steps []subagent.ShellStep) []string {
+func generatedFiles(steps []subagents.ShellStep) []string {
 	var generated []string
 	for _, step := range steps {
 		if !shellWriter(step) {
@@ -240,12 +240,12 @@ func changedLines(before, after string) int {
 
 type wroteBySubAgent struct {
 	tool   contract.Tool
-	writes *subagent.Writes
+	writes *subagents.Writes
 }
 
 func (t wroteBySubAgent) Name() string { return t.tool.Name() }
 
-func (t wroteBySubAgent) Definition() llm.Tool { return t.tool.Definition() }
+func (t wroteBySubAgent) Definition() core.Tool { return t.tool.Definition() }
 
 func (t wroteBySubAgent) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	paths, _ := TargetPaths(t.Name(), raw)
@@ -300,10 +300,10 @@ func changedSince(before, after map[string]string, counted func(file string) boo
 type sourceBudget struct {
 	spent   int
 	scripts []ScriptSpend
-	enabled []subagent.Definition
+	enabled []subagents.Definition
 	files   *WriteTool
-	writes  *subagent.Writes
-	roster  *subagent.Roster
+	writes  *subagents.Writes
+	roster  *subagents.Roster
 }
 
 func (b *sourceBudget) spendScript(command string, lines int) string {
@@ -351,7 +351,7 @@ func (b *sourceBudget) linesChanged(tool string, args budgetArgs) int {
 func wholeFilePrinters(command string) ([]string, bool) {
 	var args []string
 	printing := false
-	for _, step := range subagent.ShellSteps(command) {
+	for _, step := range subagents.ShellSteps(command) {
 		switch {
 		case step.Program == "cat":
 		case step.Program == "rtk" && len(step.Args) > 0 && step.Args[0] == "read":
@@ -398,8 +398,8 @@ type budgetedTool struct {
 	budget *sourceBudget
 }
 
-func WithSourceBudget(tools []contract.Tool, defined []subagent.Definition) []contract.Tool {
-	budget := &sourceBudget{enabled: enabledSubAgents(defined), writes: &subagent.Writes{}}
+func WithSourceBudget(tools []contract.Tool, defined []subagents.Definition) []contract.Tool {
+	budget := &sourceBudget{enabled: enabledSubAgents(defined), writes: &subagents.Writes{}}
 	wrapped := slices.Clone(tools)
 	for i, tool := range wrapped {
 		if spawner, spawns := tool.(*SpawnTool); spawns {
@@ -421,7 +421,7 @@ func WithSourceBudget(tools []contract.Tool, defined []subagent.Definition) []co
 
 func (t budgetedTool) Name() string { return t.tool.Name() }
 
-func (t budgetedTool) Definition() llm.Tool {
+func (t budgetedTool) Definition() core.Tool {
 	definition := t.tool.Definition()
 	if definition.Name == "edit" {
 		definition.Description += fmt.Sprintf(". your source budget as the orchestrator is %d changed source lines a turn, in any directory", konst.OrchestratorSourceLinesPerTurn)
@@ -447,7 +447,7 @@ func (t budgetedTool) runShell(ctx context.Context, raw json.RawMessage, command
 	if refusal, refused := shellRefusal(command); refused {
 		return contract.Result{}, t.refuse(refusal)
 	}
-	steps := subagent.ShellSteps(command)
+	steps := subagents.ShellSteps(command)
 	if !slices.ContainsFunc(steps, runsScript) || t.budget.files == nil {
 		result, err := t.tool.Run(ctx, raw)
 		if err == nil {
@@ -466,7 +466,7 @@ func (t budgetedTool) runShell(ctx context.Context, raw json.RawMessage, command
 	held = append(held, t.budget.heldBySubAgents()...)
 	uncounted := append(generatedFiles(steps), t.budget.writtenBySubAgents(t.budget.writes.End(mark))...)
 	result.Content += t.budget.spendScript(command, changedSince(before, after, func(file string) bool {
-		owned, _ := subagent.Matches(file, held)
+		owned, _ := subagents.Matches(file, held)
 		return !owned && !slices.Contains(uncounted, file)
 	}))
 	return result, err

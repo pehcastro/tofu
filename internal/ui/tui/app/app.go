@@ -1,4 +1,4 @@
-package tui
+package app
 
 import (
 	"bytes"
@@ -26,7 +26,7 @@ import (
 	"tofu/internal/konst"
 	library "tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/platform/recover"
+	safe "tofu/internal/platform/recover"
 	isession "tofu/internal/store/session"
 	isettings "tofu/internal/store/settings"
 	"tofu/internal/sys"
@@ -132,7 +132,7 @@ type Wire struct {
 	Name     string
 	Model    string
 	Provider string
-	Efforts  []llm.Effort
+	Efforts  []core.Effort
 }
 
 type Options struct {
@@ -252,7 +252,7 @@ type App struct {
 	bound          string
 	configSeen     host.ConfigFiles
 	chosen         resolvedModel
-	effort         llm.Effort
+	effort         core.Effort
 	heldPick       Pick
 	ownPick        Pick
 	pickWatching   bool

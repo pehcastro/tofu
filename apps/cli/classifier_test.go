@@ -49,7 +49,7 @@ func TestEachBindingOpensItsOwnWireWithItsOwnClassifierKey(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := models.BindRole(sys.StateDir(project), models.RoleClassifier, bound.slug); err != nil {
+			if err := catalog.BindRole(sys.StateDir(project), catalog.RoleClassifier, bound.slug); err != nil {
 				t.Fatal(err)
 			}
 
@@ -60,9 +60,9 @@ func TestEachBindingOpensItsOwnWireWithItsOwnClassifierKey(t *testing.T) {
 			if name := client.Caps().Name; name != bound.wire {
 				t.Errorf("the bound %s opened the %s wire", bound.slug, name)
 			}
-			_, _ = client.Ask(context.Background(), jev.Request{
+			_, _ = client.Ask(context.Background(), core.Request{
 				State:     map[string]string{"check": "which wire"},
-				Questions: []jev.Question{{ID: "reachable", Kind: jev.QuestionNoul, Instructions: "?", True: "t", False: "f"}},
+				Questions: []core.Question{{ID: "reachable", Kind: core.QuestionNoul, Instructions: "?", True: "t", False: "f"}},
 			})
 			request := <-heard
 			if request.authorization != "Bearer "+keys[bound.key] {
@@ -72,7 +72,7 @@ func TestEachBindingOpensItsOwnWireWithItsOwnClassifierKey(t *testing.T) {
 				t.Errorf("the request named another model than %s: %s", bound.model, request.body)
 			}
 
-			set := wiring.Battery{SetName: "stop_check", QuestionsVersion: 1, Kinds: map[string]question.Kind{"work_remains": question.KindNoul}}
+			set := wiring.Battery{SetName: "stop_check", QuestionsVersion: 1, Kinds: map[string]questions.Kind{"work_remains": questions.KindNoul}}
 			row, err := wiring.AppendRow(map[string]string{"task": "write the note"}, set, wiring.RowInput{})
 			if err != nil {
 				t.Fatal(err)

@@ -1,4 +1,4 @@
-package cli
+package page
 
 import (
 	"strconv"
@@ -102,7 +102,7 @@ func (p Page) Title(subject string, facts []string, v Verdict) []string {
 		withFacts += p.Label(detailSeparator + detail)
 	}
 	beside := func(left string) (string, bool) {
-		room := p.Width - widget.Cells(left) - widget.Cells(right)
+		room := p.Width - render.Cells(left) - render.Cells(right)
 		return left + strings.Repeat(" ", max(room, 0)) + right, room >= len(Gap)
 	}
 	if right == "" {
@@ -121,22 +121,22 @@ func (p Page) Section(name string, v Verdict) string {
 	if v.Mark == None {
 		return p.Subject(name)
 	}
-	return widget.Pad(p.Subject(name), max(nameCells, widget.Cells(name)+len(Gap))) + p.verdict(v)
+	return render.Pad(p.Subject(name), max(nameCells, render.Cells(name)+len(Gap))) + p.verdict(v)
 }
 
 func (p Page) Status(name string, v Verdict) string {
-	return indent + widget.Pad(p.Label(name), max(nameCells-len(indent), widget.Cells(name)+len(Gap))) + p.verdict(v)
+	return indent + render.Pad(p.Label(name), max(nameCells-len(indent), render.Cells(name)+len(Gap))) + p.verdict(v)
 }
 
 func (p Page) Facts(facts []Fact) []string {
 	column := factLabelCells
 	for _, fact := range facts {
-		column = max(column, widget.Cells(fact.Label)+len(Gap))
+		column = max(column, render.Cells(fact.Label)+len(Gap))
 	}
 	var lines []string
 	for _, fact := range facts {
 		if fact.Text != "" {
-			lines = append(lines, widget.Pad(p.Label(fact.Label), column)+fact.Text)
+			lines = append(lines, render.Pad(p.Label(fact.Label), column)+fact.Text)
 		}
 	}
 	return lines
@@ -144,11 +144,11 @@ func (p Page) Facts(facts []Fact) []string {
 
 func (p Page) Card(head string, v Verdict, body []string) []string {
 	width := p.Width - len(indent)
-	fill := width - widget.Cells(cardTop) - widget.Cells(head) - 1
+	fill := width - render.Cells(cardTop) - render.Cells(head) - 1
 	right := ""
 	if v.Mark != None {
 		right = " " + p.verdict(v)
-		fill -= widget.Cells(right)
+		fill -= render.Cells(right)
 	}
 	lines := []string{indent + p.rule(cardTop) + head + " " + p.rule(strings.Repeat(cardRule, max(fill, 1))) + right}
 	for _, line := range body {
@@ -168,8 +168,8 @@ func (p Page) Bar(fraction float64) string {
 		colour = look.Amber
 	}
 	filled := min(max(int(fraction*konst.MeterBarWidthChars+0.5), 0), konst.MeterBarWidthChars)
-	return p.paint(look.Style(colour), widget.Bar(1, filled)) + p.rule(widget.Bar(0, konst.MeterBarWidthChars-filled)) +
-		" " + widget.Lead(widget.Percent(fraction), len("100%"))
+	return p.paint(look.Style(colour), render.Bar(1, filled)) + p.rule(render.Bar(0, konst.MeterBarWidthChars-filled)) +
+		" " + render.Lead(render.Percent(fraction), len("100%"))
 }
 
 func (p Page) Rows(rows []Row) []string {
@@ -179,7 +179,7 @@ func (p Page) Rows(rows []Row) []string {
 			if i == len(widths) {
 				widths = append(widths, 0)
 			}
-			widths[i] = max(widths[i], widget.Cells(cell))
+			widths[i] = max(widths[i], render.Cells(cell))
 		}
 	}
 	var lines []string
@@ -189,7 +189,7 @@ func (p Page) Rows(rows []Row) []string {
 			if i > 0 {
 				line += Gap
 			}
-			line += widget.Pad(cell, widths[i])
+			line += render.Pad(cell, widths[i])
 		}
 		switch {
 		case row.Hint != "":

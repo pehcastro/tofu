@@ -1,4 +1,4 @@
-package cli
+package page
 
 import (
 	"bytes"

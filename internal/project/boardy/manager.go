@@ -48,7 +48,7 @@ func (m Managed) Assign(id, assignee, actor string) (Ticket, error) {
 }
 
 func (m Managed) assign(board Board, ticket Ticket, assignee, actor string, depth int) (Ticket, error) {
-	s := m.subjectOf(rule.HookTicketAssign, board.Key, ticket, ticket.Status, actor, depth)
+	s := m.subjectOf(rules.HookTicketAssign, board.Key, ticket, ticket.Status, actor, depth)
 	if err := m.gate(&s); err != nil {
 		return ticket, err
 	}
@@ -126,7 +126,7 @@ func (m Managed) setFields(id, text, actor string, fields []string, change func(
 }
 
 func (m Managed) gateSet(key string, ticket Ticket, fields []string, actor string) (subject, error) {
-	s := m.subjectOf(rule.HookTicketSet, key, ticket, ticket.Status, actor, 0)
+	s := m.subjectOf(rules.HookTicketSet, key, ticket, ticket.Status, actor, 0)
 	s.fields = fields
 	return s, m.gate(&s)
 }

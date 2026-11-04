@@ -21,15 +21,15 @@ import (
 
 const (
 	runGatePoint       = questions.ToolGatePin
-	judgeEndpointEnvar = classifier.EndpointVariable
+	judgeEndpointEnvar = classifiers.EndpointVariable
 )
 
 type toolGate struct {
-	client    *jev.Client
+	client    *core.Client
 	set       wiring.Battery
 	cwd       string
 	rows      wiring.RowLedger
-	watch     func(ctx context.Context, tool string, decision turn.GateDecision, err error)
+	watch     func(ctx context.Context, tool string, decision loop.GateDecision, err error)
 	decisions int
 	costUSD   float64
 }
@@ -44,7 +44,7 @@ func (u unusableRule) Error() string { return u.err.Error() }
 
 func (u unusableRule) Unwrap() error { return u.err }
 
-func toolGateOn(dir, log string, keys jev.Keyring) (*toolGate, error) {
+func toolGateOn(dir, log string, keys core.Keyring) (*toolGate, error) {
 	set, err := resolvePoint(runGatePoint, dir)
 	if err != nil {
 		return nil, unusableRule{err}
@@ -110,18 +110,18 @@ func thresholdsInRange(r gate.Rule, set wiring.Battery) error {
 	return nil
 }
 
-func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.GateDecision, error) {
+func (g *toolGate) Decide(ctx context.Context, request loop.GateRequest) (loop.GateDecision, error) {
 	row, err := g.ask(ctx, request)
-	decision := turn.GateDecision{ID: row.ID, Verdict: row.Verdict, Answers: row.Answers, Reason: row.Reason,
+	decision := loop.GateDecision{ID: row.ID, Verdict: row.Verdict, Answers: row.Answers, Reason: row.Reason,
 		Provider: row.Provider, Model: row.Build, DurationMS: row.LatencyMS}
 	var unavailable jevUnavailable
 	switch {
 	case errors.As(err, &unavailable):
 		decision.Failure, err = unavailable.Error(), nil
 	case err != nil:
-		decision = turn.GateDecision{Verdict: ledger.VerdictAsk}
+		decision = loop.GateDecision{Verdict: ledger.VerdictAsk}
 	}
-	if decision.Verdict != ledger.VerdictDeny && turn.PersonOnly(g.cwd, request) {
+	if decision.Verdict != ledger.VerdictDeny && loop.PersonOnly(g.cwd, request) {
 		decision.Verdict, decision.PersonOnly = ledger.VerdictAsk, true
 	}
 	if g.watch != nil {
@@ -130,7 +130,7 @@ func (g *toolGate) Decide(ctx context.Context, request turn.GateRequest) (turn.G
 	return decision, err
 }
 
-func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Row, error) {
+func (g *toolGate) ask(ctx context.Context, request loop.GateRequest) (ledger.Row, error) {
 	var input map[string]any
 	if err := json.Unmarshal(request.Args, &input); err != nil {
 		return ledger.Row{}, fmt.Errorf("the %s call carries arguments the gate cannot read: %w", request.Tool, err)
@@ -152,10 +152,10 @@ func (g *toolGate) ask(ctx context.Context, request turn.GateRequest) (ledger.Ro
 	}
 	written := wiring.RowInput{TurnID: request.TurnID, StateBuilder: builder, Fingerprint: state.FingerprintOf(call)}
 	builtState := json.RawMessage(built)
-	if own := turn.OwnShellsCalled(ctx, request); len(own) > 0 {
+	if own := loop.OwnShellsCalled(ctx, request); len(own) > 0 {
 		return g.rows.AppendOwnShell(builtState, g.set, written, own)
 	}
-	decision, err := g.client.Ask(ctx, jev.Request{State: builtState, Questions: g.set.Questions})
+	decision, err := g.client.Ask(ctx, core.Request{State: builtState, Questions: g.set.Questions})
 	g.decisions++
 	if err != nil {
 		row, writeErr := g.rows.AppendFallback(builtState, g.set, written, err)

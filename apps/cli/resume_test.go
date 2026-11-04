@@ -25,7 +25,7 @@ func continuedScreen(t *testing.T, waitFor string) string {
 
 func TestResumeNoteOpensTheContinuedApp(t *testing.T) {
 	store := sessionProject(t)
-	recorded(t, store, "turn-head", "the head task", time.Now(), llm.Message{Role: llm.RoleUser, Content: "the head task"})
+	recorded(t, store, "turn-head", "the head task", time.Now(), core.Message{Role: core.RoleUser, Content: "the head task"})
 	if err := store.SetHead("turn-head"); err != nil {
 		t.Fatal(err)
 	}

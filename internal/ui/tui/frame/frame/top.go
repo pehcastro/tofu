@@ -109,7 +109,7 @@ func topLeft(head Head, width int, drop crowding) []span {
 func topRight(head Head, width int, drop crowding) []span {
 	right := session(head, width, drop)
 	if drop < dropClock && !head.Started.IsZero() {
-		clock := widget.Until(head.At.Sub(head.Started))
+		clock := render.Until(head.At.Sub(head.Started))
 		switch {
 		case len(right) == 0:
 		case width >= sessionRefColumns:
@@ -186,7 +186,7 @@ func chips(labels []string, current int, pad string) ([]span, []Hit) {
 		if index == current {
 			chip = span{text: " " + label + " ", fg: look.Background, bg: look.Mint}
 		}
-		end := column + widget.Cells(chip.text)
+		end := column + render.Cells(chip.text)
 		nav = append(nav, chip)
 		hits = append(hits, Hit{Start: column, End: end, Index: index})
 		column = end

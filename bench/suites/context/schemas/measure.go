@@ -28,7 +28,7 @@ type wireTool struct {
 	Schema any    `json:"input_schema"`
 }
 
-func toWire(defs []llm.Tool) []wireTool {
+func toWire(defs []core.Tool) []wireTool {
 	out := make([]wireTool, len(defs))
 	for i, d := range defs {
 		out[i] = wireTool{Name: d.Name, Desc: d.Description, Schema: d.Parameters}
@@ -36,7 +36,7 @@ func toWire(defs []llm.Tool) []wireTool {
 	return out
 }
 
-func Measure(defs []llm.Tool) Whole {
+func Measure(defs []core.Tool) Whole {
 	wired := toWire(defs)
 	whole := Whole{Tools: make([]ToolCost, len(defs))}
 	for i, w := range wired {
@@ -51,10 +51,10 @@ func Measure(defs []llm.Tool) Whole {
 	return whole
 }
 
-func wireDiffBytes(defs []llm.Tool) int {
+func wireDiffBytes(defs []core.Tool) int {
 	baseline := anthropic.Request{
 		Model:    "claude-opus-5",
-		Messages: []llm.Message{{Role: llm.RoleUser, Content: "hi"}},
+		Messages: []core.Message{{Role: core.RoleUser, Content: "hi"}},
 	}
 	withTools := baseline
 	withTools.Tools = defs

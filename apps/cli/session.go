@@ -17,7 +17,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/cron"
 	"tofu/internal/agent/loop"
@@ -84,7 +84,7 @@ type sessionResume struct {
 	Fresh       string             `json:"fresh,omitempty"`
 	Busy        *session.BusyError `json:"busy,omitempty"`
 
-	messages []llm.Message
+	messages []core.Message
 	tasks    []string
 	read     *session.Store
 	keys     *sys.KeyRedactor
@@ -321,7 +321,7 @@ func resumeOf(store *session.Store, id string) (sessionResume, error) {
 	var keysErr error
 	var loaded sync.WaitGroup
 	loaded.Go(func() {
-		keysErr = sys.Crashed(".", safe.Call(nil, "key redactor load", func() error {
+		keysErr = sys.Crashed(".", recover.Call(nil, "key redactor load", func() error {
 			keys = sys.LoadKeyRedactor()
 			return nil
 		}))
@@ -336,7 +336,7 @@ func resumeOf(store *session.Store, id string) (sessionResume, error) {
 	if err != nil {
 		return sessionResume{}, err
 	}
-	messages, err := turn.ConversationOf(said)
+	messages, err := loop.ConversationOf(said)
 	if err != nil {
 		return sessionResume{}, err
 	}
@@ -490,7 +490,7 @@ func sessionDetail(store *session.Store, handle string) (sessionRow, error) {
 	if err != nil {
 		return sessionRow{}, err
 	}
-	messages, err := turn.ConversationOf(reading)
+	messages, err := loop.ConversationOf(reading)
 	if err != nil {
 		return sessionRow{}, err
 	}
@@ -527,7 +527,7 @@ func sessionSummary(store *session.Store, handle string) (sessionRow, []session.
 	if err != nil {
 		return sessionRow{}, nil, err
 	}
-	if err := turn.CheckToolOutcomes(events); err != nil {
+	if err := loop.CheckToolOutcomes(events); err != nil {
 		return sessionRow{}, nil, err
 	}
 	row := sessionHeadRow(store, header)
@@ -547,7 +547,7 @@ func sessionSummary(store *session.Store, handle string) (sessionRow, []session.
 		if err != nil {
 			return sessionRow{}, nil, err
 		}
-		given, err := turn.ConversationFrom(part)
+		given, err := loop.ConversationFrom(part)
 		if err != nil {
 			return sessionRow{}, nil, err
 		}
@@ -870,7 +870,7 @@ func sessionReadsLines(page cli.Page, report sessionReadsReport) []string {
 	}
 	rows := make([]cli.Row, len(report.Reads))
 	for i, read := range report.Reads {
-		rows[i] = cli.Row{Cells: []string{"step " + strconv.Itoa(read.Step), read.Tool, widget.Size(read.Bytes), strings.TrimSpace(read.Source + " " + read.Span)}}
+		rows[i] = cli.Row{Cells: []string{"step " + strconv.Itoa(read.Step), read.Tool, render.Size(read.Bytes), strings.TrimSpace(read.Source + " " + read.Span)}}
 	}
 	said := ""
 	for i, row := range page.Rows(rows) {
@@ -989,7 +989,7 @@ type traceResult struct {
 	Verdict    string         `json:"gate_verdict"`
 	GateError  string         `json:"gate_error"`
 	Reason     *ledger.Reason `json:"gate_reason"`
-	Hooks      []turn.HookRun `json:"hooks"`
+	Hooks      []loop.HookRun `json:"hooks"`
 }
 
 func gateWords(result traceResult, hooks []traceHook, call string) string {
@@ -1050,7 +1050,7 @@ func tracedRequests(steps []traceRequest, exchanges []session.Exchange) []traceR
 		sent.hashes = exchange.Messages
 		before[exchange.Agent] = sent
 		if last := len(exchange.Attempts) - 1; last >= 0 {
-			var attempt llm.Attempt
+			var attempt core.Attempt
 			if json.Unmarshal(exchange.Attempts[last].Detail, &attempt) == nil {
 				request.Status, request.ProviderRequestID = attempt.Status, attempt.RequestID
 			}
@@ -1089,7 +1089,7 @@ func sessionTrace(store *session.Store, handle string) (sessionTraceReport, erro
 	if err != nil {
 		return sessionTraceReport{}, err
 	}
-	if err := turn.CheckToolOutcomes(events); err != nil {
+	if err := loop.CheckToolOutcomes(events); err != nil {
 		return sessionTraceReport{}, err
 	}
 	report, err := traceBody(store, header.ID, events, func(string, time.Time) bool { return true })
@@ -1129,7 +1129,7 @@ func traceBody(store *session.Store, id string, events []session.Event, keep fun
 		case session.EventRequest:
 			var step struct {
 				session.StepBody
-				Phase      turn.Phase `json:"phase"`
+				Phase      loop.Phase `json:"phase"`
 				DurationMS int64      `json:"duration_ms"`
 			}
 			_ = json.Unmarshal(event.Body, &step)
@@ -1168,7 +1168,7 @@ func traceBody(store *session.Store, id string, events []session.Event, keep fun
 			if event.Agent != "" || json.Unmarshal(event.Body, &said) != nil || strings.TrimSpace(said.Content) == "" || said.Role != session.RoleUser && said.Role != session.RoleAssistant {
 				break
 			}
-			text, typed := turn.TaskIn(said.Content)
+			text, typed := loop.TaskIn(said.Content)
 			if !typed {
 				text = said.Content
 			}
@@ -1233,7 +1233,7 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 	}
 	calls := make([]cli.Row, len(report.Calls))
 	for i, call := range report.Calls {
-		calls[i] = cli.Row{Mark: cli.Done, Cells: []string{cmp.Or(call.Agent, session.AuthorOrchestrator), call.Call, call.Tool, call.Outcome, widget.Size(call.Bytes), startedAfter(call.StartMS)},
+		calls[i] = cli.Row{Mark: cli.Done, Cells: []string{cmp.Or(call.Agent, session.AuthorOrchestrator), call.Call, call.Tool, call.Outcome, render.Size(call.Bytes), startedAfter(call.StartMS)},
 			Detail: strings.TrimSpace(call.Gate + " " + output.OneLine(string(call.Args)))}
 		switch {
 		case call.Result == "":
@@ -1274,7 +1274,7 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 			when += "taken " + insert.TakenAt.Format(time.TimeOnly)
 		}
 		inserted[i] = cli.Row{Mark: cli.Idle, Cells: []string{cmp.Or(insert.Agent, session.AuthorOrchestrator), insert.Origin, when, "into " + cmp.Or(insert.Request, "no request yet")},
-			Detail: widget.Fit(output.OneLine(insert.Text), page.Width)}
+			Detail: render.Fit(output.OneLine(insert.Text), page.Width)}
 	}
 	changes := make([]cli.Row, len(report.Changes))
 	for i, change := range report.Changes {
@@ -1291,7 +1291,7 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 		if said.Role == session.RoleUser {
 			who = "to the orchestrator"
 		}
-		messages[i] = cli.Row{Mark: cli.Idle, Cells: []string{who, "[message" + trace.Short(said.ID) + "]", said.At.Format(time.TimeOnly)}, Detail: widget.Fit(output.OneLine(said.Text), page.Width)}
+		messages[i] = cli.Row{Mark: cli.Idle, Cells: []string{who, "[message" + trace.Short(said.ID) + "]", said.At.Format(time.TimeOnly)}, Detail: render.Fit(output.OneLine(said.Text), page.Width)}
 	}
 	failures := make([]cli.Row, len(report.Failures))
 	for i, failure := range report.Failures {
@@ -1303,7 +1303,7 @@ func sessionTraceLines(page cli.Page, report sessionTraceReport) []string {
 	}
 	facts := []string{report.Handle, output.Plural(report.Events, "event")}
 	if sizes := report.Sizes; sizes != nil {
-		facts = append(facts, "events "+widget.Size(int(sizes.Events))+", requests "+widget.Size(int(sizes.Requests))+", bodies "+widget.Size(int(sizes.Blobs)))
+		facts = append(facts, "events "+render.Size(int(sizes.Events))+", requests "+render.Size(int(sizes.Requests))+", bodies "+render.Size(int(sizes.Blobs)))
 	}
 	lines := page.Title("Trace", facts, verdict)
 	for _, section := range []struct {
@@ -1357,7 +1357,7 @@ type sentBlock struct {
 }
 
 type requestAttempt struct {
-	llm.Attempt
+	core.Attempt
 	Body json.RawMessage `json:"body,omitempty"`
 }
 
@@ -1503,7 +1503,7 @@ func sessionRequestListLines(page cli.Page, report sessionRequestListReport) []s
 		if request.Error != "" {
 			mark = cli.Fail
 		}
-		rows[i] = cli.Row{Mark: mark, Cells: []string{turn.ShortID(request.Request), cmp.Or(request.Agent, session.AuthorOrchestrator), "step " + strconv.Itoa(request.Step),
+		rows[i] = cli.Row{Mark: mark, Cells: []string{loop.ShortID(request.Request), cmp.Or(request.Agent, session.AuthorOrchestrator), "step " + strconv.Itoa(request.Step),
 			"in " + strconv.Itoa(request.TokensIn), "read " + strconv.Itoa(request.CacheRead), "wrote " + strconv.Itoa(request.CacheWrite)},
 			Detail: traced(request.At.Format(time.DateTime), request.Model, request.Why, output.OneLine(request.Error))}
 	}
@@ -1515,14 +1515,14 @@ const hasFlag = "--has"
 
 func requestOrigins() []string {
 	var named []string
-	for _, source := range llm.Source("").Enum() {
-		named = append(named, string(llm.Source(source).Kind())+"/"+source)
+	for _, source := range core.Source("").Enum() {
+		named = append(named, string(core.Source(source).Kind())+"/"+source)
 	}
 	return named
 }
 
 func originName(message session.MessageBody) (string, bool) {
-	origin := turn.OriginOf(message)
+	origin := loop.OriginOf(message)
 	return string(origin.Kind()) + "/" + string(origin.Source), message.Origin != "" || message.From != nil
 }
 
@@ -1575,7 +1575,7 @@ func sessionRequestsHavingLines(page cli.Page, report sessionRequestsHavingRepor
 			carrying++
 			mark, where = cli.Done, "at "+strings.Join(positions, ", ")
 		}
-		rows[i] = cli.Row{Mark: mark, Cells: []string{turn.ShortID(request.Request), cmp.Or(request.Agent, session.AuthorOrchestrator), output.Plural(request.Messages, "message"), where}}
+		rows[i] = cli.Row{Mark: mark, Cells: []string{loop.ShortID(request.Request), cmp.Or(request.Agent, session.AuthorOrchestrator), output.Plural(request.Messages, "message"), where}}
 	}
 	lines := append(page.Title("Requests", []string{report.Handle, output.Plural(len(report.Requests), "request"), strconv.Itoa(carrying) + " from " + report.Origin}, cli.Verdict{}), "")
 	if len(rows) == 0 {
@@ -1595,20 +1595,20 @@ func breakpointBody(view session.RequestView, attempts []requestAttempt) (json.R
 	for i, message := range view.Messages {
 		reading.Messages[i].MessageBody = message
 	}
-	conversation, err := turn.ConversationOf(reading)
+	conversation, err := loop.ConversationOf(reading)
 	if err != nil {
 		return nil, breakpointsNone, err
 	}
-	var tools []llm.Tool
+	var tools []core.Tool
 	if len(view.Tools) > 0 {
 		if err := json.Unmarshal(view.Tools, &tools); err != nil {
 			return nil, breakpointsNone, err
 		}
 	}
 	var system []string
-	var messages []llm.Message
+	var messages []core.Message
 	for _, message := range conversation {
-		if message.Role == llm.RoleSystem {
+		if message.Role == core.RoleSystem {
 			system = append(system, message.Content)
 			continue
 		}
@@ -1638,7 +1638,7 @@ func markBreakpoints(report *sessionRequestReport, body json.RawMessage) {
 			system = i
 		case message.Answers != "":
 			answered[message.Answers] = i
-		case message.Role != session.RoleAssistant || len(message.Calls) > 0 || !llm.BlankText(message.Text):
+		case message.Role != session.RoleAssistant || len(message.Calls) > 0 || !core.BlankText(message.Text):
 			spoken = append(spoken, i)
 		}
 		for _, id := range message.Calls {
@@ -1724,7 +1724,7 @@ func requestPartsLines(page cli.Page, parts *session.RequestParts) []string {
 	}
 	rows := make([]cli.Row, len(parts.Prompt))
 	for i, part := range parts.Prompt {
-		why, appended := strings.CutSuffix(part.Why, turn.PartAppendedWhy)
+		why, appended := strings.CutSuffix(part.Why, loop.PartAppendedWhy)
 		placed := "system prompt"
 		switch {
 		case appended:
@@ -1740,7 +1740,7 @@ func requestPartsLines(page cli.Page, parts *session.RequestParts) []string {
 	}
 	var skills, memories []string
 	for _, item := range parts.Carried {
-		if item.From != nil && item.From.Kind == string(llm.OriginSkill) && !slices.Contains(skills, item.From.Name) {
+		if item.From != nil && item.From.Kind == string(core.OriginSkill) && !slices.Contains(skills, item.From.Name) {
 			skills = append(skills, item.From.Name)
 		}
 		for _, id := range item.Memory {
@@ -1797,7 +1797,7 @@ func wireMessageLines(body json.RawMessage, width int) []string {
 		}
 		line := "messages." + strconv.Itoa(i) + " " + strings.Join(parts, " | ")
 		if said != "" {
-			line += " | text" + widget.Fit(said, max(width-widget.Cells(line)-len(" | text"), 0))
+			line += " | text" + render.Fit(said, max(width-render.Cells(line)-len(" | text"), 0))
 		}
 		lines = append(lines, line)
 	}
@@ -1836,9 +1836,9 @@ func sessionRequestLines(page cli.Page, report sessionRequestReport) []string {
 		if message.Breakpoint {
 			cells = append(cells, "breakpoint")
 		}
-		rows[i] = cli.Row{Mark: cli.Idle, Cells: cells, Detail: widget.Fit(output.OneLine(message.Text), page.Width)}
+		rows[i] = cli.Row{Mark: cli.Idle, Cells: cells, Detail: render.Fit(output.OneLine(message.Text), page.Width)}
 		if message.Role == session.RoleSystem {
-			rows[i].Detail = widget.Size(len(message.Text)) + " of system prompt, whole in --json"
+			rows[i].Detail = render.Size(len(message.Text)) + " of system prompt, whole in --json"
 		}
 	}
 	lines = append(append(lines, requestPartsLines(page, report.Parts)...), "", page.Section("messages tofu built", cli.Verdict{}))
@@ -1846,7 +1846,7 @@ func sessionRequestLines(page cli.Page, report sessionRequestReport) []string {
 	for i, attempt := range report.Attempts {
 		facts := []cli.Fact{
 			{Label: "status", Text: strconv.Itoa(attempt.Status) + " · " + attempt.RequestID},
-			{Label: "timing", Text: strconv.FormatInt(attempt.HeadersMS, 10) + " ms to headers, " + strconv.FormatInt(attempt.StreamMS, 10) + " ms streaming, " + widget.Size(int(attempt.Received))},
+			{Label: "timing", Text: strconv.FormatInt(attempt.HeadersMS, 10) + " ms to headers, " + strconv.FormatInt(attempt.StreamMS, 10) + " ms streaming, " + render.Size(int(attempt.Received))},
 			{Label: "retry after", Text: attempt.RetryAfter},
 			{Label: "error", Text: attempt.Error},
 			{Label: "error body", Text: attempt.ErrorBody},
@@ -1857,7 +1857,7 @@ func sessionRequestLines(page cli.Page, report sessionRequestReport) []string {
 	if report.Error != "" {
 		return append(append(lines, "", page.Section("error", cli.Verdict{Mark: cli.Fail})), cli.Indent(report.Error)...)
 	}
-	var answer llm.Decision
+	var answer core.Decision
 	_ = json.Unmarshal(report.Response, &answer)
 	var calls []string
 	for _, call := range answer.ToolCalls {
@@ -1878,7 +1878,7 @@ func sessionWhen(at, now time.Time) string {
 	case since < 0, since >= sessionWeek:
 		return at.Format(sessionDate)
 	case since < sessionDay:
-		return widget.Until(since) + " ago"
+		return render.Until(since) + " ago"
 	}
 	return at.Format(sessionClock)
 }

@@ -14,7 +14,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/store/memory/entries"
-	"tofu/internal/store/memory/tree"
+	memtree "tofu/internal/store/memory/tree"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/registry"
 )
@@ -48,11 +48,11 @@ type MemoryView struct {
 }
 
 type MemoryScoped struct {
-	Statement string         `json:"statement"`
-	Offered   memory.Scope   `json:"offered"`
-	Picked    string         `json:"picked"`
-	Scopes    []memory.Scope `json:"scopes,omitempty"`
-	By        string         `json:"by"`
+	Statement string          `json:"statement"`
+	Offered   entries.Scope   `json:"offered"`
+	Picked    string          `json:"picked"`
+	Scopes    []entries.Scope `json:"scopes,omitempty"`
+	By        string          `json:"by"`
 }
 
 const (
@@ -60,24 +60,24 @@ const (
 	ScopedByAuto   = "auto"
 )
 
-func keptMemory(emit func(Event)) func(tools.MemoryKept) {
-	return func(kept tools.MemoryKept) {
+func keptMemory(emit func(Event)) func(registry.MemoryKept) {
+	return func(kept registry.MemoryKept) {
 		emit(Event{Kind: EventMemoryScoped, ID: session.NewEventID(), Scoped: &MemoryScoped{Statement: kept.Statement, Offered: kept.Offered, Picked: string(kept.Kept), By: ScopedByAuto}})
 	}
 }
 
 type MemoryChanged struct {
-	Scope memory.Scope `json:"scope"`
-	File  string       `json:"file"`
+	Scope entries.Scope `json:"scope"`
+	File  string        `json:"file"`
 }
 
 type memoryStamp struct {
-	scope    memory.Scope
+	scope    entries.Scope
 	size     int64
 	modified time.Time
 }
 
-func memoryStamps(shelves []memory.Shelf) map[string]memoryStamp {
+func memoryStamps(shelves []entries.Shelf) map[string]memoryStamp {
 	stamps := map[string]memoryStamp{}
 	for _, shelf := range shelves {
 		for _, file := range shelf.EntryFiles() {
@@ -90,7 +90,7 @@ func memoryStamps(shelves []memory.Shelf) map[string]memoryStamp {
 }
 
 func (s *server) watchMemory(quit <-chan struct{}) {
-	placed, err := memory.Placed(s.Dir)
+	placed, err := entries.Placed(s.Dir)
 	if err != nil {
 		return
 	}
@@ -129,17 +129,17 @@ type MemoryScopedEvent struct {
 
 func (s *server) memoryRead(named string, read func(*memtree.Store) ([]string, error)) (MemoryView, error) {
 	store := named
-	if named != memory.EpisodesStore {
-		scope, err := memory.ParseScope(named)
+	if named != entries.EpisodesStore {
+		scope, err := entries.ParseScope(named)
 		if err != nil {
-			return MemoryView{}, &Refusal{Code: CodeBadParams, Message: "a store is " + memory.EpisodesStore + " or a scope: " + err.Error()}
+			return MemoryView{}, &Refusal{Code: CodeBadParams, Message: "a store is " + entries.EpisodesStore + " or a scope: " + err.Error()}
 		}
-		if _, err := memory.Block(s.Dir); err != nil {
+		if _, err := entries.Block(s.Dir); err != nil {
 			return MemoryView{}, err
 		}
 		store = string(scope)
 	}
-	logs, err := memory.Trees(s.Dir)
+	logs, err := entries.Trees(s.Dir)
 	if err != nil {
 		return MemoryView{}, err
 	}
@@ -182,11 +182,11 @@ func (s *server) memoryRead(named string, read func(*memtree.Store) ([]string, e
 	return view, nil
 }
 
-func (h *Host) AnswerMemory(id string, scope memory.Scope) bool {
+func (h *Host) AnswerMemory(id string, scope entries.Scope) bool {
 	return h.answerMemory(id, scope, nil)
 }
 
-func (h *Host) answerMemory(id string, scope memory.Scope, said *Resolution) bool {
+func (h *Host) answerMemory(id string, scope entries.Scope, said *Resolution) bool {
 	if f := h.following.Load(); f != nil {
 		return f.ask(followAsk{Op: followMemory, Asked: id, Scope: scope, Said: said}).OK
 	}
@@ -198,8 +198,8 @@ func (h *Host) answerMemory(id string, scope memory.Scope, said *Resolution) boo
 	})
 }
 
-func pickMemory(emit func(Event), book *replies[memory.Scope]) tools.MemoryPick {
-	return func(ctx context.Context, offer tools.MemoryOffer) (memory.Scope, error) {
+func pickMemory(emit func(Event), book *replies[entries.Scope]) registry.MemoryPick {
+	return func(ctx context.Context, offer registry.MemoryOffer) (entries.Scope, error) {
 		shown, err := json.Marshal(map[string]string{"statement": offer.Statement, "scope": string(offer.Scope), "said": offer.Said})
 		if err != nil {
 			return "", err
@@ -207,12 +207,12 @@ func pickMemory(emit func(Event), book *replies[memory.Scope]) tools.MemoryPick 
 		id := session.NewEventID()
 		reply := book.wait(id)
 		defer book.forget(id)
-		emit(Event{Kind: EventDecision, ID: id, Decision: &Decision{Tool: turn.RememberToolName, Verdict: Ask, Remembers: offer.Statement, MemoryScope: offer.Scope, MemoryScopes: offer.Scopes}})
+		emit(Event{Kind: EventDecision, ID: id, Decision: &Decision{Tool: loop.RememberToolName, Verdict: Ask, Remembers: offer.Statement, MemoryScope: offer.Scope, MemoryScopes: offer.Scopes}})
 		accepts := []ApprovalDecision{}
 		for _, scope := range offer.Scopes {
 			accepts = append(accepts, RememberedAs(scope))
 		}
-		emit(Event{Kind: EventAwaitPerson, ID: id, Tool: turn.RememberToolName, Args: shown, Accepts: append(accepts, RejectOnce, RejectAlways, Cancelled)})
+		emit(Event{Kind: EventAwaitPerson, ID: id, Tool: loop.RememberToolName, Args: shown, Accepts: append(accepts, RejectOnce, RejectAlways, Cancelled)})
 		resumed := Event{Kind: EventResumed, ID: id, Resolution: cancelledByTofu()}
 		defer func() { emit(resumed) }()
 		select {

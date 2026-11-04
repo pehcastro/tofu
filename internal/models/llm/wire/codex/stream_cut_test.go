@@ -23,7 +23,7 @@ func TestAFailedCodexStreamIsMarkedForAnotherPostOnlyWhenTheCauseIsTransient(t *
 		if err == nil {
 			t.Fatalf("%s ended without a failure", failed.event)
 		}
-		if errors.Is(err, llm.ErrStreamBroke) != failed.again || !strings.Contains(err.Error(), failed.said) {
+		if errors.Is(err, core.ErrStreamBroke) != failed.again || !strings.Contains(err.Error(), failed.said) {
 			t.Errorf("%s ended with %v: want %q in it, and posting again %v", failed.event, err, failed.said, failed.again)
 		}
 	}

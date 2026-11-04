@@ -22,7 +22,7 @@ func liveKey(t *testing.T, gate string) string {
 		t.Skipf("set %s=1 to spend money on the jev arms", gate)
 	}
 	sys.AllowLiveCredential(t)
-	key, err := jev.TypeSafeKey(filepath.Join(repoRoot, ".env"))
+	key, err := core.TypeSafeKey(filepath.Join(repoRoot, ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}

@@ -15,16 +15,16 @@ import (
 
 func TestServeAnnouncesOnlyAKeptShellAndClosesEveryNameItAnnounced(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "shells")
-	registry := shell.OpenAt(dir)
+	registry := process.OpenAt(dir)
 	c, _, _ := serving(t, nil, ServeConfig{Shells: registry})
 	c.ask("1", "initialize", `{"client":"desk"}`)
 	c.answer("1", &InitializeResult{})
-	choice, err := shell.Resolve("")
+	choice, err := process.Resolve("")
 	if err != nil {
 		t.Fatal(err)
 	}
 	work := t.TempDir()
-	run := func(command string, wait shell.Wait) shell.Shell {
+	run := func(command string, wait process.Wait) process.Shell {
 		cmd := exec.Command(choice.Path, "-c", command)
 		cmd.Dir = work
 		got, err := registry.YieldReady(context.Background(), cmd, command, "lead", wait)
@@ -53,7 +53,7 @@ func TestServeAnnouncesOnlyAKeptShellAndClosesEveryNameItAnnounced(t *testing.T)
 		return one
 	}
 
-	gone := run("sleep 30", shell.Wait{Within: 200 * time.Millisecond, Kept: shell.KeptMoved})
+	gone := run("sleep 30", process.Wait{Within: 200 * time.Millisecond, Kept: process.KeptMoved})
 	c.until(seen("shell.started", gone.Name), "shell.started for "+gone.Name)
 	listed := filepath.Join(dir, "running", gone.Name+".json")
 	if err := os.Rename(listed, listed+".away"); err != nil {
@@ -64,14 +64,14 @@ func TestServeAnnouncesOnlyAKeptShellAndClosesEveryNameItAnnounced(t *testing.T)
 		t.Errorf("the shell gone from the list closed as %+v, want an end time", vanished)
 	}
 
-	once := run("sleep 1", shell.Wait{Within: 5 * time.Second, Kept: shell.KeptMoved})
+	once := run("sleep 1", process.Wait{Within: 5 * time.Second, Kept: process.KeptMoved})
 	free, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	port := free.Addr().(*net.TCPAddr).Port
 	_ = free.Close()
-	server := run("sleep 2; exit 5", shell.Wait{Within: 300 * time.Millisecond, Poll: 50 * time.Millisecond, Port: port, Kept: shell.KeptBackground})
+	server := run("sleep 2; exit 5", process.Wait{Within: 300 * time.Millisecond, Poll: 50 * time.Millisecond, Port: port, Kept: process.KeptBackground})
 	c.until(seen("shell.started", server.Name), "shell.started for "+server.Name)
 	if ended := exited(server.Name); ended.ExitCode == nil || *ended.ExitCode != 5 || ended.EndedAt == nil {
 		t.Errorf("the background shell closed as %+v, want exit 5 with an end time", ended)
@@ -80,7 +80,7 @@ func TestServeAnnouncesOnlyAKeptShellAndClosesEveryNameItAnnounced(t *testing.T)
 		if one.Shell == once.Name {
 			t.Errorf("the one-shot %s was announced as a shell: %+v", once.Name, one)
 		}
-		if one.Shell == server.Name && (one.Kept != ShellKept(shell.KeptBackground) || one.Dir != work || one.Port != port || one.Ready != ShellReady(shell.ReadyWaited) || one.LeftOver) {
+		if one.Shell == server.Name && (one.Kept != ShellKept(process.KeptBackground) || one.Dir != work || one.Port != port || one.Ready != ShellReady(process.ReadyWaited) || one.LeftOver) {
 			t.Errorf("the background shell was announced as %+v, want kept background, dir %s, port %d, ready waited", one, work, port)
 		}
 	}

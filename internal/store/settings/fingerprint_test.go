@@ -123,7 +123,7 @@ func askThrough(t *testing.T, store *settings.Store, accepts string) (*versionSe
 }
 
 func ask(wire *anthropic.Wire) error {
-	_, _, err := wire.Ask(context.Background(), anthropic.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "hi"}}})
+	_, _, err := wire.Ask(context.Background(), anthropic.Request{Messages: []core.Message{{Role: core.RoleUser, Content: "hi"}}})
 	return err
 }
 

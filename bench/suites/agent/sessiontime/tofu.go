@@ -104,7 +104,7 @@ func (t *tally) generation(events []session.Event, exchanges []session.Exchange,
 				for _, name := range shellName.FindAllString(result.Content, -1) {
 					shells[agentShell{event.Agent, name}] = kind
 				}
-			case turn.ShellToolName:
+			case loop.ShellToolName:
 				kind = bucketOtherBash
 				if call.args.Op == "wait" {
 					kind = bucketWait

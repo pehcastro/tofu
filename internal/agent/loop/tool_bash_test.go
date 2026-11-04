@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -44,7 +44,7 @@ func TestBashDeadlineSaysItWasTheDeadline(t *testing.T) {
 		t.Errorf("no registry: outcome %v, content %q, failure %q", alone.Outcome, alone.Content, alone.FailureText)
 	}
 	tool := newBash(t)
-	registry := shell.OpenAt(t.TempDir())
+	registry := process.OpenAt(t.TempDir())
 	ctx := WithShellRegistry(context.Background(), registry)
 	raw, _ := json.Marshal(map[string]any{"command": "echo partial; sleep 30", "timeout_ms": 2000})
 	listed, err := tool.Run(ctx, raw)
@@ -67,7 +67,7 @@ func TestBashDeadlineSaysItWasTheDeadline(t *testing.T) {
 func TestABashCallPastTheSoftLimitReturnsAShellNameAndTheCommandKeepsRunning(t *testing.T) {
 	tool := newBash(t)
 	tool.softLimit = time.Second
-	registry := shell.OpenAt(t.TempDir())
+	registry := process.OpenAt(t.TempDir())
 	ctx := WithShellRegistry(context.Background(), registry)
 	command := "echo building; sleep 4; echo built > marker"
 	raw, _ := json.Marshal(map[string]any{"command": command})
@@ -80,7 +80,7 @@ func TestABashCallPastTheSoftLimitReturnsAShellNameAndTheCommandKeepsRunning(t *
 	name := regexp.MustCompile(`bash-\d+`).FindString(result.Content)
 	t.Cleanup(func() { _ = registry.Kill(name) })
 	running, readErr := registry.Read(name)
-	if name == "" || readErr != nil || running.State != shell.Running || took > 3*time.Second || !strings.Contains(result.Content, "building") {
+	if name == "" || readErr != nil || running.State != process.Running || took > 3*time.Second || !strings.Contains(result.Content, "building") {
 		t.Fatalf("after %v the call came back %q, shell %q read as %+v (%v), want an early return naming a running shell with the output so far", took, result.Content, name, running, readErr)
 	}
 	marker := filepath.Join(string(tool.root), "marker")
@@ -110,7 +110,7 @@ func TestBashTellsEveryChildItIsAnAgentForegroundAndBackground(t *testing.T) {
 		t.Setenv(name, "")
 	}
 	tool := newBash(t)
-	ctx := WithShellRegistry(context.Background(), shell.OpenAt(t.TempDir()))
+	ctx := WithShellRegistry(context.Background(), process.OpenAt(t.TempDir()))
 	for _, background := range []bool{false, true} {
 		raw, _ := json.Marshal(map[string]any{"command": "env", "background": background})
 		result, err := tool.Run(ctx, raw)
@@ -149,7 +149,7 @@ func TestPowerShellFallbackSkipsTheProfileAndPrintsUTF8(t *testing.T) {
 		t.Skip("no powershell on PATH")
 	}
 	tool := newBash(t)
-	tool.choice = shell.Choice{Path: path, Label: "powershell"}
+	tool.choice = process.Choice{Path: path, Label: "powershell"}
 	result := runBash(t, tool, map[string]any{"command": "[Console]::OutputEncoding.CodePage; [Environment]::CommandLine"})
 	if !strings.HasPrefix(result.Content, "65001") || !strings.Contains(result.Content, "-NoProfile") {
 		t.Fatalf("%q", result.Content)

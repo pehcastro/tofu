@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/project/boardy"
 )
@@ -137,7 +137,7 @@ func (c boardyCall) attention() int {
 			for i, one := range needs {
 				rows[i] = cli.Row{Mark: mark, Cells: []string{one.ID, one.Title}}
 				if !one.Since.IsZero() {
-					rows[i].Cells = []string{one.ID, dash(one.Assignee), widget.Until(now.Sub(one.Since)), one.Title}
+					rows[i].Cells = []string{one.ID, dash(one.Assignee), render.Until(now.Sub(one.Since)), one.Title}
 				}
 			}
 			for i, line := range page.Rows(rows) {

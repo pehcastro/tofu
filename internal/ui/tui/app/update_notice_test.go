@@ -1,4 +1,4 @@
-package tui
+package app
 
 import (
 	"strings"
@@ -47,7 +47,7 @@ func TestAnUpdateNoticeSitsUnderTheWelcomeArtAndNeverInTheChat(t *testing.T) {
 		if gap := line - art[len(art)-1]; gap < 1 || gap > 2 {
 			t.Fatalf("the notice is %d rows from the art rather than just under it\n%s", gap, screen)
 		}
-		if lead := strings.Index(rows[line], want); lead < (100-widget.Cells(want))/2-2 {
+		if lead := strings.Index(rows[line], want); lead < (100-render.Cells(want))/2-2 {
 			t.Fatalf("the notice is not centred under the art\n%s", screen)
 		}
 		if line >= composerRow(t, rows)-2 {
@@ -74,12 +74,12 @@ func TestARunningSessionCarriesTheNoticeAtTheRightOfTheRowAboveTheComposer(t *te
 		if at < 0 || at > composerRow(t, rows) || rowWith(rows, "tofu 9.9") != at {
 			t.Fatalf("the notice is not on the status row above the composer\n%s", screen)
 		}
-		if widget.Cells(rows[at]) != width {
-			t.Fatalf("the status row is %d cells wide on a %d wide screen\n%s", widget.Cells(rows[at]), width, screen)
+		if render.Cells(rows[at]) != width {
+			t.Fatalf("the status row is %d cells wide on a %d wide screen\n%s", render.Cells(rows[at]), width, screen)
 		}
 		trimmed := strings.TrimRight(rows[at], " ")
 		_, shown, _ := strings.Cut(trimmed, "  tofu 9.9")
-		if !strings.HasPrefix(installedNotice[len("tofu 9.9"):], strings.TrimSuffix(shown, "…")) || widget.Cells(trimmed) < width-2 {
+		if !strings.HasPrefix(installedNotice[len("tofu 9.9"):], strings.TrimSuffix(shown, "…")) || render.Cells(trimmed) < width-2 {
 			t.Fatalf("the status row does not end with the notice\n%s", screen)
 		}
 		if strings.Count(screen, "tofu 9.9") > 1 {

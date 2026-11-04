@@ -25,13 +25,13 @@ import (
 	testkit "tofu/internal/testkit/cli"
 )
 
-func recorded(t *testing.T, store *session.Store, id, task string, at time.Time, messages ...llm.Message) {
+func recorded(t *testing.T, store *session.Store, id, task string, at time.Time, messages ...core.Message) {
 	t.Helper()
 	events := []session.Event{{Kind: session.EventStep, Body: json.RawMessage(`{"index":1}`)}}
 	for _, message := range messages {
-		row := turn.MessageRow{Role: message.Role.String(), Content: message.Content, ToolCallID: message.ToolCallID}
+		row := loop.MessageRow{Role: message.Role.String(), Content: message.Content, ToolCallID: message.ToolCallID}
 		for _, call := range message.ToolCalls {
-			row.ToolCalls = append(row.ToolCalls, turn.MessageToolCall{ID: call.ID, Name: call.Name, Arguments: call.Arguments})
+			row.ToolCalls = append(row.ToolCalls, loop.MessageToolCall{ID: call.ID, Name: call.Name, Arguments: call.Arguments})
 		}
 		body, err := json.Marshal(row)
 		if err != nil {
@@ -139,8 +139,8 @@ func TestASessionTheStoreCannotParseIsCountedAndNamed(t *testing.T) {
 func TestSessionInfoPrintsTheHeaderAndTheCounts(t *testing.T) {
 	store := sessionProject(t)
 	recorded(t, store, "turn-one", "explain the repo", time.Now().Add(-time.Hour),
-		llm.Message{Role: llm.RoleUser, Content: "explain the repo"},
-		llm.Message{Role: llm.RoleAssistant, Content: "it is a harness"})
+		core.Message{Role: core.RoleUser, Content: "explain the repo"},
+		core.Message{Role: core.RoleAssistant, Content: "it is a harness"})
 
 	out, _, code := sessionRun(t, "session", "info", "turn-one")
 	if code != output.ExitOK {
@@ -162,9 +162,9 @@ func TestSessionInfoPrintsTheHeaderAndTheCounts(t *testing.T) {
 
 func TestSessionResumeSendsTheMessagesTheRecordHolds(t *testing.T) {
 	dir := testkit.ScratchProject(t)
-	first := &sendModel{queued: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{writeNote("call-1")}},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the note is written"},
+	first := &sendModel{queued: []core.Decision{
+		{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{writeNote("call-1")}},
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "the note is written"},
 	}}
 	var events eventLog
 	stubbedTurn(dir, first)(t.Context(), onTheSubscription, "write a note", events.add)
@@ -185,7 +185,7 @@ func TestSessionResumeSendsTheMessagesTheRecordHolds(t *testing.T) {
 		t.Fatalf("the record of %s carries no message, so a resume would start over", head.ID)
 	}
 
-	second := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "still here"}}}
+	second := &sendModel{queued: []core.Decision{{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "still here"}}}
 	var resumedEvents eventLog
 	resumedTurn(dir, second, nil, carry)(t.Context(), onTheSubscription, "what did you write", resumedEvents.add)
 
@@ -198,11 +198,11 @@ func TestSessionResumeSendsTheMessagesTheRecordHolds(t *testing.T) {
 		t.Logf("the resumed send carries role=%s tool_call_id=%s tool_calls=%d content=%.40q",
 			message.Role, message.ToolCallID, len(message.ToolCalls), message.Content)
 		switch {
-		case message.Role == llm.RoleUser && strings.Contains(message.Content, "write a note"):
+		case message.Role == core.RoleUser && strings.Contains(message.Content, "write a note"):
 			task = true
 		case len(message.ToolCalls) == 1 && message.ToolCalls[0].ID == "call-1":
 			call = true
-		case message.Role == llm.RoleTool && message.ToolCallID == "call-1":
+		case message.Role == core.RoleTool && message.ToolCallID == "call-1":
 			result = true
 		}
 	}
@@ -214,7 +214,7 @@ func TestSessionResumeSendsTheMessagesTheRecordHolds(t *testing.T) {
 	}
 }
 
-func liveAppSession(dir string, model turn.Model) *appSession {
+func liveAppSession(dir string, model loop.Model) *appSession {
 	return newAppSession(dir, func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(model), nil
 	}, nil, time.Now, sessionResume{})
@@ -222,7 +222,7 @@ func liveAppSession(dir string, model turn.Model) *appSession {
 
 func TestSlashNewDropsWhatIsCarriedAndSlashResumeTakesTheSessionBack(t *testing.T) {
 	dir := testkit.ScratchProject(t)
-	first := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "wrote it"}}}
+	first := &sendModel{queued: []core.Decision{{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "wrote it"}}}
 	live := liveAppSession(dir, first)
 	var events eventLog
 	live.run(t.Context(), onTheSubscription, "write a note", events.add)
@@ -243,7 +243,7 @@ func TestSlashNewDropsWhatIsCarriedAndSlashResumeTakesTheSessionBack(t *testing.
 		t.Errorf("/resume said %q and does not name the session it took", note)
 	}
 
-	second := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "still here"}}}
+	second := &sendModel{queued: []core.Decision{{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "still here"}}}
 	live.engine.open = func(wiring.RunOpts) (wiring.Wire, error) {
 		return wireOn(second), nil
 	}
@@ -253,7 +253,7 @@ func TestSlashNewDropsWhatIsCarriedAndSlashResumeTakesTheSessionBack(t *testing.
 	}
 	carried := false
 	for _, message := range second.requests[0].Messages {
-		if message.Role == llm.RoleUser && strings.Contains(message.Content, "write a note") {
+		if message.Role == core.RoleUser && strings.Contains(message.Content, "write a note") {
 			carried = true
 		}
 	}
@@ -265,12 +265,12 @@ func TestSlashNewDropsWhatIsCarriedAndSlashResumeTakesTheSessionBack(t *testing.
 func TestResumingATurnInterruptedMidToolCallSendsAListBothWiresAccept(t *testing.T) {
 	store := sessionProject(t)
 	recorded(t, store, "turn-cut", "read three files", time.Now(),
-		llm.Message{Role: llm.RoleUser, Content: "read three files"},
-		llm.Message{Role: llm.RoleAssistant, ToolCalls: []llm.ToolCall{
+		core.Message{Role: core.RoleUser, Content: "read three files"},
+		core.Message{Role: core.RoleAssistant, ToolCalls: []core.ToolCall{
 			{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)},
 			{ID: "call-2", Name: "read", Arguments: json.RawMessage(`{"path":"b.txt"}`)},
 		}},
-		llm.Message{Role: llm.RoleTool, ToolCallID: "call-1", Content: "a"})
+		core.Message{Role: core.RoleTool, ToolCallID: "call-1", Content: "a"})
 
 	carry, err := resumeOf(store, "turn-cut")
 	if err != nil {
@@ -314,7 +314,7 @@ func TestContinueTakesTheHeadWithNoListAndNoQuestion(t *testing.T) {
 	store := sessionProject(t)
 	recorded(t, store, "turn-old", "the older task", time.Now().Add(-time.Hour))
 	recorded(t, store, "turn-head", "the head task", time.Now(),
-		llm.Message{Role: llm.RoleUser, Content: "the head task"})
+		core.Message{Role: core.RoleUser, Content: "the head task"})
 	if err := store.SetHead("turn-head"); err != nil {
 		t.Fatal(err)
 	}
@@ -406,7 +406,7 @@ func TestASessionListedNowCarriesAGeneratedNameAndTheIDIsStillInJSON(t *testing.
 func TestRenameThenInfoAndResumeFindTheSessionByTheNewName(t *testing.T) {
 	store := sessionProject(t)
 	recorded(t, store, "turn-one", "explain the repo", time.Now(),
-		llm.Message{Role: llm.RoleUser, Content: "explain the repo"})
+		core.Message{Role: core.RoleUser, Content: "explain the repo"})
 
 	out, errOut, code := sessionRun(t, "session", "rename", "turn-one", "The Gate Work")
 	if code != output.ExitOK {
@@ -488,7 +488,7 @@ func TestTheSessionsAlreadyOnDiskListWithNoNameRatherThanFailing(t *testing.T) {
 			unnamed++
 		}
 	}
-	text := strings.Join(sessionListLines(cli.Page{Width: konst.ProseWidthChars}, report, time.Now()), "\n")
+	text := strings.Join(sessionListLines(page.Page{Width: konst.ProseWidthChars}, report, time.Now()), "\n")
 	t.Logf("%d sessions, %d of them written before the name, %d skipped\n%s",
 		len(report.Sessions), unnamed, len(report.Skipped), text)
 	if unnamed == 0 {
@@ -504,9 +504,9 @@ func TestTheSessionsAlreadyOnDiskListWithNoNameRatherThanFailing(t *testing.T) {
 func readingSession(t *testing.T, id string, paths ...string) {
 	t.Helper()
 	store := sessionProject(t)
-	step := turn.StepRow{Index: 1, AssistantText: "looking at the store"}
+	step := loop.StepRow{Index: 1, AssistantText: "looking at the store"}
 	for i, path := range paths {
-		step.ToolCalls = append(step.ToolCalls, turn.ToolCallRow{
+		step.ToolCalls = append(step.ToolCalls, loop.ToolCallRow{
 			Tool:         "read",
 			Args:         json.RawMessage(`{"path":"` + path + `"}`),
 			ResultBytes:  1024 * (i + 1),
@@ -561,8 +561,8 @@ func TestSessionReadsJSONCarriesThePathTheSizeAndWhereTheReasoningCameFrom(t *te
 func TestASessionEndedIsMarkedEndedAnOpenOneIsNotAndTheEndedOneStillResumes(t *testing.T) {
 	store := sessionProject(t)
 	at := time.Now()
-	recorded(t, store, "turn-ended", "the ended one", at, llm.Message{Role: llm.RoleUser, Content: "the ended one"})
-	recorded(t, store, "turn-open", "the open one", at, llm.Message{Role: llm.RoleUser, Content: "the open one"})
+	recorded(t, store, "turn-ended", "the ended one", at, core.Message{Role: core.RoleUser, Content: "the ended one"})
+	recorded(t, store, "turn-open", "the open one", at, core.Message{Role: core.RoleUser, Content: "the open one"})
 	if _, err := store.End("turn-ended", session.EndedByNew, at.Add(time.Minute)); err != nil {
 		t.Fatal(err)
 	}
@@ -750,14 +750,14 @@ func TestTheSweepDeletesOnlyAStaleSessionNothingKeeps(t *testing.T) {
 			t.Errorf("the sweep deleted %s", id)
 		}
 	}
-	text := strings.Join(sessionCleanLines(cli.Page{Width: konst.ProseWidthChars}, swept), "\n")
+	text := strings.Join(sessionCleanLines(page.Page{Width: konst.ProseWidthChars}, swept), "\n")
 	t.Logf("%s", text)
 }
 
 func TestSessionResumeJSONNamesWhatItCarries(t *testing.T) {
 	store := sessionProject(t)
 	recorded(t, store, "turn-one", "explain the repo", time.Now(),
-		llm.Message{Role: llm.RoleUser, Content: "explain the repo"})
+		core.Message{Role: core.RoleUser, Content: "explain the repo"})
 
 	out, _, _ := sessionRun(t, "session", "resume", "turn-one", output.JSONFlag)
 	var carry sessionResume
@@ -770,11 +770,11 @@ func TestSessionResumeJSONNamesWhatItCarries(t *testing.T) {
 func TestTheForkSentenceReadsTheSameInSessionInfoAndInContext(t *testing.T) {
 	store := sessionProject(t)
 	const id, into = "turn-forker", "turn-forker-f2"
-	row := turn.Row{
-		ID: id, Schema: turn.SchemaVersion, At: time.Now(), Task: "read the repo",
-		Root: id, Outcome: turn.OutcomeForked, ForkedInto: into,
-		Steps: []turn.StepRow{{Index: 1, Fork: &turn.Fork{
-			Kind: turn.ForkContinuation, Into: into, TokensBefore: 1326, TokensAfter: 1475,
+	row := loop.Row{
+		ID: id, Schema: loop.SchemaVersion, At: time.Now(), Task: "read the repo",
+		Root: id, Outcome: loop.OutcomeForked, ForkedInto: into,
+		Steps: []loop.StepRow{{Index: 1, Fork: &loop.Fork{
+			Kind: loop.ForkContinuation, Into: into, TokensBefore: 1326, TokensAfter: 1475,
 		}}},
 	}
 	header, events, err := row.Record()
@@ -797,7 +797,7 @@ func TestTheForkSentenceReadsTheSameInSessionInfoAndInContext(t *testing.T) {
 
 func TestAFailedCallAndAFailedTurnKeepTheirReasonInTraceAndInfo(t *testing.T) {
 	dir := testkit.ScratchProject(t)
-	model := &sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+	model := &sendModel{queued: []core.Decision{{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
 		{ID: "call-1", Name: "bash", Arguments: json.RawMessage(`{"command":"echo first; echo the disk is gone >&2; exit 3"}`)},
 	}}}}
 	var events eventLog
@@ -840,10 +840,10 @@ type thenRefused struct {
 	refused error
 }
 
-func (m *thenRefused) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (m *thenRefused) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	if len(m.queued) == 0 {
 		m.requests = append(m.requests, request)
-		return llm.Decision{}, m.refused
+		return core.Decision{}, m.refused
 	}
 	return m.sendModel.Ask(ctx, request)
 }
@@ -851,7 +851,7 @@ func (m *thenRefused) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 func TestSessionRequestPrintsTheFailingRequestAsSentAndTheWholeErrorBody(t *testing.T) {
 	dir := testkit.ScratchProject(t)
 	detail := `{"type":"error","error":{"type":"invalid_request_error","message":"messages.3: tool_use ids were found without tool_result blocks immediately after: call-a"}}`
-	model := &thenRefused{sendModel: sendModel{queued: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+	model := &thenRefused{sendModel: sendModel{queued: []core.Decision{{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
 		{ID: "call-a", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)},
 		{ID: "call-b", Name: "read", Arguments: json.RawMessage(`{"path":"b.txt"}`)},
 	}}}}, refused: &transport.Error{Kind: transport.KindBadRequest, Op: "anthropic.Ask", Status: 400, Detail: detail}}

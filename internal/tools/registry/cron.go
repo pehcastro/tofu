@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -32,9 +32,9 @@ type cronArgs struct {
 
 func (c Cron) Name() string { return CronToolName }
 
-func (c Cron) Definition() llm.Tool {
+func (c Cron) Definition() core.Tool {
 	text := func(about string) map[string]any { return map[string]any{"type": "string", "description": about} }
-	return llm.Tool{
+	return core.Tool{
 		Name: CronToolName,
 		Description: "the session's scheduled jobs, which post a prompt into this conversation when they fire: a recurring check, a loop, or a goal the person set. " +
 			"list shows each job with its next fire, its expiry, its version and its last result; history shows every version with who changed it and why. " +

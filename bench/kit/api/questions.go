@@ -3,12 +3,12 @@ package api
 import (
 	"fmt"
 
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
 	libraryquestions "tofu/library/questions"
 )
 
-func GateBattery() ([]jev.Question, int, error) {
+func GateBattery() ([]core.Question, int, error) {
 	layers, err := question.Layers(libraryquestions.Files(), "")
 	if err != nil {
 		return nil, 0, err
@@ -20,15 +20,15 @@ func GateBattery() ([]jev.Question, int, error) {
 	return toJevBattery(set.Questions), set.QuestionsVersion, nil
 }
 
-func toJevBattery(questions []question.Question) []jev.Question {
-	out := make([]jev.Question, 0, len(questions))
+func toJevBattery(questions []question.Question) []core.Question {
+	out := make([]core.Question, 0, len(questions))
 	for _, q := range questions {
 		out = append(out, q.ToJev())
 	}
 	return out
 }
 
-var countSweepPool = []jev.Question{
+var countSweepPool = []core.Question{
 	nounQuestion("q01", "Does the state's cwd field start with /home?"),
 	nounQuestion("q02", "Does the state name a bash tool call?"),
 	nounQuestion("q03", "Does the state's context carry a user_recent_messages field?"),
@@ -43,17 +43,17 @@ var countSweepPool = []jev.Question{
 	nounQuestion("q12", "Does the state's tool field equal bash?"),
 }
 
-func nounQuestion(id, instructions string) jev.Question {
-	return jev.Question{
+func nounQuestion(id, instructions string) core.Question {
+	return core.Question{
 		ID:           id,
-		Kind:         jev.QuestionNoul,
+		Kind:         core.QuestionNoul,
 		Instructions: instructions,
 		True:         "yes, the state matches the question",
 		False:        "no, the state does not match the question",
 	}
 }
 
-func CountSweepQuestions(count int) []jev.Question {
+func CountSweepQuestions(count int) []core.Question {
 	if count > len(countSweepPool) {
 		panic(fmt.Sprintf("bench: only %d count sweep questions are defined, asked for %d", len(countSweepPool), count))
 	}
@@ -62,19 +62,19 @@ func CountSweepQuestions(count int) []jev.Question {
 
 const optionSweepFieldName = "target"
 
-func OptionSweepQuestion(options int) (jev.Question, string) {
+func OptionSweepQuestion(options int) (core.Question, string) {
 	names := make([]string, options)
 	for i := range names {
 		names[i] = fmt.Sprintf("item_%d", i)
 	}
 	expected := names[options/2]
-	opts := make([]jev.Option, options)
+	opts := make([]core.Option, options)
 	for i, name := range names {
-		opts[i] = jev.Option{Name: name}
+		opts[i] = core.Option{Name: name}
 	}
-	q := jev.Question{
+	q := core.Question{
 		ID:           "pick",
-		Kind:         jev.QuestionChoice,
+		Kind:         core.QuestionChoice,
 		Instructions: "The state has a field named target. Choose the option whose name equals it exactly.",
 		Options:      opts,
 	}

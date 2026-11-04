@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -27,20 +27,20 @@ func checkingLead(t *testing.T, model *crew, every time.Duration) (Config, *Spaw
 	}
 	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(read, write), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
 		ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" }}
-	spawn := NewSpawnTool("turn-lead", base, &subagent.Roster{})
+	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	spawn.Limits = func() SubAgentLimits { return SubAgentLimits{Running: 2, Depth: 1, CheckIn: every} }
 	lead := base
 	lead.Task, lead.Tools, lead.Inbox = "hand the work to a sub-agent", NewRegistry(read, write, spawn), spawn.Inbox
 	return lead, spawn
 }
 
-func writeUsers() llm.Decision {
+func writeUsers() core.Decision {
 	args, _ := json.Marshal(map[string]string{"path": "src/users.ts", "content": "export const users = []\n"})
-	return toolCallDecision(llm.ToolCall{ID: "call-write", Name: "write", Arguments: args})
+	return toolCallDecision(core.ToolCall{ID: "call-write", Name: "write", Arguments: args})
 }
 
-func noted(n int) []llm.Decision {
-	var said []llm.Decision
+func noted(n int) []core.Decision {
+	var said []core.Decision
 	for range n {
 		said = append(said, claimDecision("noted"))
 	}
@@ -48,8 +48,8 @@ func noted(n int) []llm.Decision {
 }
 
 func TestACheckOnASlowSubAgentNeverWakesTheLeadAndRidesWithItsReport(t *testing.T) {
-	model := newCrew(map[string][]llm.Decision{
-		leadKey:    append([]llm.Decision{spawnCall("call-spawn", usersRoute, "src/users.ts")}, noted(200)...),
+	model := newCrew(map[string][]core.Decision{
+		leadKey:    append([]core.Decision{spawnCall("call-spawn", usersRoute, "src/users.ts")}, noted(200)...),
 		usersRoute: {writeUsers(), claimDecision("the users route is added")},
 	})
 	release := model.hold(usersRoute, 2)
@@ -78,7 +78,7 @@ func TestACheckOnASlowSubAgentNeverWakesTheLeadAndRidesWithItsReport(t *testing.
 }
 
 func TestNoCheckIsSentWhenTheIntervalIsZero(t *testing.T) {
-	model := newCrew(map[string][]llm.Decision{
+	model := newCrew(map[string][]core.Decision{
 		leadKey:    {spawnCall("call-spawn", usersRoute, "src/users.ts"), claimDecision("sub-1 is on it"), claimDecision("sub-1 is done")},
 		usersRoute: {writeUsers(), claimDecision("the users route is added")},
 	})
@@ -99,7 +99,7 @@ func TestAnUnreadCheckIsReplacedAndCountsFromTheLastOneRead(t *testing.T) {
 	if err := inbox.reserve(1); err != nil {
 		t.Fatal(err)
 	}
-	held := &heldSubAgent{agent: subagent.SubAgent{ID: "sub-1"}, inbox: NewInbox()}
+	held := &heldSubAgent{agent: subagents.SubAgent{ID: "sub-1"}, inbox: NewInbox()}
 	inbox.keep(held, func() {})
 	check := &checkIn{id: "sub-1", started: start, missed: func(Row) []string { return nil }}
 	inbox.attach(held, check)
@@ -117,7 +117,7 @@ func TestAnUnreadCheckIsReplacedAndCountsFromTheLastOneRead(t *testing.T) {
 	if len(idle) != 1 || !strings.Contains(idle[0], "steps since the last check: none, and no step for 31m0s") {
 		t.Fatalf("a check after the lead read the last one is %q, want none since then and idle since the step at 3m", idle)
 	}
-	inbox.ended(held, "", llm.SourceReport, false, nil)
+	inbox.ended(held, "", core.SourceReport, false, nil)
 	inbox.postCheck(held, check, nil, start.Add(64*time.Minute))
 	if after := inbox.Take(); len(after) > 0 {
 		t.Fatalf("a check on an ended sub-agent was posted: %q", after)
@@ -138,7 +138,7 @@ func TestAnUnreadCheckIsReplacedAndCountsFromTheLastOneRead(t *testing.T) {
 
 func TestTheGateIsReadOutsideTheInboxLock(t *testing.T) {
 	spawn := &SpawnTool{Inbox: NewInbox(), Limits: func() SubAgentLimits { return SubAgentLimits{CheckIn: checkEvery} }}
-	held := &heldSubAgent{agent: subagent.SubAgent{ID: "sub-1"}, running: true}
+	held := &heldSubAgent{agent: subagents.SubAgent{ID: "sub-1"}, running: true}
 	heldLock := make(chan bool, 64)
 	check := &checkIn{id: "sub-1", started: time.Now(), missed: func(Row) []string {
 		free := spawn.Inbox.mu.TryLock()

@@ -11,7 +11,7 @@ import (
 const proxySheet = "tools/shell/proxy.yaml"
 
 type ProxySetting struct {
-	Proxy   *turn.CommandProxy
+	Proxy   *loop.CommandProxy
 	Use     string
 	Layer   string
 	Refused []error
@@ -19,7 +19,7 @@ type ProxySetting struct {
 
 func LoadProxySetting(root string) ProxySetting {
 	setting := ProxySetting{Use: "off", Layer: "nothing declares it"}
-	layers, err := models.Layers(shipped.Files(), root)
+	layers, err := catalog.Layers(shipped.Files(), root)
 	if err != nil {
 		setting.Refused = append(setting.Refused, err)
 		return setting
@@ -28,7 +28,7 @@ func LoadProxySetting(root string) ProxySetting {
 		if _, err := fs.Stat(layer.FS, proxySheet); err != nil {
 			continue
 		}
-		proxy, err := turn.LoadCommandProxy(layer.FS, layer.Origin, root)
+		proxy, err := loop.LoadCommandProxy(layer.FS, layer.Origin, root)
 		if err != nil {
 			setting.Refused = append(setting.Refused, err)
 			continue

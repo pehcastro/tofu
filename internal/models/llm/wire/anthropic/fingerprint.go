@@ -80,8 +80,8 @@ func AnthropicBuiltinToolNames() [4]string {
 	return [4]string{"web_search", "code_execution", "text_editor", "computer"}
 }
 
-func ReasoningEfforts() []llm.Effort {
-	return []llm.Effort{llm.EffortLow, llm.EffortMedium, llm.EffortHigh, llm.EffortXHigh, llm.EffortMax}
+func ReasoningEfforts() []core.Effort {
+	return []core.Effort{core.EffortLow, core.EffortMedium, core.EffortHigh, core.EffortXHigh, core.EffortMax}
 }
 
 func ClaudeCodeAgentBetas(thinking bool) []string {

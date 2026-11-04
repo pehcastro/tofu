@@ -1,4 +1,4 @@
-package rule
+package rules
 
 import (
 	"bytes"
@@ -23,11 +23,11 @@ func (r Rule) watches(path string) bool {
 	if r.Trigger.scope != "" && !ScopeReaches(r.Trigger.scope, path) {
 		return false
 	}
-	listed, err := subagent.Matches(path, r.Paths)
+	listed, err := subagents.Matches(path, r.Paths)
 	if err != nil || r.Paths != nil && !listed {
 		return false
 	}
-	excepted, err := subagent.Matches(path, r.ExceptPaths)
+	excepted, err := subagents.Matches(path, r.ExceptPaths)
 	return err == nil && !excepted
 }
 

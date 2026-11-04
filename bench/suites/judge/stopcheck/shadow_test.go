@@ -19,13 +19,13 @@ import (
 )
 
 type queuedModel struct {
-	decisions []llm.Decision
+	decisions []core.Decision
 	asked     int
 }
 
-func (m *queuedModel) Ask(context.Context, llm.Request) (llm.Decision, error) {
+func (m *queuedModel) Ask(context.Context, core.Request) (core.Decision, error) {
 	if m.asked >= len(m.decisions) {
-		return llm.Decision{}, errors.New("queuedModel: the loop asked for more steps than were queued")
+		return core.Decision{}, errors.New("queuedModel: the loop asked for more steps than were queued")
 	}
 	m.asked++
 	return m.decisions[m.asked-1], nil
@@ -37,8 +37,8 @@ type echoTool struct {
 
 func (*echoTool) Name() string { return "bash" }
 
-func (*echoTool) Definition() llm.Tool {
-	return llm.Tool{Name: "bash", Description: "run a command", Parameters: map[string]any{"type": "object"}}
+func (*echoTool) Definition() core.Tool {
+	return core.Tool{Name: "bash", Description: "run a command", Parameters: map[string]any{"type": "object"}}
 }
 
 func (t *echoTool) Run(context.Context, json.RawMessage) (contract.Result, error) {
@@ -55,7 +55,7 @@ type shadowGate struct {
 	written  []ledger.Row
 }
 
-func (g *shadowGate) Decide(_ context.Context, request turn.GateRequest) (turn.GateDecision, error) {
+func (g *shadowGate) Decide(_ context.Context, request loop.GateRequest) (loop.GateDecision, error) {
 	g.deciding.Lock()
 	defer g.deciding.Unlock()
 	built, builder, err := state.BuildStopCheck(state.StopCheckState{
@@ -63,7 +63,7 @@ func (g *shadowGate) Decide(_ context.Context, request turn.GateRequest) (turn.G
 		RecentSteps: []state.StopCheckStep{{Index: len(g.written) + 1, ToolCalls: []state.StopCheckCall{{Tool: request.Tool}}}},
 	})
 	if err != nil {
-		return turn.GateDecision{}, err
+		return loop.GateDecision{}, err
 	}
 	row, err := appendRow(g.writer, rowInput{
 		state: json.RawMessage(built), stateBuilder: builder, wording: g.pol.QuestionsVersion,
@@ -71,10 +71,10 @@ func (g *shadowGate) Decide(_ context.Context, request turn.GateRequest) (turn.G
 		turnID: request.TurnID,
 	})
 	if err != nil {
-		return turn.GateDecision{}, err
+		return loop.GateDecision{}, err
 	}
 	g.written = append(g.written, row)
-	return turn.GateDecision{ID: row.ID, Verdict: ledger.VerdictAllow}, nil
+	return loop.GateDecision{ID: row.ID, Verdict: ledger.VerdictAllow}, nil
 }
 
 func stopNowAnswers(wording int) []ledger.Answer {
@@ -239,25 +239,25 @@ func TestAStopDecisionRecordedMidTurnInShadowDoesNotEndTheTurn(t *testing.T) {
 	dir := t.TempDir()
 	gate := &shadowGate{writer: ledger.NewWriter(dir), pol: pol, mode: resolution.Mode, reason: resolution.Reason}
 
-	call := llm.ToolCall{ID: "call-1", Name: "bash", Arguments: json.RawMessage(`{"command":"ls"}`)}
-	model := &queuedModel{decisions: []llm.Decision{
-		{Build: "stub", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{call}},
-		{Build: "stub", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{call}},
-		{Build: "stub", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{call}},
-		{Build: "stub", Outcome: llm.OutcomeMessage, Content: "done"},
+	call := core.ToolCall{ID: "call-1", Name: "bash", Arguments: json.RawMessage(`{"command":"ls"}`)}
+	model := &queuedModel{decisions: []core.Decision{
+		{Build: "stub", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{call}},
+		{Build: "stub", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{call}},
+		{Build: "stub", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{call}},
+		{Build: "stub", Outcome: core.OutcomeMessage, Content: "done"},
 	}}
 
-	row, err := turn.Run(context.Background(), turn.Config{
+	row, err := loop.Run(context.Background(), loop.Config{
 		Model:          model,
-		Spend:          turn.SpendAPIKey,
-		Tools:          turn.NewRegistry(&echoTool{}),
+		Spend:          loop.SpendAPIKey,
+		Tools:          loop.NewRegistry(&echoTool{}),
 		Gate:           gate,
 		Task:           "list the folder",
-		Caps:           turn.Caps{MaxSteps: 10, LoopGuardRepeats: konst.TurnLoopGuardRepeats, LoopGuardWindow: konst.TurnLoopGuardWindow},
+		Caps:           loop.Caps{MaxSteps: 10, LoopGuardRepeats: konst.TurnLoopGuardRepeats, LoopGuardWindow: konst.TurnLoopGuardWindow},
 		ResultBytesCap: 4096,
 	})
 	if err != nil {
-		t.Fatalf("turn.Run: %v", err)
+		t.Fatalf("loop.Run: %v", err)
 	}
 
 	if len(gate.written) != 3 {
@@ -282,7 +282,7 @@ func TestAStopDecisionRecordedMidTurnInShadowDoesNotEndTheTurn(t *testing.T) {
 	if len(row.Steps) != 4 {
 		t.Fatalf("the turn ran %d steps after three recorded stop decisions, want the four its model asked for", len(row.Steps))
 	}
-	if row.Outcome != turn.OutcomeStopped {
+	if row.Outcome != loop.OutcomeStopped {
 		t.Fatalf("the turn ended as %s, want stopped, which is the model's own last message ending it", row.Outcome)
 	}
 	if model.asked != 4 {

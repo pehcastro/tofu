@@ -15,7 +15,7 @@ import (
 
 func TestATurnSaysWhetherThePersonOrACronJobStartedIt(t *testing.T) {
 	at := time.Date(2026, 10, 8, 9, 0, 0, 0, time.UTC)
-	origins, release := make(chan llm.Origin, 3), make(chan struct{})
+	origins, release := make(chan core.Origin, 3), make(chan struct{})
 	h, _ := New(Config{Now: func() time.Time { return at }, Play: func(ctx context.Context, _ Pick, _ string, live Live) {
 		origins <- live.Origin
 		select {
@@ -51,8 +51,8 @@ func TestATurnSaysWhetherThePersonOrACronJobStartedIt(t *testing.T) {
 	release <- struct{}{}
 	idle()
 
-	want := []llm.Origin{{Source: llm.SourceTask}, {Source: llm.SourceCronFire, ID: "c1", Schedule: "every 1m"}, {Source: llm.SourceCronFire, ID: "c2"}}
-	if got := []llm.Origin{typed, fired, unread}; !slices.Equal(got, want) {
+	want := []core.Origin{{Source: core.SourceTask}, {Source: core.SourceCronFire, ID: "c1", Schedule: "every 1m"}, {Source: core.SourceCronFire, ID: "c2"}}
+	if got := []core.Origin{typed, fired, unread}; !slices.Equal(got, want) {
 		t.Errorf("the three turns were started by %+v, want %+v", got, want)
 	}
 	var started, wired []Origin
@@ -84,12 +84,12 @@ func TestAReopenedSessionSaysWhoSentEachMessage(t *testing.T) {
 		source string
 		want   Origin
 	}{
-		{"fix the build", "task", Origin{Kind: OriginPerson, Sub: llm.SourceTask}},
-		{"cron c3 fired, not typed by the person:\ncheck the build", "cron c3 0 9 * * *, fired in process 4242", Origin{Kind: OriginCron, Sub: llm.SourceCronFire, Job: "c3", Schedule: "0 9 * * *"}},
-		{"an old session wrote no origin", "", Origin{Kind: OriginPerson, Sub: llm.SourceTask}},
-		{"the stop hook says the tests fail", "stop hook", Origin{Kind: llm.OriginHook, Sub: llm.SourceStopHook}},
-		{"sub-agent research-9 is finished, the shaders compile", "sub-agent report", Origin{Kind: OriginAgent, Sub: llm.SourceReport, Name: "research-9"}},
-		{"and keep it short", "sub-agent check and typed by the person", Origin{Kind: OriginPerson, Sub: llm.SourceTyped}},
+		{"fix the build", "task", Origin{Kind: OriginPerson, Sub: core.SourceTask}},
+		{"cron c3 fired, not typed by the person:\ncheck the build", "cron c3 0 9 * * *, fired in process 4242", Origin{Kind: OriginCron, Sub: core.SourceCronFire, Job: "c3", Schedule: "0 9 * * *"}},
+		{"an old session wrote no origin", "", Origin{Kind: OriginPerson, Sub: core.SourceTask}},
+		{"the stop hook says the tests fail", "stop hook", Origin{Kind: core.OriginHook, Sub: core.SourceStopHook}},
+		{"sub-agent research-9 is finished, the shaders compile", "sub-agent report", Origin{Kind: OriginAgent, Sub: core.SourceReport, Name: "research-9"}},
+		{"and keep it short", "sub-agent check and typed by the person", Origin{Kind: OriginPerson, Sub: core.SourceTyped}},
 	}
 	events := []recordedEvent{reported("research-9", roster.Finished, sent[4].text, at)}
 	for _, one := range sent {
@@ -100,7 +100,7 @@ func TestAReopenedSessionSaysWhoSentEachMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	messages, err := turn.ConversationFrom(logged)
+	messages, err := loop.ConversationFrom(logged)
 	if err != nil {
 		t.Fatal(err)
 	}

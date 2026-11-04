@@ -1,4 +1,4 @@
-package memtree
+package tree
 
 import (
 	"cmp"
@@ -71,9 +71,9 @@ func (s *Store) Build(ctx context.Context, compact Compact) (Built, error) {
 		running++
 		before := s.before(ref)
 		report := sys.Crashes(".")
-		safe.Go(report, "memtree compaction", func() {
+		recover.Go(report, "memtree compaction", func() {
 			finished := compacted{ref: ref}
-			finished.err = safe.Call(report, "memtree compaction", func() (err error) {
+			finished.err = recover.Call(report, "memtree compaction", func() (err error) {
 				finished.text, err = compact(ctx, before, left, right)
 				return err
 			})
@@ -134,7 +134,7 @@ func BuildInReplies(ctx context.Context, open func(func(*Store) error) error, on
 		if len(steps) > 0 {
 			asking.Go(func() {
 				var lines []string
-				err := safe.Call(report, "memory compaction", func() (err error) {
+				err := recover.Call(report, "memory compaction", func() (err error) {
 					lines, err = all(ctx, before, steps)
 					return err
 				})
@@ -158,7 +158,7 @@ func BuildInReplies(ctx context.Context, open func(func(*Store) error) error, on
 			asking.Go(func() {
 				defer func() { <-slots }()
 				var line string
-				err := safe.Call(report, "memory compaction", func() (err error) {
+				err := recover.Call(report, "memory compaction", func() (err error) {
 					line, err = one(ctx, before, q.left, q.right)
 					return err
 				})

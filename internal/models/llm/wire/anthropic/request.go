@@ -20,11 +20,11 @@ import (
 type Request struct {
 	Model      string
 	System     []string
-	Messages   []llm.Message
-	Tools      []llm.Tool
-	ToolChoice llm.ToolChoice
+	Messages   []core.Message
+	Tools      []core.Tool
+	ToolChoice core.ToolChoice
 	MaxTokens  int
-	Effort     llm.Effort
+	Effort     core.Effort
 	SessionID  string
 	AccountID  string
 	InstallID  string
@@ -39,7 +39,7 @@ type Request struct {
 	OnRetry             func()
 }
 
-const SourceAfterTheCachedPrefix = llm.SourceAfterTheCachedPrefix
+const SourceAfterTheCachedPrefix = core.SourceAfterTheCachedPrefix
 
 const CacheTTLFiveMinutes = "5m"
 
@@ -216,9 +216,9 @@ func (r Request) Encode(oauth bool) ([]byte, error) {
 
 func (r Request) toolChoice() *wireToolChoice {
 	switch r.ToolChoice {
-	case llm.ToolChoiceAuto:
+	case core.ToolChoiceAuto:
 		return nil
-	case llm.ToolChoiceNone:
+	case core.ToolChoiceNone:
 		return &wireToolChoice{Type: "none"}
 	}
 	panic("anthropic: unknown tool choice")
@@ -231,7 +231,7 @@ func (r Request) outputConfig() (*wireOutput, error) {
 	if !slices.Contains(ReasoningEfforts(), r.Effort) {
 		return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
 			"%q is not an anthropic thinking effort; this wire takes %s",
-			r.Effort, llm.EffortList(ReasoningEfforts()))
+			r.Effort, core.EffortList(ReasoningEfforts()))
 	}
 	return &wireOutput{Effort: string(r.Effort)}, nil
 }
@@ -390,9 +390,9 @@ func historyChars(messages []wireMessage) int {
 	return total
 }
 
-func firstUserText(messages []llm.Message) string {
+func firstUserText(messages []core.Message) string {
 	for _, message := range messages {
-		if message.Role == llm.RoleUser {
+		if message.Role == core.RoleUser {
 			return message.Sent()
 		}
 	}
@@ -434,21 +434,21 @@ func everyToolUseAnswered(messages []wireMessage) error {
 	return nil
 }
 
-func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
+func encodeMessages(messages []core.Message, oauth bool) ([]wireMessage, error) {
 	encoded := make([]wireMessage, 0, len(messages))
 	for index, message := range messages {
 		switch message.Role {
-		case llm.RoleSystem:
+		case core.RoleSystem:
 			return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
 				"message %d is a system message; anthropic carries those in the system field", index)
 
-		case llm.RoleUser:
-			if llm.BlankText(message.Content) && len(message.Images) == 0 {
+		case core.RoleUser:
+			if core.BlankText(message.Content) && len(message.Images) == 0 {
 				return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
 					"message %d is a user message with no content", index)
 			}
 			var blocks []contentBlock
-			if !llm.BlankText(message.Content) {
+			if !core.BlankText(message.Content) {
 				blocks = append(blocks, contentBlock{Type: "text", Text: message.Sent()})
 			}
 			pictures, err := pictureBlocks(index, message.Images)
@@ -459,7 +459,7 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 			blocks[len(blocks)-1].keptHead = message.KeptHead
 			encoded = append(encoded, wireMessage{Role: "user", Content: blocks})
 
-		case llm.RoleTool:
+		case core.RoleTool:
 			if message.ToolCallID == "" {
 				return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
 					"message %d is a tool result with no tool call id", index)
@@ -479,8 +479,8 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 			}
 			encoded = append(encoded, wireMessage{Role: "user", Content: []contentBlock{result}})
 
-		case llm.RoleAssistant:
-			if llm.BlankText(message.Content) && len(message.ToolCalls) == 0 {
+		case core.RoleAssistant:
+			if core.BlankText(message.Content) && len(message.ToolCalls) == 0 {
 				continue
 			}
 			blocks := make([]contentBlock, 0, len(message.ToolCalls)+2)
@@ -488,7 +488,7 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 				blocks = append(blocks, contentBlock{Type: "thinking",
 					Thinking: message.Thinking.Text, Signature: message.Thinking.Signature})
 			}
-			if !llm.BlankText(message.Content) {
+			if !core.BlankText(message.Content) {
 				blocks = append(blocks, contentBlock{Type: "text", Text: message.Content})
 			}
 			for callIndex, call := range message.ToolCalls {
@@ -506,7 +506,7 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 			blocks[len(blocks)-1].keptHead = message.KeptHead
 			encoded = append(encoded, wireMessage{Role: "assistant", Content: blocks})
 
-		case llm.RoleUnknown:
+		case core.RoleUnknown:
 			return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
 				"message %d has an unknown role", index)
 		}
@@ -514,21 +514,21 @@ func encodeMessages(messages []llm.Message, oauth bool) ([]wireMessage, error) {
 	return encoded, nil
 }
 
-func pictureBlocks(index int, images []llm.Image) ([]contentBlock, error) {
+func pictureBlocks(index int, images []core.Image) ([]contentBlock, error) {
 	blocks := make([]contentBlock, len(images))
 	for i, image := range images {
 		image = image.Fitted()
 		data := image.Base64()
-		if len(data) > llm.ImageEncodedBytes {
+		if len(data) > core.ImageEncodedBytes {
 			return nil, transport.Fail("anthropic.Encode", transport.KindBadRequest, nil,
-				"message %d image %d is %d bytes of base64, past the %d byte cap", index, i, len(data), llm.ImageEncodedBytes)
+				"message %d image %d is %d bytes of base64, past the %d byte cap", index, i, len(data), core.ImageEncodedBytes)
 		}
 		blocks[i] = contentBlock{Type: "image", Source: &imageSource{Type: "base64", MediaType: image.MediaType, Data: data}}
 	}
 	return blocks, nil
 }
 
-func encodeTools(tools []llm.Tool, oauth bool) ([]wireTool, error) {
+func encodeTools(tools []core.Tool, oauth bool) ([]wireTool, error) {
 	if len(tools) == 0 {
 		return nil, nil
 	}

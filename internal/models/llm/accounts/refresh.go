@@ -1,4 +1,4 @@
-package cred
+package accounts
 
 import (
 	"context"
@@ -132,8 +132,8 @@ func (m *Manager) refreshOnce(ctx context.Context, row Row, stale func(Credentia
 		running = &flight{done: make(chan struct{})}
 		m.inflight[row.ID] = running
 		report := sys.Crashes(".")
-		safe.Go(report, "credential refresh", func() {
-			running.err = safe.Call(report, "credential refresh", func() (err error) {
+		recover.Go(report, "credential refresh", func() {
+			running.err = recover.Call(report, "credential refresh", func() (err error) {
 				detached, cancel := context.WithTimeout(context.WithoutCancel(ctx), refreshTimeout)
 				defer cancel()
 				running.access, err = m.refreshLeased(detached, row, stale)

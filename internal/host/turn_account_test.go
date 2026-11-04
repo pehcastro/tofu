@@ -13,11 +13,11 @@ import (
 	"tofu/internal/store/session"
 )
 
-type scriptedModel struct{ replies []llm.Decision }
+type scriptedModel struct{ replies []core.Decision }
 
-func (m *scriptedModel) Ask(context.Context, llm.Request) (llm.Decision, error) {
+func (m *scriptedModel) Ask(context.Context, core.Request) (core.Decision, error) {
 	if len(m.replies) == 0 {
-		return llm.Decision{Build: "stub", Outcome: llm.OutcomeMessage, Content: "done"}, nil
+		return core.Decision{Build: "stub", Outcome: core.OutcomeMessage, Content: "done"}, nil
 	}
 	reply := m.replies[0]
 	m.replies = m.replies[1:]
@@ -30,25 +30,25 @@ type twoAccounts struct {
 }
 
 func (e twoAccounts) Prepare(start Turn, hooks Hooks) (Prepared, error) {
-	first := &scriptedModel{replies: []llm.Decision{{Build: "stub", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{{ID: "call-1", Name: "nothing", Arguments: json.RawMessage(`{}`)}}}}}
+	first := &scriptedModel{replies: []core.Decision{{Build: "stub", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{{ID: "call-1", Name: "nothing", Arguments: json.RawMessage(`{}`)}}}}}
 	moved := false
-	accounts := turn.Accounts{
-		Pick: func(context.Context) (turn.Account, error) {
+	accounts := loop.Accounts{
+		Pick: func(context.Context) (loop.Account, error) {
 			if e.fixed {
-				return turn.Account{Model: first}, nil
+				return loop.Account{Model: first}, nil
 			}
-			return turn.Account{ID: 1, Model: first, Headroom: 0.2, Window: "5h"}, nil
+			return loop.Account{ID: 1, Model: first, Headroom: 0.2, Window: "5h"}, nil
 		},
-		Next: func(context.Context, turn.Account) (turn.Account, bool, error) {
+		Next: func(context.Context, loop.Account) (loop.Account, bool, error) {
 			if moved || e.fixed {
-				return turn.Account{}, false, nil
+				return loop.Account{}, false, nil
 			}
 			moved = true
-			return turn.Account{ID: 2, Model: &scriptedModel{}, Headroom: 0.5, Window: "5h"}, true, nil
+			return loop.Account{ID: 2, Model: &scriptedModel{}, Headroom: 0.5, Window: "5h"}, true, nil
 		},
 	}
 	store, err := session.OpenIn(e.dir)
-	return Prepared{Config: turn.Config{Accounts: accounts, Task: start.Task, Caps: turn.Caps{MaxSteps: 4}, Inbox: hooks.Inbox, ResultBytesCap: konst.TurnResultBytesCap, Spend: turn.SpendSubscription}, Sessions: store,
+	return Prepared{Config: loop.Config{Accounts: accounts, Task: start.Task, Caps: loop.Caps{MaxSteps: 4}, Inbox: hooks.Inbox, ResultBytesCap: konst.TurnResultBytesCap, Spend: loop.SpendSubscription}, Sessions: store,
 		Account: func(id int64) TurnAccount {
 			return TurnAccount{Source: "claude-sub", AccountID: id, Login: "person@example.com", Model: "claude-opus-5"}
 		}}, err
@@ -173,10 +173,10 @@ func TestTurnAccountNamesThePickAndTheMoveOfTheRunningTurn(t *testing.T) {
 			t.Fatalf("the turn sent %d turn.account lines, want a pick and a move: %+v", len(spent), spent)
 		}
 		picked, moved := spent[0], spent[1]
-		if picked.Reason != AccountReason(turn.AccountPicked) || picked.AccountID != 1 || picked.FromAccount != 0 || picked.Source != "claude-sub" || picked.Login != "person@example.com" || picked.Model != "claude-opus-5" || picked.Turn != running.Turn {
+		if picked.Reason != AccountReason(loop.AccountPicked) || picked.AccountID != 1 || picked.FromAccount != 0 || picked.Source != "claude-sub" || picked.Login != "person@example.com" || picked.Model != "claude-opus-5" || picked.Turn != running.Turn {
 			t.Errorf("the pick went out as %+v, want account 1 picked on claude-sub in turn %s", picked, running.Turn)
 		}
-		if moved.Reason != AccountReason(turn.AccountMoved) || moved.AccountID != 2 || moved.FromAccount != 1 || moved.Turn != running.Turn {
+		if moved.Reason != AccountReason(loop.AccountMoved) || moved.AccountID != 2 || moved.FromAccount != 1 || moved.Turn != running.Turn {
 			t.Errorf("the move went out as %+v, want account 2 moved from 1 in turn %s", moved, running.Turn)
 		}
 	}

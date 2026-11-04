@@ -498,9 +498,9 @@ func (s *server) pumpOn(l *lane) {
 		event.from = l.host
 		s.publish(event)
 	}
-	safe.Go(l.host.report, "serve pump", func() {
+	recover.Go(l.host.report, "serve pump", func() {
 		defer close(l.pumped)
-		safe.Loop(l.host.report, "serve pump", l.stop, func() {
+		recover.Loop(l.host.report, "serve pump", l.stop, func() {
 			for {
 				select {
 				case event := <-l.host.Events():

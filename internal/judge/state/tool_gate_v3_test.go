@@ -11,14 +11,14 @@ import (
 const toolGateV3Path = "../../../library/questions/tool_gate@3.yaml"
 
 func TestToolGateV3QuestionSetLintsClean(t *testing.T) {
-	set, err := question.Load(toolGateV3Path)
+	set, err := questions.Load(toolGateV3Path)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
 	if set.QuestionsVersion != 3 {
 		t.Fatalf("questions_version = %d, want 3", set.QuestionsVersion)
 	}
-	findings := question.Lint(set, question.DefaultCaps())
+	findings := questions.Lint(set, questions.DefaultCaps())
 	for _, finding := range findings {
 		t.Errorf("finding: %s", finding)
 	}

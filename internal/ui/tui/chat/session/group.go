@@ -123,9 +123,9 @@ func (m *Model) groupLines(start int) []string {
 		case call.standsAlone():
 			lines = append(lines, continuation+m.toolLine(call))
 		case acted:
-			lines = append(lines, continuation+look.Style(look.ReferenceID).Render(icon)+look.Style(look.Text).Render(ansi.Truncate(words, max(room-widget.Cells(icon), 1), "…")))
+			lines = append(lines, continuation+look.Style(look.ReferenceID).Render(icon)+look.Style(look.Text).Render(ansi.Truncate(words, max(room-render.Cells(icon), 1), "…")))
 		case g.open:
-			lines = append(lines, continuation+openIndent+look.Muted(ansi.Truncate(cardWords(call), max(room-widget.Cells(openIndent), 1), "…")))
+			lines = append(lines, continuation+openIndent+look.Muted(ansi.Truncate(cardWords(call), max(room-render.Cells(openIndent), 1), "…")))
 		}
 	}
 	return lines
@@ -148,7 +148,7 @@ func (m *Model) workRow(g group) string {
 			ended = call.Ended
 		}
 	}
-	return look.Muted(strings.Join([]string{finishedWord, counts, widget.Until(ended.Sub(g.calls[0].Started))}, actGap))
+	return look.Muted(strings.Join([]string{finishedWord, counts, render.Until(ended.Sub(g.calls[0].Started))}, actGap))
 }
 
 func (m *Model) leadDoing(g group) string {

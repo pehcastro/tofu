@@ -32,7 +32,7 @@ import (
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
-	"tofu/internal/ui/tui/app"
+	tui "tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/fixture"
 	"tofu/internal/ui/tui/frame/filmstrip"
 	"tofu/internal/ui/tui/frame/frame"
@@ -237,7 +237,7 @@ type cassetteReply struct {
 }
 
 type recordedReply struct {
-	decision      llm.Decision
+	decision      core.Decision
 	deltas        []string
 	thinking      string
 	unfinished    bool
@@ -255,7 +255,7 @@ type cassette struct {
 	callers       map[string]string
 	subAgents     int
 	firstOnSystem map[string]string
-	last          llm.Request
+	last          core.Request
 	sent          []sentRequest
 	dump          string
 	askedFor      string
@@ -263,7 +263,7 @@ type cassette struct {
 
 type sentRequest struct {
 	summary  string
-	messages []llm.Message
+	messages []core.Message
 }
 
 type requestsForm struct {
@@ -343,12 +343,12 @@ func readCassette(path string) (*cassette, error) {
 		if len(reply.Deltas) == 0 && reply.Text != "" {
 			reply.Deltas = []string{reply.Text}
 		}
-		decision := llm.Decision{Build: wiring.CassetteBuild, Outcome: llm.OutcomeMessage, Content: strings.Join(reply.Deltas, ""), FirstTokenMS: recordedFlight.Milliseconds(),
-			Usage: llm.Usage{InputTokens: reply.Usage.Input}, PromptAccounting: llm.PromptExcludesCacheReads,
-			CacheReadTokens: reply.Usage.CacheRead, CacheWriteTokens: reply.Usage.CacheWrite, Thinking: llm.Thinking{Text: reply.Thinking}}
+		decision := core.Decision{Build: wiring.CassetteBuild, Outcome: core.OutcomeMessage, Content: strings.Join(reply.Deltas, ""), FirstTokenMS: recordedFlight.Milliseconds(),
+			Usage: core.Usage{InputTokens: reply.Usage.Input}, PromptAccounting: core.PromptExcludesCacheReads,
+			CacheReadTokens: reply.Usage.CacheRead, CacheWriteTokens: reply.Usage.CacheWrite, Thinking: core.Thinking{Text: reply.Thinking}}
 		for index, one := range reply.Tools {
-			decision.Outcome = llm.OutcomeToolCalls
-			decision.ToolCalls = append(decision.ToolCalls, llm.ToolCall{
+			decision.Outcome = core.OutcomeToolCalls
+			decision.ToolCalls = append(decision.ToolCalls, core.ToolCall{
 				ID:        fmt.Sprintf("%s_%d_%d", wiring.CassetteBuild, number+1, index+1),
 				Name:      one.Name,
 				Arguments: one.Args,
@@ -393,11 +393,11 @@ func readCassette(path string) (*cassette, error) {
 	return deck, nil
 }
 
-func anthropicRefuses(request llm.Request) error {
+func anthropicRefuses(request core.Request) error {
 	var system []string
-	messages := make([]llm.Message, 0, len(request.Messages))
+	messages := make([]core.Message, 0, len(request.Messages))
 	for _, message := range request.Messages {
-		if message.Role == llm.RoleSystem {
+		if message.Role == core.RoleSystem {
 			system = append(system, message.Content)
 			continue
 		}
@@ -407,22 +407,22 @@ func anthropicRefuses(request llm.Request) error {
 	return err
 }
 
-func (c *cassette) take(request llm.Request) (recordedReply, error) {
+func (c *cassette) take(request core.Request) (recordedReply, error) {
 	if err := anthropicRefuses(request); err != nil {
 		return recordedReply{}, fmt.Errorf("%s: the anthropic wire would refuse this request: %w", c.name, err)
 	}
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	c.last = request
-	system, opening, forked, briefed, marked := "", llm.Message{}, false, false, false
+	system, opening, forked, briefed, marked := "", core.Message{}, false, false, false
 	for at, message := range request.Messages {
-		if message.Role == llm.RoleSystem && system == "" {
+		if message.Role == core.RoleSystem && system == "" {
 			system = message.Content
 		}
-		briefed = briefed || message.Origin.Source == llm.SourceBrief
-		marked = marked || message.Role == llm.RoleUser && message.Origin.Source != ""
-		if message.Role == llm.RoleUser && message.Origin.Source != llm.SourceMemoryView && message.Origin.Source != llm.SourceEpisodes && opening.Role == llm.RoleUnknown {
-			opening, forked = message, at+1 < len(request.Messages) && request.Messages[at+1].Origin.Source == llm.SourceForkCarry
+		briefed = briefed || message.Origin.Source == core.SourceBrief
+		marked = marked || message.Role == core.RoleUser && message.Origin.Source != ""
+		if message.Role == core.RoleUser && message.Origin.Source != core.SourceMemoryView && message.Origin.Source != core.SourceEpisodes && opening.Role == core.RoleUnknown {
+			opening, forked = message, at+1 < len(request.Messages) && request.Messages[at+1].Origin.Source == core.SourceForkCarry
 		}
 	}
 	conversation := opening.Content
@@ -444,8 +444,8 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 	}
 	c.taken[name]++
 	body, err := json.Marshal(struct {
-		Messages []llm.Message
-		Tools    []llm.Tool
+		Messages []core.Message
+		Tools    []core.Tool
 	}{request.Messages, request.Tools})
 	if err != nil {
 		return recordedReply{}, err
@@ -460,7 +460,7 @@ func (c *cassette) take(request llm.Request) (recordedReply, error) {
 	}
 	sent := sentRequest{summary: line, messages: slices.Clone(request.Messages)}
 	for at := range sent.messages {
-		sent.messages[at].Images = make([]llm.Image, len(sent.messages[at].Images))
+		sent.messages[at].Images = make([]core.Image, len(sent.messages[at].Images))
 	}
 	c.sent = append(c.sent, sent)
 	if c.dump != "" {
@@ -518,7 +518,7 @@ func (sent sentRequest) lines(form requestsForm, width int, redactor sys.KeyReda
 			continue
 		}
 		for _, one := range strings.Split(redactor.Redact(strings.Join(said, "\n")), "\n") {
-			lines = append(lines, widget.Fit("    "+one, width))
+			lines = append(lines, render.Fit("    "+one, width))
 		}
 	}
 	return lines
@@ -533,15 +533,15 @@ func appendLines(path string, lines []string) error {
 	return errors.Join(err, file.Close())
 }
 
-func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (c *cassette) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	select {
 	case <-ctx.Done():
-		return llm.Decision{}, ctx.Err()
+		return core.Decision{}, ctx.Err()
 	case <-time.After(recordedFlight):
 	}
 	reply, err := c.take(request)
 	if err != nil {
-		return llm.Decision{}, err
+		return core.Decision{}, err
 	}
 	defer func() {
 		c.mutex.Lock()
@@ -549,7 +549,7 @@ func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 		c.mutex.Unlock()
 	}()
 	if reply.refused != nil {
-		return llm.Decision{}, reply.refused
+		return core.Decision{}, reply.refused
 	}
 	if request.OnThinking != nil && reply.thinking != "" {
 		request.OnThinking(reply.thinking)
@@ -564,7 +564,7 @@ func (c *cassette) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 	}
 	<-ctx.Done()
 	time.Sleep(reply.holdAfterStop)
-	return llm.Decision{}, ctx.Err()
+	return core.Decision{}, ctx.Err()
 }
 
 func (c *cassette) askers() string {
@@ -625,7 +625,7 @@ func (c *cassette) images() string {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	for index := len(c.last.Messages) - 1; index >= 0; index-- {
-		if message := c.last.Messages[index]; message.Role == llm.RoleUser {
+		if message := c.last.Messages[index]; message.Role == core.RoleUser {
 			return "the last user message carried " + strconv.Itoa(len(message.Images)) + " image(s)"
 		}
 	}
@@ -637,7 +637,7 @@ func driveWire(deck *cassette) wiring.Opener {
 		if deck == nil {
 			return wiring.Wire{}, errors.New("tofu drive opens no live wire: name a recorded one with --cassette or " + cassetteVariable)
 		}
-		standingIn := models.Model{ID: wiring.CassetteBuild, Windows: []string{wiring.CassetteBuild}}
+		standingIn := catalog.Model{ID: wiring.CassetteBuild, Windows: []string{wiring.CassetteBuild}}
 		if chosen, err := wiring.ChooseModel(opts); err == nil {
 			standingIn.Subscription, standingIn.Vision, standingIn.PromptCache = chosen.Subscription, chosen.Vision, chosen.PromptCache
 			if opts.Model != "" {
@@ -646,7 +646,7 @@ func driveWire(deck *cassette) wiring.Opener {
 				deck.mutex.Unlock()
 			}
 		}
-		return wiring.Wire{Held: wiring.FixedAccounts(deck), Spend: turn.SpendSubscription, Selected: standingIn}, nil
+		return wiring.Wire{Held: wiring.FixedAccounts(deck), Spend: loop.SpendSubscription, Selected: standingIn}, nil
 	}
 }
 
@@ -701,7 +701,7 @@ func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePla
 				return held.Wires()
 			}
 			library, _ := wiring.ModelLibrary(dir)
-			listed := []tui.Wire{{Name: library.WireFor(models.Subscription(plan.source)), Model: shown, Provider: cmp.Or(plan.source, wiring.CassetteBuild)}}
+			listed := []tui.Wire{{Name: library.WireFor(catalog.Subscription(plan.source)), Model: shown, Provider: cmp.Or(plan.source, wiring.CassetteBuild)}}
 			if plan.quota == "" {
 				return listed
 			}
@@ -868,7 +868,7 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 		armIsKnown("--sift", plan.arms.SiftArm, wiring.SiftArms()),
 		armIsKnown("--done-review", plan.arms.DoneArm, settingspkg.DoneReviews()),
 		armIsKnown("--tools", plan.arms.ToolSet, []string{toolSetFull, toolSetThree}),
-		armIsKnown("--source", plan.source, []string{string(cred.ClaudeSub), string(cred.CodexSub)}),
+		armIsKnown("--source", plan.source, []string{string(accounts.ClaudeSub), string(accounts.CodexSub)}),
 	); err != nil {
 		return refuse("", err)
 	}

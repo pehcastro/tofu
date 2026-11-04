@@ -21,7 +21,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/sys"
 	"tofu/internal/testkit/cli"
@@ -66,16 +66,16 @@ func stubJev(t *testing.T, status int, body string) {
 	bindTypeSafe(t)
 }
 
-func claimedDoneWithNothing() turn.Row {
-	return turn.Row{
+func claimedDoneWithNothing() loop.Row {
+	return loop.Row{
 		ID:      "turn-sub-agent",
 		Task:    "create hello.txt containing the single word hello, then stop",
-		Outcome: turn.OutcomeStopped,
-		Steps:   []turn.StepRow{{Index: 1, AssistantText: "Done, hello.txt is written."}},
+		Outcome: loop.OutcomeStopped,
+		Steps:   []loop.StepRow{{Index: 1, AssistantText: "Done, hello.txt is written."}},
 	}
 }
 
-func openLineSubAgent() turn.Row {
+func openLineSubAgent() loop.Row {
 	row := claimedDoneWithNothing()
 	row.Task = "TOFU-1: create hello.txt containing the single word hello.\n\n## Acceptance\n- hello.txt says hello, pasted\n"
 	return row
@@ -115,7 +115,7 @@ func TestAShadowStopCheckDecidesNothingAndTheScreenStands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the typed arm failed: %v", err)
 	}
-	if decision.Verdict != turn.DoneAccepted {
+	if decision.Verdict != loop.DoneAccepted {
 		t.Fatalf("a shadow row reading allow reopened the sub-agent: %s", decision.Reason)
 	}
 	row := stopCheckRow(t, decision.ID)
@@ -137,7 +137,7 @@ func TestAnOpenLineIsAskedToJevAndReopenedInEitherMode(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: the typed arm failed: %v", mode, err)
 		}
-		if decision.Verdict != turn.DoneReopen || !strings.Contains(decision.Reason, "hello.txt says hello") {
+		if decision.Verdict != loop.DoneReopen || !strings.Contains(decision.Reason, "hello.txt says hello") {
 			t.Fatalf("%s: an unmet acceptance line was not reopened naming the line: %s %s", mode, decision.Verdict, decision.Reason)
 		}
 		row := stopCheckRow(t, decision.ID)
@@ -156,7 +156,7 @@ func TestAJevErrorStillReopensAnOpenLine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("jev being down let an unmet line through as an error, so the claim would stand: %v", err)
 	}
-	if decision.Verdict != turn.DoneReopen {
+	if decision.Verdict != loop.DoneReopen {
 		t.Fatalf("jev being down accepted an unmet line: %s", decision.Reason)
 	}
 	if row := stopCheckRow(t, decision.ID); row.Verdict != ledger.VerdictAsk {
@@ -165,9 +165,9 @@ func TestAJevErrorStillReopensAnOpenLine(t *testing.T) {
 }
 
 func TestTheDoneReviewIsScreenUnlessTheSettingOrTheCommandLineSaysOtherwise(t *testing.T) {
-	testkit.EmptyHome(t)
+	cli.EmptyHome(t)
 	dir := t.TempDir()
-	reviewOf := func(args ...string) turn.DoneReview {
+	reviewOf := func(args ...string) loop.DoneReview {
 		t.Helper()
 		opts, err := parseRunArgs(append(append([]string{"--dir", dir}, args...), "a task"))
 		if err != nil {
@@ -175,7 +175,7 @@ func TestTheDoneReviewIsScreenUnlessTheSettingOrTheCommandLineSaysOtherwise(t *t
 		}
 		return newDoneReview(settled(opts, nil).DoneArm, func(note string) { t.Errorf("tofu run %v said %q", args, note) })
 	}
-	if review := reviewOf(); review != turn.DoneReview(turn.ContractDoneReview{}) {
+	if review := reviewOf(); review != loop.DoneReview(loop.ContractDoneReview{}) {
 		t.Fatalf("with no setting and no flag the done review is %#v, want the screen", review)
 	}
 	for _, spawnless := range [][]string{{"--no-subagents"}, {"--tools", toolSetThree}} {
@@ -193,7 +193,7 @@ func TestTheDoneReviewIsScreenUnlessTheSettingOrTheCommandLineSaysOtherwise(t *t
 	if review := reviewOf(); review != nil {
 		t.Fatalf("doneReview off still built the done review %#v", review)
 	}
-	if review := reviewOf("--done-review", settingspkg.DoneReviewCheap); review != turn.DoneReview(turn.CheapDoneReview{}) {
+	if review := reviewOf("--done-review", settingspkg.DoneReviewCheap); review != loop.DoneReview(loop.CheapDoneReview{}) {
 		t.Fatalf("--done-review cheap over doneReview off built %#v, want the flag to win", review)
 	}
 	if _, err := parseRunArgs([]string{"--dir", dir, "--done-review", "maybe", "a task"}); err == nil {
@@ -202,12 +202,12 @@ func TestTheDoneReviewIsScreenUnlessTheSettingOrTheCommandLineSaysOtherwise(t *t
 }
 
 func TestATypedDoneReviewWithNoJevKeyFallsBackToTheScreenAndSaysSo(t *testing.T) {
-	testkit.EmptyHome(t)
+	cli.EmptyHome(t)
 	t.Setenv(sys.OpenRouterClassifierKeyName, "")
 	t.Chdir(t.TempDir())
 	var said []string
 	review := newDoneReview(settingspkg.DoneReviewTyped, func(note string) { said = append(said, note) })
-	if review != turn.DoneReview(turn.ContractDoneReview{}) {
+	if review != loop.DoneReview(loop.ContractDoneReview{}) {
 		t.Fatalf("typed with no Jev key built %#v, want the screen", review)
 	}
 	if len(said) != 1 || !strings.Contains(said[0], "typed") || !strings.Contains(said[0], "screen") {
@@ -243,7 +243,7 @@ func TestTheCheapDoneReviewArmReopensASubAgentThatRanNoTool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the cheap arm failed: %v", err)
 	}
-	if decision.Verdict != turn.DoneReopen {
+	if decision.Verdict != loop.DoneReopen {
 		t.Fatalf("the cheap arm answered %q for a sub-agent with no tool call at all", decision.Verdict)
 	}
 	t.Logf("cheap arm: %s, %s", decision.Verdict, decision.Reason)
@@ -268,7 +268,7 @@ func TestTheTypedDoneReviewArmReopensASubAgentAndLogsTheDecision(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the typed arm failed: %v", err)
 	}
-	if decision.Verdict != turn.DoneReopen {
+	if decision.Verdict != loop.DoneReopen {
 		t.Fatalf("the typed arm answered %q where work_remains is 0.95", decision.Verdict)
 	}
 	if decision.ID == "" {
@@ -301,12 +301,12 @@ func TestTheTypedDoneReviewBelievesASubAgentThatDidTheWork(t *testing.T) {
 		t.Fatalf("newTypedDoneReview: %v", err)
 	}
 	exitZero := 0
-	subAgent := turn.Row{
+	subAgent := loop.Row{
 		ID:      "turn-sub-agent",
 		Task:    "create hello.txt containing the single word hello, then stop",
-		Outcome: turn.OutcomeStopped,
-		Steps: []turn.StepRow{
-			{Index: 1, ToolCalls: []turn.ToolCallRow{{Tool: "write", Command: "write hello.txt", ExitCode: &exitZero}}},
+		Outcome: loop.OutcomeStopped,
+		Steps: []loop.StepRow{
+			{Index: 1, ToolCalls: []loop.ToolCallRow{{Tool: "write", Command: "write hello.txt", ExitCode: &exitZero}}},
 			{Index: 2, AssistantText: "Done, hello.txt is written."},
 		},
 	}
@@ -315,7 +315,7 @@ func TestTheTypedDoneReviewBelievesASubAgentThatDidTheWork(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the typed arm failed: %v", err)
 	}
-	if decision.Verdict != turn.DoneAccepted {
+	if decision.Verdict != loop.DoneAccepted {
 		t.Fatalf("the typed arm reopened a sub-agent that wrote the file and said so: %s", decision.Reason)
 	}
 	t.Logf("typed arm: %s, %s", decision.Verdict, decision.Reason)
@@ -409,7 +409,7 @@ func TestTheTypedDoneReviewReopensTheSubAgentInsideARunAndWhyPrintsTheChain(t *t
 	t.Logf("tofu why %s\n%s", first.DecisionIDs[0], printed)
 }
 
-func spawnOneSubAgent(t *testing.T, review turn.DoneReview, subAgent []llm.Decision) []turn.Row {
+func spawnOneSubAgent(t *testing.T, review loop.DoneReview, subAgent []llm.Decision) []loop.Row {
 	t.Helper()
 	dir := t.TempDir()
 	opts := armOpts(t)
@@ -422,13 +422,13 @@ func spawnOneSubAgent(t *testing.T, review turn.DoneReview, subAgent []llm.Decis
 	reported := llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent reported back"}
 	lead := []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{spawnCall}}, reported, reported}
 
-	config, spawner := mustConfig(t, opts, built, runtime{model: &queuedModel{decisions: lead, subAgents: subAgent}, spend: turn.SpendSubscription})
+	config, spawner := mustConfig(t, opts, built, runtime{model: &queuedModel{decisions: lead, subAgents: subAgent}, spend: loop.SpendSubscription})
 	spawner.Review = review
 	leadRows(t, config)
 	return spawner.SubAgentRows()
 }
 
-func recordedTurn(t *testing.T, name string) turn.Row {
+func recordedTurn(t *testing.T, name string) loop.Row {
 	t.Helper()
 	row, err := readRecordedTurn(dummy.Path("turns", "labelled"), name)
 	if err != nil {
@@ -442,7 +442,7 @@ func TestLiveTheTypedDoneReviewReadsTwoRecordedSubAgents(t *testing.T) {
 		t.Skip("set TOFU_LIVE=1 to spend a fraction of a cent on two live stop_check@1 decisions")
 	}
 	sys.AllowLiveCredential(t)
-	key, err := jev.TypeSafeKey(filepath.Join("..", "..", ".env"))
+	key, err := core.TypeSafeKey(filepath.Join("..", "..", ".env"))
 	if err != nil {
 		t.Fatalf("no credential: %v", err)
 	}
@@ -463,10 +463,10 @@ func TestLiveTheTypedDoneReviewReadsTwoRecordedSubAgents(t *testing.T) {
 	}
 	t.Logf("%s (%d steps): %s %s", wrote.ID, len(wrote.Steps), did.Verdict, did.Reason)
 
-	if empty.Verdict != turn.DoneReopen {
+	if empty.Verdict != loop.DoneReopen {
 		t.Errorf("jev accepted %s, which claimed a file and recorded no step at all", nothing.ID)
 	}
-	if did.Verdict != turn.DoneAccepted {
+	if did.Verdict != loop.DoneAccepted {
 		t.Errorf("jev reopened %s, which wrote the file the task asked for and said so", wrote.ID)
 	}
 
@@ -478,10 +478,10 @@ func TestLiveTheTypedDoneReviewReadsTwoRecordedSubAgents(t *testing.T) {
 }
 
 func TestDoneVerdictNamesEveryLedgerVerdict(t *testing.T) {
-	want := map[ledger.Verdict]turn.DoneVerdict{
-		ledger.VerdictAllow: turn.DoneReopen,
-		ledger.VerdictAsk:   turn.DoneAccepted,
-		ledger.VerdictDeny:  turn.DoneAccepted,
+	want := map[ledger.Verdict]loop.DoneVerdict{
+		ledger.VerdictAllow: loop.DoneReopen,
+		ledger.VerdictAsk:   loop.DoneAccepted,
+		ledger.VerdictDeny:  loop.DoneAccepted,
 	}
 	for _, v := range ledger.AllVerdicts() {
 		if v == ledger.VerdictUnset {
@@ -506,7 +506,7 @@ func TestTheSpawnerTofuBuildsKnowsTheProjectItsGateLooksIn(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
-	_, spawner := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription})
+	_, spawner := mustConfig(t, opts, built, runtime{spend: loop.SpendSubscription})
 	if spawner == nil || spawner.Project != opts.Dir {
 		t.Fatalf("the spawner runConfig builds, for tofu run and the interface alike, looks for tests in %q, want the run directory %q", spawner.Project, opts.Dir)
 	}

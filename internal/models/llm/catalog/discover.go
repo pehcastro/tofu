@@ -1,4 +1,4 @@
-package models
+package catalog
 
 import (
 	"cmp"
@@ -73,8 +73,8 @@ func Discover(ctx context.Context, client *transport.Client, account Account) (S
 	return served, nil
 }
 
-func discoveryRequest(account Account, token string) llm.Dump {
-	headers := []llm.Header{
+func discoveryRequest(account Account, token string) core.Dump {
+	headers := []core.Header{
 		{Name: "Authorization", Value: "Bearer " + token},
 		{Name: "Accept", Value: "application/json"},
 	}
@@ -83,22 +83,22 @@ func discoveryRequest(account Account, token string) llm.Dump {
 	case ClaudeSub:
 		url = anthropicModelsURL
 		headers = append(headers,
-			llm.Header{Name: "anthropic-version", Value: anthropic.AnthropicAPIVersion},
-			llm.Header{Name: "anthropic-beta", Value: oauthBeta},
-			llm.Header{Name: "User-Agent", Value: anthropic.ClaudeCodeUserAgent(account.clientVersion())})
+			core.Header{Name: "anthropic-version", Value: anthropic.AnthropicAPIVersion},
+			core.Header{Name: "anthropic-beta", Value: oauthBeta},
+			core.Header{Name: "User-Agent", Value: anthropic.ClaudeCodeUserAgent(account.clientVersion())})
 	case CodexSub:
 		url = codexModelsURL + account.clientVersion()
 		if account.AccountID != "" {
-			headers = append(headers, llm.Header{Name: codex.HeaderAccountID, Value: account.AccountID})
+			headers = append(headers, core.Header{Name: codex.HeaderAccountID, Value: account.AccountID})
 		}
 		headers = append(headers,
-			llm.Header{Name: codex.HeaderBeta, Value: codex.BetaResponsesSSE},
-			llm.Header{Name: codex.HeaderOriginator, Value: codex.Originator},
-			llm.Header{Name: codex.HeaderVersion, Value: account.clientVersion()})
+			core.Header{Name: codex.HeaderBeta, Value: codex.BetaResponsesSSE},
+			core.Header{Name: codex.HeaderOriginator, Value: codex.Originator},
+			core.Header{Name: codex.HeaderVersion, Value: account.clientVersion()})
 	default:
 		panic("models: unknown subscription " + string(account.Subscription))
 	}
-	return llm.Dump{
+	return core.Dump{
 		Method:      http.MethodGet,
 		URL:         cmp.Or(account.BaseURL, url),
 		Headers:     headers,

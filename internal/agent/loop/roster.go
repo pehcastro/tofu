@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -23,12 +23,12 @@ type recordedSession struct {
 }
 
 type recordedSubAgent struct {
-	agent       subagent.SubAgent
+	agent       subagents.SubAgent
 	lastIn      string
 	call        string
 	byLead      bool
 	depth       int
-	state       subagent.State
+	state       subagents.State
 	ended       bool
 	steps       int
 	calls       []string
@@ -40,7 +40,7 @@ type recordedSubAgent struct {
 	fromHeader  bool
 }
 
-func RestoreSubAgents(store *session.Store, id string, roster *subagent.Roster, inbox *Inbox) error {
+func RestoreSubAgents(store *session.Store, id string, roster *subagents.Roster, inbox *Inbox) error {
 	lineage, err := store.Lineage(id)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil
@@ -74,8 +74,8 @@ func RestoreSubAgents(store *session.Store, id string, roster *subagent.Roster, 
 	return stopErr
 }
 
-func readBack(store *session.Store, id, agentID string) func() ([]llm.Message, error) {
-	return func() ([]llm.Message, error) {
+func readBack(store *session.Store, id, agentID string) func() ([]core.Message, error) {
+	return func() ([]core.Message, error) {
 		once := store.ReadOnce()
 		lineage, err := once.LineageNaming(id, agentID)
 		if errors.Is(err, fs.ErrNotExist) {
@@ -105,37 +105,37 @@ func endStoppedByTheRestart(store *session.Store, runs []*recordedSubAgent) erro
 		store.Unread(run.lastIn)
 		trace := spawnTrace{site: spawnSite{log: log}}
 		if !run.recent {
-			failed = append(failed, trace.end(run.agent.ID, subagent.Parked), log.Close())
-			run.state = subagent.Parked
+			failed = append(failed, trace.end(run.agent.ID, subagents.Parked), log.Close())
+			run.state = subagents.Parked
 			continue
 		}
-		stopped := "sub-agent " + run.agent.ID + " is " + subagent.Errored.String() + ": tofu closed it at step " + strconv.Itoa(run.steps) + " of " + strconv.Quote(run.agent.Mission)
+		stopped := "sub-agent " + run.agent.ID + " is " + subagents.Errored.String() + ": tofu closed it at step " + strconv.Itoa(run.steps) + " of " + strconv.Quote(run.agent.Mission)
 		if len(run.calls) > 0 {
 			stopped += ", after " + run.calls[len(run.calls)-1]
 		}
 		stopped += "; message it to resume."
-		_, err = log.Append(session.Event{Agent: run.agent.ID, Kind: session.EventReport}, session.ReportBody{State: subagent.Errored.String(), Text: stopped})
-		failed = append(failed, err, trace.end(run.agent.ID, subagent.Errored), log.Close())
-		run.state, run.report, run.undelivered = subagent.Errored, stopped, true
+		_, err = log.Append(session.Event{Agent: run.agent.ID, Kind: session.EventReport}, session.ReportBody{State: subagents.Errored.String(), Text: stopped})
+		failed = append(failed, err, trace.end(run.agent.ID, subagents.Errored), log.Close())
+		run.state, run.report, run.undelivered = subagents.Errored, stopped, true
 	}
 	return errors.Join(failed...)
 }
 
-func spawnedIn(store *session.Store, lineage []session.Generation) func() []subagent.SubAgent {
+func spawnedIn(store *session.Store, lineage []session.Generation) func() []subagents.SubAgent {
 	var unread []string
 	for _, generation := range lineage {
 		if generation.Unread {
 			unread = append(unread, generation.Header.ID)
 		}
 	}
-	return func() []subagent.SubAgent {
-		var spawned []subagent.SubAgent
+	return func() []subagents.SubAgent {
+		var spawned []subagents.SubAgent
 		for _, id := range unread {
 			events, _ := store.Spawns(id)
 			for _, event := range events {
 				var body session.SpawnBody
 				if json.Unmarshal(event.Body, &body) == nil {
-					spawned = append(spawned, subagent.SubAgent{ID: body.Agent, Mission: body.Mission, Owns: body.Owns, Ticket: body.Ticket})
+					spawned = append(spawned, subagents.SubAgent{ID: body.Agent, Mission: body.Mission, Owns: body.Owns, Ticket: body.Ticket})
 				}
 			}
 		}
@@ -160,15 +160,15 @@ func (t *SpawnTool) recall(id string) error {
 	t.roster.Recall(recorded)
 	if held, _ := t.Inbox.find(id); held != nil {
 		held.agent.Ticket, held.agent.Mission, held.agent.Brief, held.agent.Owns, held.agent.Regranted = recorded.Ticket, recorded.Mission, recorded.Brief, recorded.Owns, recorded.Regranted
-		held.boundary = subagent.NewBoundary(id, "", recorded.Owns)
+		held.boundary = subagents.NewBoundary(id, "", recorded.Owns)
 		held.trace.mission, held.trace.owns, held.trace.ticket = recorded.Mission, recorded.Owns, recorded.Ticket
 	}
 	return nil
 }
 
-func restoredHeld(agent subagent.SubAgent, depth int, reload func() ([]llm.Message, error)) *heldSubAgent {
+func restoredHeld(agent subagents.SubAgent, depth int, reload func() ([]core.Message, error)) *heldSubAgent {
 	return &heldSubAgent{agent: agent, restored: true, reload: reload, inbox: NewInbox(),
-		boundary: subagent.NewBoundary(agent.ID, "", agent.Owns),
+		boundary: subagents.NewBoundary(agent.ID, "", agent.Owns),
 		trace:    spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: agent.Owns, ticket: agent.Ticket, depth: depth}}
 }
 
@@ -183,7 +183,7 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 			}
 			state, _ := endedAs(run.Status)
 			ran[run.Agent] = &recordedSubAgent{lastIn: recorded.id, call: run.SpawnCall, byLead: run.ParentAgent == "", depth: run.Depth, state: state, ended: true, fromHeader: true, active: run.StartedAt,
-				agent: subagent.SubAgent{ID: run.Agent, Agent: run.Definition, Model: run.Model, Started: run.StartedAt}}
+				agent: subagents.SubAgent{ID: run.Agent, Agent: run.Definition, Model: run.Model, Started: run.StartedAt}}
 			if run.EndedAt != nil {
 				ran[run.Agent].active = *run.EndedAt
 			}
@@ -202,8 +202,8 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 				if json.Unmarshal(event.Body, &body) != nil || ran[body.Agent] != nil {
 					continue
 				}
-				ran[body.Agent] = &recordedSubAgent{lastIn: recorded.id, call: event.Call, byLead: event.Agent == "", depth: body.Depth, state: subagent.Parked, active: event.At,
-					agent: subagent.SubAgent{ID: body.Agent, Agent: body.Definition, Model: body.Model, Mission: body.Mission, Owns: body.Owns, Ticket: body.Ticket, Started: event.At}}
+				ran[body.Agent] = &recordedSubAgent{lastIn: recorded.id, call: event.Call, byLead: event.Agent == "", depth: body.Depth, state: subagents.Parked, active: event.At,
+					agent: subagents.SubAgent{ID: body.Agent, Agent: body.Definition, Model: body.Model, Mission: body.Mission, Owns: body.Owns, Ticket: body.Ticket, Started: event.At}}
 				order = append(order, ran[body.Agent])
 			case event.Kind == session.EventToolCall:
 				var call session.CallBody
@@ -224,7 +224,7 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 				var result session.ResultBody
 				if granted := ran[message.To]; granted != nil && json.Unmarshal(event.Body, &result) == nil && result.ToolOutcome == session.ToolOutcomeRan {
 					granted.agent.Owns = ownsAfter(message.Do, granted.agent.Owns, message.Owns)
-					granted.agent.Regranted = append(granted.agent.Regranted, subagent.OwnsChange{At: event.At, Did: message.Do, Paths: message.Owns})
+					granted.agent.Regranted = append(granted.agent.Regranted, subagents.OwnsChange{At: event.At, Did: message.Do, Paths: message.Owns})
 				}
 			case event.Kind == session.EventMessage && event.Agent == "":
 				var message session.MessageBody
@@ -235,7 +235,7 @@ func recordedSubAgents(chain []recordedSession) []*recordedSubAgent {
 					leadReports = append(leadReports, message.Content)
 				}
 				for _, told := range order {
-					told.undelivered = told.undelivered && (message.Role != llm.RoleUser.String() || !event.At.After(told.reportedAt))
+					told.undelivered = told.undelivered && (message.Role != core.RoleUser.String() || !event.At.After(told.reportedAt))
 				}
 			case event.Agent == "" && event.Kind == session.EventTurnEnd:
 				leadIdle = event.At
@@ -293,7 +293,7 @@ func (t *SpawnTool) recompose(held *heldSubAgent) error {
 		return fmt.Errorf("%s's scratch folder was not made: %w", held.agent.ID, err)
 	}
 	held.definition, held.system, held.parts, held.environment, held.restored = definition, system, parts, environment+scratchWords(scratch), false
-	held.boundary, held.scratch = subagent.NewBoundary(held.agent.ID, scratch.Dir(), owns), scratch
+	held.boundary, held.scratch = subagents.NewBoundary(held.agent.ID, scratch.Dir(), owns), scratch
 	return nil
 }
 
@@ -308,13 +308,13 @@ func sessionChain(lineage []session.Generation) []recordedSession {
 	return chain
 }
 
-func endedAs(status string) (subagent.State, bool) {
-	for _, state := range []subagent.State{subagent.Finished, subagent.Errored, subagent.Parked} {
+func endedAs(status string) (subagents.State, bool) {
+	for _, state := range []subagents.State{subagents.Finished, subagents.Errored, subagents.Parked} {
 		if state.String() == status {
 			return state, true
 		}
 	}
-	return subagent.Parked, false
+	return subagents.Parked, false
 }
 
 func reportsWrittenBeforeReportEvents(leadReports []string, order []*recordedSubAgent) {
@@ -333,7 +333,7 @@ func reportsWrittenBeforeReportEvents(leadReports []string, order []*recordedSub
 	}
 }
 
-func subAgentHistory(store *session.Store, chain []recordedSession, agentID string) ([]llm.Message, error) {
+func subAgentHistory(store *session.Store, chain []recordedSession, agentID string) ([]core.Message, error) {
 	var since []session.Event
 	var change session.Event
 	changedIn := ""

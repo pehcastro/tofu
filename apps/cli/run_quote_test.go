@@ -20,7 +20,7 @@ const (
 
 func sessionCarryingOneTurn(t *testing.T) (*session.Store, string) {
 	t.Helper()
-	store, id := session.NewStore(t.TempDir()), turn.NewID(time.Now())
+	store, id := session.NewStore(t.TempDir()), loop.NewID(time.Now())
 	body, err := json.Marshal(session.MessageBody{Role: session.RoleAssistant, Content: quotedWords})
 	if err != nil {
 		t.Fatalf("encoding the recorded turn: %v", err)
@@ -32,7 +32,7 @@ func sessionCarryingOneTurn(t *testing.T) (*session.Store, string) {
 	return store, id
 }
 
-func quotingTurn(t *testing.T, reference string) (turn.Config, turn.Row) {
+func quotingTurn(t *testing.T, reference string) (loop.Config, loop.Row) {
 	t.Helper()
 	store, recorded := sessionCarryingOneTurn(t)
 	opts := armOpts(t)
@@ -41,28 +41,28 @@ func quotingTurn(t *testing.T, reference string) (turn.Config, turn.Row) {
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
-	model := &scriptedModel{decisions: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+	model := &scriptedModel{decisions: []core.Decision{
+		{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
 			{ID: "call-1", Name: "quote", Arguments: json.RawMessage(`{"id":"` + reference + `"}`)},
 		}},
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "answered"},
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "answered"},
 	}}
-	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, sessions: store})
-	row, err := turn.Run(context.Background(), config)
+	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: loop.SpendSubscription, sessions: store})
+	row, err := loop.Run(context.Background(), config)
 	if err != nil {
-		t.Fatalf("turn.Run: %v", err)
+		t.Fatalf("loop.Run: %v", err)
 	}
 	return config, row
 }
 
 func TestATurnCallsQuoteThroughTheToolsTheRunBuildsAndGetsTheRecordedWordsBack(t *testing.T) {
 	config, row := quotingTurn(t, quoteReference)
-	if !slices.ContainsFunc(config.Tools.Definitions(), func(one llm.Tool) bool { return one.Name == "quote" }) {
+	if !slices.ContainsFunc(config.Tools.Definitions(), func(one core.Tool) bool { return one.Name == "quote" }) {
 		t.Fatal("the run builds no quote tool, so the rule still tells the model to do something it cannot do")
 	}
 	var answers []string
 	for _, message := range row.Conversation {
-		if message.Role == llm.RoleTool {
+		if message.Role == core.RoleTool {
 			answers = append(answers, message.Content)
 		}
 	}
@@ -97,7 +97,7 @@ func TestTheThreeToolArmStaysThreeToolsWithNoQuoteInIt(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
-	config, _ := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription, sessions: store})
+	config, _ := mustConfig(t, opts, built, runtime{spend: loop.SpendSubscription, sessions: store})
 	var named []string
 	for _, one := range config.Tools.Definitions() {
 		named = append(named, one.Name)

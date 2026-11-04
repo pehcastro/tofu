@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -74,8 +74,8 @@ func TestAStepRowRecordedBeforeThisChangeStillDecodesWithItsWorkingSet(t *testin
 func TestAMeasuredStepNamesTheCapsItWasMeasuredAgainstOnBothWrites(t *testing.T) {
 	store := session.NewStore(t.TempDir())
 	tool := &stubTool{name: "read", result: contract.Result{Content: "file contents", Command: "read a.txt"}}
-	model := &stubModel{decisions: []llm.Decision{
-		toolCallDecision(llm.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)}),
+	model := &stubModel{decisions: []core.Decision{
+		toolCallDecision(core.ToolCall{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"path":"a.txt"}`)}),
 		messageDecision(),
 	}}
 	config := baseConfig(t, model, NewRegistry(tool))
@@ -188,15 +188,15 @@ func baseConfig(t *testing.T, model Model, tools Registry) Config {
 }
 
 type stubModel struct {
-	decisions []llm.Decision
-	requests  []llm.Request
+	decisions []core.Decision
+	requests  []core.Request
 	calls     int
 }
 
-func (m *stubModel) Ask(_ context.Context, request llm.Request) (llm.Decision, error) {
+func (m *stubModel) Ask(_ context.Context, request core.Request) (core.Decision, error) {
 	m.requests = append(m.requests, request)
 	if m.calls >= len(m.decisions) {
-		return llm.Decision{}, errors.New("stubModel: no more decisions queued")
+		return core.Decision{}, errors.New("stubModel: no more decisions queued")
 	}
 	decision := m.decisions[m.calls]
 	m.calls++
@@ -214,8 +214,8 @@ type stubTool struct {
 
 func (t *stubTool) Name() string { return t.name }
 
-func (t *stubTool) Definition() llm.Tool {
-	return llm.Tool{Name: t.name, Description: "a stub tool", Parameters: map[string]any{"type": "object"}}
+func (t *stubTool) Definition() core.Tool {
+	return core.Tool{Name: t.name, Description: "a stub tool", Parameters: map[string]any{"type": "object"}}
 }
 
 func (t *stubTool) Run(_ context.Context, _ json.RawMessage) (contract.Result, error) {
@@ -230,10 +230,10 @@ func (t *stubTool) Run(_ context.Context, _ json.RawMessage) (contract.Result, e
 	return result, t.err
 }
 
-func toolCallDecision(calls ...llm.ToolCall) llm.Decision {
-	return llm.Decision{Build: "m1", Outcome: llm.OutcomeToolCalls, ToolCalls: calls}
+func toolCallDecision(calls ...core.ToolCall) core.Decision {
+	return core.Decision{Build: "m1", Outcome: core.OutcomeToolCalls, ToolCalls: calls}
 }
 
-func messageDecision() llm.Decision {
-	return llm.Decision{Build: "m1", Outcome: llm.OutcomeMessage, Content: "done"}
+func messageDecision() core.Decision {
+	return core.Decision{Build: "m1", Outcome: core.OutcomeMessage, Content: "done"}
 }

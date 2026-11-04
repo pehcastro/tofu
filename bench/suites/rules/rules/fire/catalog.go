@@ -12,13 +12,13 @@ type CatalogRule struct {
 }
 
 func StructuralCatalog(libraryDir string) ([]CatalogRule, error) {
-	loaded, err := rule.LoadDir(libraryDir)
+	loaded, err := rules.LoadDir(libraryDir)
 	if err != nil {
 		return nil, err
 	}
 	var structural []CatalogRule
 	for _, one := range loaded {
-		if one.Kind != rule.KindStructural {
+		if one.Kind != rules.KindStructural {
 			continue
 		}
 		structural = append(structural, CatalogRule{ID: one.ID, Mode: one.Mode.String()})

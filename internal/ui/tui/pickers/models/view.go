@@ -77,7 +77,7 @@ type renderKey struct {
 	provider, cursor int
 	filter, bound    string
 	assign           *Target
-	effort           llm.Effort
+	effort           core.Effort
 	entry            keyEntry
 	reloading        bool
 }
@@ -146,7 +146,7 @@ func (m Model) keyDialog(width int) string {
 	inner := width - 2*keyPanelPad
 	input, hints := look.Muted(keyChecking+m.entry.provider), checkingHints
 	if m.entry.checking == 0 {
-		shape := widget.Fit(m.entry.field.Shape(), inner-keyBoxChrome-utf8.RuneCountInString(promptGlyph+caretGlyph))
+		shape := render.Fit(m.entry.field.Shape(), inner-keyBoxChrome-utf8.RuneCountInString(promptGlyph+caretGlyph))
 		input, hints = look.Accent(promptGlyph)+look.Title(shape)+look.Accent(caretGlyph), keyHints
 	}
 	body := lipgloss.NewStyle().Width(inner).Padding(0, 1).Border(lipgloss.RoundedBorder()).
@@ -204,7 +204,7 @@ func (m Model) listPane(width, modalHeight int) string {
 	if m.tab == tabRoles {
 		view := look.SectionLabel(rolesHead) + "\n" + look.Faint(rolesHint) + "\n\n"
 		for i, target := range m.targets[start:end] {
-			view += look.CatalogRow(width-rowInset, start+i == m.cursor, target.Name) + "\n  " + look.Faint(widget.Fit(target.Job, width-rowInset)) + "\n"
+			view += look.CatalogRow(width-rowInset, start+i == m.cursor, target.Name) + "\n  " + look.Faint(render.Fit(target.Job, width-rowInset)) + "\n"
 		}
 		if len(m.targets) == 0 {
 			view += look.Muted(noRoles)
@@ -236,7 +236,7 @@ func (m Model) listPane(width, modalHeight int) string {
 }
 
 func field(label, value string) string {
-	return look.Faint(widget.Pad(label, fieldColumn)) + look.Muted(value) + "\n"
+	return look.Faint(render.Pad(label, fieldColumn)) + look.Muted(value) + "\n"
 }
 
 func (m Model) detailPane() string {

@@ -30,19 +30,19 @@ func NewWire(key string) (*Wire, error) {
 }
 
 func JudgeModel() (string, error) {
-	layers, err := models.Layers(shipped.Files(), "")
+	layers, err := catalog.Layers(shipped.Files(), "")
 	if err != nil {
 		return "", err
 	}
-	library, err := models.Load(layers)
+	library, err := catalog.Load(layers)
 	if err != nil {
 		return "", err
 	}
-	if bound, ok := library.Bound(models.RoleClassifier); ok && bound.Provider == models.TypeSafe {
+	if bound, ok := library.Bound(catalog.RoleClassifier); ok && bound.Provider == catalog.TypeSafe {
 		return bound.Requested(), nil
 	}
 	for _, model := range library.Models {
-		if model.Provider == models.TypeSafe && model.Kind == models.KindClassifier && model.Use != models.UseExcluded {
+		if model.Provider == catalog.TypeSafe && model.Kind == catalog.KindClassifier && model.Use != catalog.UseExcluded {
 			return model.Requested(), nil
 		}
 	}
@@ -50,13 +50,13 @@ func JudgeModel() (string, error) {
 }
 
 type Call struct {
-	Request  jev.Request
-	Response jev.Response
-	Raw      jev.Raw
+	Request  core.Request
+	Response core.Response
+	Raw      core.Raw
 	Err      error
 }
 
-func Ask(ctx context.Context, wire jev.Wire, request jev.Request) Call {
+func Ask(ctx context.Context, wire core.Wire, request core.Request) Call {
 	call := Call{Request: request}
 	body, err := request.Encode(wire.Model())
 	if err != nil {
@@ -69,13 +69,13 @@ func Ask(ctx context.Context, wire jev.Wire, request jev.Request) Call {
 		call.Err = err
 		return call
 	}
-	response, err := jev.Decode(raw.Body)
+	response, err := core.Decode(raw.Body)
 	if err != nil {
 		call.Err = err
 		return call
 	}
 	call.Response = response
-	if err := jev.Validate(request, response); err != nil {
+	if err := core.Validate(request, response); err != nil {
 		call.Err = err
 		return call
 	}

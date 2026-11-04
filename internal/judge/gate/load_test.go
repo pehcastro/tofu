@@ -32,15 +32,15 @@ thresholds:
   risk_ask_at: 0.25
 `
 
-func shippedQuestionSet(t *testing.T) question.Set {
+func shippedQuestionSet(t *testing.T) questions.Set {
 	t.Helper()
 	path, err := filepath.Abs(filepath.Join("..", "..", "..", "library", "questions", "tool_gate@1.yaml"))
 	if err != nil {
 		t.Fatalf("absolute question path: %v", err)
 	}
-	set, err := question.Load(path)
+	set, err := questions.Load(path)
 	if err != nil {
-		t.Fatalf("question.Load: %v", err)
+		t.Fatalf("questions.Load: %v", err)
 	}
 	return set
 }

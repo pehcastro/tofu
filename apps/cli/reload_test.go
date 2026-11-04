@@ -11,7 +11,7 @@ import (
 	"tofu/apps/cli/output"
 
 	"tofu/internal/testkit/cli"
-	"tofu/internal/ui/tui/app"
+	tui "tofu/internal/ui/tui/app"
 )
 
 const (
@@ -58,8 +58,8 @@ func TestReloadPrintsOnlyThePartsThatChangedSinceTheLastRun(t *testing.T) {
 		t.Fatalf("the first reload exited %d: %s", code, errOut.String())
 	}
 
-	testkit.WriteFile(t, project, ".tofu/skills/deploy/SKILL.md", "---\nname: deploy\ndescription: ship the build\n---\nsteps\n")
-	testkit.WriteFile(t, project, ".tofu/models/anthropic/claude-sonnet-9.yaml", "subscription: claude-sub\nuse: allowed\n")
+	cli.WriteFile(t, project, ".tofu/skills/deploy/SKILL.md", "---\nname: deploy\ndescription: ship the build\n---\nsteps\n")
+	cli.WriteFile(t, project, ".tofu/models/anthropic/claude-sonnet-9.yaml", "subscription: claude-sub\nuse: allowed\n")
 	if err := os.Remove(filepath.Join(project, ".tofu", "agents", "reviewer.md")); err != nil {
 		t.Fatal(err)
 	}
@@ -67,13 +67,13 @@ func TestReloadPrintsOnlyThePartsThatChangedSinceTheLastRun(t *testing.T) {
 	if code := reloadVerb(nil, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("the second reload exited %d: %s", code, errOut.String())
 	}
-	testkit.SameText(t, "a reload after a new skill, a new model and a removed sub-agent", out.String(), reloadAfterASkillAModelAndARemovedSubAgent)
+	cli.SameText(t, "a reload after a new skill, a new model and a removed sub-agent", out.String(), reloadAfterASkillAModelAndARemovedSubAgent)
 
 	out.Reset()
 	if code := reloadVerb(nil, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("the third reload exited %d: %s", code, errOut.String())
 	}
-	testkit.SameText(t, "a reload over the same disk", out.String(), reloadOverTheSameDisk)
+	cli.SameText(t, "a reload over the same disk", out.String(), reloadOverTheSameDisk)
 }
 
 func TestReloadJSONIsOneEnvelopeWithEveryPartAndItsChanges(t *testing.T) {
@@ -82,7 +82,7 @@ func TestReloadJSONIsOneEnvelopeWithEveryPartAndItsChanges(t *testing.T) {
 	if code := reloadVerb([]string{output.JSONFlag}, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("the first reload exited %d: %s", code, errOut.String())
 	}
-	testkit.WriteFile(t, project, ".tofu/skills/deploy/SKILL.md", "---\nname: deploy\ndescription: ship the build\n---\nsteps\n")
+	cli.WriteFile(t, project, ".tofu/skills/deploy/SKILL.md", "---\nname: deploy\ndescription: ship the build\n---\nsteps\n")
 	out.Reset()
 	if code := reloadVerb([]string{output.JSONFlag}, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("the second reload exited %d: %s", code, errOut.String())
@@ -106,16 +106,16 @@ func TestReloadJSONIsOneEnvelopeWithEveryPartAndItsChanges(t *testing.T) {
 }
 
 func TestReloadInTheAppPicksUpAKeymapEdit(t *testing.T) {
-	project := testkit.ChdirTemp(t)
+	project := cli.ChdirTemp(t)
 	keys := filepath.Join(t.TempDir(), "keybindings.json")
-	testkit.WriteFile(t, filepath.Dir(keys), "keybindings.json", `{"version":1,"bindings":{"Search":"ctrl+k"}}`)
+	cli.WriteFile(t, filepath.Dir(keys), "keybindings.json", `{"version":1,"bindings":{"Search":"ctrl+k"}}`)
 	app := tui.New(tui.Options{Repo: "scratch", Root: project, Keymap: keys, Reload: appReload(project)})
 	app.Init()
 	app.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	const searchHint = "Screens, agents and events"
 	ctrlO := tea.KeyPressMsg{Code: 'o', Mod: tea.ModCtrl}
 
-	testkit.WriteFile(t, filepath.Dir(keys), "keybindings.json", `{"version":1,"bindings":{"Search":"ctrl+o"}}`)
+	cli.WriteFile(t, filepath.Dir(keys), "keybindings.json", `{"version":1,"bindings":{"Search":"ctrl+o"}}`)
 	app.Update(ctrlO)
 	if strings.Contains(app.View().Content, searchHint) {
 		t.Fatal("the new binding fired before /reload, so this test proves nothing")

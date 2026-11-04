@@ -23,7 +23,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
 	"tofu/internal/sys"
@@ -53,22 +53,22 @@ type Turn struct {
 }
 
 type Hooks struct {
-	Lead     func(turn.Model) turn.Model
-	SubAgent func(turn.Model) turn.Model
+	Lead     func(loop.Model) loop.Model
+	SubAgent func(loop.Model) loop.Model
 	Say      func(string)
 	Now      func() time.Time
-	Person   turn.Person
-	Gate     func(ctx context.Context, tool string, gated turn.GateDecision, err error)
+	Person   loop.Person
+	Gate     func(ctx context.Context, tool string, gated loop.GateDecision, err error)
 	Roster   *roster.Roster
-	Inbox    *turn.Inbox
-	Reads    *turn.ReadLedger
+	Inbox    *loop.Inbox
+	Reads    *loop.ReadLedger
 	Cron     *cron.Book
 }
 
 type Prepared struct {
-	Config    turn.Config
-	Spawner   *turn.SpawnTool
-	Plan      *tools.Plan
+	Config    loop.Config
+	Spawner   *loop.SpawnTool
+	Plan      *registry.Plan
 	Ceiling   int
 	MaxSteps  int
 	Decisions func() int
@@ -79,7 +79,7 @@ type Prepared struct {
 }
 
 type limitReached struct {
-	*turn.RateLimited
+	*loop.RateLimited
 	source string
 }
 
@@ -117,7 +117,7 @@ func enteredUnshown(said session.MessageBody, origin llm.Origin) (Event, bool) {
 	case llm.SourceTyped, llm.SourceSteer, llm.SourceEnvironment, llm.SourceSpawnLine:
 		return Event{}, false
 	}
-	task, _ := turn.TaskIn(said.Content)
+	task, _ := loop.TaskIn(said.Content)
 	return Event{Kind: EventTask, Text: task, Origin: wireOrigin(origin)}, true
 }
 
@@ -148,27 +148,27 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	images := imagesOf(task)
 	watch := &watcher{held: h.roster, spent: h.spent, emit: emit, now: h.now, turnID: live.Turn, seen: h.shown, stop: &leadStop{}}
 	var prepared Prepared
-	person, asking := awaitPerson(emit, h.asks, &prepared.Config), turn.WithQuestionsBlock(turn.WithShellRegistry(tools.WithMemoryKept(context.WithValue(ctx, cronFiredKey{}, h.cronFired), keptMemory(emit)), h.shells), h.questionsBlock)
+	person, asking := awaitPerson(emit, h.asks, &prepared.Config), loop.WithQuestionsBlock(loop.WithShellRegistry(registry.WithMemoryKept(context.WithValue(ctx, cronFiredKey{}, h.cronFired), keptMemory(emit)), h.shells), h.questionsBlock)
 	if live.Unattended {
 		person = unattended
 	} else {
-		asking = turn.WithPersonForm(tools.WithMemoryPick(asking, pickMemory(emit, h.memoryPicks)), askForm(emit, h.questions))
+		asking = loop.WithPersonForm(registry.WithMemoryPick(asking, pickMemory(emit, h.memoryPicks)), askForm(emit, h.questions))
 	}
 	prepared, err = h.engine.Prepare(Turn{ID: watch.turnID, Session: id, Task: task, Pick: pick, Images: images}, Hooks{
-		Lead:     func(model turn.Model) turn.Model { watch.inner = model; return watch },
-		SubAgent: func(model turn.Model) turn.Model { return watchedSubAgent{watch: watch, inner: model} },
+		Lead:     func(model loop.Model) loop.Model { watch.inner = model; return watch },
+		SubAgent: func(model loop.Model) loop.Model { return watchedSubAgent{watch: watch, inner: model} },
 		Say:      say,
 		Now:      h.now,
 		Person:   person,
-		Gate: func(ctx context.Context, tool string, gated turn.GateDecision, err error) {
-			asker := turn.SubAgentAsking(ctx)
+		Gate: func(ctx context.Context, tool string, gated loop.GateDecision, err error) {
+			asker := loop.SubAgentAsking(ctx)
 			decided := Decision{Tool: tool, Verdict: Ask}
 			switch {
 			case err != nil:
 				decided.Failure = err.Error()
 			case gated.Verdict != ledger.VerdictUnset:
 				decided = gateDecision(tool, gated)
-				decided.Enforced = prepared.Config.GateMode == turn.GateEnforce
+				decided.Enforced = prepared.Config.GateMode == loop.GateEnforce
 			default:
 				return
 			}
@@ -205,7 +205,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	h.mu.Lock()
 	config.SessionSource, h.started = h.started, ""
 	if h.carriedOn != "" && h.carriedOn != config.Wire {
-		h.carried = turn.WithoutThinking(h.carried)
+		h.carried = loop.WithoutThinking(h.carried)
 	}
 	h.carriedOn = config.Wire
 	config.History, config.Prefix = h.carried, h.prefix
@@ -227,27 +227,27 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		}
 		return spent
 	}
-	config.AccountTaken = func(taken turn.AccountTaken) {
+	config.AccountTaken = func(taken loop.AccountTaken) {
 		spent := spentOn(taken.ID)
 		spent.Reason, spent.FromAccount = AccountReason(taken.Reason), taken.From
 		emit(Event{Kind: EventAccount, Account: &spent})
 	}
-	config.Accounts = announcingMoves(config.Accounts, func(moved turn.Moved) {
+	config.Accounts = announcingMoves(config.Accounts, func(moved loop.Moved) {
 		movedTo, ceiling = moved.To, cmp.Or(moved.Budget.CeilingTokens, ceiling)
 		spent := spentOn(moved.Account.ID)
-		spent.Reason = AccountReason(turn.AccountMoved)
+		spent.Reason = AccountReason(loop.AccountMoved)
 		emit(Event{Kind: EventAccount, Account: &spent})
 	})
 	config.Accounts = keepingHeld(config.Accounts, heldAccount(sessions, id, h.now()), func(why string) { emit(Event{Kind: EventNote, Text: why}) })
-	announce := func(ended turn.Row, agent, into string) {
+	announce := func(ended loop.Row, agent, into string) {
 		forked := forkOf(ended, into)
 		emit(Event{Kind: EventForkStart, Agent: agent})
 		emit(Event{Kind: EventNote, Text: forkWords(forked), Agent: agent})
 		emit(Event{Kind: EventForkEnd, Fork: &forked, Agent: agent})
 	}
 	var forking sync.Mutex
-	var awaitingSession *turn.Row
-	announceIntoSession := func(ended turn.Row, into string) {
+	var awaitingSession *loop.Row
+	announceIntoSession := func(ended loop.Row, into string) {
 		kept := cronFile(sessions, into)
 		if err := h.cron.Keep(kept); err != nil {
 			say("cron jobs were not written to " + kept + ": " + err.Error())
@@ -255,7 +255,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		announce(ended, "", into)
 		emit(labelledAs(sessions, Event{Kind: EventSession, ID: into, Root: into}))
 	}
-	announcedFromHeader := func(ended turn.Row) bool {
+	announcedFromHeader := func(ended loop.Row) bool {
 		header, err := sessions.Header(ended.Session)
 		if err != nil || header.ForkedInto == "" {
 			return false
@@ -285,7 +285,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 			watch.turnRecorded(logged.Turn)
 		}
 		if said, user := leadUserMessage(logged); user {
-			origin := turn.OriginOf(said)
+			origin := loop.OriginOf(said)
 			if endsTheRow(origin.Source) {
 				watch.endLeadRow()
 			}
@@ -310,13 +310,13 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		emit(Event{Kind: EventRequestSent, ID: sent.ID, Agent: sent.Agent, Logged: &sent})
 	}
 	if prepared.Spawner != nil {
-		prepared.Spawner.Announce(config.Sent, func(agent string, step turn.StepRow) {
+		prepared.Spawner.Announce(config.Sent, func(agent string, step loop.StepRow) {
 			if step.Occupancy != nil {
 				emit(Event{Kind: EventContext, Agent: agent, Context: Context{Used: step.Occupancy.Total(), Budget: ceiling}})
 			}
 		})
 	}
-	config.Step = func(step turn.StepRow) {
+	config.Step = func(step loop.StepRow) {
 		steps.Store(int64(step.Index))
 		if prepared.Plan != nil {
 			emit(Event{Kind: EventPlan, Plan: statedPlan(prepared.Plan.Items())})
@@ -325,7 +325,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 			emit(Event{Kind: EventContext, Context: Context{Used: step.Occupancy.Total(), Budget: ceiling}})
 		}
 	}
-	config.EndedSession = func(ended turn.Row) error {
+	config.EndedSession = func(ended loop.Row) error {
 		if ended.SpawnedFrom != "" {
 			announce(ended, ended.Root, ended.ForkedInto)
 			return nil
@@ -347,10 +347,10 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	heard := func(typed string) { h.heardTyped(emit, typed) }
 	var reported []error
 	var reached limitReached
-	if scratched, err := turn.WithLeadScratch(asking, config); err == nil {
+	if scratched, err := loop.WithLeadScratch(asking, config); err == nil {
 		asking = scratched
 	}
-	leadErr := turn.Lead(asking, config, live.Steering, heard, func(row turn.Row, err error) {
+	leadErr := loop.Lead(asking, config, live.Steering, heard, func(row loop.Row, err error) {
 		forking.Lock()
 		announceAwaitedIn(row.Session)
 		forking.Unlock()
@@ -376,7 +376,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		}
 		h.mu.Lock()
 		if row.Conversation != nil {
-			h.carried = turn.Sendable(row.Conversation)
+			h.carried = loop.Sendable(row.Conversation)
 		}
 		forked := row.Session != "" && row.Session != h.id
 		if row.Session != "" {
@@ -422,32 +422,32 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	return reached
 }
 
-func heldAccount(sessions *session.Store, id string, now time.Time) turn.Held {
+func heldAccount(sessions *session.Store, id string, now time.Time) loop.Held {
 	if held, found := heldIn(sessions.EventsPath(id), now); found {
 		return held
 	}
 	header, err := sessions.Header(id)
-	if err != nil || header.CarriedFrom == nil || !slices.Contains([]turn.ForkKind{turn.ForkCompact, turn.ForkByHand, turn.ForkBranch}, turn.ForkKind(header.ForkKind)) {
-		return turn.Held{}
+	if err != nil || header.CarriedFrom == nil || !slices.Contains([]loop.ForkKind{loop.ForkCompact, loop.ForkByHand, loop.ForkBranch}, loop.ForkKind(header.ForkKind)) {
+		return loop.Held{}
 	}
 	return heldAccount(sessions, header.CarriedFrom.Session, now)
 }
 
-func heldIn(events string, now time.Time) (turn.Held, bool) {
+func heldIn(events string, now time.Time) (loop.Held, bool) {
 	file, err := os.Open(events)
 	if err != nil {
-		return turn.Held{}, false
+		return loop.Held{}, false
 	}
 	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
 	if err != nil {
-		return turn.Held{}, false
+		return loop.Held{}, false
 	}
 	for window := int64(bufio.MaxScanTokenSize); ; window *= 2 {
 		start := max(info.Size()-window, 0)
 		tail := make([]byte, info.Size()-start)
 		if read, _ := file.ReadAt(tail, start); read < len(tail) {
-			return turn.Held{}, false
+			return loop.Held{}, false
 		}
 		if held, found := lastHeld(tail, start == 0, now); found || start == 0 {
 			return held, found
@@ -455,13 +455,13 @@ func heldIn(events string, now time.Time) (turn.Held, bool) {
 	}
 }
 
-func lastHeld(tail []byte, whole bool, now time.Time) (turn.Held, bool) {
+func lastHeld(tail []byte, whole bool, now time.Time) (loop.Held, bool) {
 	lines := bytes.Split(tail, []byte{'\n'})
 	if !whole {
 		lines = lines[1:]
 	}
 	turnEnd, request := []byte(`"kind":"`+session.EventTurnEnd+`"`), []byte(`"kind":"`+session.EventRequest+`"`)
-	var held turn.Held
+	var held loop.Held
 	var ended bool
 	var asked time.Time
 	for at := len(lines) - 1; at >= 0 && (!ended || asked.IsZero()); at-- {
@@ -487,18 +487,18 @@ func lastHeld(tail []byte, whole bool, now time.Time) (turn.Held, bool) {
 		}
 	}
 	if asked.IsZero() {
-		return turn.Held{}, false
+		return loop.Held{}, false
 	}
 	held.Idle = now.Sub(asked)
 	return held, ended
 }
 
-func keepingHeld(accounts turn.Accounts, held turn.Held, note func(string)) turn.Accounts {
+func keepingHeld(accounts loop.Accounts, held loop.Held, note func(string)) loop.Accounts {
 	pick, keep := accounts.Pick, accounts.Keep
 	if pick == nil || keep == nil || held.ID == 0 {
 		return accounts
 	}
-	accounts.Pick = func(ctx context.Context) (turn.Account, error) {
+	accounts.Pick = func(ctx context.Context) (loop.Account, error) {
 		kept, leftBecause, err := keep(ctx, held)
 		if err != nil || kept.ID != 0 {
 			return kept, err
@@ -512,12 +512,12 @@ func keepingHeld(accounts turn.Accounts, held turn.Held, note func(string)) turn
 	return accounts
 }
 
-func announcingMoves(accounts turn.Accounts, announce func(turn.Moved)) turn.Accounts {
+func announcingMoves(accounts loop.Accounts, announce func(loop.Moved)) loop.Accounts {
 	elsewhere := accounts.Elsewhere
 	if elsewhere == nil {
 		return accounts
 	}
-	accounts.Elsewhere = func(ctx context.Context, left []string, conversationTokens int) (turn.Moved, error) {
+	accounts.Elsewhere = func(ctx context.Context, left []string, conversationTokens int) (loop.Moved, error) {
 		moved, err := elsewhere(ctx, left, conversationTokens)
 		if err == nil {
 			moved.Accounts = announcingMoves(moved.Accounts, announce)
@@ -625,7 +625,7 @@ func LastAt(store *session.Store, id string) time.Time {
 }
 
 func gateOffEvent(gateErr error) Event {
-	var missing jev.MissingKey
+	var missing core.MissingKey
 	errors.As(gateErr, &missing)
 	return Event{Kind: EventGateOff, Text: gateErr.Error(), GateWhy: missing.Why}
 }
@@ -638,12 +638,12 @@ func (h *Host) cronFired() bool {
 	return len(h.unread) > 0
 }
 
-func awaitPerson(emit func(Event), book *asks, config *turn.Config) turn.Person {
-	return func(ctx context.Context, request turn.GateRequest, decision turn.GateDecision) (turn.PersonAnswer, error) {
+func awaitPerson(emit func(Event), book *asks, config *loop.Config) loop.Person {
+	return func(ctx context.Context, request loop.GateRequest, decision loop.GateDecision) (loop.PersonAnswer, error) {
 		places, _ := config.ResolvedPlaces()
 		place := askedPlace(request)
 		var overriding struct{ Rule, Question string }
-		if request.Tool == (tools.RuleOverride{}).Name() {
+		if request.Tool == (registry.RuleOverride{}).Name() {
 			_ = json.Unmarshal(request.Args, &overriding)
 		}
 		standsAt, accepts := place, []ApprovalDecision{AllowOnce, AllowFor, AllowAlways, RejectOnce, RejectAlways, Cancelled}
@@ -657,18 +657,18 @@ func awaitPerson(emit func(Event), book *asks, config *turn.Config) turn.Person 
 			emit(Event{Kind: EventNote, Text: overriding.Question})
 			emit(Event{Kind: EventDecision, ID: id, Decision: &Decision{Tool: request.Tool, Verdict: Ask, OverridesRule: overriding.Rule}})
 		case stands && request.Code != nil:
-			turn.CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "the person, standing", Answer: codeAnswer(stood)}.Record(places.Log)
+			loop.CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "the person, standing", Answer: codeAnswer(stood)}.Record(places.Log)
 			return personAnswer(stood), nil
 		case stands:
 			recordStanding(places.Log, request, place, stood)
 			return personAnswer(stood), nil
-		case turn.StandingOnly(ctx):
-			return turn.PersonDenied, turn.NotStanding{}
+		case loop.StandingOnly(ctx):
+			return loop.PersonDenied, loop.NotStanding{}
 		}
-		asked := Event{Kind: EventAwaitPerson, ID: id, Tool: request.Tool, Text: place, Args: request.Args, Agent: turn.SubAgentAsking(ctx), Accepts: accepts,
+		asked := Event{Kind: EventAwaitPerson, ID: id, Tool: request.Tool, Text: place, Args: request.Args, Agent: loop.SubAgentAsking(ctx), Accepts: accepts,
 			Reason: agentReason(request.Reason), Risk: riskOf(decision)}
 		if request.Code != nil {
-			emit(Event{Kind: EventNote, Text: asked.Agent + " asks you to run this inline code:\n" + turn.CodeShown(*request.Code)})
+			emit(Event{Kind: EventNote, Text: asked.Agent + " asks you to run this inline code:\n" + loop.CodeShown(*request.Code)})
 		}
 		if decision.Verdict != ledger.VerdictUnset {
 			judged := gateDecision(request.Tool, decision)
@@ -702,13 +702,13 @@ func awaitPerson(emit func(Event), book *asks, config *turn.Config) turn.Person 
 			}
 			resumed.Resolution = nil
 			if request.Code != nil {
-				turn.CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "the person", Answer: codeAnswer(answered), Took: time.Since(started)}.Record(places.Log)
+				loop.CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "the person", Answer: codeAnswer(answered), Took: time.Since(started)}.Record(places.Log)
 			}
 			out := personAnswer(answered)
 			recordPersonAnswer(places.Log, decision.ID, out)
 			return out, nil
 		case <-ctx.Done():
-			return turn.PersonDenied, ctx.Err()
+			return loop.PersonDenied, ctx.Err()
 		}
 	}
 }
@@ -723,7 +723,7 @@ func agentReason(said string) string {
 	return string(runes[:konst.ApprovalReasonRunes-1]) + "…"
 }
 
-func riskOf(decision turn.GateDecision) Risk {
+func riskOf(decision loop.GateDecision) Risk {
 	switch {
 	case decision.PersonOnly, decision.Verdict == ledger.VerdictDeny, decision.Reason != nil && decision.Reason.Blocked:
 		return RiskDestructive
@@ -772,52 +772,52 @@ func (u unansweredAsk) applied() ApprovalDecision {
 	return RejectOnce
 }
 
-func (u unansweredAsk) decide(emit func(Event), request turn.GateRequest, log string) (turn.PersonAnswer, error) {
-	answer, code, err, said := turn.PersonDenied, turn.CodeDeny, error(u), u.Error()
+func (u unansweredAsk) decide(emit func(Event), request loop.GateRequest, log string) (loop.PersonAnswer, error) {
+	answer, code, err, said := loop.PersonDenied, loop.CodeDeny, error(u), u.Error()
 	if u.outcome == settings.GateAskAllow {
-		answer, code, err, said = turn.PersonAllowedOnce, turn.CodeAllowOnce, nil, u.why()+", so the call runs"
+		answer, code, err, said = loop.PersonAllowedOnce, loop.CodeAllowOnce, nil, u.why()+", so the call runs"
 	}
 	if request.Code != nil {
-		turn.CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "nobody, " + settings.GateAskTimeout + " " + u.outcome, Answer: code}.Record(log)
+		loop.CodeEntry{Turn: request.TurnID, Code: *request.Code, By: "nobody, " + settings.GateAskTimeout + " " + u.outcome, Answer: code}.Record(log)
 	}
 	emit(Event{Kind: EventNote, Text: "the ask about " + askedPlace(request) + ": " + said})
 	return answer, err
 }
 
-func personAnswer(answered Answer) turn.PersonAnswer {
+func personAnswer(answered Answer) loop.PersonAnswer {
 	switch answered {
 	case AlwaysHere:
-		return turn.PersonAlwaysHere
+		return loop.PersonAlwaysHere
 	case AllowedOnce, AllowedAWhile:
-		return turn.PersonAllowedOnce
+		return loop.PersonAllowedOnce
 	case Denied, NeverHere:
-		return turn.PersonDenied
+		return loop.PersonDenied
 	}
 	panic("host: unknown answer from the person")
 }
 
-func codeAnswer(answered Answer) turn.CodeAnswer {
+func codeAnswer(answered Answer) loop.CodeAnswer {
 	switch answered {
 	case AlwaysHere:
-		return turn.CodeAllowAlways
+		return loop.CodeAllowAlways
 	case AllowedOnce, AllowedAWhile:
-		return turn.CodeAllowOnce
+		return loop.CodeAllowOnce
 	case Denied:
-		return turn.CodeDeny
+		return loop.CodeDeny
 	case NeverHere:
-		return turn.CodeDenyAlways
+		return loop.CodeDenyAlways
 	}
 	panic("host: unknown answer from the person")
 }
 
-func recordPersonAnswer(log, id string, answer turn.PersonAnswer) {
+func recordPersonAnswer(log, id string, answer loop.PersonAnswer) {
 	if log == "" || id == "" {
 		return
 	}
 	_ = ledger.NewWriter(log).Backfill(id, answer.Outcome())
 }
 
-func recordStanding(log string, request turn.GateRequest, place string, stood Answer) {
+func recordStanding(log string, request loop.GateRequest, place string, stood Answer) {
 	if log == "" {
 		return
 	}
@@ -838,12 +838,12 @@ func (noPerson) Error() string {
 	return "no person: a cron job started this turn and nobody is there to answer, so a call that would ask is refused"
 }
 
-func unattended(context.Context, turn.GateRequest, turn.GateDecision) (turn.PersonAnswer, error) {
-	return turn.PersonDenied, noPerson{}
+func unattended(context.Context, loop.GateRequest, loop.GateDecision) (loop.PersonAnswer, error) {
+	return loop.PersonDenied, noPerson{}
 }
 
-func askedPlace(request turn.GateRequest) string {
-	return turn.CallPlace(request, processDir)
+func askedPlace(request loop.GateRequest) string {
+	return loop.CallPlace(request, processDir)
 }
 
 func unreported(err error, reported []error) error {
@@ -857,7 +857,7 @@ func unreported(err error, reported []error) error {
 	return errors.Join(unseen...)
 }
 
-func forkOf(ended turn.Row, into string) Fork {
+func forkOf(ended loop.Row, into string) Fork {
 	forked := Fork{From: ended.Session, To: into}
 	if fork := ended.EndedInFork; fork != nil {
 		forked.Kind, forked.Before, forked.After = string(fork.Kind), fork.TokensBefore, fork.TokensAfter
@@ -872,7 +872,7 @@ func forkWords(forked Fork) string {
 	return fmt.Sprintf("forked into %s as a %s at %d tokens, which began at %d", forked.To, forked.Kind, forked.Before, forked.After)
 }
 
-func WordsAfterLastCalls(row turn.Row) (string, bool) {
+func WordsAfterLastCalls(row loop.Row) (string, bool) {
 	if len(row.Steps) == 0 || len(row.Steps[len(row.Steps)-1].ToolCalls) == 0 || len(row.Conversation) == 0 {
 		return "", false
 	}
@@ -880,39 +880,39 @@ func WordsAfterLastCalls(row turn.Row) (string, bool) {
 		return last.Content, strings.TrimSpace(last.Content) != ""
 	}
 	step := row.Steps[len(row.Steps)-1]
-	onlySpawned := !slices.ContainsFunc(step.ToolCalls, func(call turn.ToolCallRow) bool { return call.SubAgentID == "" })
+	onlySpawned := !slices.ContainsFunc(step.ToolCalls, func(call loop.ToolCallRow) bool { return call.SubAgentID == "" })
 	return step.AssistantText, onlySpawned && strings.TrimSpace(step.AssistantText) != ""
 }
 
-func doneWords(outcome turn.Outcome, guard *turn.LoopGuardStop) (string, Status) {
+func doneWords(outcome loop.Outcome, guard *loop.LoopGuardStop) (string, Status) {
 	switch outcome {
-	case turn.OutcomeUnset, turn.OutcomeForked:
+	case loop.OutcomeUnset, loop.OutcomeForked:
 		return "finished in", StatusFinished
-	case turn.OutcomeStopped:
+	case loop.OutcomeStopped:
 		return "cooked for", StatusFinished
-	case turn.OutcomeStepCap:
+	case loop.OutcomeStepCap:
 		return "stopped at the step cap after", StatusStopped
-	case turn.OutcomeDecisionCap:
+	case loop.OutcomeDecisionCap:
 		return "stopped at the decision cap after", StatusStopped
-	case turn.OutcomeTruncated:
+	case loop.OutcomeTruncated:
 		return "stopped on a reply it could not finish, after", StatusStopped
-	case turn.OutcomeError:
+	case loop.OutcomeError:
 		return "failed after", StatusFailed
-	case turn.OutcomeCancelled:
+	case loop.OutcomeCancelled:
 		return cancelledAt, StatusStopped
-	case turn.OutcomeRetiredCostCap:
+	case loop.OutcomeRetiredCostCap:
 		return "stopped at a cap this build no longer sets, after", StatusStopped
-	case turn.OutcomeRetiredWallClockCap:
+	case loop.OutcomeRetiredWallClockCap:
 		return "stopped at the wall clock cap after", StatusStopped
-	case turn.OutcomeLoopGuard:
+	case loop.OutcomeLoopGuard:
 		return loopGuardWords(guard) + ", after", StatusStopped
-	case turn.OutcomeForkStop:
+	case loop.OutcomeForkStop:
 		return "stopped forking after", StatusStopped
 	}
 	panic("host: unknown outcome " + outcome.String())
 }
 
-func loopGuardWords(guard *turn.LoopGuardStop) string {
+func loopGuardWords(guard *loop.LoopGuardStop) string {
 	if guard == nil {
 		return "stopped itself after repeating a tool call"
 	}
@@ -920,7 +920,7 @@ func loopGuardWords(guard *turn.LoopGuardStop) string {
 		" and getting the same result " + strconv.Itoa(guard.Repeats) + " times in a row"
 }
 
-func statedPlan(items []tools.PlanItem) []PlanItem {
+func statedPlan(items []registry.PlanItem) []PlanItem {
 	drawn := make([]PlanItem, 0, len(items))
 	for _, item := range items {
 		drawn = append(drawn, PlanItem{Phase: item.Phase, Text: item.Text, State: drawnPlanState(item.State)})
@@ -928,21 +928,21 @@ func statedPlan(items []tools.PlanItem) []PlanItem {
 	return drawn
 }
 
-func drawnPlanState(state tools.PlanState) PlanState {
+func drawnPlanState(state registry.PlanState) PlanState {
 	switch state {
-	case tools.PlanPending:
+	case registry.PlanPending:
 		return PlanPending
-	case tools.PlanRunning:
+	case registry.PlanRunning:
 		return PlanRunning
-	case tools.PlanDone:
+	case registry.PlanDone:
 		return PlanDone
-	case tools.PlanDropped:
+	case registry.PlanDropped:
 		return PlanDropped
 	}
 	panic("host: unknown plan item state " + string(state))
 }
 
-func gateDecision(tool string, gated turn.GateDecision) Decision {
+func gateDecision(tool string, gated loop.GateDecision) Decision {
 	decision := Decision{Tool: tool, Verdict: verdictOf(gated.Verdict), Provider: gated.Provider, Model: gated.Model, DurationMS: gated.DurationMS}
 	for _, answer := range gated.Answers {
 		decision.Answers = append(decision.Answers, gateAnswer(answer))

@@ -1,4 +1,4 @@
-package rule
+package rules
 
 import (
 	"cmp"
@@ -285,7 +285,7 @@ func newTrigger(d declaredTrigger, file, id string) (Trigger, error) {
 		return Trigger{}, err
 	}
 	if d.scope != "" {
-		if _, err := subagent.Matches("a/path/the/scope/is/tested/against", []string{d.scope}); err != nil {
+		if _, err := subagents.Matches("a/path/the/scope/is/tested/against", []string{d.scope}); err != nil {
 			return Trigger{}, fmt.Errorf("%s: rule %q declares the scope %q and it is not a path glob: %v", file, id, d.scope, err)
 		}
 	}
@@ -408,13 +408,13 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 
 func ScopeReaches(scope, held string) bool {
 	if !strings.Contains(held, "*") {
-		matched, err := subagent.Matches(held, []string{scope})
+		matched, err := subagents.Matches(held, []string{scope})
 		return err == nil && matched
 	}
-	var roster subagent.Roster
-	var collision subagent.CollisionError
-	return roster.Hold(subagent.SubAgent{ID: "scope", Owns: []string{scope}}) == nil &&
-		errors.As(roster.Hold(subagent.SubAgent{ID: "owner", Owns: []string{held}}), &collision)
+	var roster subagents.Roster
+	var collision subagents.CollisionError
+	return roster.Hold(subagents.SubAgent{ID: "scope", Owns: []string{scope}}) == nil &&
+		errors.As(roster.Hold(subagents.SubAgent{ID: "owner", Owns: []string{held}}), &collision)
 }
 
 type ReasonKind string

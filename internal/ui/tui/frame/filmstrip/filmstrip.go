@@ -49,15 +49,15 @@ type beat struct {
 
 type scenario struct {
 	name  string
-	tune  func(*tui.Options)
+	tune  func(*app.Options)
 	beats []beat
 }
 
 type reel struct {
-	app     *tui.App
+	app     *app.App
 	driver  *Driver
 	at      time.Time
-	options tui.Options
+	options app.Options
 	width   int
 	height  int
 }
@@ -80,7 +80,7 @@ func workspace(home string) string {
 	return root
 }
 
-func newReel(width, height int, home string, tune func(*tui.Options)) *reel {
+func newReel(width, height int, home string, tune func(*app.Options)) *reel {
 	root := workspace(home)
 	store, err := isettings.Open(filepath.Join(home, sys.StateDirName, isettings.FileName), filepath.Join(root, sys.StateDirName, isettings.FileName))
 	if err == nil {
@@ -90,7 +90,7 @@ func newReel(width, height int, home string, tune func(*tui.Options)) *reel {
 		panic(err)
 	}
 	r := &reel{at: fixture.Opened(), width: width, height: height}
-	r.options = tui.Options{
+	r.options = app.Options{
 		Repo:     fixture.Path,
 		Root:     root,
 		Branch:   fixture.Branch,
@@ -99,10 +99,10 @@ func newReel(width, height int, home string, tune func(*tui.Options)) *reel {
 		Keymap:   filepath.Join(home, keymapFile),
 		Now:      func() time.Time { return r.at },
 		Paths:    workspaceFiles,
-		Wires: func() []tui.Wire {
-			return []tui.Wire{{Name: fixture.Wire, Model: fixture.Model, Provider: fixture.Provider, Efforts: []llm.Effort{llm.EffortLow, llm.EffortMedium, llm.EffortHigh}}}
+		Wires: func() []app.Wire {
+			return []app.Wire{{Name: fixture.Wire, Model: fixture.Model, Provider: fixture.Provider, Efforts: []core.Effort{core.EffortLow, core.EffortMedium, core.EffortHigh}}}
 		},
-		Turn:         func(context.Context, tui.Pick, string, tui.CalledFromInsideTheTurnAndNeverAfterItReturns) {},
+		Turn:         func(context.Context, app.Pick, string, app.CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 		Copy:         func(string) error { return nil },
 		ReloadModels: servedInCatalog,
 	}
@@ -132,12 +132,12 @@ func (r *reel) open() {
 	if r.driver != nil {
 		r.driver.Close()
 	}
-	r.app = tui.New(r.options)
+	r.app = app.New(r.options)
 	r.driver = Drive(r.app, r.width, r.height, filepath.Join(r.options.Root, sys.StateDirName))
-	r.app.Update(tui.Event{Kind: tui.EventSession, Text: fixture.SessionName, ID: fixture.SessionID})
+	r.app.Update(app.Event{Kind: app.EventSession, Text: fixture.SessionName, ID: fixture.SessionID})
 	r.app.Update(fixture.Quotas(r.at))
-	r.app.Update(tui.Event{Kind: tui.EventContext, Context: fixture.Context()})
-	r.app.Update(tui.Event{Kind: tui.EventStats, TokensIn: 284000, TokensOut: 61000, CacheRead: 190000, Decisions: 3})
+	r.app.Update(app.Event{Kind: app.EventContext, Context: fixture.Context()})
+	r.app.Update(app.Event{Kind: app.EventStats, TokensIn: 284000, TokensOut: 61000, CacheRead: 190000, Decisions: 3})
 }
 
 func (r *reel) settle() {
@@ -156,7 +156,7 @@ func (r *reel) press(keys ...string) {
 
 func (r *reel) wait(d time.Duration) { r.at = r.at.Add(d) }
 
-func (r *reel) send(events ...tui.Event) {
+func (r *reel) send(events ...app.Event) {
 	for _, event := range events {
 		r.app.Update(event)
 	}
@@ -195,15 +195,15 @@ func allowedDecision() *session.Decision {
 	}
 }
 
-func call(id, tool, text string) tui.Event {
-	return tui.Event{Kind: tui.EventToolCall, ID: id, Tool: tool, Text: text}
+func call(id, tool, text string) app.Event {
+	return app.Event{Kind: app.EventToolCall, ID: id, Tool: tool, Text: text}
 }
 
-func result(id, text string) tui.Event {
-	return tui.Event{Kind: tui.EventToolResult, ID: id, Text: text}
+func result(id, text string) app.Event {
+	return app.Event{Kind: app.EventToolResult, ID: id, Text: text}
 }
 
-func delta(text string) tui.Event { return tui.Event{Kind: tui.EventTextDelta, Text: text} }
+func delta(text string) app.Event { return app.Event{Kind: app.EventTextDelta, Text: text} }
 
 func opening() []beat {
 	return []beat{
@@ -216,15 +216,15 @@ func opening() []beat {
 func plainTurn() scenario {
 	return scenario{name: "plain", beats: append(opening(),
 		beat{"requesting", func(r *reel) {
-			r.send(tui.Event{Kind: tui.EventRequesting})
+			r.send(app.Event{Kind: app.EventRequesting})
 			r.wait(beatGap)
 		}},
 		beat{"thinking", func(r *reel) {
-			r.send(tui.Event{Kind: tui.EventStats, TokensIn: 291000, TokensOut: 61400, CacheRead: 190000, Decisions: 3})
+			r.send(app.Event{Kind: app.EventStats, TokensIn: 291000, TokensOut: 61400, CacheRead: 190000, Decisions: 3})
 			r.wait(beatGap)
 		}},
 		beat{"tooling", func(r *reel) {
-			r.send(call("c1", "read", "internal/judge/policy/toolgate.go"), tui.Event{Kind: tui.EventDecision, Decision: allowedDecision()})
+			r.send(call("c1", "read", "internal/judge/policy/toolgate.go"), app.Event{Kind: app.EventDecision, Decision: allowedDecision()})
 			r.wait(toolGap)
 		}},
 		beat{"second-tool", func(r *reel) {
@@ -238,9 +238,9 @@ func plainTurn() scenario {
 		beat{"answered", func(r *reel) {
 			r.send(
 				delta("that is not resolved cannot say whether a verdict is enforced."),
-				tui.Event{Kind: tui.EventDone, Text: "cooked for"},
+				app.Event{Kind: app.EventDone, Text: "cooked for"},
 			)
-			r.app.Update(tui.Closed{})
+			r.app.Update(app.Closed{})
 			r.wait(beatGap)
 		}},
 	)}
@@ -266,9 +266,9 @@ func twelveTools() scenario {
 		beat{"twelfth-tool", reads(9, 12)},
 		beat{"answered", func(r *reel) {
 			r.send(result("c12", "84 lines, 2.1 KB"),
-				tui.Event{Kind: tui.EventText, ID: "a1f3c9", Text: "twelve reads and the loop only ever shows the one that is running."},
-				tui.Event{Kind: tui.EventDone, Text: "cooked for"})
-			r.app.Update(tui.Closed{})
+				app.Event{Kind: app.EventText, ID: "a1f3c9", Text: "twelve reads and the loop only ever shows the one that is running."},
+				app.Event{Kind: app.EventDone, Text: "cooked for"})
+			r.app.Update(app.Closed{})
 			r.wait(beatGap)
 		}},
 	)}
@@ -277,7 +277,7 @@ func twelveTools() scenario {
 func markdownAnswer() scenario {
 	return scenario{name: "markdown", beats: append(opening(),
 		beat{"requesting", func(r *reel) {
-			r.send(tui.Event{Kind: tui.EventRequesting})
+			r.send(app.Event{Kind: app.EventRequesting})
 			r.wait(beatGap)
 		}},
 		beat{"first-paragraph", func(r *reel) {
@@ -293,8 +293,8 @@ func markdownAnswer() scenario {
 			r.wait(beatGap)
 		}},
 		beat{"answered", func(r *reel) {
-			r.send(delta("none of the three is knowable from the wire alone."), tui.Event{Kind: tui.EventDone, Text: "cooked for"})
-			r.app.Update(tui.Closed{})
+			r.send(delta("none of the three is knowable from the wire alone."), app.Event{Kind: app.EventDone, Text: "cooked for"})
+			r.app.Update(app.Closed{})
 			r.wait(beatGap)
 		}},
 	)}
@@ -307,11 +307,11 @@ func askingTurn() scenario {
 			r.wait(toolGap)
 		}},
 		beat{"asked", func(r *reel) {
-			r.send(tui.Event{Kind: tui.EventDecision, Decision: askedDecision()})
+			r.send(app.Event{Kind: app.EventDecision, Decision: askedDecision()})
 			r.wait(beatGap)
 		}},
 		beat{"waiting", func(r *reel) {
-			r.send(tui.Event{Kind: tui.EventAwaitPerson})
+			r.send(app.Event{Kind: app.EventAwaitPerson})
 			r.wait(toolGap)
 		}},
 		beat{"allowed", func(r *reel) {
@@ -321,10 +321,10 @@ func askingTurn() scenario {
 		}},
 		beat{"answered", func(r *reel) {
 			r.send(
-				tui.Event{Kind: tui.EventText, ID: "b7e201", Text: "the force push was the only way to move the branch, and it is done."},
-				tui.Event{Kind: tui.EventDone, Text: "cooked for"},
+				app.Event{Kind: app.EventText, ID: "b7e201", Text: "the force push was the only way to move the branch, and it is done."},
+				app.Event{Kind: app.EventDone, Text: "cooked for"},
 			)
-			r.app.Update(tui.Closed{})
+			r.app.Update(app.Closed{})
 			r.wait(beatGap)
 		}},
 	)}
@@ -346,8 +346,8 @@ func interruptedTurn() scenario {
 			r.wait(beatGap)
 		}},
 		beat{"stopped", func(r *reel) {
-			r.send(tui.Event{Kind: tui.EventDone, Text: "cooked for"})
-			r.app.Update(tui.Closed{})
+			r.send(app.Event{Kind: app.EventDone, Text: "cooked for"})
+			r.app.Update(app.Closed{})
 			r.wait(beatGap)
 		}},
 	)}
@@ -368,8 +368,8 @@ func lettingToolsFinish() scenario {
 			r.wait(beatGap)
 		}},
 		beat{"stopped", func(r *reel) {
-			r.send(result("c2", "ok tofu/internal/turn 0.42s"), tui.Event{Kind: tui.EventDone, Text: "cooked for"})
-			r.app.Update(tui.Closed{})
+			r.send(result("c2", "ok tofu/internal/turn 0.42s"), app.Event{Kind: app.EventDone, Text: "cooked for"})
+			r.app.Update(app.Closed{})
 			r.wait(beatGap)
 		}},
 	)}
@@ -382,16 +382,16 @@ func failedTurn() scenario {
 			r.wait(toolGap)
 		}},
 		beat{"failing", func(r *reel) {
-			r.send(tui.Event{Kind: tui.EventToolResult, ID: "c1", Text: "exit 128", Outcome: host.ToolFailed})
+			r.send(app.Event{Kind: app.EventToolResult, ID: "c1", Text: "exit 128", Outcome: host.ToolFailed})
 			r.wait(beatGap)
 		}},
 		beat{"failed", func(r *reel) {
-			r.send(tui.Event{Kind: tui.EventFailure, Tool: "bash", Text: pushFailure})
+			r.send(app.Event{Kind: app.EventFailure, Tool: "bash", Text: pushFailure})
 			r.wait(beatGap)
 		}},
 		beat{"closed", func(r *reel) {
-			r.send(tui.Event{Kind: tui.EventDone, Text: "failed after"})
-			r.app.Update(tui.Closed{})
+			r.send(app.Event{Kind: app.EventDone, Text: "failed after"})
+			r.app.Update(app.Closed{})
 			r.wait(beatGap)
 		}},
 	)}
@@ -399,11 +399,11 @@ func failedTurn() scenario {
 
 func subAgentTurn() scenario {
 	held, spent := &roster.Roster{}, map[string]int{}
-	subAgent := func(r *reel, state roster.State, steps, tokens int) tui.Event {
+	subAgent := func(r *reel, state roster.State, steps, tokens int) app.Event {
 		held.Stepped(subAgentID, steps, r.at)
 		held.Reached(subAgentID, state, "")
 		spent[subAgentID] = tokens
-		return tui.Event{Kind: tui.EventSubAgent, SubAgents: host.SubAgentRows(held.SubAgents(), r.at, 0, spent, nil)}
+		return app.Event{Kind: app.EventSubAgent, SubAgents: host.SubAgentRows(held.SubAgents(), r.at, 0, spent, nil)}
 	}
 	return scenario{name: "sub-agent", beats: append(opening(),
 		beat{"spawned", func(r *reel) {
@@ -415,7 +415,7 @@ func subAgentTurn() scenario {
 			})
 			r.send(
 				delta("handing the policy loader to a sub-agent"),
-				tui.Event{Kind: tui.EventToolCall, ID: "42e30c", Tool: "spawn", Text: "read internal/judge/policy/resolve.go and say what it reads first", Promote: true},
+				app.Event{Kind: app.EventToolCall, ID: "42e30c", Tool: "spawn", Text: "read internal/judge/policy/resolve.go and say what it reads first", Promote: true},
 				subAgent(r, roster.Working, 1, 0),
 			)
 			r.wait(subAgentGap)
@@ -432,10 +432,10 @@ func subAgentTurn() scenario {
 			r.send(
 				subAgent(r, roster.InReview, 2, 24600),
 				result("42e30c", "3 lines, 199 bytes"),
-				tui.Event{Kind: tui.EventText, ID: "d41c08", Text: "the sub-agent read it: the loader reads the lock before the mode."},
-				tui.Event{Kind: tui.EventDone, Text: "cooked for"},
+				app.Event{Kind: app.EventText, ID: "d41c08", Text: "the sub-agent read it: the loader reads the lock before the mode."},
+				app.Event{Kind: app.EventDone, Text: "cooked for"},
 			)
-			r.app.Update(tui.Closed{})
+			r.app.Update(app.Closed{})
 			r.wait(beatGap)
 		}},
 	)}

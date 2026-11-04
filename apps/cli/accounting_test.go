@@ -28,7 +28,7 @@ type recordedHeader struct {
 	Wire string `json:"wire"`
 }
 
-func readRecordedRow(t *testing.T, dir string) turn.Row {
+func readRecordedRow(t *testing.T, dir string) loop.Row {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join(dir, "header.json"))
 	if err != nil {
@@ -42,7 +42,7 @@ func readRecordedRow(t *testing.T, dir string) turn.Row {
 	if err != nil {
 		t.Fatalf("reading the body: %v", err)
 	}
-	row := turn.Row{ID: header.ID, Wire: header.Wire}
+	row := loop.Row{ID: header.ID, Wire: header.Wire}
 	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
 		if line == "" {
 			continue
@@ -54,7 +54,7 @@ func readRecordedRow(t *testing.T, dir string) turn.Row {
 		if entry.Kind != "step" {
 			continue
 		}
-		var step turn.StepRow
+		var step loop.StepRow
 		if err := json.Unmarshal(entry.Body, &step); err != nil {
 			t.Fatalf("%s/body.jsonl step: %v", dir, err)
 		}
@@ -63,13 +63,13 @@ func readRecordedRow(t *testing.T, dir string) turn.Row {
 	return row
 }
 
-func recordedRowsByWire(t *testing.T) map[string][]turn.Row {
+func recordedRowsByWire(t *testing.T) map[string][]loop.Row {
 	t.Helper()
 	entries, err := os.ReadDir(recordedSessionsDir)
 	if err != nil {
 		t.Skipf("no %s on this machine: %v", recordedSessionsDir, err)
 	}
-	byWire := map[string][]turn.Row{}
+	byWire := map[string][]loop.Row{}
 	for _, entry := range entries {
 		if !entry.IsDir() {
 			continue
@@ -88,11 +88,11 @@ func recordedRowsByWire(t *testing.T) map[string][]turn.Row {
 
 func TestOneCodexSessionAndOneAnthropicSessionReadBackOnTheSameScale(t *testing.T) {
 	byWire := recordedRowsByWire(t)
-	if len(byWire[llm.WireCodex]) == 0 || len(byWire[llm.WireAnthropic]) == 0 {
+	if len(byWire[core.WireCodex]) == 0 || len(byWire[core.WireAnthropic]) == 0 {
 		t.Skipf("%s holds %d codex and %d anthropic sessions, so the two wires cannot be compared",
-			recordedSessionsDir, len(byWire[llm.WireCodex]), len(byWire[llm.WireAnthropic]))
+			recordedSessionsDir, len(byWire[core.WireCodex]), len(byWire[core.WireAnthropic]))
 	}
-	for _, row := range []turn.Row{byWire[llm.WireCodex][0], byWire[llm.WireAnthropic][0]} {
+	for _, row := range []loop.Row{byWire[core.WireCodex][0], byWire[core.WireAnthropic][0]} {
 		accounting := row.PromptAccounting()
 		for _, step := range row.Steps {
 			fresh := accounting.FreshTokens(step.PromptTokens, step.CacheReadTokens)
@@ -117,7 +117,7 @@ type readStep struct {
 	fresh     int
 }
 
-func readStepsOf(rows []turn.Row) []readStep {
+func readStepsOf(rows []loop.Row) []readStep {
 	var out []readStep
 	for _, row := range rows {
 		accounting := row.PromptAccounting()
@@ -136,8 +136,8 @@ func readStepsOf(rows []turn.Row) []readStep {
 
 func TestTwoStepsThatBillTheSameAndCacheTheSameReadBackTheSameFreshCount(t *testing.T) {
 	byWire := recordedRowsByWire(t)
-	codexSteps := readStepsOf(byWire[llm.WireCodex])
-	anthropicSteps := readStepsOf(byWire[llm.WireAnthropic])
+	codexSteps := readStepsOf(byWire[core.WireCodex])
+	anthropicSteps := readStepsOf(byWire[core.WireAnthropic])
 	pairs := 0
 	for _, left := range codexSteps {
 		for _, right := range anthropicSteps {
@@ -159,10 +159,10 @@ func TestTwoStepsThatBillTheSameAndCacheTheSameReadBackTheSameFreshCount(t *test
 
 func TestASessionRecordedBeforeThisTicketStillReadsBack(t *testing.T) {
 	byWire := recordedRowsByWire(t)
-	if len(byWire[llm.WireCodex]) == 0 {
+	if len(byWire[core.WireCodex]) == 0 {
 		t.Skipf("no codex session in %s", recordedSessionsDir)
 	}
-	row := byWire[llm.WireCodex][0]
+	row := byWire[core.WireCodex][0]
 	header, err := os.ReadFile(filepath.Join(recordedSessionsDir, row.ID, "header.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -171,7 +171,7 @@ func TestASessionRecordedBeforeThisTicketStillReadsBack(t *testing.T) {
 		t.Fatalf("%s was recorded after this ticket, so it proves nothing about the files already on disk", row.ID)
 	}
 	accounting := row.PromptAccounting()
-	if accounting != llm.PromptIncludesCacheReads {
+	if accounting != core.PromptIncludesCacheReads {
 		t.Fatalf("%s reads as %s, so a file recorded before this ticket is read with the wrong meaning", row.ID, accounting)
 	}
 	cached := 0
@@ -199,10 +199,10 @@ func TestASessionRecordedBeforeThisTicketStillReadsBack(t *testing.T) {
 }
 
 type accountedModel struct {
-	decision llm.Decision
+	decision core.Decision
 }
 
-func (m accountedModel) Ask(context.Context, llm.Request) (llm.Decision, error) {
+func (m accountedModel) Ask(context.Context, core.Request) (core.Decision, error) {
 	return m.decision, nil
 }
 
@@ -211,19 +211,19 @@ func TestTheBottomBarIsGivenFreshTokensOnBothWires(t *testing.T) {
 		wire      string
 		promptRaw int
 	}{
-		{llm.WireCodex, 8016},
-		{llm.WireAnthropic, 2896},
+		{core.WireCodex, 8016},
+		{core.WireAnthropic, 2896},
 	} {
 		driver := driveApp(t)
-		model := accountedModel{decision: llm.Decision{
+		model := accountedModel{decision: core.Decision{
 			Build:            "stub-model",
-			Outcome:          llm.OutcomeMessage,
-			Usage:            llm.Usage{InputTokens: each.promptRaw, OutputTokens: 100},
-			PromptAccounting: llm.PromptAccountingFor(each.wire),
+			Outcome:          core.OutcomeMessage,
+			Usage:            core.Usage{InputTokens: each.promptRaw, OutputTokens: 100},
+			PromptAccounting: core.PromptAccountingFor(each.wire),
 			CacheReadTokens:  5120,
 		}}
-		stubbedTurn(testkit.ScratchProject(t), model)(t.Context(), onTheSubscription, "say what you hold", driver.emit)
-		stats := driver.of(tui.EventStats)
+		stubbedTurn(cli.ScratchProject(t), model)(t.Context(), onTheSubscription, "say what you hold", driver.emit)
+		stats := driver.of(app.EventStats)
 		if len(stats) == 0 {
 			t.Fatalf("%s: no stats event reached the bar", each.wire)
 		}

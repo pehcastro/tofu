@@ -1,4 +1,4 @@
-package tools
+package registry
 
 import (
 	"context"
@@ -168,7 +168,7 @@ func NewVerbs(dir string) ([]contract.Tool, error) {
 
 func (v Verb) Name() string { return v.spec.tool }
 
-func (v Verb) Definition() llm.Tool {
+func (v Verb) Definition() core.Tool {
 	properties := make(map[string]any, len(v.spec.params))
 	required := []string{}
 	for _, param := range v.spec.params {
@@ -178,7 +178,7 @@ func (v Verb) Definition() llm.Tool {
 			required = append(required, name)
 		}
 	}
-	return llm.Tool{
+	return core.Tool{
 		Name:        v.spec.tool,
 		Description: v.spec.about + ". " + v.spec.needs,
 		Parameters:  map[string]any{"type": "object", "properties": properties, "required": required},

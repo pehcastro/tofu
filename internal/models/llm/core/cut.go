@@ -1,4 +1,4 @@
-package llm
+package core
 
 type CutReply struct {
 	Streamed string

@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
@@ -25,10 +25,10 @@ const (
 )
 
 type standingJudge struct {
-	client    *jev.Client
+	client    *core.Client
 	unasked   error
 	set       question.Set
-	asked     jev.Question
+	asked     core.Question
 	threshold float64
 	ledger    *ledger.Writer
 	notify    func(string)
@@ -60,7 +60,7 @@ func (j *standingJudge) open(project string) error {
 		return err
 	}
 	j.set, j.asked = set, asked.ToJev()
-	j.client, err = classifier.Open(project, jev.ReadKeyring(), konst.CarryStandingJudged)
+	j.client, err = classifiers.Open(project, core.ReadKeyring(), konst.CarryStandingJudged)
 	return err
 }
 
@@ -90,11 +90,11 @@ func (j *standingJudge) order(sentence string) bool {
 	if j.unasked != nil {
 		why := "jev cannot be asked, so the word list decided: " + j.unasked.Error()
 		row.Reason.ModeReason = &why
-	} else if decision, err := j.client.Ask(context.Background(), jev.Request{State: body, Questions: []jev.Question{j.asked}}); err != nil {
+	} else if decision, err := j.client.Ask(context.Background(), core.Request{State: body, Questions: []core.Question{j.asked}}); err != nil {
 		why := "jev could not answer, so the word list decided: " + err.Error()
 		row.Reason.ModeReason = &why
 	} else {
-		decision.Record(&row, []jev.Question{j.asked}, j.set.QuestionsVersion)
+		decision.Record(&row, []core.Question{j.asked}, j.set.QuestionsVersion)
 		row.Reason.Value = row.Answers[0].Noul
 		kept = row.Reason.Value >= j.threshold
 	}

@@ -1,4 +1,4 @@
-package tools_test
+package registry_test
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/registry"
 	"tofu/internal/tools/web"
@@ -58,20 +58,20 @@ func (m *watchingModel) toolResult(t *testing.T) string {
 	return ""
 }
 
-func runWeb(t *testing.T, model *watchingModel, list []contract.Tool, bytesCap int, gate turn.Gate) turn.Row {
+func runWeb(t *testing.T, model *watchingModel, list []contract.Tool, bytesCap int, gate loop.Gate) loop.Row {
 	t.Helper()
-	row, err := turn.Run(context.Background(), turn.Config{
+	row, err := loop.Run(context.Background(), loop.Config{
 		Model:          model,
-		Spend:          turn.SpendSubscription,
-		Tools:          turn.NewRegistry(list...),
+		Spend:          loop.SpendSubscription,
+		Tools:          loop.NewRegistry(list...),
 		Gate:           gate,
-		GateMode:       turn.GateEnforce,
+		GateMode:       loop.GateEnforce,
 		Task:           "read one page from the web",
 		ResultBytesCap: bytesCap,
 		ArtifactDir:    t.TempDir(),
 	})
 	if err != nil {
-		t.Fatalf("turn.Run: %v", err)
+		t.Fatalf("loop.Run: %v", err)
 	}
 	return row
 }
@@ -84,9 +84,9 @@ func fetching(address string) *watchingModel {
 
 type denyingGate struct{ asked []string }
 
-func (g *denyingGate) Decide(_ context.Context, request turn.GateRequest) (turn.GateDecision, error) {
+func (g *denyingGate) Decide(_ context.Context, request loop.GateRequest) (loop.GateDecision, error) {
 	g.asked = append(g.asked, request.Tool)
-	return turn.GateDecision{
+	return loop.GateDecision{
 		ID:      "dec-web-1",
 		Verdict: ledger.VerdictDeny,
 		Reason:  &ledger.Reason{Question: "risk", Comparison: "risk_deny_at", Value: 3, Threshold: 2},
@@ -106,12 +106,12 @@ func toolNames(t *testing.T, key string, projectFiles map[string]string) string 
 	for name, body := range projectFiles {
 		project[name] = &fstest.MapFile{Data: []byte(body)}
 	}
-	config, err := web.LoadKeyed([]web.Layer{layers[0], {Origin: "project", FS: project}}, jev.ReadKeyring())
+	config, err := web.LoadKeyed([]web.Layer{layers[0], {Origin: "project", FS: project}}, core.ReadKeyring())
 	if err != nil {
 		t.Fatalf("loading the web library: %v", err)
 	}
 	var names []string
-	for _, tool := range tools.NewWeb(config) {
+	for _, tool := range registry.NewWeb(config) {
 		names = append(names, tool.Name())
 	}
 	return strings.Join(names, " ")
@@ -149,7 +149,7 @@ func TestAFetchedPageArrivesInTheRowAsUnitsRatherThanMarkup(t *testing.T) {
 		<nav><a href="/pricing">Pricing</a></nav></main></body></html>`)
 
 	model := fetching(server.URL + "/docs/pools")
-	called := loggedRows(t, runWeb(t, model, tools.NewWeb(webLimits()), konst.TurnResultBytesCap, nil))
+	called := loggedRows(t, runWeb(t, model, registry.NewWeb(webLimits()), konst.TurnResultBytesCap, nil))
 	if len(called) != 1 || called[0].Error != "" {
 		t.Fatalf("the fetch did not run: %+v", called)
 	}
@@ -183,7 +183,7 @@ func TestAFetchedPageDropsLinkOnlyNavigationAndTheMessageSaysWhatWent(t *testing
 	</main></body></html>`)
 
 	model := fetching(server.URL)
-	runWeb(t, model, tools.NewWeb(webLimits()), konst.TurnResultBytesCap, nil)
+	runWeb(t, model, registry.NewWeb(webLimits()), konst.TurnResultBytesCap, nil)
 	content := model.toolResult(t)
 	t.Logf("the model saw:\n%s", content)
 
@@ -203,7 +203,7 @@ func TestAPageTooLargeForTheResultCapBecomesAHandleRatherThanATruncation(t *test
 		strings.Repeat("<p>a paragraph that says nothing in particular.</p>", 400)+"</main></body></html>")
 
 	model := fetching(server.URL)
-	called := loggedRows(t, runWeb(t, model, tools.NewWeb(webLimits()), 4096, nil))
+	called := loggedRows(t, runWeb(t, model, registry.NewWeb(webLimits()), 4096, nil))
 	if len(called) != 1 {
 		t.Fatalf("the fetch did not run: %+v", called)
 	}
@@ -221,7 +221,7 @@ func TestTheGateRefusesAFetchBeforeAnythingReachesTheNetwork(t *testing.T) {
 	server, requests := servePage(t, "text/html", "<html><body><main><p>never read</p></main></body></html>")
 	gate := &denyingGate{}
 
-	called := loggedRows(t, runWeb(t, fetching(server.URL), tools.NewWeb(webLimits()), konst.TurnResultBytesCap, gate))
+	called := loggedRows(t, runWeb(t, fetching(server.URL), registry.NewWeb(webLimits()), konst.TurnResultBytesCap, gate))
 	t.Logf("the gate was asked about %v and answered %q, the server counted %d requests",
 		gate.asked, called[0].GateVerdict, *requests)
 	if *requests != 0 {
@@ -240,7 +240,7 @@ func TestAPageThatTriesToIssueAnInstructionArrivesAsDataInsideMarkers(t *testing
 	server, _ := servePage(t, "text/html", "<html><body><main><h1>Notes</h1><p>"+instruction+"</p></main></body></html>")
 
 	model := fetching(server.URL)
-	runWeb(t, model, tools.NewWeb(webLimits()), konst.TurnResultBytesCap, nil)
+	runWeb(t, model, registry.NewWeb(webLimits()), konst.TurnResultBytesCap, nil)
 	content := model.toolResult(t)
 	t.Logf("the model saw:\n%s", content)
 
@@ -259,7 +259,7 @@ func TestAPageThatTriesToIssueAnInstructionArrivesAsDataInsideMarkers(t *testing
 		}
 	}
 	again := fetching(server.URL)
-	runWeb(t, again, tools.NewWeb(webLimits()), konst.TurnResultBytesCap, nil)
+	runWeb(t, again, registry.NewWeb(webLimits()), konst.TurnResultBytesCap, nil)
 	if marker(content) == marker(again.toolResult(t)) {
 		t.Fatalf("the marker is the same on every fetch, so a page can close it: %q", marker(content))
 	}
@@ -281,7 +281,7 @@ func fetchResults(t *testing.T, address string, argsList ...string) []string {
 			Arguments: json.RawMessage(`{"url":` + strconv.Quote(address) + args + `}`)})
 	}
 	model := &watchingModel{scripted: scriptedModel{calls: calls}}
-	runWeb(t, model, tools.NewWeb(webLimits()), 1<<20, nil)
+	runWeb(t, model, registry.NewWeb(webLimits()), 1<<20, nil)
 	var results []string
 	for _, message := range model.seen {
 		if message.Role == llm.RoleTool {

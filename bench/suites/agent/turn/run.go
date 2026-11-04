@@ -46,7 +46,7 @@ func Run(ctx context.Context, key string) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	client, err := llm.NewClient(wire)
+	client, err := core.NewClient(wire)
 	if err != nil {
 		return Result{}, err
 	}

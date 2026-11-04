@@ -124,10 +124,10 @@ func TaskGates(armDir, startCommit string) Task {
 	}
 }
 
-func LatestSession(dir string, after time.Time) (turn.Row, error) {
+func LatestSession(dir string, after time.Time) (loop.Row, error) {
 	listing, err := session.NewStore(dir).Listing()
 	if err != nil {
-		return turn.Row{}, err
+		return loop.Row{}, err
 	}
 	for _, header := range listing.Sessions {
 		if header.At.Before(after) {
@@ -135,7 +135,7 @@ func LatestSession(dir string, after time.Time) (turn.Row, error) {
 		}
 		row, err := sessionRow(dir, header.ID)
 		if err != nil {
-			return turn.Row{}, err
+			return loop.Row{}, err
 		}
 		return continuationOf(dir, row), nil
 	}
@@ -146,11 +146,11 @@ func LatestSession(dir string, after time.Time) (turn.Row, error) {
 	if unread != "" {
 		unread = ", and these rows could not be read at all:" + unread
 	}
-	return turn.Row{}, fmt.Errorf("no turn row in %s is dated at or after %s, so the run wrote nothing this bench can read%s",
+	return loop.Row{}, fmt.Errorf("no turn row in %s is dated at or after %s, so the run wrote nothing this bench can read%s",
 		dir, after.Format(time.RFC3339), unread)
 }
 
-func continuationOf(dir string, row turn.Row) turn.Row {
+func continuationOf(dir string, row loop.Row) loop.Row {
 	walked := map[string]bool{row.ID: true}
 	for row.ForkedInto != "" && !walked[row.ForkedInto] {
 		next, err := sessionRow(dir, row.ForkedInto)
@@ -163,23 +163,23 @@ func continuationOf(dir string, row turn.Row) turn.Row {
 	return row
 }
 
-func sessionRow(dir, id string) (turn.Row, error) {
+func sessionRow(dir, id string) (loop.Row, error) {
 	reading, err := session.NewStore(dir).Reading(id)
 	if err != nil {
-		return turn.Row{}, err
+		return loop.Row{}, err
 	}
 	if len(reading.Outcome) == 0 {
-		return turn.Row{}, fmt.Errorf("the body of session %s carries no outcome event, so there is no turn row in it", id)
+		return loop.Row{}, fmt.Errorf("the body of session %s carries no outcome event, so there is no turn row in it", id)
 	}
-	var row turn.Row
+	var row loop.Row
 	if err := json.Unmarshal(reading.Outcome, &row); err != nil {
-		return turn.Row{}, fmt.Errorf("the outcome event of session %s does not read as a turn row: %w", id, err)
+		return loop.Row{}, fmt.Errorf("the outcome event of session %s does not read as a turn row: %w", id, err)
 	}
-	var steps []turn.StepRow
+	var steps []loop.StepRow
 	for i, step := range reading.Steps {
-		var measured turn.StepRow
+		var measured loop.StepRow
 		if err := json.Unmarshal(step.Raw, &measured); err != nil {
-			return turn.Row{}, fmt.Errorf("step %d of session %s does not read as a step: %w", i+1, id, err)
+			return loop.Row{}, fmt.Errorf("step %d of session %s does not read as a step: %w", i+1, id, err)
 		}
 		steps = append(steps, measured)
 	}
@@ -187,7 +187,7 @@ func sessionRow(dir, id string) (turn.Row, error) {
 	return row, nil
 }
 
-func StoreTranscript(dir string, row turn.Row) error {
+func StoreTranscript(dir string, row loop.Row) error {
 	body, err := json.MarshalIndent(row, "", "  ")
 	if err != nil {
 		return err
@@ -198,19 +198,19 @@ func StoreTranscript(dir string, row turn.Row) error {
 	return os.WriteFile(filepath.Join(dir, row.ID+singleFileSuffix), body, 0o600)
 }
 
-func LoadSession(path string) (turn.Row, error) {
+func LoadSession(path string) (loop.Row, error) {
 	body, err := os.ReadFile(path)
 	if err != nil {
-		return turn.Row{}, err
+		return loop.Row{}, err
 	}
-	var row turn.Row
+	var row loop.Row
 	if err := json.Unmarshal(body, &row); err != nil {
-		return turn.Row{}, fmt.Errorf("%s is not a turn row: %w", path, err)
+		return loop.Row{}, fmt.Errorf("%s is not a turn row: %w", path, err)
 	}
 	return row, nil
 }
 
-func MeasureTofu(session turn.Row, src Sources, meta RunMeta) (Row, []string) {
+func MeasureTofu(session loop.Row, src Sources, meta RunMeta) (Row, []string) {
 	row, gaps, err := ParseTofu(src.LedgerDir, ledger.Filter{TurnID: session.ID}, meta)
 	if err != nil {
 		row = Row{Arm: meta.Arm, Task: meta.Task, Version: meta.Version, Run: meta.Run, CLIVersion: meta.CLIVersion, CredentialKind: meta.CredentialKind, Commit: meta.Commit, Setup: meta.Setup}
@@ -275,11 +275,11 @@ func scoreTree(row Row, src Sources, gaps []string) (Row, []string) {
 	return row, gaps
 }
 
-func credentialOfSpend(spend turn.Spend) (CredentialKind, string) {
+func credentialOfSpend(spend loop.Spend) (CredentialKind, string) {
 	switch spend {
-	case turn.SpendSubscription:
+	case loop.SpendSubscription:
 		return CredentialKindSubscription, ""
-	case turn.SpendAPIKey:
+	case loop.SpendAPIKey:
 		return CredentialKindKey, ""
 	}
 	return CredentialKindKey, fmt.Sprintf("credential kind: the turn row names its spend %q, which is neither subscription nor api_key, so this row says key and its dollars cannot be trusted", spend)
@@ -320,31 +320,31 @@ func graded(checks []ChecklistCheck) []ChecklistCheck {
 	return out
 }
 
-func endReasonOf(session turn.Row) (EndReason, string) {
+func endReasonOf(session loop.Row) (EndReason, string) {
 	switch session.Outcome {
-	case turn.OutcomeStopped:
+	case loop.OutcomeStopped:
 		return EndReasonDone, ""
-	case turn.OutcomeStepCap:
+	case loop.OutcomeStepCap:
 		return EndReasonTurnCap, ""
-	case turn.OutcomeRetiredCostCap:
+	case loop.OutcomeRetiredCostCap:
 		return EndReasonCrash, "end reason: this turn row was written when tofu still had a cost cap, that cap is gone, and harness.EndReason has no variant for it, so this row says crash"
-	case turn.OutcomeRetiredWallClockCap:
+	case loop.OutcomeRetiredWallClockCap:
 		return EndReasonWallClock, ""
-	case turn.OutcomeDecisionCap:
+	case loop.OutcomeDecisionCap:
 		return EndReasonTurnCap, "end reason: the turn ended on the decision cap, and harness.EndReason has no variant for that, so this row says turn_cap"
-	case turn.OutcomeLoopGuard:
+	case loop.OutcomeLoopGuard:
 		return EndReasonTurnCap, "end reason: the turn stopped itself on a repeated tool call, and harness.EndReason has no variant for that, so this row says turn_cap"
-	case turn.OutcomeForkStop:
+	case loop.OutcomeForkStop:
 		return EndReasonTurnCap, "end reason: the turn stopped on its fork rule, and harness.EndReason has no variant for that, so this row says turn_cap"
-	case turn.OutcomeTruncated:
+	case loop.OutcomeTruncated:
 		return EndReasonTruncated, ""
-	case turn.OutcomeError:
+	case loop.OutcomeError:
 		return EndReasonCrash, ""
-	case turn.OutcomeCancelled:
+	case loop.OutcomeCancelled:
 		return EndReasonCrash, "end reason: the turn was cancelled from outside, and harness.EndReason has no variant for that, so this row says crash"
-	case turn.OutcomeUnset:
+	case loop.OutcomeUnset:
 		return EndReasonCrash, "end reason: the turn row carries no outcome, so this row says crash"
-	case turn.OutcomeForked:
+	case loop.OutcomeForked:
 		return EndReasonCrash, fmt.Sprintf(
 			"end reason: session %s forked into %s and a forked session is not the end of the work, "+
 				"so the session that finished it is the one to score and it was not on disk to be followed",
@@ -353,7 +353,7 @@ func endReasonOf(session turn.Row) (EndReason, string) {
 	panic("harness: unknown turn outcome " + session.Outcome.String())
 }
 
-func countToolCalls(session turn.Row) ToolCalls {
+func countToolCalls(session loop.Row) ToolCalls {
 	var calls ToolCalls
 	for _, step := range session.Steps {
 		for _, call := range step.ToolCalls {
@@ -375,7 +375,7 @@ func countToolCalls(session turn.Row) ToolCalls {
 	return calls
 }
 
-func countTokens(session turn.Row) (input, output int64) {
+func countTokens(session loop.Row) (input, output int64) {
 	accounting := session.PromptAccounting()
 	for _, step := range session.Steps {
 		input += int64(accounting.BilledTokens(step.PromptTokens, step.CacheReadTokens) + step.CacheWriteTokens)
@@ -384,7 +384,7 @@ func countTokens(session turn.Row) (input, output int64) {
 	return input, output
 }
 
-func wireGapOf(session turn.Row) string {
+func wireGapOf(session loop.Row) string {
 	if session.Wire != "" {
 		return ""
 	}

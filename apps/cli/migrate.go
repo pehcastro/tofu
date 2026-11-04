@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/cli/render"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
@@ -111,7 +111,7 @@ func moveProjectState(out io.Writer, project string) []stateMove {
 		}
 	}
 	if len(names) > 0 {
-		moved := []string{"moved " + strings.Join(names, ", "), output.Plural(total.Files, "file"), widget.Size(int(total.Bytes))}
+		moved := []string{"moved " + strings.Join(names, ", "), output.Plural(total.Files, "file"), render.Size(int(total.Bytes))}
 		if total.Settled > 0 {
 			moved = append(moved, strconv.Itoa(total.Settled)+" settled")
 		}
@@ -221,7 +221,7 @@ func migrateLines(page cli.Page, report migrateReport, failed int) []string {
 	var moved []cli.Row
 	for _, move := range report.Moves {
 		if move.Failure == "" {
-			moved = append(moved, cli.Row{Mark: cli.Changed, Cells: []string{move.Name, output.Plural(move.Files, "file"), widget.Size(int(move.Bytes))}, Detail: page.Path(move.To)})
+			moved = append(moved, cli.Row{Mark: cli.Changed, Cells: []string{move.Name, output.Plural(move.Files, "file"), render.Size(int(move.Bytes))}, Detail: page.Path(move.To)})
 		}
 	}
 	if len(moved) > 0 {

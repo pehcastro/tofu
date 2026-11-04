@@ -89,16 +89,16 @@ func Measure(runs int) (Rounds, error) {
 }
 
 func timeToolchainCacheHit(dir string) (cold, warm time.Duration, err error) {
-	shell, err := turn.ResolveRunShell("")
+	shell, err := loop.ResolveRunShell("")
 	if err != nil {
 		return 0, 0, err
 	}
 	coldStart := time.Now()
-	turn.EnvironmentFromShell(dir, coldStart, shell)
+	loop.EnvironmentFromShell(dir, coldStart, shell)
 	cold = time.Since(coldStart)
 
 	warmStart := time.Now()
-	turn.EnvironmentFromShell(dir, warmStart, shell)
+	loop.EnvironmentFromShell(dir, warmStart, shell)
 	warm = time.Since(warmStart)
 	return cold, warm, nil
 }
@@ -112,7 +112,7 @@ func subtractFloor(total, baseline time.Duration) time.Duration {
 
 func timeBashTool(root string) (time.Duration, error) {
 	started := time.Now()
-	if _, err := turn.NewBashTool(root); err != nil {
+	if _, err := loop.NewBashTool(root); err != nil {
 		return 0, err
 	}
 	return time.Since(started), nil

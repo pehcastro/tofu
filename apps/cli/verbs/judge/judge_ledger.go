@@ -8,7 +8,7 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/judge/state"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/sys"
@@ -18,7 +18,7 @@ import (
 
 type Outcome struct {
 	answers  []ledger.Answer
-	Decision jev.Decision
+	Decision core.Decision
 	fresh    bool
 	verdict  ledger.Verdict
 	mode     gate.Mode
@@ -38,7 +38,7 @@ func (o Outcome) output() map[string]any {
 	return out
 }
 
-func AskFresh(ctx context.Context, client *jev.Client, req jev.Request, set wiring.Battery) (Outcome, ledger.Entry, error) {
+func AskFresh(ctx context.Context, client *core.Client, req core.Request, set wiring.Battery) (Outcome, ledger.Entry, error) {
 	decision, err := client.Ask(ctx, req)
 	if err != nil {
 		state, notEncoded := json.Marshal(req.State)
@@ -59,7 +59,7 @@ func AskFresh(ctx context.Context, client *jev.Client, req jev.Request, set wiri
 	return Outcome{answers: answers, fresh: true, Decision: decision, verdict: row.Verdict, mode: set.Mode}, entry, nil
 }
 
-func RunJudge(ctx context.Context, client *jev.Client, req jev.Request, set wiring.Battery, noCache bool) (Outcome, error) {
+func RunJudge(ctx context.Context, client *core.Client, req core.Request, set wiring.Battery, noCache bool) (Outcome, error) {
 	if noCache {
 		outcome, _, err := AskFresh(ctx, client, req, set)
 		return outcome, err
@@ -115,13 +115,13 @@ func RunJudge(ctx context.Context, client *jev.Client, req jev.Request, set wiri
 	return Outcome{answers: entry.Answers, verdict: row.Verdict, mode: set.Mode}, nil
 }
 
-func jevAnswerJSON(a jev.Answer) map[string]any {
+func jevAnswerJSON(a core.Answer) map[string]any {
 	switch a.Kind {
-	case jev.QuestionNoul:
+	case core.QuestionNoul:
 		return map[string]any{"type": "noul", "noul": a.Noul}
-	case jev.QuestionChoice:
+	case core.QuestionChoice:
 		return map[string]any{"type": "choice", "choice": a.Choice, "probabilities": a.Probabilities, "confidence": a.Confidence}
-	case jev.QuestionScore:
+	case core.QuestionScore:
 		return map[string]any{"type": "score", "score": a.Score, "probabilities": a.Probabilities, "confidence": a.Confidence}
 	}
 	panic("tofu: unknown question kind")
@@ -147,13 +147,13 @@ func distMap(dist []ledger.Slice) map[string]float64 {
 	return out
 }
 
-func MemoryScopeJudge(dir, log string, keys jev.Keyring, say func(string)) *tools.ScopeJudge {
+func MemoryScopeJudge(dir, log string, keys core.Keyring, say func(string)) *registry.ScopeJudge {
 	layers, err := question.Layers(questions.Files(), dir)
 	var set question.Set
 	if err == nil {
 		set, _, err = question.Resolve(state.MemoryScopeRef, layers)
 	}
-	var client *jev.Client
+	var client *core.Client
 	if err == nil {
 		client, err = wiring.JevClientFrom(keys, wiring.OneCallAtATime)
 	}
@@ -163,5 +163,5 @@ func MemoryScopeJudge(dir, log string, keys jev.Keyring, say func(string)) *tool
 		}
 		return nil
 	}
-	return &tools.ScopeJudge{Client: client, Set: set, Ledger: ledger.NewWriter(log)}
+	return &registry.ScopeJudge{Client: client, Set: set, Ledger: ledger.NewWriter(log)}
 }

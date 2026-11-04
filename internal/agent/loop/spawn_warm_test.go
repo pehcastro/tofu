@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"context"
@@ -17,17 +17,17 @@ import (
 var warmBrief = regexp.MustCompile(`brief-\d+`)
 
 type warmScript struct {
-	spawns   []llm.ToolCall
+	spawns   []core.ToolCall
 	mu       sync.Mutex
 	began    map[string]time.Time
 	answered map[string]time.Time
 	spawned  bool
 }
 
-func (s *warmScript) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (s *warmScript) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	brief := ""
 	for _, message := range request.Messages {
-		if message.Role == llm.RoleUser && brief == "" {
+		if message.Role == core.RoleUser && brief == "" {
 			brief = warmBrief.FindString(message.Content)
 		}
 	}
@@ -66,7 +66,7 @@ func warmSpawns(t *testing.T, agents ...string) *warmScript {
 		if err != nil {
 			t.Fatal(err)
 		}
-		script.spawns = append(script.spawns, llm.ToolCall{ID: "call-" + n, Name: "spawn", Arguments: args})
+		script.spawns = append(script.spawns, core.ToolCall{ID: "call-" + n, Name: "spawn", Arguments: args})
 	}
 	base := Config{
 		Model:          script,
@@ -76,8 +76,8 @@ func warmSpawns(t *testing.T, agents ...string) *warmScript {
 		ArtifactDir:    filepath.Join(t.TempDir(), "artifacts"),
 		NewID:          func() string { return "turn-orchestrator" },
 	}
-	spawner := NewSpawnTool("turn-orchestrator", base, &subagent.Roster{})
-	spawner.SubAgents.Defined = []subagent.Definition{{Name: "ts-dev", Runs: subagent.RunsModel}, {Name: "go-dev", Runs: subagent.RunsModel}}
+	spawner := NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
+	spawner.SubAgents.Defined = []subagents.Definition{{Name: "ts-dev", Runs: subagents.RunsModel}, {Name: "go-dev", Runs: subagents.RunsModel}}
 	orchestrator := base
 	orchestrator.Task, orchestrator.Tools, orchestrator.Inbox = "hand the work to sub-agents", NewRegistry(spawner), spawner.Inbox
 	startLead(context.Background(), orchestrator, nil).wait(t)

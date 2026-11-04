@@ -1,4 +1,4 @@
-package cli
+package page
 
 import (
 	"bytes"
@@ -66,7 +66,7 @@ func (p Page) Colour() bool { return p.Profile > colorprofile.ASCII }
 func (p Page) Print(out io.Writer, lines []string) error {
 	var text strings.Builder
 	for _, line := range lines {
-		if widget.Cells(line) > p.Width && !strings.Contains(line, hintArrow) {
+		if render.Cells(line) > p.Width && !strings.Contains(line, hintArrow) {
 			line = p.wrap(line)
 		}
 		text.WriteString(line)
@@ -90,7 +90,7 @@ func (p Page) wrap(line string) string {
 		switch {
 		case *last == "":
 			*last = word
-		case widget.Cells(*last+" "+word) <= room:
+		case render.Cells(*last+" "+word) <= room:
 			*last += " " + word
 		default:
 			*last = strings.TrimRight(*last, " ")

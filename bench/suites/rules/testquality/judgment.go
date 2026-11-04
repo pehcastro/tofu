@@ -2,19 +2,19 @@ package testquality
 
 import "tofu/internal/librarian/rules"
 
-func judgmentFlags(dir, checkerID string) ([]rule.Finding, error) {
-	checker := rule.Builtins()[checkerID]
-	return checker.Check(rule.Rule{ID: checkerID, Checker: checkerID}, rule.GoPackage{Dir: dir})
+func judgmentFlags(dir, checkerID string) ([]rules.Finding, error) {
+	checker := rules.Builtins()[checkerID]
+	return checker.Check(rules.Rule{ID: checkerID, Checker: checkerID}, rules.GoPackage{Dir: dir})
 }
 
-func JudgmentFlagsTautologicalTests(dir string) ([]rule.Finding, error) {
+func JudgmentFlagsTautologicalTests(dir string) ([]rules.Finding, error) {
 	return judgmentFlags(dir, "test_assertion")
 }
 
-func JudgmentFlagsMockBoundary(dir string) ([]rule.Finding, error) {
+func JudgmentFlagsMockBoundary(dir string) ([]rules.Finding, error) {
 	return judgmentFlags(dir, "test_mock_boundary")
 }
 
-func JudgmentFlagsMissingBoundaryCases(dir string) ([]rule.Finding, error) {
+func JudgmentFlagsMissingBoundaryCases(dir string) ([]rules.Finding, error) {
 	return judgmentFlags(dir, "test_boundary_cases")
 }

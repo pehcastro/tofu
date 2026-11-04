@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/llm/core"
@@ -88,19 +88,19 @@ func (row traceRow) is(kind traceKind) bool {
 
 func (row traceRow) who() string { return cmp.Or(row.Agent, traceLead) }
 
-func (row traceRow) wroteBy(kind llm.OriginKind) bool {
-	return row.Origin != nil && (llm.OriginKind(row.Origin.Kind) == kind || kind == llm.OriginPerson && llm.Source(row.Origin.Sub).Answer())
+func (row traceRow) wroteBy(kind core.OriginKind) bool {
+	return row.Origin != nil && (core.OriginKind(row.Origin.Kind) == kind || kind == core.OriginPerson && core.Source(row.Origin.Sub).Answer())
 }
 
 type traceFilter struct {
-	From   time.Time      `json:"from,omitzero"`
-	Origin llm.OriginKind `json:"origin,omitempty"`
-	To     time.Time      `json:"to,omitzero"`
-	Agents []string       `json:"agents,omitempty"`
-	Turn   string         `json:"turn,omitempty"`
-	Kinds  []traceKind    `json:"kinds,omitempty"`
-	Grep   string         `json:"grep,omitempty"`
-	Last   int            `json:"last,omitempty"`
+	From   time.Time       `json:"from,omitzero"`
+	Origin core.OriginKind `json:"origin,omitempty"`
+	To     time.Time       `json:"to,omitzero"`
+	Agents []string        `json:"agents,omitempty"`
+	Turn   string          `json:"turn,omitempty"`
+	Kinds  []traceKind     `json:"kinds,omitempty"`
+	Grep   string          `json:"grep,omitempty"`
+	Last   int             `json:"last,omitempty"`
 }
 
 func (f traceFilter) empty() bool {
@@ -197,9 +197,9 @@ func sessionTraceArgs(args []string, now time.Time) (traceAsk, error) {
 		case "--since":
 			ask.filter.From, err = traceTime(value, now)
 		case "--from":
-			origins := llm.OriginKind("").Enum()
+			origins := core.OriginKind("").Enum()
 			if slices.Contains(origins, value) {
-				ask.filter.Origin = llm.OriginKind(value)
+				ask.filter.Origin = core.OriginKind(value)
 			} else if ask.filter.From, err = traceTime(value, now); err != nil {
 				err = fmt.Errorf("--from %q is neither an origin, one of %s, nor a time such as 1h or 04:10", value, strings.Join(origins, ", "))
 			}
@@ -302,7 +302,7 @@ func sessionTimeline(store *session.Store, handle string, filter traceFilter) (t
 	if err != nil {
 		return traceTimeline{}, err
 	}
-	if err := turn.CheckToolOutcomes(events); err != nil {
+	if err := loop.CheckToolOutcomes(events); err != nil {
 		return traceTimeline{}, err
 	}
 	exchanges, err := store.Exchanges(header.ID)
@@ -339,7 +339,7 @@ func sessionTimeline(store *session.Store, handle string, filter traceFilter) (t
 		if err != nil {
 			return traceTimeline{}, err
 		}
-		if err := turn.CheckToolOutcomes(events); err != nil {
+		if err := loop.CheckToolOutcomes(events); err != nil {
 			return traceTimeline{}, err
 		}
 		borrowed, there := traceRows(slices.DeleteFunc(slices.Clone(events), outsideHere), nil), handleOf(store, from.ID)

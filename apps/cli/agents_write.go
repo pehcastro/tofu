@@ -83,7 +83,7 @@ func (o agentWriteOpts) file(name string) string {
 }
 
 func knownModel(dir, model string) error {
-	if model == string(subagent.RunsInherit) {
+	if model == string(subagents.RunsInherit) {
 		return nil
 	}
 	catalog, err := wiring.ModelLibrary(dir)
@@ -93,21 +93,21 @@ func knownModel(dir, model string) error {
 	return err
 }
 
-func definitionAt(found subagent.Found, path string) (subagent.Definition, bool) {
+func definitionAt(found subagents.Found, path string) (subagents.Definition, bool) {
 	for _, listed := range found.Definitions {
-		for _, definition := range append([]subagent.Definition{listed}, listed.Shadowed...) {
+		for _, definition := range append([]subagents.Definition{listed}, listed.Shadowed...) {
 			if definition.Path == path {
 				return definition, true
 			}
 		}
 	}
-	return subagent.Definition{}, false
+	return subagents.Definition{}, false
 }
 
-func listedAgent(found subagent.Found, name string) (subagent.Definition, bool) {
-	at := slices.IndexFunc(found.Definitions, func(definition subagent.Definition) bool { return definition.Name == name })
+func listedAgent(found subagents.Found, name string) (subagents.Definition, bool) {
+	at := slices.IndexFunc(found.Definitions, func(definition subagents.Definition) bool { return definition.Name == name })
 	if at < 0 {
-		return subagent.Definition{}, false
+		return subagents.Definition{}, false
 	}
 	return found.Definitions[at], true
 }
@@ -132,7 +132,7 @@ func agentsAddVerb(args []string, out, errOut io.Writer) int {
 			tools = append(tools, tool)
 		}
 	}
-	data, err := subagent.DefinitionFile(name, opts.description, opts.model, tools)
+	data, err := subagents.DefinitionFile(name, opts.description, opts.model, tools)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -148,7 +148,7 @@ func agentsAddVerb(args []string, out, errOut io.Writer) int {
 	switch {
 	case err == nil && !read:
 		err = fmt.Errorf("tofu does not read %s, because the agentSources setting leaves out tofu", o.Path(filepath.Dir(file)))
-	case err == nil && written.Runs == subagent.RunsRefused:
+	case err == nil && written.Runs == subagents.RunsRefused:
 		err = errors.New(strings.Join(written.Refused, "; "))
 	}
 	if err != nil {
@@ -181,12 +181,12 @@ func agentsSetVerb(args []string, out, errOut io.Writer) int {
 	if err := knownModel(opts.dir, model); err != nil {
 		return o.Fail(err)
 	}
-	file, err := subagent.Assign(opts.layer.parent, name, model)
+	file, err := subagents.Assign(opts.layer.parent, name, model)
 	if err != nil {
 		return o.Fail(err)
 	}
-	previous := string(subagent.RunsInherit)
-	if before.Runs == subagent.RunsModel {
+	previous := string(subagents.RunsInherit)
+	if before.Runs == subagents.RunsModel {
 		previous = before.Model
 	}
 	return o.Receipt(host.WriteReceipt{Changes: []host.FileChange{{Change: host.ChangeChanged, What: "sub-agent " + name + " runs " + model, File: file}}, Undo: "tofu agents set" + opts.layer.flag + " " + name + " " + previous})
@@ -223,7 +223,7 @@ func agentsRemoveVerb(args []string, out, errOut io.Writer) int {
 		return o.Fail(err)
 	}
 	changes := []host.FileChange{{Change: host.ChangeRemoved, What: "sub-agent " + name, File: file}}
-	assignments, was, err := subagent.Unassign(opts.layer.parent, name)
+	assignments, was, err := subagents.Unassign(opts.layer.parent, name)
 	if err != nil {
 		return o.Fail(err)
 	}

@@ -11,7 +11,7 @@ import (
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
 )
@@ -78,7 +78,7 @@ type Event struct {
 	Root         string
 	Identity     *session.Identity
 	Promote      bool
-	GateWhy      jev.Why
+	GateWhy      core.Why
 	Args         json.RawMessage
 	ExitCode     *int
 	Hits         *int
@@ -90,7 +90,7 @@ type Event struct {
 	At           time.Time
 	Step         int
 	Turn         string
-	Questions    []turn.PersonQuestion
+	Questions    []loop.PersonQuestion
 	Resolution   *Resolution `json:",omitempty"`
 	Wait         time.Duration
 	Accepts      []ApprovalDecision
@@ -236,8 +236,8 @@ type Decision struct {
 	Enforced      bool
 	OverridesRule string
 	Remembers     string
-	MemoryScope   memory.Scope `json:",omitempty"`
-	MemoryScopes  []memory.Scope
+	MemoryScope   entries.Scope `json:",omitempty"`
+	MemoryScopes  []entries.Scope
 }
 
 type PlanState int

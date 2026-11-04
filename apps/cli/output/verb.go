@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"tofu/apps/cli/page"
+	cli "tofu/apps/cli/page"
 	"tofu/internal/host"
 )
 

@@ -11,7 +11,7 @@ import (
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 
-	"tofu/internal/ui/tui/app"
+	tui "tofu/internal/ui/tui/app"
 )
 
 const (

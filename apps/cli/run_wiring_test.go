@@ -51,7 +51,7 @@ func projectSessions(t *testing.T, dir string) *session.Store {
 }
 
 func buildTestRunTools(dir, set string) ([]contract.Tool, error) {
-	shell, err := turn.ResolveRunShell("")
+	shell, err := loop.ResolveRunShell("")
 	if err != nil {
 		return nil, err
 	}
@@ -70,15 +70,15 @@ func TestARealRunOffersSymbolsAndTheOffArmDoesNot(t *testing.T) {
 }
 
 type deletingModel struct {
-	decisions []llm.Decision
+	decisions []core.Decision
 	deletes   string
 	asked     int
 }
 
-func (m *deletingModel) Ask(context.Context, llm.Request) (llm.Decision, error) {
+func (m *deletingModel) Ask(context.Context, core.Request) (core.Decision, error) {
 	if m.asked == 1 {
 		if err := os.Remove(m.deletes); err != nil {
-			return llm.Decision{}, err
+			return core.Decision{}, err
 		}
 	}
 	m.asked++
@@ -98,21 +98,21 @@ func TestASecondIdenticalReadInOneTurnNeverReachesTheTool(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
-	read := func(id string) llm.Decision {
-		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+	read := func(id string) core.Decision {
+		return core.Decision{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
 			{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"note.txt"}`)},
 		}}
 	}
-	model := &deletingModel{deletes: readable, decisions: []llm.Decision{
+	model := &deletingModel{deletes: readable, decisions: []core.Decision{
 		read("call-1"),
 		read("call-2"),
-		{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it twice"},
+		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "read it twice"},
 	}}
 
-	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription})
-	row, err := turn.Run(context.Background(), config)
+	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: loop.SpendSubscription})
+	row, err := loop.Run(context.Background(), config)
 	if err != nil {
-		t.Fatalf("turn.Run: %v", err)
+		t.Fatalf("loop.Run: %v", err)
 	}
 	if len(row.Steps) < 2 || len(row.Steps[1].ToolCalls) != 1 {
 		t.Fatalf("the turn ran %d steps, want two reads and an answer", len(row.Steps))
@@ -123,7 +123,7 @@ func TestASecondIdenticalReadInOneTurnNeverReachesTheTool(t *testing.T) {
 	}
 	var answers []string
 	for _, message := range row.Conversation {
-		if message.Role == llm.RoleTool {
+		if message.Role == core.RoleTool {
 			answers = append(answers, message.Content)
 		}
 	}
@@ -168,7 +168,7 @@ func TestTheWriteAndEditARunBuildsAreCheckedByTheWarmTscItIsGiven(t *testing.T) 
 	}
 	warm := newWarmProcesses(nil)
 	t.Cleanup(warm.Close)
-	shell, err := turn.ResolveRunShell("")
+	shell, err := loop.ResolveRunShell("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestASessionInATsconfigDirectoryStartsItsWatcherBeforeAnyToolCall(t *testin
 	if _, err := exec.LookPath("bun"); err != nil {
 		t.Skip("bun is not on PATH")
 	}
-	shell, err := turn.ResolveRunShell("")
+	shell, err := loop.ResolveRunShell("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func TestASessionInAWorkspaceRootWarmsItsLargestPackagesUpToTheCap(t *testing.T)
 			t.Fatal(err)
 		}
 	}
-	shell, err := turn.ResolveRunShell("")
+	shell, err := loop.ResolveRunShell("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -320,7 +320,7 @@ func TestASpawnedSubAgentsRequestsCarryTheEffortTheSpawnNames(t *testing.T) {
 		{"minimal", ""},
 	} {
 		t.Run(cmp.Or(spawned.effort, "inherited"), func(t *testing.T) {
-			testkit.EmptyHome(t)
+			cli.EmptyHome(t)
 			args, _ := json.Marshal(map[string]any{"task": "add the users route", "owns": []string{"src/**"}, "effort": spawned.effort})
 			spawnCall := `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"` + anthropic.EncodeToolName("spawn", true) + `","input":{}}}` + "\n" +
 				`{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":` + strconv.Quote(string(args)) + `}}` + "\n" +
@@ -328,26 +328,26 @@ func TestASpawnedSubAgentsRequestsCarryTheEffortTheSpawnNames(t *testing.T) {
 			server := &effortServer{replies: []string{spawnCall}}
 			listening := httptest.NewServer(server)
 			t.Cleanup(listening.Close)
-			orchestrator := models.Model{Subscription: "claude-sub", ID: "claude-test", Efforts: anthropic.ReasoningEfforts()}
-			subscription := func(effort llm.Effort) turn.Subscription {
+			orchestrator := catalog.Model{Subscription: "claude-sub", ID: "claude-test", Efforts: anthropic.ReasoningEfforts()}
+			subscription := func(effort core.Effort) loop.Subscription {
 				wire, err := anthropic.New(anthropic.Config{BaseURL: listening.URL, Model: "claude-test", Proxy: true,
 					Token: func(context.Context, string) (string, error) { return "sk-ant-oat01-test", nil }})
 				if err != nil {
 					t.Fatal(err)
 				}
-				return turn.Subscription{Wire: wire, Effort: effort}
+				return loop.Subscription{Wire: wire, Effort: effort}
 			}
 			open := func(opts wiring.RunOpts) (wiring.Wire, error) {
-				return wiring.Wire{Held: wiring.FixedAccounts(subscription(opts.Effort)), Spend: turn.SpendSubscription, Selected: orchestrator}, nil
+				return wiring.Wire{Held: wiring.FixedAccounts(subscription(opts.Effort)), Spend: loop.SpendSubscription, Selected: orchestrator}, nil
 			}
 			dir := t.TempDir()
-			opener := runtime{orchestrator: orchestrator, open: open}.subAgentOpener(wiring.RunOpts{Dir: dir, Wire: wiring.WireSubscription, Model: orchestrator.Slug(), Effort: llm.EffortMedium})
-			base := turn.Config{Model: subscription(llm.EffortMedium), Spend: turn.SpendSubscription, Caps: turn.Caps{MaxSteps: 5}, ResultBytesCap: 4096,
+			opener := runtime{orchestrator: orchestrator, open: open}.subAgentOpener(wiring.RunOpts{Dir: dir, Wire: wiring.WireSubscription, Model: orchestrator.Slug(), Effort: core.EffortMedium})
+			base := loop.Config{Model: subscription(core.EffortMedium), Spend: loop.SpendSubscription, Caps: loop.Caps{MaxSteps: 5}, ResultBytesCap: 4096,
 				ArtifactDir: t.TempDir(), NewID: func() string { return "turn-lead" }, Task: "hand the users route to a sub-agent"}
-			spawner := turn.NewSpawnTool("turn-lead", base, &subagent.Roster{})
+			spawner := loop.NewSpawnTool("turn-lead", base, &subagents.Roster{})
 			spawner.SubAgents.Open = opener
 			lead := base
-			lead.Tools, lead.Inbox = turn.NewRegistry(spawner), spawner.Inbox
+			lead.Tools, lead.Inbox = loop.NewRegistry(spawner), spawner.Inbox
 			leadRows(t, lead)
 			t.Logf("%d requests reached the wire", len(server.bodies))
 			subAgentAsked := ""
@@ -371,15 +371,15 @@ func TestASpawnedSubAgentsRequestsCarryTheEffortTheSpawnNames(t *testing.T) {
 }
 
 func TestATsDevSpawnIsOfferedTypecheck(t *testing.T) {
-	reply := func(text string) llm.Decision {
-		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: text}
+	reply := func(text string) core.Decision {
+		return core.Decision{Build: "stub-model", Outcome: core.OutcomeMessage, Content: text}
 	}
-	model := &queuedModel{decisions: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+	model := &queuedModel{decisions: []core.Decision{
+		{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
 			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"agent":"ts-dev","task":"check the project","owns":["src/**"]}`)}}},
 		reply("ts-dev is on it"), reply("done"),
-	}, subAgents: []llm.Decision{reply("checked")}}
-	stubbedTurn(testkit.ScratchProject(t), model)(t.Context(), onTheSubscription, "have ts-dev check the project", driveAppOn(t, nil).emit)
+	}, subAgents: []core.Decision{reply("checked")}}
+	stubbedTurn(cli.ScratchProject(t), model)(t.Context(), onTheSubscription, "have ts-dev check the project", driveAppOn(t, nil).emit)
 	if len(model.subAgentAsked) == 0 {
 		t.Fatal("the ts-dev sub-agent never asked its model")
 	}
@@ -462,7 +462,7 @@ func TestARunAtACeilingUnderItsPromptIsRefusedAndJustAboveItCompactsAndRecordsTh
 	if err := os.WriteFile(filepath.Join(dir, "big.txt"), []byte(strings.Repeat("x", 20000)), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	run := func(ceiling int) (turn.Row, *queuedModel, recall.Budget, error) {
+	run := func(ceiling int) (loop.Row, *queuedModel, recall.Budget, error) {
 		opts, err := parseRunArgs([]string{"--dir", dir, "--context-ceiling", strconv.Itoa(ceiling), "--no-subagents", "read the big file over and over"})
 		if err != nil {
 			t.Fatalf("parseRunArgs: %v", err)
@@ -471,20 +471,20 @@ func TestARunAtACeilingUnderItsPromptIsRefusedAndJustAboveItCompactsAndRecordsTh
 		if err != nil {
 			t.Fatalf("buildTestRunTools: %v", err)
 		}
-		var decisions []llm.Decision
+		var decisions []core.Decision
 		for i := range 8 {
-			decisions = append(decisions, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+			decisions = append(decisions, core.Decision{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
 				{ID: "call-" + string(rune('a'+i)), Name: "bash", Arguments: json.RawMessage(`{"command":"head -c 6000 big.txt; echo ` + strconv.Itoa(i) + `"}`)},
 			}})
 		}
-		model := &queuedModel{decisions: append(decisions, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it"})}
+		model := &queuedModel{decisions: append(decisions, core.Decision{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "read it"})}
 		budget, err := wiring.ContextBudget(opts, chosenFor(t))
 		if err != nil {
 			t.Fatalf("contextBudget: %v", err)
 		}
-		config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, budget: budget})
+		config, _ := mustConfig(t, opts, built, runtime{model: model, spend: loop.SpendSubscription, budget: budget})
 		config.NoFork = true
-		row, err := turn.Run(context.Background(), config)
+		row, err := loop.Run(context.Background(), config)
 		return row, model, budget, err
 	}
 	_, model, _, err := run(10000)
@@ -495,7 +495,7 @@ func TestARunAtACeilingUnderItsPromptIsRefusedAndJustAboveItCompactsAndRecordsTh
 	t.Logf("%v", err)
 	row, _, budget, err := run(low.LeastTokens + 8000)
 	if err != nil {
-		t.Fatalf("turn.Run at %d tokens: %v", low.LeastTokens+8000, err)
+		t.Fatalf("loop.Run at %d tokens: %v", low.LeastTokens+8000, err)
 	}
 	dropped := 0
 	for _, step := range row.Steps {
@@ -547,14 +547,14 @@ func TestARequestOverTheModelsWindowIsRefusedBeforeItIsSent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("budget: %v", err)
 	}
-	queued := &queuedModel{decisions: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "sent"}}}
+	queued := &queuedModel{decisions: []core.Decision{{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "sent"}}}
 	guard, err := wiring.Guarded(queued, budget)
 	if err != nil {
 		t.Fatalf("guarded: %v", err)
 	}
 
-	_, err = guard.Ask(context.Background(), llm.Request{Messages: []llm.Message{
-		{Role: llm.RoleUser, Content: strings.Repeat("x", 10000000)},
+	_, err = guard.Ask(context.Background(), core.Request{Messages: []core.Message{
+		{Role: core.RoleUser, Content: strings.Repeat("x", 10000000)},
 	}})
 	var over *recall.OverWindow
 	if !errors.As(err, &over) {
@@ -567,7 +567,7 @@ func TestARequestOverTheModelsWindowIsRefusedBeforeItIsSent(t *testing.T) {
 		t.Fatal("the model was asked anyway, so the request reached the wire")
 	}
 
-	decision, err := guard.Ask(context.Background(), llm.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: "small"}}})
+	decision, err := guard.Ask(context.Background(), core.Request{Messages: []core.Message{{Role: core.RoleUser, Content: "small"}}})
 	if err != nil || decision.Content != "sent" {
 		t.Fatalf("a request inside the window was not sent: %v %+v", err, decision)
 	}
@@ -581,23 +581,23 @@ func TestAModelWithNoRecordedWindowCompactsAtTheOperatingCeiling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseRunArgs: %v", err)
 	}
-	var decisions []llm.Decision
+	var decisions []core.Decision
 	for i := range konst.ContextCeilingTokens / 25000 {
 		name := "part-" + strconv.Itoa(i) + ".txt"
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(strings.Repeat(strings.Repeat("x", 99)+"\n", 200)), 0o600); err != nil {
 			t.Fatal(err)
 		}
-		decisions = append(decisions, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+		decisions = append(decisions, core.Decision{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
 			{ID: "call-" + strconv.Itoa(i), Name: "bash", Arguments: json.RawMessage(`{"command":"cat ` + name + `"}`)},
 		}})
 	}
-	decisions = append(decisions, llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "read it all"})
+	decisions = append(decisions, core.Decision{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "read it all"})
 	built, err := buildTestRunTools(dir, opts.ToolSet)
 	if err != nil {
 		t.Fatalf("buildTestRunTools: %v", err)
 	}
 
-	budget, err := wiring.ContextBudget(opts, models.Model{ID: "a model no library records"})
+	budget, err := wiring.ContextBudget(opts, catalog.Model{ID: "a model no library records"})
 	if err != nil {
 		t.Fatalf("contextBudget: %v", err)
 	}
@@ -606,11 +606,11 @@ func TestAModelWithNoRecordedWindowCompactsAtTheOperatingCeiling(t *testing.T) {
 			budget, konst.ContextCeilingTokens)
 	}
 	store := projectSessions(t, dir)
-	config, _ := mustConfig(t, opts, built, runtime{model: &queuedModel{decisions: decisions}, spend: turn.SpendSubscription, budget: budget, sessions: store})
+	config, _ := mustConfig(t, opts, built, runtime{model: &queuedModel{decisions: decisions}, spend: loop.SpendSubscription, budget: budget, sessions: store})
 	config.NoFork = true
-	row, err := turn.Run(context.Background(), config)
+	row, err := loop.Run(context.Background(), config)
 	if err != nil {
-		t.Fatalf("turn.Run: %v", err)
+		t.Fatalf("loop.Run: %v", err)
 	}
 
 	dropped := 0
@@ -645,7 +645,7 @@ func TestTheSpawnToolIsGivenTheSessionStoreBeforeTheTurnStarts(t *testing.T) {
 	store := projectSessions(t, dir)
 	model := oneNoteSubAgent()
 
-	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, sessions: store})
+	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: loop.SpendSubscription, sessions: store})
 	rows := leadRows(t, config)
 	var named []string
 	for _, row := range rows {
@@ -717,23 +717,23 @@ func TestAProjectCarryingNoWebLibraryGetsFetchFromTheShippedOne(t *testing.T) {
 
 func oneNoteSubAgent() *queuedModel {
 	return &queuedModel{
-		decisions: []llm.Decision{
-			{Build: "stub-model", Outcome: llm.OutcomeToolCalls, Content: "the sub-agent is on it", ToolCalls: []llm.ToolCall{
+		decisions: []core.Decision{
+			{Build: "stub-model", Outcome: core.OutcomeToolCalls, Content: "the sub-agent is on it", ToolCalls: []core.ToolCall{
 				{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"task":"write note.txt","owns":["note.txt"]}`)},
 			}},
-			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent reported"},
+			{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "the sub-agent reported"},
 		},
-		subAgents: []llm.Decision{
-			{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+		subAgents: []core.Decision{
+			{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
 				{ID: "call-2", Name: "write", Arguments: json.RawMessage(`{"path":"note.txt","content":"a note"}`)},
 			}},
-			{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "the sub-agent wrote it"},
+			{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "the sub-agent wrote it"},
 		},
 	}
 }
 
 type watchingModel struct {
-	inner     turn.Model
+	inner     loop.Model
 	store     *session.Store
 	subAgent  string
 	mu        sync.Mutex
@@ -741,11 +741,11 @@ type watchingModel struct {
 	found     []bool
 }
 
-func (m *watchingModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (m *watchingModel) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	_, err := m.store.Header(m.subAgent)
 	m.mu.Lock()
 	switch {
-	case turn.SubAgentAsking(ctx) != "":
+	case loop.SubAgentAsking(ctx) != "":
 		m.found = append(m.found, err == nil)
 	case m.leadFirst == nil:
 		onDisk := err == nil
@@ -767,7 +767,7 @@ func TestASubAgentLeavesItsRecordWhileTheOrchestratorsTurnIsStillRunning(t *test
 	store := projectSessions(t, dir)
 	model := &watchingModel{store: store, subAgent: "sub-1", inner: oneNoteSubAgent()}
 
-	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, sessions: store})
+	config, _ := mustConfig(t, opts, built, runtime{model: model, spend: loop.SpendSubscription, sessions: store})
 	leadRows(t, config)
 	if model.leadFirst == nil || *model.leadFirst {
 		t.Errorf("the sub-agent's record was on disk before the orchestrator spawned it")
@@ -809,7 +809,7 @@ func armOpts(t *testing.T, args ...string) wiring.RunOpts {
 	return opts
 }
 
-func mustConfig(t *testing.T, opts wiring.RunOpts, built []contract.Tool, run runtime) (turn.Config, *turn.SpawnTool) {
+func mustConfig(t *testing.T, opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Config, *loop.SpawnTool) {
 	t.Helper()
 	places, err := sys.ResolvePlaces(".")
 	if err != nil {
@@ -829,7 +829,7 @@ func toolNames(t *testing.T, opts wiring.RunOpts) []string {
 	if err != nil {
 		t.Fatalf("buildTestRunTools %s: %v", opts.ToolSet, err)
 	}
-	config, _ := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription})
+	config, _ := mustConfig(t, opts, built, runtime{spend: loop.SpendSubscription})
 	var named []string
 	for _, definition := range config.Tools.Definitions() {
 		named = append(named, definition.Name)
@@ -837,7 +837,7 @@ func toolNames(t *testing.T, opts wiring.RunOpts) []string {
 	return named
 }
 
-func chosenFor(t *testing.T) models.Model {
+func chosenFor(t *testing.T) catalog.Model {
 	t.Helper()
 	opts, err := parseRunArgs([]string{"--dir", t.TempDir(), "--wire", wiring.WireSubscription, "a task"})
 	if err != nil {
@@ -850,32 +850,32 @@ func chosenFor(t *testing.T) models.Model {
 	return selected
 }
 
-func leadRows(t *testing.T, config turn.Config) []turn.Row {
+func leadRows(t *testing.T, config loop.Config) []loop.Row {
 	t.Helper()
-	var rows []turn.Row
-	if err := turn.Lead(context.Background(), config, nil, nil, func(row turn.Row, _ error) { rows = append(rows, row) }); err != nil {
-		t.Fatalf("turn.Lead: %v", err)
+	var rows []loop.Row
+	if err := loop.Lead(context.Background(), config, nil, nil, func(row loop.Row, _ error) { rows = append(rows, row) }); err != nil {
+		t.Fatalf("loop.Lead: %v", err)
 	}
 	return rows
 }
 
 type queuedModel struct {
 	mu            sync.Mutex
-	decisions     []llm.Decision
-	subAgents     []llm.Decision
-	subAgentAsked []llm.Request
+	decisions     []core.Decision
+	subAgents     []core.Decision
+	subAgentAsked []core.Request
 }
 
-func (m *queuedModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
+func (m *queuedModel) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	queue := &m.decisions
-	if turn.SubAgentAsking(ctx) != "" {
+	if loop.SubAgentAsking(ctx) != "" {
 		queue = &m.subAgents
 		m.subAgentAsked = append(m.subAgentAsked, request)
 	}
 	if len(*queue) == 0 {
-		return llm.Decision{}, errors.New("queuedModel: no more decisions queued")
+		return core.Decision{}, errors.New("queuedModel: no more decisions queued")
 	}
 	next := (*queue)[0]
 	*queue = (*queue)[1:]
@@ -884,11 +884,11 @@ func (m *queuedModel) Ask(ctx context.Context, request llm.Request) (llm.Decisio
 
 type leadRecording struct {
 	*queuedModel
-	leadAsked []llm.Request
+	leadAsked []core.Request
 }
 
-func (m *leadRecording) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
-	if turn.SubAgentAsking(ctx) == "" {
+func (m *leadRecording) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
+	if loop.SubAgentAsking(ctx) == "" {
 		m.mu.Lock()
 		m.leadAsked = append(m.leadAsked, request)
 		m.mu.Unlock()
@@ -897,24 +897,24 @@ func (m *leadRecording) Ask(ctx context.Context, request llm.Request) (llm.Decis
 }
 
 func TestOnAReactProjectTheLeadCarriesTheDesignRulesAndNoWritingRuleAndItsTsDevCarriesBoth(t *testing.T) {
-	dir := testkit.ScratchProject(t)
+	dir := cli.ScratchProject(t)
 	if err := os.WriteFile(filepath.Join(dir, "package.json"), []byte(`{"dependencies": {"react": "19"}}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	const task = "make the save button in src/components/Dialog.tsx keep its label while it saves"
-	reply := func(text string) llm.Decision {
-		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: text}
+	reply := func(text string) core.Decision {
+		return core.Decision{Build: "stub-model", Outcome: core.OutcomeMessage, Content: text}
 	}
-	model := &leadRecording{queuedModel: &queuedModel{decisions: []llm.Decision{
-		{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{
+	model := &leadRecording{queuedModel: &queuedModel{decisions: []core.Decision{
+		{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
 			{ID: "call-1", Name: "spawn", Arguments: json.RawMessage(`{"agent":"ts-dev","task":"` + task + `","owns":["src/**"]}`)}}},
 		reply("ts-dev is on it"), reply("done"),
-	}, subAgents: []llm.Decision{reply("saved")}}}
+	}, subAgents: []core.Decision{reply("saved")}}}
 	stubbedTurn(dir, model)(t.Context(), onTheSubscription, task, driveAppOn(t, nil).emit)
 	if len(model.leadAsked) == 0 || len(model.subAgentAsked) == 0 {
 		t.Fatalf("the lead asked %d times and the sub-agent %d, and both must ask once", len(model.leadAsked), len(model.subAgentAsked))
 	}
-	sent := func(request llm.Request) (prompt string, tools []string) {
+	sent := func(request core.Request) (prompt string, tools []string) {
 		for _, message := range request.Messages {
 			prompt += message.Content + "\n"
 		}
@@ -963,7 +963,7 @@ func TestOnAReactProjectTheLeadCarriesTheDesignRulesAndNoWritingRuleAndItsTsDevC
 	if err != nil {
 		t.Fatal(err)
 	}
-	alone, _ := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription})
+	alone, _ := mustConfig(t, opts, built, runtime{spend: loop.SpendSubscription})
 	if !strings.Contains(alone.SystemMessage()+alone.FirstUserMessage(), "[code_rules, from the rule fe_control_states]") {
 		t.Error("a run with no sub-agents writes the code itself and lost the code rules")
 	}
@@ -1090,8 +1090,8 @@ func TestTheLeadAsksWhereToOverrideARuleAndOnlyAYesWritesTheFile(t *testing.T) {
 
 func TestAnOffOverrideLeavesOneLineInThePromptAndAStaleOneLeavesTheRule(t *testing.T) {
 	for _, version := range []int{1, 2} {
-		project := testkit.ChdirTemp(t)
-		data, err := rule.OverrideFile(overrideAsked, "", rule.Override{Of: overrideAsked, Version: version, Reason: "the SDK's unit tests are its contract", By: rule.ByAsked, At: "2026-10-05"})
+		project := cli.ChdirTemp(t)
+		data, err := rules.OverrideFile(overrideAsked, "", rules.Override{Of: overrideAsked, Version: version, Reason: "the SDK's unit tests are its contract", By: rules.ByAsked, At: "2026-10-05"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1120,15 +1120,15 @@ func TestTheLeadAloneHoldsTheCronToolAndAFiredTurnNeverPushes(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		config, _ := mustConfig(t, opts, built, runtime{spend: turn.SpendSubscription, cron: &cron.Book{}, now: time.Now, notify: func(string) {}})
+		config, _ := mustConfig(t, opts, built, runtime{spend: loop.SpendSubscription, cron: &cron.Book{}, now: time.Now, notify: func(string) {}})
 		var lead []string
 		for _, definition := range config.Tools.Definitions() {
 			lead = append(lead, definition.Name)
 		}
-		if !slices.Contains(lead, tools.CronToolName) {
+		if !slices.Contains(lead, registry.CronToolName) {
 			t.Errorf("arms %v: the lead is not given the cron tool: %v", arms, lead)
 		}
-		if slices.ContainsFunc(built, func(tool contract.Tool) bool { return tool.Name() == tools.CronToolName }) {
+		if slices.ContainsFunc(built, func(tool contract.Tool) bool { return tool.Name() == registry.CronToolName }) {
 			t.Errorf("arms %v: the cron tool is in the set a sub-agent is given", arms)
 		}
 		bash := shellsverb.WithoutPush(built)[slices.IndexFunc(built, func(tool contract.Tool) bool { return tool.Name() == "bash" })]
@@ -1162,20 +1162,20 @@ func TestEveryLeadThatCanAskAPersonHoldsRuleOverrideAndTheThreeToolArmAloneStays
 			t.Fatal(err)
 		}
 		asked := 0
-		var person turn.Person
+		var person loop.Person
 		if arm.person {
-			person = func(context.Context, turn.GateRequest, turn.GateDecision) (turn.PersonAnswer, error) {
+			person = func(context.Context, loop.GateRequest, loop.GateDecision) (loop.PersonAnswer, error) {
 				asked++
-				return turn.PersonDenied, nil
+				return loop.PersonDenied, nil
 			}
 		}
-		call := llm.ToolCall{ID: "call-1", Name: turn.RuleOverrideToolName, Arguments: json.RawMessage(`{"rule":"tool_pick","why_now":"the person asked for find","change":"off"}`)}
-		done := llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "worked within tool_pick"}
-		model := &queuedModel{decisions: []llm.Decision{{Build: "stub-model", Outcome: llm.OutcomeToolCalls, ToolCalls: []llm.ToolCall{call}}, done, done, done}}
-		config, _ := mustConfig(t, opts, built, runtime{model: model, spend: turn.SpendSubscription, leadAsks: person})
+		call := core.ToolCall{ID: "call-1", Name: loop.RuleOverrideToolName, Arguments: json.RawMessage(`{"rule":"tool_pick","why_now":"the person asked for find","change":"off"}`)}
+		done := core.Decision{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "worked within tool_pick"}
+		model := &queuedModel{decisions: []core.Decision{{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{call}}, done, done, done}}
+		config, _ := mustConfig(t, opts, built, runtime{model: model, spend: loop.SpendSubscription, leadAsks: person})
 		held := 0
 		for _, definition := range config.Tools.Definitions() {
-			if definition.Name == turn.RuleOverrideToolName {
+			if definition.Name == loop.RuleOverrideToolName {
 				held++
 			}
 		}
@@ -1206,7 +1206,7 @@ func TestTheThinkingSummaryFlagWinsOverTheStoredSettingForThatRunOnly(t *testing
 		if err != nil {
 			t.Fatalf("parseRunArgs: %v", err)
 		}
-		body, err := dryRunBody(opts, models.Model{ID: "gpt-5.6-sol"}, turn.Config{Task: opts.Task})
+		body, err := dryRunBody(opts, catalog.Model{ID: "gpt-5.6-sol"}, loop.Config{Task: opts.Task})
 		if err != nil {
 			t.Fatalf("dryRunBody: %v", err)
 		}

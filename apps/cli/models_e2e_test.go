@@ -17,7 +17,7 @@ import (
 	"tofu/apps/cli/page"
 	modelsverb "tofu/apps/cli/verbs/models"
 	"tofu/internal/host"
-	"tofu/internal/models/llm/catalog"
+	models "tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
 	settingspkg "tofu/internal/store/settings"
@@ -166,10 +166,10 @@ codex-sub       ○ not signed in
 )
 
 type envelopeOf[T any] struct {
-	Verb     string        `json:"verb"`
-	OK       bool          `json:"ok"`
-	Data     T             `json:"data"`
-	Problems []cli.Problem `json:"problems"`
+	Verb     string         `json:"verb"`
+	OK       bool           `json:"ok"`
+	Data     T              `json:"data"`
+	Problems []page.Problem `json:"problems"`
 }
 
 func oneEnvelope(t *testing.T, printed string, into any) {
@@ -289,7 +289,7 @@ func TestModelsReloadShowsANewModelAndARefusedAccountWithTheVendorBodyOnlyInJSON
 		t.Fatal(err)
 	}
 	var text bytes.Buffer
-	if err := (cli.Page{Width: 80}).Print(&text, modelsverb.ReloadLines(cli.Page{Width: 80}, report)); err != nil {
+	if err := (page.Page{Width: 80}).Print(&text, modelsverb.ReloadLines(page.Page{Width: 80}, report)); err != nil {
 		t.Fatal(err)
 	}
 	testkit.SameText(t, "a reload where one account serves a new model and the other is refused", text.String(), reloadOfANewModelAndARefusedAccount)

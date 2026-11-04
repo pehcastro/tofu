@@ -30,22 +30,22 @@ type replayWire struct {
 
 func (w *replayWire) Model() string { return recordedModel }
 
-func (w *replayWire) Caps() jev.WireCaps {
-	return jev.WireCaps{
+func (w *replayWire) Caps() core.WireCaps {
+	return core.WireCaps{
 		Name:              "recorded",
 		MaxStateTokens:    konst.JudgeStateTokenCeiling,
 		MaxRequestTokens:  konst.JudgeRequestTokenCeiling,
-		MaxRequestBytes:   jev.EstimateBytes(konst.JudgeStateTokenCeiling),
-		CriteriaKinds:     []jev.CriteriaKind{jev.CriteriaString, jev.CriteriaObject, jev.CriteriaNull},
+		MaxRequestBytes:   core.EstimateBytes(konst.JudgeStateTokenCeiling),
+		CriteriaKinds:     []core.CriteriaKind{core.CriteriaString, core.CriteriaObject, core.CriteriaNull},
 		MaxChoiceOptions:  konst.ChoiceCeiling,
 		MaxScoreLevels:    konst.JudgeScoreLevelCeiling,
 		ReturnsConfidence: true,
 	}
 }
 
-func (w *replayWire) Post(_ context.Context, _ []byte) (jev.Raw, error) {
+func (w *replayWire) Post(_ context.Context, _ []byte) (core.Raw, error) {
 	at := w.served.Add(1) - 1
-	return jev.Raw{
+	return core.Raw{
 		Body:      w.replies[int(at)%len(w.replies)],
 		RequestID: fmt.Sprintf("recorded-%d", at),
 		Attempts:  1,
@@ -53,7 +53,7 @@ func (w *replayWire) Post(_ context.Context, _ []byte) (jev.Raw, error) {
 	}, nil
 }
 
-func recordedClient(t *testing.T) *jev.Client {
+func recordedClient(t *testing.T) *core.Client {
 	t.Helper()
 	file, err := os.Open(replyFile)
 	if err != nil {
@@ -74,17 +74,17 @@ func recordedClient(t *testing.T) *jev.Client {
 	if len(wire.replies) == 0 {
 		t.Fatalf("%s carries no recorded reply", replyFile)
 	}
-	client, err := jev.NewClient(jev.Config{Wire: wire})
+	client, err := core.NewClient(core.Config{Wire: wire})
 	if err != nil {
 		t.Fatalf("NewClient: %v", err)
 	}
 	return client
 }
 
-func shippedQuestions(t *testing.T) question.Set {
+func shippedQuestions(t *testing.T) questions.Set {
 	t.Helper()
-	layers := []question.Layer{{Name: "library", Origin: "library/questions", FS: libraryquestions.Files()}}
-	set, _, err := question.Resolve(Point, layers)
+	layers := []questions.Layer{{Name: "library", Origin: "library/questions", FS: libraryquestions.Files()}}
+	set, _, err := questions.Resolve(Point, layers)
 	if err != nil {
 		t.Fatalf("resolve %s: %v", Point, err)
 	}

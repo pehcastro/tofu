@@ -1,4 +1,4 @@
-package models
+package catalog
 
 import (
 	"context"
@@ -15,27 +15,27 @@ func liveAccount(t *testing.T, spec SubscriptionSpec) Account {
 	if os.Getenv("TOFU_LIVE_MODELS") != "1" {
 		t.Skip("set TOFU_LIVE_MODELS=1 to ask the live subscription which models it serves")
 	}
-	path, err := cred.Path()
+	path, err := accounts.Path()
 	if err != nil {
 		t.Fatalf("locating the credential store: %v", err)
 	}
-	store, err := cred.Open(path)
+	store, err := accounts.Open(path)
 	if err != nil {
 		t.Skipf("no credential store, run tofu login %s: %v", spec.Wire, err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	credential, err := cred.Lookup(spec.Wire)
+	credential, err := accounts.Lookup(spec.Wire)
 	if err != nil {
 		t.Fatalf("looking up the %s spec: %v", spec.Wire, err)
 	}
-	row, present, err := store.Row(cred.Provider(spec.Wire))
+	row, present, err := store.Row(accounts.Provider(spec.Wire))
 	if err != nil || !present {
 		t.Skipf("no %s credential: %v", spec.Wire, err)
 	}
 	return Account{
 		Subscription: spec.ID,
 		AccountID:    row.Credential.Identity.AccountID,
-		Token:        cred.NewManager(store, credential).Access,
+		Token:        accounts.NewManager(store, credential).Access,
 	}
 }
 

@@ -10,7 +10,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/sys"
 	shipped "tofu/library"
 	"tofu/library/questions"

@@ -15,19 +15,19 @@ import (
 
 func cappedTurnRequest(step int) Request {
 	schema := map[string]any{"type": "object", "properties": map[string]any{"path": map[string]any{"type": "string"}}, "required": []string{"path"}}
-	messages := []llm.Message{{Role: llm.RoleUser, Content: "read the five notes, a to e, and say what each holds"}}
+	messages := []core.Message{{Role: core.RoleUser, Content: "read the five notes, a to e, and say what each holds"}}
 	for read := 1; read < step; read++ {
 		id := "toolu_" + strconv.Itoa(read)
 		messages = append(messages,
-			llm.Message{Role: llm.RoleAssistant, Content: "reading note " + strconv.Itoa(read), ToolCalls: []llm.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"` + strconv.Itoa(read) + `.txt"}`)}}},
-			llm.Message{Role: llm.RoleTool, ToolCallID: id, Content: strings.Repeat("note "+strconv.Itoa(read)+" ", 300)})
+			core.Message{Role: core.RoleAssistant, Content: "reading note " + strconv.Itoa(read), ToolCalls: []core.ToolCall{{ID: id, Name: "read", Arguments: json.RawMessage(`{"path":"` + strconv.Itoa(read) + `.txt"}`)}}},
+			core.Message{Role: core.RoleTool, ToolCallID: id, Content: strings.Repeat("note "+strconv.Itoa(read)+" ", 300)})
 	}
 	return Request{
 		Model:     "claude-opus-5",
 		System:    []string{"you are a coding agent", strings.Repeat("work in small steps. ", 200)},
 		Messages:  messages,
-		Tools:     []llm.Tool{{Name: "read", Description: "read a file", Parameters: schema}, {Name: "bash", Description: "run a command", Parameters: schema}, {Name: "edit", Description: "edit a file", Parameters: schema}},
-		Effort:    llm.EffortHigh,
+		Tools:     []core.Tool{{Name: "read", Description: "read a file", Parameters: schema}, {Name: "bash", Description: "run a command", Parameters: schema}, {Name: "edit", Description: "edit a file", Parameters: schema}},
+		Effort:    core.EffortHigh,
 		SessionID: "0b8e2f4a-1c3d-4e5f-8a9b-0c1d2e3f4a5b",
 		AccountID: "7d6c5b4a-3e2f-4a1b-9c8d-7e6f5a4b3c2d",
 		InstallID: "install-1",
@@ -47,7 +47,7 @@ func TestTheLastStepOfACappedTurnAddsOnlyToolChoiceNoneToTheBodySentBefore(t *te
 	for step := range pinnedBodies {
 		request := cappedTurnRequest(step + 1)
 		if step == len(pinnedBodies)-1 {
-			request.ToolChoice = llm.ToolChoiceNone
+			request.ToolChoice = core.ToolChoiceNone
 		}
 		body, err := request.Encode(true)
 		if err != nil {

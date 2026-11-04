@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"tofu/apps/cli/output"
-	testkit "tofu/internal/testkit/cli"
+	"tofu/internal/testkit/cli"
 )
 
 const (
@@ -113,24 +113,24 @@ var readingAge = regexp.MustCompile(`(?m)  \d+d( \d+h)? ago$`)
 
 func TestE2EUsageReadsTheKeyOfTheProjectAndTheQuotaHistoryOfTheHome(t *testing.T) {
 	bare := newProject(t, "bare")
-	testkit.SameText(t, "a project with no key and no credential",
+	cli.SameText(t, "a project with no key and no credential",
 		bare.run(t, output.ExitOK, "usage"), usageWithNothingSignedIn)
-	testkit.SameText(t, "a project that recorded no reading", bare.run(t, output.ExitOK, "usage", "--history"),
+	cli.SameText(t, "a project that recorded no reading", bare.run(t, output.ExitOK, "usage", "--history"),
 		"Usage history                                                    ○ none recorded\n")
 
 	recorded := newProject(t, "recorded")
-	testkit.WriteFile(t, recorded.dir, ".env", "TYPESAFE_API_KEY=made-up-typesafe-thistestwroteit\n")
-	testkit.WriteFile(t, recorded.dir, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
-	testkit.WriteFile(t, recorded.home, ".tofu/quota/readings.jsonl", recordedQuotaReadings)
-	testkit.SameText(t, "a project carrying its own key",
+	cli.WriteFile(t, recorded.dir, ".env", "TYPESAFE_API_KEY=made-up-typesafe-thistestwroteit\n")
+	cli.WriteFile(t, recorded.dir, ".tofu/roles/classifier.yaml", "model: typesafe/jev-latest\n")
+	cli.WriteFile(t, recorded.home, ".tofu/quota/readings.jsonl", recordedQuotaReadings)
+	cli.SameText(t, "a project carrying its own key",
 		recorded.run(t, output.ExitOK, "usage"), usageWithAKeyAndNothingSignedIn)
-	testkit.SameText(t, "the readings the project recorded",
+	cli.SameText(t, "the readings the project recorded",
 		readingAge.ReplaceAllString(recorded.run(t, output.ExitOK, "usage", "--history"), "  AGO"), quotaHistoryOfThreeWindows)
 
 	printed := recorded.run(t, output.ExitOK, "usage", "--json")
 	oneEnvelope(t, printed, &struct{}{})
-	testkit.SameText(t, "tofu usage --json", normalEnvelope(printed, nil), usageEnvelopeWithAKeyAndNothingSignedIn)
+	cli.SameText(t, "tofu usage --json", normalEnvelope(printed, nil), usageEnvelopeWithAKeyAndNothingSignedIn)
 	printed = recorded.run(t, output.ExitOK, "usage", "--history", "--json")
 	oneEnvelope(t, printed, &struct{}{})
-	testkit.SameText(t, "tofu usage --history --json", normalEnvelope(printed, nil), quotaHistoryEnvelope)
+	cli.SameText(t, "tofu usage --history --json", normalEnvelope(printed, nil), quotaHistoryEnvelope)
 }

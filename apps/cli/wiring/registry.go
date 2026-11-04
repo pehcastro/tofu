@@ -20,10 +20,10 @@ func RegistryPath() (string, error) {
 	return filepath.Join(dir, registryFileName), nil
 }
 
-func ModelRegistry() (models.Registry, error) {
+func ModelRegistry() (catalog.Registry, error) {
 	path, err := RegistryPath()
 	if err != nil {
-		return models.ShippedRegistry()
+		return catalog.ShippedRegistry()
 	}
-	return models.RegistryAt(path)
+	return catalog.RegistryAt(path)
 }

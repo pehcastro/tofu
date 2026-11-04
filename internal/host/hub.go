@@ -103,7 +103,7 @@ type hub struct {
 	stopped     chan struct{}
 	stop        sync.Once
 	open        HubSession
-	report      safe.Report
+	report      recover.Report
 	say         func(string)
 	projectTurn sync.Mutex
 	mu          sync.Mutex
@@ -332,7 +332,7 @@ func takeHubLock(place hubPlace) (*os.File, error) {
 	}
 }
 
-func RunHub(project string, report safe.Report, say func(string), open HubSession) error {
+func RunHub(project string, report recover.Report, say func(string), open HubSession) error {
 	place, err := placeOf(project)
 	if err != nil {
 		return err
@@ -379,13 +379,13 @@ func RunHub(project string, report safe.Report, say func(string), open HubSessio
 	if err := writeRegistry(place.registry, h.status); err != nil {
 		return fmt.Errorf("the host registry %s: %w", place.registry, err)
 	}
-	safe.Go(report, "host accept", func() {
+	recover.Go(report, "host accept", func() {
 		for {
 			conn, err := listener.Accept()
 			if err != nil {
 				return
 			}
-			safe.Go(report, "host member", func() { h.serve(conn) })
+			recover.Go(report, "host member", func() { h.serve(conn) })
 		}
 	})
 	if os.Getenv(hubReadyVariable) != "" {
@@ -493,7 +493,7 @@ func (s *server) hear(quit <-chan struct{}, topic WriteTopic, heard func(boardy.
 	for {
 		if conn, err := dialHub(place.socket); err == nil {
 			hungUp := make(chan struct{})
-			safe.Go(s.report, "serve "+string(topic)+" hang up", func() {
+			recover.Go(s.report, "serve "+string(topic)+" hang up", func() {
 				select {
 				case <-quit:
 				case <-hungUp:
@@ -695,7 +695,7 @@ func (h *hub) opened(s *hosted) error {
 		h.forget(s)
 		return s.failed
 	}
-	safe.Go(h.report, "host session events", func() {
+	recover.Go(h.report, "host session events", func() {
 		for {
 			select {
 			case event := <-live.events:

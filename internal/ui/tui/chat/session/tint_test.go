@@ -81,7 +81,7 @@ func cellBackgrounds(row string) []string {
 	background, from := "", 0
 	paint := func(text string) {
 		for _, glyph := range text {
-			for range widget.Cells(string(glyph)) {
+			for range render.Cells(string(glyph)) {
 				cells = append(cells, background)
 			}
 		}

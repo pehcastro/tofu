@@ -25,11 +25,11 @@ const (
 )
 
 const (
-	thenBypassed       rule.Then = "bypassed"
-	thenBypassReview   rule.Then = "bypass-review"
-	thenBypassAsked    rule.Then = "bypass-asked"
-	thenBypassAccepted rule.Then = "bypass-accepted"
-	thenBypassAnswered rule.Then = "bypass-answered"
+	thenBypassed       rules.Then = "bypassed"
+	thenBypassReview   rules.Then = "bypass-review"
+	thenBypassAsked    rules.Then = "bypass-asked"
+	thenBypassAccepted rules.Then = "bypass-accepted"
+	thenBypassAnswered rules.Then = "bypass-answered"
 )
 
 type BypassState string
@@ -43,23 +43,23 @@ const (
 )
 
 type BypassRequest struct {
-	ID         string         `json:"id"`
-	Ticket     string         `json:"ticket"`
-	Hook       string         `json:"hook"`
-	HookSum    string         `json:"hook_sum"`
-	Event      rule.HookEvent `json:"event"`
-	From       Status         `json:"from"`
-	To         Status         `json:"to"`
-	Why        string         `json:"why"`
-	By         string         `json:"by"`
-	ByKind     rule.HookActor `json:"by_kind"`
-	Accept     rule.Accept    `json:"accept"`
-	At         time.Time      `json:"at"`
-	State      BypassState    `json:"state"`
-	AnsweredBy string         `json:"answered_by,omitempty"`
-	AnsweredAt time.Time      `json:"answered_at,omitzero"`
-	Answer     string         `json:"answer,omitempty"`
-	Applied    bool           `json:"applied,omitempty"`
+	ID         string          `json:"id"`
+	Ticket     string          `json:"ticket"`
+	Hook       string          `json:"hook"`
+	HookSum    string          `json:"hook_sum"`
+	Event      rules.HookEvent `json:"event"`
+	From       Status          `json:"from"`
+	To         Status          `json:"to"`
+	Why        string          `json:"why"`
+	By         string          `json:"by"`
+	ByKind     rules.HookActor `json:"by_kind"`
+	Accept     rules.Accept    `json:"accept"`
+	At         time.Time       `json:"at"`
+	State      BypassState     `json:"state"`
+	AnsweredBy string          `json:"answered_by,omitempty"`
+	AnsweredAt time.Time       `json:"answered_at,omitzero"`
+	Answer     string          `json:"answer,omitempty"`
+	Applied    bool            `json:"applied,omitempty"`
 }
 
 type FlaggedHook struct {
@@ -79,20 +79,20 @@ func (e bypassRefused) Error() string { return "bypass refused: " + e.why }
 func SubAgentActor(actor string) bool { return strings.Contains(actor, subAgentOfSession) }
 
 func (m Managed) bypassable(s subject) bool {
-	return m.Bypass.Hook != "" && s.depth == 0 && (s.event == rule.HookTicketMove || s.event == rule.HookTicketClose)
+	return m.Bypass.Hook != "" && s.depth == 0 && (s.event == rules.HookTicketMove || s.event == rules.HookTicketClose)
 }
 
-func (m Managed) vetBypass(hooks []rule.Hook, s subject) error {
+func (m Managed) vetBypass(hooks []rules.Hook, s subject) error {
 	if !m.bypassable(s) {
 		return nil
 	}
-	held, _ := m.holding(hooks, rule.WhenBefore, s)
-	at := slices.IndexFunc(held, func(h rule.Hook) bool { return h.ID == m.Bypass.Hook && h.Action.Do != doBroken })
+	held, _ := m.holding(hooks, rules.WhenBefore, s)
+	at := slices.IndexFunc(held, func(h rules.Hook) bool { return h.ID == m.Bypass.Hook && h.Action.Do != doBroken })
 	var why string
 	switch {
 	case at < 0:
 		why = fmt.Sprintf("no hook %s runs before this %s of %s", m.Bypass.Hook, s.event, s.ticket.ID)
-	case !held[at].Action.Do.Check() || held[at].Then != rule.ThenRefuse && held[at].Then != rule.ThenAsk:
+	case !held[at].Action.Do.Check() || held[at].Then != rules.ThenRefuse && held[at].Then != rules.ThenAsk:
 		why = fmt.Sprintf("hook %s does not refuse or ask, so there is nothing to bypass", m.Bypass.Hook)
 	case held[at].Bypass == nil || !slices.Contains(held[at].Bypass.Who, m.actorKind(s.actor)):
 		why = "hook " + m.Bypass.Hook + " is " + m.bypassHint(held[at], s)
@@ -106,12 +106,12 @@ func (m Managed) vetBypass(hooks []rule.Hook, s subject) error {
 	return bypassRefused{why}
 }
 
-func (m Managed) bypassHint(h rule.Hook, s subject) string {
+func (m Managed) bypassHint(h rules.Hook, s subject) string {
 	b := h.Bypass
 	switch {
 	case b == nil:
 		return "not bypassable"
-	case s.event != rule.HookTicketMove && s.event != rule.HookTicketClose:
+	case s.event != rules.HookTicketMove && s.event != rules.HookTicketClose:
 		return "a bypass is asked on a move, and this is " + string(s.event)
 	case !slices.Contains(b.Who, m.actorKind(s.actor)):
 		return fmt.Sprintf("bypassable by %s; you act as %s, so it is not yours to bypass", strings.Join(actorNames(b.Who), ", "), m.actorKind(s.actor))
@@ -119,24 +119,24 @@ func (m Managed) bypassHint(h rule.Hook, s subject) string {
 	return fmt.Sprintf("bypass: tofu boardy move %s %s --bypass %s --why <reason>", s.ticket.ID, s.to, h.ID)
 }
 
-func (m Managed) bypass(h rule.Hook, s subject) ([]Fired, error) {
+func (m Managed) bypass(h rules.Hook, s subject) ([]Fired, error) {
 	b, why := h.Bypass, m.Bypass.Why
 	accept, routed := m.acceptor(b.Accept, s)
 	switch {
-	case b.Accept == rule.AcceptNone:
-		return []Fired{firing(h, s, rule.ModeShadow, false, thenBypassed, "accept none, so it passes: "+why)}, nil
-	case b.Wait == rule.WaitAfter:
-		return []Fired{firing(h, s, rule.ModeShadow, false, thenBypassReview, fmt.Sprintf("it passes, and the %s reviews it after%s: %s", accept, routed, why))}, nil
+	case b.Accept == rules.AcceptNone:
+		return []Fired{firing(h, s, rules.ModeShadow, false, thenBypassed, "accept none, so it passes: "+why)}, nil
+	case b.Wait == rules.WaitAfter:
+		return []Fired{firing(h, s, rules.ModeShadow, false, thenBypassReview, fmt.Sprintf("it passes, and the %s reviews it after%s: %s", accept, routed, why))}, nil
 	}
 	book, _ := m.Store.bypassBook(s.key)
 	at := slices.IndexFunc(book.Requests, func(r BypassRequest) bool { return r.holds(h, s) })
 	if at < 0 {
 		detail := fmt.Sprintf("the bypass waits for the %s to accept it%s: %s", accept, routed, why)
-		return []Fired{firing(h, s, rule.ModeShadow, false, thenBypassAsked, detail)}, WaitingError{Ticket: s.ticket.ID, Rule: h.ID, Detail: detail, For: string(accept)}
+		return []Fired{firing(h, s, rules.ModeShadow, false, thenBypassAsked, detail)}, WaitingError{Ticket: s.ticket.ID, Rule: h.ID, Detail: detail, For: string(accept)}
 	}
 	req := book.Requests[at]
 	if req.State == BypassYes {
-		return []Fired{firing(h, s, rule.ModeShadow, false, thenBypassAccepted, fmt.Sprintf("%s accepted by %s: %s", req.ID, req.AnsweredBy, req.Why))}, nil
+		return []Fired{firing(h, s, rules.ModeShadow, false, thenBypassAccepted, fmt.Sprintf("%s accepted by %s: %s", req.ID, req.AnsweredBy, req.Why))}, nil
 	}
 	detail := fmt.Sprintf("%s was asked at %s and still waits for the %s: tofu boardy bypass answer %s yes|no", req.ID, req.At.Local().Format(time.DateTime), req.Accept, req.ID)
 	return nil, WaitingError{Ticket: s.ticket.ID, Rule: h.ID, Detail: detail, For: string(req.Accept)}
@@ -156,25 +156,25 @@ func (r BypassRequest) Line() string {
 	return fmt.Sprintf("%s (answered %s by %s)", head, r.State, r.AnsweredBy)
 }
 
-func (r BypassRequest) holds(h rule.Hook, s subject) bool {
+func (r BypassRequest) holds(h rules.Hook, s subject) bool {
 	same := r.Ticket == s.ticket.ID && r.Hook == h.ID && r.From == s.from && r.To == s.to
 	return same && (r.State == BypassOpen || r.State == BypassYes && !r.Applied && r.HookSum == hookSum(h.File))
 }
 
-func (m Managed) acceptor(accept rule.Accept, s subject) (rule.Accept, string) {
+func (m Managed) acceptor(accept rules.Accept, s subject) (rules.Accept, string) {
 	board, _ := m.Store.Board(s.key)
 	switch {
-	case accept == rule.AcceptJev:
-		return rule.AcceptPerson, ", since no classifier answers a bypass yet"
-	case accept == rule.AcceptLead && m.actorKind(s.actor) == rule.ActorLead, accept == rule.AcceptManager && m.actorKind(s.actor) != rule.ActorPerson && m.role(board, s.actor) == RoleManager:
-		return rule.AcceptPerson, fmt.Sprintf(", since the %s asked it and it goes up", accept)
+	case accept == rules.AcceptJev:
+		return rules.AcceptPerson, ", since no classifier answers a bypass yet"
+	case accept == rules.AcceptLead && m.actorKind(s.actor) == rules.ActorLead, accept == rules.AcceptManager && m.actorKind(s.actor) != rules.ActorPerson && m.role(board, s.actor) == RoleManager:
+		return rules.AcceptPerson, fmt.Sprintf(", since the %s asked it and it goes up", accept)
 	}
 	return accept, ""
 }
 
-func (m Managed) settleBypass(hooks []rule.Hook, s subject, fired []Fired, err error) error {
+func (m Managed) settleBypass(hooks []rules.Hook, s subject, fired []Fired, err error) error {
 	at := slices.IndexFunc(fired, func(f Fired) bool {
-		return f.RuleID == m.Bypass.Hook && slices.Contains([]rule.Then{thenBypassed, thenBypassReview, thenBypassAsked, thenBypassAccepted}, f.Then)
+		return f.RuleID == m.Bypass.Hook && slices.Contains([]rules.Then{thenBypassed, thenBypassReview, thenBypassAsked, thenBypassAccepted}, f.Then)
 	})
 	var waiting WaitingError
 	held := errors.As(err, &waiting) && waiting.Rule == m.Bypass.Hook
@@ -184,12 +184,12 @@ func (m Managed) settleBypass(hooks []rule.Hook, s subject, fired []Fired, err e
 	case at < 0:
 		return bypassRefused{fmt.Sprintf("hook %s passes this %s, so there is nothing to bypass", m.Bypass.Hook, s.event)}
 	}
-	h := hooks[slices.IndexFunc(hooks, func(h rule.Hook) bool { return h.ID == m.Bypass.Hook && h.Action.Do != doBroken })]
+	h := hooks[slices.IndexFunc(hooks, func(h rules.Hook) bool { return h.ID == m.Bypass.Hook && h.Action.Do != doBroken })]
 	switch fired[at].Then {
 	case thenBypassAccepted:
 		return errors.Join(err, m.applyBypass(s, h))
 	case thenBypassAsked, thenBypassReview:
-		state := map[rule.Then]BypassState{thenBypassAsked: BypassOpen, thenBypassReview: BypassReview}[fired[at].Then]
+		state := map[rules.Then]BypassState{thenBypassAsked: BypassOpen, thenBypassReview: BypassReview}[fired[at].Then]
 		id, fileErr := m.fileBypass(s, h, state)
 		if fileErr != nil {
 			return errors.Join(err, fileErr)
@@ -202,7 +202,7 @@ func (m Managed) settleBypass(hooks []rule.Hook, s subject, fired []Fired, err e
 	return err
 }
 
-func (m Managed) fileBypass(s subject, h rule.Hook, state BypassState) (string, error) {
+func (m Managed) fileBypass(s subject, h rules.Hook, state BypassState) (string, error) {
 	accept, _ := m.acceptor(h.Bypass.Accept, s)
 	var id string
 	err := m.editBypasses(s.key, func(book *bypassBook) error {
@@ -219,7 +219,7 @@ func (m Managed) fileBypass(s subject, h rule.Hook, state BypassState) (string, 
 	return id, err
 }
 
-func (m Managed) applyBypass(s subject, h rule.Hook) error {
+func (m Managed) applyBypass(s subject, h rules.Hook) error {
 	return m.editBypasses(s.key, func(book *bypassBook) error {
 		at := slices.IndexFunc(book.Requests, func(r BypassRequest) bool { return r.State == BypassYes && r.holds(h, s) })
 		if at < 0 {
@@ -259,7 +259,7 @@ func (m Managed) editBypasses(key string, edit func(*bypassBook) error) error {
 	})
 	for _, req := range expired {
 		text := fmt.Sprintf("%s expired after %dh with no answer from the %s; ask again: tofu boardy move %s %s --bypass %s --why <reason>", req.ID, konst.BoardBypassWaitHours, req.Accept, req.Ticket, req.To, req.Hook)
-		err = errors.Join(err, m.Store.Record(key, Event{Ticket: req.Ticket, Kind: RuleFired, Actor: req.By, To: req.To, Text: hookText(req.Hook, string(rule.ThenNudge), req.Event, text)}))
+		err = errors.Join(err, m.Store.Record(key, Event{Ticket: req.Ticket, Kind: RuleFired, Actor: req.By, To: req.To, Text: hookText(req.Hook, string(rules.ThenNudge), req.Event, text)}))
 	}
 	return err
 }
@@ -322,7 +322,7 @@ func (m Managed) AnswerBypass(key, id string, yes bool, why, actor string) (Bypa
 		said += ": " + req.Answer
 	}
 	if req.State == BypassNo {
-		then = rule.ThenNudge
+		then = rules.ThenNudge
 	}
 	err = m.Store.Record(key, Event{Ticket: req.Ticket, Kind: RuleFired, Actor: actor, To: req.To, Text: hookText(req.Hook, string(then), req.Event, said)})
 	if err != nil || req.State != BypassYes || req.Applied {
@@ -330,7 +330,7 @@ func (m Managed) AnswerBypass(key, id string, yes bool, why, actor string) (Bypa
 	}
 	asker := m
 	asker.Bypass = Bypassing{Hook: req.Hook, Why: req.Why}
-	if req.ByKind == rule.ActorLead {
+	if req.ByKind == rules.ActorLead {
 		asker.Lead = req.By
 	}
 	moved, err := asker.Move(req.Ticket, req.To, fmt.Sprintf("bypass %s of %s accepted by %s", req.ID, req.Hook, actor), req.By)
@@ -338,17 +338,17 @@ func (m Managed) AnswerBypass(key, id string, yes bool, why, actor string) (Bypa
 	return req, moved, err
 }
 
-func (m Managed) unanswerable(req BypassRequest, hooks []rule.Hook, key, actor string) string {
+func (m Managed) unanswerable(req BypassRequest, hooks []rules.Hook, key, actor string) string {
 	board, _ := m.Store.Board(key)
 	kind := m.actorKind(actor)
 	ticket, err := m.Store.Get(req.Ticket)
-	at := slices.IndexFunc(hooks, func(h rule.Hook) bool { return h.ID == req.Hook && h.Action.Do != doBroken })
+	at := slices.IndexFunc(hooks, func(h rules.Hook) bool { return h.ID == req.Hook && h.Action.Do != doBroken })
 	switch {
 	case req.State == BypassExpired:
 		return fmt.Sprintf("it expired after %dh with no answer; ask again: tofu boardy move %s %s --bypass %s --why <reason>", konst.BoardBypassWaitHours, req.Ticket, req.To, req.Hook)
 	case req.State != BypassOpen && req.State != BypassReview:
 		return fmt.Sprintf("it was answered %s by %s at %s", req.State, req.AnsweredBy, req.AnsweredAt.Local().Format(time.DateTime))
-	case kind != rule.ActorPerson && (actor == req.By || req.Accept == rule.AcceptPerson || req.Accept == rule.AcceptLead && kind != rule.ActorLead || req.Accept == rule.AcceptManager && m.role(board, actor) != RoleManager):
+	case kind != rules.ActorPerson && (actor == req.By || req.Accept == rules.AcceptPerson || req.Accept == rules.AcceptLead && kind != rules.ActorLead || req.Accept == rules.AcceptManager && m.role(board, actor) != RoleManager):
 		return fmt.Sprintf("it waits for the %s, asked by %s; you act as %s, so it is not yours to answer", req.Accept, req.By, kind)
 	case req.State == BypassReview:
 		return ""
@@ -369,7 +369,7 @@ func (m Managed) flaggedHooks(key string, now time.Time) ([]FlaggedHook, error) 
 	counts := map[string]int{}
 	since := now.Add(-konst.BoardBypassFlagDays * 24 * time.Hour)
 	for _, event := range events {
-		for _, then := range []rule.Then{thenBypassed, thenBypassReview, thenBypassAccepted} {
+		for _, then := range []rules.Then{thenBypassed, thenBypassReview, thenBypassAccepted} {
 			if hook, _, found := strings.Cut(event.Text, " ("+string(then)+", "); found && event.Kind == RuleFired && event.At.After(since) {
 				counts[hook]++
 			}

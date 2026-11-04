@@ -32,7 +32,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 	var unfinished []int
 	calls, asked := map[string]int{}, map[string]session.CallBody{}
 	libraryFiles, tickets := map[string]string{}, map[string]string{}
-	forked := map[string]*turn.Fork{}
+	forked := map[string]*loop.Fork{}
 	for _, event := range events {
 		row := traceRow{At: event.At, Agent: event.Agent, Turn: event.Turn, ID: event.ID}
 		switch event.Kind {
@@ -80,13 +80,13 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 		case session.EventRequest:
 			var step struct {
 				session.StepBody
-				Phase turn.Phase `json:"phase"`
+				Phase loop.Phase `json:"phase"`
 			}
 			_ = json.Unmarshal(event.Body, &step)
 			exchange := sent[event.ID]
 			delete(sent, event.ID)
 			row.Kind, row.ID = kindRequest, cmp.Or(exchange.Request, event.ID)
-			row.Text = traced(turn.ShortID(row.ID), cmp.Or(step.Model, exchange.Model), "in "+strconv.Itoa(step.PromptTokens)+" out "+strconv.Itoa(step.CompletionTokens)+" read "+strconv.Itoa(step.CacheReadTokens)+
+			row.Text = traced(loop.ShortID(row.ID), cmp.Or(step.Model, exchange.Model), "in "+strconv.Itoa(step.PromptTokens)+" out "+strconv.Itoa(step.CompletionTokens)+" read "+strconv.Itoa(step.CacheReadTokens)+
 				" wrote "+strconv.Itoa(step.CacheWriteTokens), took(exchange.DurationMS), spent(step.CostUSD), string(step.Phase), exchange.Why, output.OneLine(exchange.Error))
 			row.Outcome = traceProblem(false, exchange.Error)
 		case session.EventMemoryRequest:
@@ -107,9 +107,9 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			}
 			var ticketed struct{ ID, Ticket, Task, To, Reason string }
 			switch {
-			case call.Tool == turn.SpawnToolName && json.Unmarshal(call.Args, &ticketed) == nil:
+			case call.Tool == loop.SpawnToolName && json.Unmarshal(call.Args, &ticketed) == nil:
 				row.Ticket, row.work = ticketed.Ticket, workStep{what: workBrief, said: ticketed.Task}
-			case call.Tool == turn.TicketMoveToolName && json.Unmarshal(call.Args, &ticketed) == nil:
+			case call.Tool == loop.TicketMoveToolName && json.Unmarshal(call.Args, &ticketed) == nil:
 				row.Ticket, row.work = ticketed.ID, workStep{what: workMove, said: traced("to "+ticketed.To, ticketed.Reason), to: ticketed.To}
 			}
 			if what, name := wiring.LibraryLoad(call); what != "" {
@@ -148,7 +148,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			row.Kind, row.ID, row.State = kindGate, event.Call, cmp.Or(result.Verdict, "refused")
 			row.Text = traced(call.Tool+": "+cmp.Or(gate, "refused"), output.OneLine(reason))
 		case session.EventHook:
-			var ran hook.Run
+			var ran hooks.Run
 			_ = json.Unmarshal(event.Body, &ran)
 			row.Kind, row.ID = kindHook, event.Call
 			row.Text = traced(string(ran.Event)+" "+ran.Command, "exit "+strconv.Itoa(ran.Exit)+" in "+strconv.FormatInt(ran.DurationMS, 10)+" ms",
@@ -159,18 +159,18 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			if json.Unmarshal(event.Body, &said) != nil || strings.TrimSpace(said.Content) == "" || said.Role != session.RoleUser && said.Role != session.RoleAssistant {
 				continue
 			}
-			text, typed := turn.TaskIn(said.Content)
+			text, typed := loop.TaskIn(said.Content)
 			if !typed {
 				text = said.Content
 			}
 			row.Kind, row.State, row.Text = kindMessage, said.Role, said.Role+": "+output.OneLine(text)
-			origin := turn.OriginOf(said)
-			row.Origin = turn.RecordedOrigin(origin)
+			origin := loop.OriginOf(said)
+			row.Origin = loop.RecordedOrigin(origin)
 			if said.Origin != "" || said.From != nil {
 				from := string(origin.Kind()) + "/" + string(origin.Source)
 				row.Kind, row.State, row.Text = kindInsert, from, from+": "+traced(carriedFiles(origin.Source, said.Content), output.OneLine(text))
 			}
-			if origin.Source == llm.SourceCronFire {
+			if origin.Source == core.SourceCronFire {
 				row.Kind = kindCron
 			}
 		case session.EventSpawn:
@@ -187,7 +187,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			var ended session.AgentEndBody
 			_ = json.Unmarshal(event.Body, &ended)
 			row.Kind, row.State, row.Text, row.Ticket = kindSpawn, ended.Status, traced("ended "+ended.Status, spent(ended.CostUSD)), tickets[event.Agent]
-			if ended.Status != subagent.Finished.String() {
+			if ended.Status != subagents.Finished.String() {
 				row.Kind, row.Outcome = kindStop, traceStopped
 				unfinished = append(unfinished, len(rows))
 			}
@@ -198,8 +198,8 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			row.work = workStep{what: workReport, said: report.Text}
 		case session.EventCompaction:
 			var compacted struct {
-				Compaction *turn.Compaction `json:"compaction"`
-				Fork       *turn.Fork       `json:"fork"`
+				Compaction *loop.Compaction `json:"compaction"`
+				Fork       *loop.Fork       `json:"fork"`
 			}
 			_ = json.Unmarshal(event.Body, &compacted)
 			row.Kind, row.Text = kindCompaction, "compacted"
@@ -267,7 +267,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			case timed:
 				row.Kind = kindSpawn
 				row.Agent, _, _ = strings.Cut(spawnOf, " ")
-			case event.Agent != "" && (notice.From == nil || llm.Source(notice.From.Sub) == llm.SourceGate):
+			case event.Agent != "" && (notice.From == nil || core.Source(notice.From.Sub) == core.SourceGate):
 				row.Kind = kindGate
 			}
 		case session.EventAttachment:
@@ -285,7 +285,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 	for _, exchange := range exchanges {
 		if _, unrecorded := sent[exchange.Request]; unrecorded && exchange.Error != "" {
 			rows = append(rows, traceRow{At: exchange.At, Kind: kindRequest, Agent: exchange.Agent, Turn: exchange.Turn, ID: exchange.Request,
-				Outcome: traceProblem(false, exchange.Error), Text: traced(turn.ShortID(exchange.Request), exchange.Model, took(exchange.DurationMS), output.OneLine(exchange.Error))})
+				Outcome: traceProblem(false, exchange.Error), Text: traced(loop.ShortID(exchange.Request), exchange.Model, took(exchange.DurationMS), output.OneLine(exchange.Error))})
 		}
 	}
 	for _, cut := range cacheTrace(events, exchanges).Breaks {
@@ -334,8 +334,8 @@ func becauseOf(rows []traceRow, causes []stopCause, at int) string {
 	return "no row before it says why"
 }
 
-func carriedFiles(source llm.Source, carry string) string {
-	if source != llm.SourceForkCarry {
+func carriedFiles(source core.Source, carry string) string {
+	if source != core.SourceForkCarry {
 		return ""
 	}
 	carried := recall.ReadCarried(carry)
@@ -352,7 +352,7 @@ func carriedFiles(source llm.Source, carry string) string {
 	return strings.Join(said, " · ")
 }
 
-func forkWords(fork *turn.Fork) (step, carried string) {
+func forkWords(fork *loop.Fork) (step, carried string) {
 	if fork == nil {
 		return "step and files in the segment before, see --kind fork", ""
 	}
@@ -398,14 +398,14 @@ func took(ms int64) string {
 	case time.Duration(ms)*time.Millisecond < time.Second:
 		return strconv.FormatInt(ms, 10) + " ms"
 	}
-	return widget.Until(time.Duration(ms) * time.Millisecond)
+	return render.Until(time.Duration(ms) * time.Millisecond)
 }
 
 func sized(bytes int) string {
 	if bytes == 0 {
 		return ""
 	}
-	return widget.Size(bytes)
+	return render.Size(bytes)
 }
 
 func spent(usd float64) string {

@@ -22,11 +22,11 @@ const (
 	resolveGoPath  = "internal/judge/policy/resolve.go"
 )
 
-func done() []tui.Event {
-	return []tui.Event{{Kind: tui.EventDone, Text: "cooked for"}}
+func done() []app.Event {
+	return []app.Event{{Kind: app.EventDone, Text: "cooked for"}}
 }
 
-func agentWork(at time.Time) []tui.Event {
+func agentWork(at time.Time) []app.Event {
 	subAgents := []subagent.Row{
 		{Name: "c1", Doing: "read the policy loader", Owns: []string{"internal/judge/policy/**"}, Since: 94 * time.Second, Steps: 3, Total: 40, Tokens: 18200, State: roster.Working,
 			Calls: []subagent.Call{
@@ -40,17 +40,17 @@ func agentWork(at time.Time) []tui.Event {
 			Calls:  []subagent.Call{{ID: "7c3e01", At: at, Tool: "bash", Text: "go test ./internal/shell/...", Result: "exit 1\n--- FAIL: TestKillTree (0.31s)"}},
 			Report: "exit 1: TestKillTree could not find the job object"},
 	}
-	events := []tui.Event{{Kind: tui.EventRequesting}}
+	events := []app.Event{{Kind: app.EventRequesting}}
 	for index, subAgent := range subAgents {
 		id := "5e0" + strconv.Itoa(index+1) + "aa"
-		events = append(events, tui.Event{Kind: tui.EventToolCall, ID: id, Tool: "spawn", Text: subAgent.Doing, Promote: true},
-			tui.Event{Kind: tui.EventSubAgent, SubAgents: subAgents[:index+1]},
+		events = append(events, app.Event{Kind: app.EventToolCall, ID: id, Tool: "spawn", Text: subAgent.Doing, Promote: true},
+			app.Event{Kind: app.EventSubAgent, SubAgents: subAgents[:index+1]},
 			result(id, "spawned [&"+subAgent.Name+"]"))
 	}
 	events = append(events,
 		call("9d4f10", "read", "internal/turn/loop.go"),
 		result("9d4f10", "412 lines, 11.8 KB"),
-		tui.Event{Kind: tui.EventText, ID: "9d4f11", Text: "three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite. [tool#9d4f10] is the loop I read."})
+		app.Event{Kind: app.EventText, ID: "9d4f11", Text: "three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite. [tool#9d4f10] is the loop I read."})
 	return append(events, done()...)
 }
 
@@ -85,13 +85,13 @@ func createdFile() string {
 	return strings.Join(rows, "\n")
 }
 
-func fileWork() []tui.Event {
-	return append([]tui.Event{
+func fileWork() []app.Event {
+	return append([]app.Event{
 		call("e5a101", "edit", resolveGoPath),
-		{Kind: tui.EventToolResult, ID: "e5a101", Text: "ok", Diff: modifiedDiff()},
+		{Kind: app.EventToolResult, ID: "e5a101", Text: "ok", Diff: modifiedDiff()},
 		call("e5a102", "write", "internal/judge/ledger/floor_rows.go"),
-		{Kind: tui.EventToolResult, ID: "e5a102", Text: "ok", Created: createdFile()},
-		{Kind: tui.EventText, ID: "e5a103", Text: "the resolver checks the lock now, and [edit#e5a102] holds the 1200 floor rows."},
+		{Kind: app.EventToolResult, ID: "e5a102", Text: "ok", Created: createdFile()},
+		{Kind: app.EventText, ID: "e5a103", Text: "the resolver checks the lock now, and [edit#e5a102] holds the 1200 floor rows."},
 	}, done()...)
 }
 
@@ -110,7 +110,7 @@ func shellEntries(at time.Time) []shells.Entry {
 	}
 }
 
-func withShells(options *tui.Options) {
+func withShells(options *app.Options) {
 	at := options.Now()
 	options.Shells = func() []shells.Entry { return shellEntries(at) }
 	options.KillShell = func(string) error { return nil }
@@ -133,7 +133,7 @@ func screens() []scenario {
 		categories = append(categories, beat{name, step})
 	}
 	return []scenario{
-		{name: "welcome", tune: func(options *tui.Options) { options.Fresh, options.Pose = true, sittingPose }, beats: []beat{
+		{name: "welcome", tune: func(options *app.Options) { options.Fresh, options.Pose = true, sittingPose }, beats: []beat{
 			{"sitting", func(*reel) {}},
 			{"typed", func(r *reel) { r.driver.Type(welcomeDraft) }},
 			{"lying", func(r *reel) { r.options.Pose = lyingPose; r.open() }},
@@ -192,7 +192,7 @@ func screens() []scenario {
 				r.driver.Type(welcomeDraft)
 				r.press("enter")
 				r.send(agentWork(r.at)...)
-				r.app.Update(tui.Closed{})
+				r.app.Update(app.Closed{})
 			}},
 			{"sub-agents", keys("alt+2")},
 		}},

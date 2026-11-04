@@ -1,4 +1,4 @@
-package turn
+package loop
 
 import (
 	"cmp"
@@ -20,13 +20,13 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/method"
-	"tofu/internal/judge/questions"
+	question "tofu/internal/judge/questions"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
-	"tofu/internal/librarian/skills"
+	skill "tofu/internal/librarian/skills"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
-	"tofu/internal/models/llm/core"
+	llm "tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
@@ -37,15 +37,15 @@ import (
 const TheFormatContract = prompt.TheFormatContract
 
 type PromptPart struct {
-	Concern rule.Concern
+	Concern rules.Concern
 	RuleID  string
 	Agent   string
 	Name    string
 	File    string
 	Text    string
 	Why     string
-	Reason  rule.ReasonKind
-	Mode    rule.Mode
+	Reason  rules.ReasonKind
+	Mode    rules.Mode
 	State   session.PartState
 	ByTask  bool
 	Off     bool
@@ -73,13 +73,13 @@ type ComposeSpec struct {
 	Paths          []string
 	Environment    string
 	ToolGuidance   string
-	Rules          []rule.Rule
-	SwitchedOff    []rule.Overriding
-	Agent          subagent.Definition
+	Rules          []rules.Rule
+	SwitchedOff    []rules.Overriding
+	Agent          subagents.Definition
 	Skills         []skill.Skill
 	SkillsOff      bool
 	WindowTokens   int
-	Role           rule.Role
+	Role           rules.Role
 	Frameworks     []string
 	PathFrameworks []string
 	Alone          bool
@@ -90,15 +90,15 @@ type ComposeSpec struct {
 }
 
 const (
-	ConcernSkills     rule.Concern = "skills"
-	ConcernReferences rule.Concern = "references"
+	ConcernSkills     rules.Concern = "skills"
+	ConcernReferences rules.Concern = "references"
 )
 
 const SkillToolName = "skill"
 
 const referencesOnDemand = "your references, each read whole with the " + ReferenceToolName + " tool when the work reaches it:"
 
-func agentPart(definition subagent.Definition) PromptPart {
+func agentPart(definition subagents.Definition) PromptPart {
 	var text strings.Builder
 	text.WriteString("you are the " + definition.Name + " sub-agent, and these are your instructions:\n" + definition.Instructions)
 	if len(definition.References) > 0 {
@@ -107,10 +107,10 @@ func agentPart(definition subagent.Definition) PromptPart {
 	if len(definition.Cut) > 0 {
 		fmt.Fprintf(&text, "\n\nthese references were cut to keep them within %d bytes and are not here: %s", konst.SubAgentReferenceBytes, strings.Join(definition.Cut, ", "))
 	}
-	return PromptPart{Concern: rule.ConcernIdentity, Agent: definition.Name, File: filepath.ToSlash(definition.Path), Text: text.String()}
+	return PromptPart{Concern: rules.ConcernIdentity, Agent: definition.Name, File: filepath.ToSlash(definition.Path), Text: text.String()}
 }
 
-func referenceIndex(references []subagent.Reference) string {
+func referenceIndex(references []subagents.Reference) string {
 	text := referencesOnDemand
 	for _, reference := range references {
 		text += reference.IndexEntry()
@@ -118,20 +118,20 @@ func referenceIndex(references []subagent.Reference) string {
 	return text
 }
 
-func libraryReferences(library fs.FS, files []string) ([]subagent.Reference, error) {
-	var references []subagent.Reference
+func libraryReferences(library fs.FS, files []string) ([]subagents.Reference, error) {
+	var references []subagents.Reference
 	for _, file := range files {
 		data, err := fs.ReadFile(library, file)
 		if err != nil {
 			return nil, err
 		}
 		_, body := skill.FrontMatter(string(data))
-		references = append(references, subagent.Reference{Name: strings.TrimSuffix(path.Base(file), ".md"), Path: "library/" + file, Text: body})
+		references = append(references, subagents.Reference{Name: strings.TrimSuffix(path.Base(file), ".md"), Path: "library/" + file, Text: body})
 	}
 	return references, nil
 }
 
-func sourcedReferences(library fs.FS, fired rule.Rule, offered []subagent.Reference) ([]subagent.Reference, error) {
+func sourcedReferences(library fs.FS, fired rules.Rule, offered []subagents.Reference) ([]subagents.Reference, error) {
 	file, inLibrary := strings.CutPrefix(fired.Source, "library/")
 	if !inLibrary || path.Base(path.Dir(file)) != "references" {
 		return nil, nil
@@ -148,7 +148,7 @@ func sourcedReferences(library fs.FS, fired rule.Rule, offered []subagent.Refere
 		}
 	}
 	files = slices.DeleteFunc(files, func(file string) bool {
-		return slices.ContainsFunc(offered, func(reference subagent.Reference) bool { return reference.Path == "library/"+file })
+		return slices.ContainsFunc(offered, func(reference subagents.Reference) bool { return reference.Path == "library/"+file })
 	})
 	references, err := libraryReferences(library, files)
 	if err != nil {
@@ -172,7 +172,7 @@ func heldReferences(inherited map[string]string, parts []PromptPart) map[string]
 	return held
 }
 
-func referenceParts(definition subagent.Definition) []PromptPart {
+func referenceParts(definition subagents.Definition) []PromptPart {
 	var parts []PromptPart
 	for _, reference := range definition.References {
 		parts = append(parts, PromptPart{Concern: ConcernReferences, Agent: definition.Name, Name: reference.Name, File: reference.Path, State: session.PartOffered})
@@ -188,7 +188,7 @@ func referenceParts(definition subagent.Definition) []PromptPart {
 	return parts
 }
 
-func autoloadedSkills(definition subagent.Definition, skills []skill.Skill, skillsOff bool) (string, []PromptPart, error) {
+func autoloadedSkills(definition subagents.Definition, skills []skill.Skill, skillsOff bool) (string, []PromptPart, error) {
 	if skillsOff && len(definition.Skills) > 0 {
 		return "\n\nthe skills setting is off, so the skills your definition names are not loaded: " + strings.Join(definition.Skills, ", ") + ". work without them and say so in your report", nil, nil
 	}
@@ -230,14 +230,14 @@ func autoloadedSkills(definition subagent.Definition, skills []skill.Skill, skil
 	return text.String(), loaded, nil
 }
 
-func autoloadedReferences(definition subagent.Definition, skills []skill.Skill, loaded []PromptPart) ([]subagent.Reference, []PromptPart, error) {
+func autoloadedReferences(definition subagents.Definition, skills []skill.Skill, loaded []PromptPart) ([]subagents.Reference, []PromptPart, error) {
 	if definition.Origin == "library" {
 		var err error
 		if skills, err = skill.Shipped(shipped.Files(), ""); err != nil {
 			return nil, nil, err
 		}
 	}
-	var references []subagent.Reference
+	var references []subagents.Reference
 	var parts []PromptPart
 	for _, part := range loaded {
 		if part.State != session.PartLoaded {
@@ -256,7 +256,7 @@ func autoloadedReferences(definition subagent.Definition, skills []skill.Skill, 
 			return nil, nil, err
 		}
 		for _, reference := range read {
-			decided := slices.ContainsFunc(slices.Concat(definition.References, definition.Unreached, references), func(held subagent.Reference) bool { return held.Path == reference.Path })
+			decided := slices.ContainsFunc(slices.Concat(definition.References, definition.Unreached, references), func(held subagents.Reference) bool { return held.Path == reference.Path })
 			if decided || slices.Contains(definition.Cut, reference.Name) {
 				continue
 			}
@@ -268,7 +268,7 @@ func autoloadedReferences(definition subagent.Definition, skills []skill.Skill, 
 	return references, parts, nil
 }
 
-func librarySkills(library fs.FS, definition subagent.Definition) (string, error) {
+func librarySkills(library fs.FS, definition subagents.Definition) (string, error) {
 	var text strings.Builder
 	for _, name := range definition.Skills {
 		found := skill.LibraryFiles(library, "skills", name)
@@ -319,33 +319,33 @@ func unofferedLibrarySkills(library fs.FS, listed []skill.Skill, loaded []Prompt
 }
 
 type Composed struct {
-	Task       rule.Task
+	Task       rules.Task
 	Parts      []PromptPart
-	HeldBack   []rule.Match
+	HeldBack   []rules.Match
 	Unsent     []PromptPart
-	References []subagent.Reference
+	References []subagents.Reference
 }
 
 func (c Composed) Recorded() []PromptPart { return slices.Concat(c.Parts, c.Unsent) }
 
-func composedOrder() []rule.Concern {
-	return []rule.Concern{
-		rule.ConcernEnvironment,
-		rule.ConcernToolGuidance,
-		rule.ConcernSafety,
-		rule.ConcernOutputShape,
-		rule.ConcernFormatContract,
-		rule.ConcernCodeRules,
-		rule.ConcernProcessDiscipline,
-		rule.ConcernDomainKnowledge,
-		rule.ConcernTaskShaping,
-		rule.ConcernIdentity,
+func composedOrder() []rules.Concern {
+	return []rules.Concern{
+		rules.ConcernEnvironment,
+		rules.ConcernToolGuidance,
+		rules.ConcernSafety,
+		rules.ConcernOutputShape,
+		rules.ConcernFormatContract,
+		rules.ConcernCodeRules,
+		rules.ConcernProcessDiscipline,
+		rules.ConcernDomainKnowledge,
+		rules.ConcernTaskShaping,
+		rules.ConcernIdentity,
 	}
 }
 
 func Compose(spec ComposeSpec) (Composed, error) {
 	for _, reference := range spec.Agent.References {
-		if unknown := slices.IndexFunc(reference.Frameworks, func(framework string) bool { return !rule.KnownFramework(framework) }); unknown >= 0 {
+		if unknown := slices.IndexFunc(reference.Frameworks, func(framework string) bool { return !rules.KnownFramework(framework) }); unknown >= 0 {
 			return Composed{}, fmt.Errorf("the reference %s in %s declares the framework %q, which no manifest detector knows", reference.Name, reference.Path, reference.Frameworks[unknown])
 		}
 	}
@@ -394,36 +394,36 @@ func Compose(spec ComposeSpec) (Composed, error) {
 			return Composed{}, err
 		}
 		composed.References = references
-		composed.Parts = append(composed.Parts, PromptPart{Concern: rule.ConcernIdentity, Text: referenceIndex(references[:indexed])})
-		composed.Unsent = referenceParts(subagent.Definition{References: references[:indexed]})
+		composed.Parts = append(composed.Parts, PromptPart{Concern: rules.ConcernIdentity, Text: referenceIndex(references[:indexed])})
+		composed.Unsent = referenceParts(subagents.Definition{References: references[:indexed]})
 		offered = references[:indexed]
 	}
-	if composed.Task.Language = spec.Agent.Language; composed.Task.Language != "" && !rule.KnownLanguage(composed.Task.Language) {
+	if composed.Task.Language = spec.Agent.Language; composed.Task.Language != "" && !rules.KnownLanguage(composed.Task.Language) {
 		return Composed{}, fmt.Errorf("the sub-agent %s declares the language %q, which no rule knows", spec.Agent.Name, composed.Task.Language)
 	}
 	for _, builtin := range []PromptPart{
-		{Concern: rule.ConcernEnvironment, Text: spec.Environment},
-		{Concern: rule.ConcernToolGuidance, Text: spec.ToolGuidance},
-		{Concern: rule.ConcernFormatContract, Text: TheFormatContract},
+		{Concern: rules.ConcernEnvironment, Text: spec.Environment},
+		{Concern: rules.ConcernToolGuidance, Text: spec.ToolGuidance},
+		{Concern: rules.ConcernFormatContract, Text: TheFormatContract},
 	} {
 		if strings.TrimSpace(builtin.Text) == "" {
 			return Composed{}, fmt.Errorf("the composed prompt carries nothing for %s, which tofu writes itself and is never conditional", builtin.Concern)
 		}
 		composed.Parts = append(composed.Parts, builtin)
 	}
-	agentDomain := cmp.Or(spec.Agent.Domain, rule.DomainDev)
-	if asked := rule.AskedOfTheTask(spec.Rules, agentDomain, composed.Task); spec.Applies != nil && len(asked) > 0 {
+	agentDomain := cmp.Or(spec.Agent.Domain, rules.DomainDev)
+	if asked := rules.AskedOfTheTask(spec.Rules, agentDomain, composed.Task); spec.Applies != nil && len(asked) > 0 {
 		var keywordDecided error
 		text := "Jev read which of the framework's rules reach this task"
 		if composed.Task.Judged, keywordDecided = spec.Applies.Of(composed.Task, asked); keywordDecided != nil {
 			text = "the touches keyword read which of the framework's rules reach this task, since " + keywordDecided.Error()
 		}
-		composed.Parts = append(composed.Parts, PromptPart{Concern: rule.ConcernTaskShaping, Text: text, ByTask: true})
+		composed.Parts = append(composed.Parts, PromptPart{Concern: rules.ConcernTaskShaping, Text: text, ByTask: true})
 	}
-	withoutTask := rule.IndexReaching(spec.Rules, agentDomain, rule.Task{Role: composed.Task.Role, Language: composed.Task.Language,
+	withoutTask := rules.IndexReaching(spec.Rules, agentDomain, rules.Task{Role: composed.Task.Role, Language: composed.Task.Language,
 		Frameworks: slices.DeleteFunc(slices.Clone(composed.Task.Frameworks), func(framework string) bool { return slices.Contains(spec.PathFrameworks, framework) })})
 	var firedByKind []string
-	for i, match := range rule.IndexReaching(spec.Rules, agentDomain, composed.Task) {
+	for i, match := range rules.IndexReaching(spec.Rules, agentDomain, composed.Task) {
 		if !match.Fires {
 			held := spec.Rules[i]
 			composed.HeldBack = append(composed.HeldBack, match)
@@ -431,7 +431,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 			continue
 		}
 		fired := spec.Rules[i]
-		if kind := fired.Trigger.Kind(); kind != rule.VerbNone && kind == composed.Task.Verb {
+		if kind := fired.Trigger.Kind(); kind != rules.VerbNone && kind == composed.Task.Verb {
 			firedByKind = append(firedByKind, fired.ID)
 		}
 		text := cmp.Or(strings.TrimSpace(fired.Text), strings.TrimSpace(fired.Notes))
@@ -470,7 +470,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		if len(firedByKind) > 0 {
 			text += ", so the rules for that kind fire: " + strings.Join(firedByKind, ", ")
 		}
-		composed.Parts = append(composed.Parts, PromptPart{Concern: rule.ConcernTaskShaping, Text: text, ByTask: true})
+		composed.Parts = append(composed.Parts, PromptPart{Concern: rules.ConcernTaskShaping, Text: text, ByTask: true})
 	}
 	composed.Unsent = append(composed.Unsent, spec.Dropped...)
 	for _, off := range spec.SwitchedOff {
@@ -478,7 +478,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		if off.Rule.Override.Reason != "" {
 			text += ": " + off.Rule.Override.Reason
 		}
-		composed.Parts = append(composed.Parts, PromptPart{Concern: off.Base.Concern, RuleID: off.Base.ID, File: filepath.ToSlash(off.Rule.File), Text: text, Reason: rule.ReasonSetting, Mode: off.Rule.Mode, Off: true})
+		composed.Parts = append(composed.Parts, PromptPart{Concern: off.Base.Concern, RuleID: off.Base.ID, File: filepath.ToSlash(off.Rule.File), Text: text, Reason: rules.ReasonSetting, Mode: off.Rule.Mode, Off: true})
 	}
 	order := composedOrder()
 	slices.SortStableFunc(composed.Parts, func(a, b PromptPart) int {
@@ -529,7 +529,7 @@ func (c Composed) WithTaskRules(environment string) string {
 func (c Composed) render(keep func(PromptPart) bool) string {
 	var block strings.Builder
 	for _, part := range c.Parts {
-		if part.Concern == rule.ConcernEnvironment || part.State != session.PartFired || !keep(part) {
+		if part.Concern == rules.ConcernEnvironment || part.State != session.PartFired || !keep(part) {
 			continue
 		}
 		if block.Len() > 0 {
@@ -544,8 +544,8 @@ func (p PromptPart) rendered() string {
 	return fmt.Sprintf("[%s, from %s]\n%s", p.Concern, p.Rule(), p.Text)
 }
 
-func TaskNamed(text string) rule.Task {
-	task := rule.Task{Text: text}
+func TaskNamed(text string) rules.Task {
+	task := rules.Task{Text: text}
 	for _, word := range strings.Fields(text) {
 		word = strings.Trim(word, ",;:()[]{}\"'`")
 		if strings.Contains(word, "://") {
@@ -555,7 +555,7 @@ func TaskNamed(text string) rule.Task {
 			task.Paths = append(task.Paths, filepath.ToSlash(word))
 			continue
 		}
-		if verb := verbNamed(word); verb == rule.VerbPlan || task.Verb == rule.VerbNone {
+		if verb := verbNamed(word); verb == rules.VerbPlan || task.Verb == rules.VerbNone {
 			task.Verb = verb
 		}
 	}
@@ -575,15 +575,15 @@ func namedExtension(word string) bool {
 	return true
 }
 
-func verbNamed(word string) rule.Verb {
-	named := rule.Verb(strings.ToLower(word))
-	if slices.Contains([]rule.Verb{rule.VerbPlan, "ticket", "tickets", "epic", "epics"}, named) {
-		return rule.VerbPlan
+func verbNamed(word string) rules.Verb {
+	named := rules.Verb(strings.ToLower(word))
+	if slices.Contains([]rules.Verb{rules.VerbPlan, "ticket", "tickets", "epic", "epics"}, named) {
+		return rules.VerbPlan
 	}
-	if slices.Contains([]rule.Verb{rule.VerbDebug, rule.VerbExplore, rule.VerbReview, rule.VerbWrite}, named) {
+	if slices.Contains([]rules.Verb{rules.VerbDebug, rules.VerbExplore, rules.VerbReview, rules.VerbWrite}, named) {
 		return named
 	}
-	return rule.VerbNone
+	return rules.VerbNone
 }
 
 const (
@@ -605,7 +605,7 @@ type pointJudge struct {
 	asked     question.Question
 	version   int
 	threshold float64
-	client    *jev.Client
+	client    *core.Client
 	ledger    *ledger.Writer
 	unasked   error
 }
@@ -652,17 +652,17 @@ func (j *pointJudge) open(project, ref, name string, kind question.Kind) error {
 		return err
 	}
 	j.asked, j.version, j.ledger = asked, set.QuestionsVersion, ledger.NewWriter(places.Log)
-	j.client, err = classifier.Open(project, jev.ReadKeyring(), 1)
+	j.client, err = classifiers.Open(project, core.ReadKeyring(), 1)
 	return err
 }
 
-func (j *KindJudge) Of(task string, named rule.Verb) (rule.Verb, error) {
+func (j *KindJudge) Of(task string, named rules.Verb) (rules.Verb, error) {
 	if strings.TrimSpace(task) == "" {
 		return named, errors.New("the task is blank, so jev is not asked")
 	}
-	kind, chosen, err := method.Run(context.Background(), j.methods, taskKindPoint, method.Arms[rule.Verb]{
-		Cheap:  func(context.Context) (rule.Verb, error) { return named, nil },
-		Judged: func(ctx context.Context) (rule.Verb, error) { return j.ask(ctx, task) },
+	kind, chosen, err := method.Run(context.Background(), j.methods, taskKindPoint, method.Arms[rules.Verb]{
+		Cheap:  func(context.Context) (rules.Verb, error) { return named, nil },
+		Judged: func(ctx context.Context) (rules.Verb, error) { return j.ask(ctx, task) },
 	})
 	switch {
 	case err != nil:
@@ -673,25 +673,25 @@ func (j *KindJudge) Of(task string, named rule.Verb) (rule.Verb, error) {
 	return kind, nil
 }
 
-func (j *KindJudge) ask(ctx context.Context, task string) (rule.Verb, error) {
+func (j *KindJudge) ask(ctx context.Context, task string) (rules.Verb, error) {
 	if j.unasked != nil {
-		return rule.VerbNone, fmt.Errorf("jev cannot be asked: %w", j.unasked)
+		return rules.VerbNone, fmt.Errorf("jev cannot be asked: %w", j.unasked)
 	}
 	body, err := json.Marshal(struct {
 		Task string `json:"task"`
 	}{task})
 	if err != nil {
-		return rule.VerbNone, err
+		return rules.VerbNone, err
 	}
-	asked := []jev.Question{j.asked.ToJev()}
+	asked := []core.Question{j.asked.ToJev()}
 	row := ledger.Row{Point: taskKindPoint, Questions: taskKindPoint, Version: j.version, StateHash: ledger.HashOf(body), StateBuilder: taskKindBuilder, State: body,
 		Verdict: ledger.VerdictAsk, Reason: &ledger.Reason{Question: taskKindName, Comparison: ">= " + strconv.FormatFloat(j.threshold, 'f', -1, 64), Threshold: j.threshold, Mode: ledger.ModeEnforced}}
-	decision, err := j.client.Ask(ctx, jev.Request{State: json.RawMessage(body), Questions: asked})
+	decision, err := j.client.Ask(ctx, core.Request{State: json.RawMessage(body), Questions: asked})
 	if err != nil {
 		failed := "jev could not answer, so the word list names the task's kind: " + err.Error()
 		row.Reason.ModeReason = &failed
 		_, unwritten := j.ledger.Append(row)
-		return rule.VerbNone, errors.Join(fmt.Errorf("jev could not answer: %w", err), unwritten)
+		return rules.VerbNone, errors.Join(fmt.Errorf("jev could not answer: %w", err), unwritten)
 	}
 	decision.Record(&row, asked, j.version)
 	answer := decision.Answers[taskKindName]
@@ -699,24 +699,24 @@ func (j *KindJudge) ask(ctx context.Context, task string) (rule.Verb, error) {
 		row.Verdict = ledger.VerdictAllow
 	}
 	if _, err := j.ledger.Append(row); err != nil {
-		return rule.VerbNone, fmt.Errorf("the decision did not reach the ledger: %w", err)
+		return rules.VerbNone, fmt.Errorf("the decision did not reach the ledger: %w", err)
 	}
 	if row.Verdict != ledger.VerdictAllow {
-		return rule.VerbNone, fmt.Errorf("jev chose %s at %.2f, under kind_at %.2f", answer.Choice, row.Reason.Value, j.threshold)
+		return rules.VerbNone, fmt.Errorf("jev chose %s at %.2f, under kind_at %.2f", answer.Choice, row.Reason.Value, j.threshold)
 	}
 	if answer.Choice == j.asked.Escape {
-		return rule.VerbNone, nil
+		return rules.VerbNone, nil
 	}
-	return rule.Verb(answer.Choice), nil
+	return rules.Verb(answer.Choice), nil
 }
 
-func (j *RuleJudge) Of(task rule.Task, asked []rule.Rule) (map[string]rule.Judged, error) {
+func (j *RuleJudge) Of(task rules.Task, asked []rules.Rule) (map[string]rules.Judged, error) {
 	if strings.TrimSpace(task.Text) == "" {
 		return nil, errors.New("the task is blank, so jev is not asked")
 	}
-	judged, chosen, err := method.Run(context.Background(), j.methods, ruleAppliesPoint, method.Arms[map[string]rule.Judged]{
-		Cheap:  func(context.Context) (map[string]rule.Judged, error) { return nil, nil },
-		Judged: func(ctx context.Context) (map[string]rule.Judged, error) { return j.ask(ctx, task, asked) },
+	judged, chosen, err := method.Run(context.Background(), j.methods, ruleAppliesPoint, method.Arms[map[string]rules.Judged]{
+		Cheap:  func(context.Context) (map[string]rules.Judged, error) { return nil, nil },
+		Judged: func(ctx context.Context) (map[string]rules.Judged, error) { return j.ask(ctx, task, asked) },
 	})
 	if err == nil && chosen == method.Cheap {
 		err = fmt.Errorf("%s names %s for %s", j.methods.File, chosen, ruleAppliesPoint)
@@ -724,7 +724,7 @@ func (j *RuleJudge) Of(task rule.Task, asked []rule.Rule) (map[string]rule.Judge
 	return judged, err
 }
 
-func (j *RuleJudge) ask(ctx context.Context, task rule.Task, asked []rule.Rule) (map[string]rule.Judged, error) {
+func (j *RuleJudge) ask(ctx context.Context, task rules.Task, asked []rules.Rule) (map[string]rules.Judged, error) {
 	if j.unasked != nil {
 		return nil, fmt.Errorf("jev cannot be asked: %w", j.unasked)
 	}
@@ -738,10 +738,10 @@ func (j *RuleJudge) ask(ctx context.Context, task rule.Task, asked []rule.Rule) 
 		Rules []ruleState `json:"rules"`
 	}{Task: task.Text, Paths: append([]string{}, task.Paths...)}
 	rubric := j.asked.ToJev()
-	var each []jev.Question
+	var each []core.Question
 	for i, r := range asked {
 		state.Rules = append(state.Rules, ruleState{ID: r.ID, Text: cmp.Or(strings.TrimSpace(r.Text), strings.TrimSpace(r.Notes))})
-		each = append(each, jev.Question{ID: ruleAppliesName + "_" + strconv.Itoa(i), Kind: jev.QuestionNoul, Instructions: rubric.Instructions + " The rule is rules[" + strconv.Itoa(i) + "].", True: rubric.True, False: rubric.False})
+		each = append(each, core.Question{ID: ruleAppliesName + "_" + strconv.Itoa(i), Kind: core.QuestionNoul, Instructions: rubric.Instructions + " The rule is rules[" + strconv.Itoa(i) + "].", True: rubric.True, False: rubric.False})
 	}
 	body, err := json.Marshal(state)
 	if err != nil {
@@ -749,7 +749,7 @@ func (j *RuleJudge) ask(ctx context.Context, task rule.Task, asked []rule.Rule) 
 	}
 	row := ledger.Row{Point: ruleAppliesPoint, Questions: ruleAppliesPoint, Version: j.version, StateHash: ledger.HashOf(body), StateBuilder: ruleAppliesBuilder, State: body,
 		Verdict: ledger.VerdictAllow, Reason: &ledger.Reason{Question: ruleAppliesName, Comparison: ">= " + strconv.FormatFloat(j.threshold, 'f', -1, 64), Threshold: j.threshold, Mode: ledger.ModeEnforced}}
-	decision, err := j.client.Ask(ctx, jev.Request{State: json.RawMessage(body), Questions: each})
+	decision, err := j.client.Ask(ctx, core.Request{State: json.RawMessage(body), Questions: each})
 	if err != nil {
 		failed := "jev could not answer, so the touches keyword decides which rules reach the task: " + err.Error()
 		row.Verdict, row.Reason.ModeReason = ledger.VerdictAsk, &failed
@@ -760,10 +760,10 @@ func (j *RuleJudge) ask(ctx context.Context, task rule.Task, asked []rule.Rule) 
 	if row, err = j.ledger.Append(row); err != nil {
 		return nil, fmt.Errorf("the decision did not reach the ledger: %w", err)
 	}
-	judged := map[string]rule.Judged{}
+	judged := map[string]rules.Judged{}
 	for i, r := range asked {
 		applies := row.Answers[i].Noul
-		judged[r.ID] = rule.Judged{Applies: applies >= j.threshold,
+		judged[r.ID] = rules.Judged{Applies: applies >= j.threshold,
 			Why: fmt.Sprintf("Jev decides rather than the touches, and it answered applies %.2f against applies_at %.2f in ledger row %s", applies, j.threshold, row.ID)}
 	}
 	return judged, nil

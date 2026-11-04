@@ -43,7 +43,7 @@ func resolveInline(qs map[string]inlineQuestion) (wiring.Battery, error) {
 	}
 	sort.Strings(names)
 
-	out := wiring.Battery{SetName: "inline", QuestionsVersion: 1, Kinds: make(map[string]question.Kind, len(names))}
+	out := wiring.Battery{SetName: "inline", QuestionsVersion: 1, Kinds: make(map[string]questions.Kind, len(names))}
 	for _, name := range names {
 		jq, kind, err := toInlineJevQuestion(name, qs[name])
 		if err != nil {
@@ -55,38 +55,38 @@ func resolveInline(qs map[string]inlineQuestion) (wiring.Battery, error) {
 	return out, nil
 }
 
-func toInlineJevQuestion(name string, in inlineQuestion) (jev.Question, question.Kind, error) {
-	jq := jev.Question{ID: name, Instructions: in.Instructions}
+func toInlineJevQuestion(name string, in inlineQuestion) (core.Question, questions.Kind, error) {
+	jq := core.Question{ID: name, Instructions: in.Instructions}
 	switch in.Type {
-	case string(question.KindNoul):
-		jq.Kind = jev.QuestionNoul
+	case string(questions.KindNoul):
+		jq.Kind = core.QuestionNoul
 		var criteria struct {
 			True  string `json:"true"`
 			False string `json:"false"`
 		}
 		if len(in.Criteria) > 0 {
 			if err := json.Unmarshal(in.Criteria, &criteria); err != nil {
-				return jev.Question{}, "", fmt.Errorf("question %q: %w", name, err)
+				return core.Question{}, "", fmt.Errorf("question %q: %w", name, err)
 			}
 		}
 		jq.True, jq.False = criteria.True, criteria.False
-		return jq, question.KindNoul, nil
-	case string(question.KindChoice):
-		jq.Kind = jev.QuestionChoice
+		return jq, questions.KindNoul, nil
+	case string(questions.KindChoice):
+		jq.Kind = core.QuestionChoice
 		for _, option := range in.Options {
-			jq.Options = append(jq.Options, jev.Option{Name: option.Name, Criteria: option.Criteria})
+			jq.Options = append(jq.Options, core.Option{Name: option.Name, Criteria: option.Criteria})
 		}
-		return jq, question.KindChoice, nil
-	case string(question.KindScore):
-		jq.Kind = jev.QuestionScore
+		return jq, questions.KindChoice, nil
+	case string(questions.KindScore):
+		jq.Kind = core.QuestionScore
 		var levels []string
 		if len(in.Criteria) > 0 {
 			if err := json.Unmarshal(in.Criteria, &levels); err != nil {
-				return jev.Question{}, "", fmt.Errorf("question %q: %w", name, err)
+				return core.Question{}, "", fmt.Errorf("question %q: %w", name, err)
 			}
 		}
 		jq.Levels = levels
-		return jq, question.KindScore, nil
+		return jq, questions.KindScore, nil
 	}
-	return jev.Question{}, "", fmt.Errorf("question %q has the unknown type %q", name, in.Type)
+	return core.Question{}, "", fmt.Errorf("question %q has the unknown type %q", name, in.Type)
 }

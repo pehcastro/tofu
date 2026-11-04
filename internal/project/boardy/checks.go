@@ -22,7 +22,7 @@ type checked struct {
 	done   *DoneGate
 }
 
-type namedCheck func(m Managed, h rule.Hook, s subject, arg string) (checked, error)
+type namedCheck func(m Managed, h rules.Hook, s subject, arg string) (checked, error)
 
 const (
 	checkEvidenced     = "evidenced"
@@ -56,20 +56,20 @@ func checks() map[string]namedCheck {
 	}
 }
 
-func checkOf(h rule.Hook) (string, string) {
-	if h.Action.Do != rule.DoCheck {
+func checkOf(h rules.Hook) (string, string) {
+	if h.Action.Do != rules.DoCheck {
 		return checkEvidenced, ""
 	}
 	name, arg, _ := strings.Cut(h.Action.Arg, " ")
 	return name, strings.TrimSpace(arg)
 }
 
-func runsCheck(h rule.Hook, name string) bool {
+func runsCheck(h rules.Hook, name string) bool {
 	called, _ := checkOf(h)
-	return (h.Action.Do == rule.DoCheck || h.Action.Do == rule.DoContract) && called == name
+	return (h.Action.Do == rules.DoCheck || h.Action.Do == rules.DoContract) && called == name
 }
 
-func resolveCheck(h rule.Hook) (namedCheck, string, error) {
+func resolveCheck(h rules.Hook) (namedCheck, string, error) {
 	name, arg := checkOf(h)
 	known := checks()
 	if run, found := known[name]; found {
@@ -86,7 +86,7 @@ func refusal(err error) (checked, error) {
 	return checked{}, err
 }
 
-func (m Managed) mayMoveCheck(_ rule.Hook, s subject, _ string) (checked, error) {
+func (m Managed) mayMoveCheck(_ rules.Hook, s subject, _ string) (checked, error) {
 	board, err := m.Store.Board(s.key)
 	if err != nil {
 		return checked{}, err
@@ -94,7 +94,7 @@ func (m Managed) mayMoveCheck(_ rule.Hook, s subject, _ string) (checked, error)
 	return refusal(m.mayMove(m.role(board, s.actor), s.ticket, s.to, s.actor))
 }
 
-func (m Managed) notPossibleHold(_ rule.Hook, s subject, _ string) (checked, error) {
+func (m Managed) notPossibleHold(_ rules.Hook, s subject, _ string) (checked, error) {
 	board, err := m.Store.Board(s.key)
 	if err != nil || m.role(board, s.actor) != RoleManager {
 		return checked{}, err
@@ -102,18 +102,18 @@ func (m Managed) notPossibleHold(_ rule.Hook, s subject, _ string) (checked, err
 	return refusal(m.heldForThePerson(s.ticket, s.actor, "moves it"))
 }
 
-func (Managed) hasAcceptance(_ rule.Hook, s subject, _ string) (checked, error) {
+func (Managed) hasAcceptance(_ rules.Hook, s subject, _ string) (checked, error) {
 	return checked{
 		detail: fmt.Sprintf("it has no Acceptance, and a ticket reaches %s only with one", s.to),
 		failed: !slices.ContainsFunc(s.ticket.Acceptance, func(lines string) bool { return strings.TrimSpace(lines) != "" }),
 	}, nil
 }
 
-func (Managed) hasLogEntry(_ rule.Hook, s subject, _ string) (checked, error) {
+func (Managed) hasLogEntry(_ rules.Hook, s subject, _ string) (checked, error) {
 	return checked{detail: fmt.Sprintf("its Log is empty, and a ticket reaches %s with at least one entry", s.to), failed: strings.TrimSpace(s.ticket.Log) == ""}, nil
 }
 
-func (m Managed) evidenceChars(_ rule.Hook, s subject, arg string) (checked, error) {
+func (m Managed) evidenceChars(_ rules.Hook, s subject, arg string) (checked, error) {
 	board, err := m.Store.Board(s.key)
 	least := board.LogToReview
 	if least == 0 {
@@ -129,16 +129,16 @@ func (m Managed) evidenceChars(_ rule.Hook, s subject, arg string) (checked, err
 	}, err
 }
 
-func (Managed) decidableCheck(_ rule.Hook, s subject, _ string) (checked, error) {
+func (Managed) decidableCheck(_ rules.Hook, s subject, _ string) (checked, error) {
 	return refusal(decidable(s.ticket))
 }
 
-func (m Managed) doneStamp(_ rule.Hook, s subject, _ string) (checked, error) {
+func (m Managed) doneStamp(_ rules.Hook, s subject, _ string) (checked, error) {
 	gate := m.doneGate(s.ticket.Owns)
 	return checked{detail: gate.Refusal(), failed: gate.Refusal() != "", done: &gate}, nil
 }
 
-func (m Managed) evidenced(h rule.Hook, s subject, arg string) (checked, error) {
+func (m Managed) evidenced(h rules.Hook, s subject, arg string) (checked, error) {
 	leave := s.leave
 	if arg == everyLine {
 		leave = []int{}
@@ -151,7 +151,7 @@ func (m Managed) evidenced(h rule.Hook, s subject, arg string) (checked, error) 
 	return checked{detail: strings.ReplaceAll(said, missingPlaceholder, missing), failed: missing != ""}, nil
 }
 
-func (m Managed) beforeCaptured(h rule.Hook, s subject, lateSays string) (checked, error) {
+func (m Managed) beforeCaptured(h rules.Hook, s subject, lateSays string) (checked, error) {
 	events, err := m.Store.ticketEvents(s.ticket.ID)
 	if err != nil || slices.ContainsFunc(events, func(e Event) bool { return e.Kind == Captured }) {
 		return checked{}, err
@@ -178,7 +178,7 @@ func (m Managed) beforeCaptured(h rule.Hook, s subject, lateSays string) (checke
 
 func utcStamp(at time.Time) string { return at.UTC().Format(time.DateTime) + " UTC" }
 
-func (m Managed) beforeOnTime(_ rule.Hook, s subject, _ string) (checked, error) {
+func (m Managed) beforeOnTime(_ rules.Hook, s subject, _ string) (checked, error) {
 	if s.entry != Captured {
 		return checked{}, nil
 	}
@@ -196,7 +196,7 @@ func (m Managed) beforeOnTime(_ rule.Hook, s subject, _ string) (checked, error)
 	}, err
 }
 
-func (m Managed) subTicketsDone(_ rule.Hook, s subject, _ string) (checked, error) {
+func (m Managed) subTicketsDone(_ rules.Hook, s subject, _ string) (checked, error) {
 	children, _ := filepath.Glob(filepath.Join(m.Store.BoardDir(s.key), TicketsDirName, s.ticket.ID, "*.md"))
 	var live []string
 	for _, path := range children {
@@ -214,7 +214,7 @@ func (m Managed) subTicketsDone(_ rule.Hook, s subject, _ string) (checked, erro
 	}, nil
 }
 
-func (m Managed) scopeCites(_ rule.Hook, s subject, arg string) (checked, error) {
+func (m Managed) scopeCites(_ rules.Hook, s subject, arg string) (checked, error) {
 	board, err := m.Store.Board(s.key)
 	cites := board.ScopeCites
 	if len(cites) == 0 {
@@ -226,13 +226,13 @@ func (m Managed) scopeCites(_ rule.Hook, s subject, arg string) (checked, error)
 	}, err
 }
 
-func (m Managed) epicReadyCheck(_ rule.Hook, s subject, _ string) (checked, error) {
+func (m Managed) epicReadyCheck(_ rules.Hook, s subject, _ string) (checked, error) {
 	return refusal(m.Store.epicReady(s.key, s.ticket.Front))
 }
 
-func (m Managed) ownsFreeCheck(_ rule.Hook, s subject, _ string) (checked, error) {
+func (m Managed) ownsFreeCheck(_ rules.Hook, s subject, _ string) (checked, error) {
 	board, err := m.Store.Board(s.key)
-	if err != nil || (s.event == rule.HookTicketMove || s.event == rule.HookTicketClose) && board.Holding(s.from) {
+	if err != nil || (s.event == rules.HookTicketMove || s.event == rules.HookTicketClose) && board.Holding(s.from) {
 		return checked{}, err
 	}
 	return refusal(m.ownsFree(s.key, s.ticket.Front, s.owns, s.to, s.replaces))
@@ -242,7 +242,7 @@ func (s subject) entering() bool {
 	return s.from == "" || s.from == Triage && s.to != Dropped
 }
 
-func (Managed) draftedCheck(_ rule.Hook, s subject, _ string) (checked, error) {
+func (Managed) draftedCheck(_ rules.Hook, s subject, _ string) (checked, error) {
 	missing := s.ticket.undrafted()
 	if !s.entering() || len(missing) == 0 {
 		return checked{}, nil
@@ -254,7 +254,7 @@ func (Managed) draftedCheck(_ rule.Hook, s subject, _ string) (checked, error) {
 	return checked{detail: fmt.Sprintf("%q has no %s, and a ticket is made with each of them. %s", s.ticket.Title, strings.Join(names, ", "), strings.Join(says, "; ")), failed: true}, nil
 }
 
-func (m Managed) feasibility(_ rule.Hook, s subject, _ string) (checked, error) {
+func (m Managed) feasibility(_ rules.Hook, s subject, _ string) (checked, error) {
 	if !s.entering() || s.dry || strings.TrimSpace(s.ticket.Feasibility) != "" {
 		return checked{}, nil
 	}
@@ -271,7 +271,7 @@ func (m Managed) feasibility(_ rule.Hook, s subject, _ string) (checked, error) 
 	}, nil
 }
 
-func (m Managed) doneReason(_ rule.Hook, s subject, _ string) (checked, error) {
+func (m Managed) doneReason(_ rules.Hook, s subject, _ string) (checked, error) {
 	parts := reasonParts(s.reason)
 	switch {
 	case s.dry:
@@ -279,9 +279,9 @@ func (m Managed) doneReason(_ rule.Hook, s subject, _ string) (checked, error) {
 	case len(parts) == 0:
 		return checked{detail: fmt.Sprintf("its reason is empty, and a ticket reaches %s with a reason that says what was verified and that nothing is open: tofu boardy move %s %s --reason <what was verified>", s.to, s.ticket.ID, s.to), failed: true}, nil
 	}
-	options := make([]jev.Option, len(parts))
+	options := make([]core.Option, len(parts))
 	for i, part := range parts {
-		options[i] = jev.Option{Name: reasonPartPrefix + strconv.Itoa(i+1), Criteria: part}
+		options[i] = core.Option{Name: reasonPartPrefix + strconv.Itoa(i+1), Criteria: part}
 	}
 	ruled := m.judged(doneReasonRef, doneReasonDecides, struct {
 		Ticket jevTicket `json:"ticket"`
@@ -298,7 +298,7 @@ func (m Managed) doneReason(_ rule.Hook, s subject, _ string) (checked, error) {
 	}, nil
 }
 
-func (m Managed) callersOwned(_ rule.Hook, s subject, _ string) (checked, error) {
+func (m Managed) callersOwned(_ rules.Hook, s subject, _ string) (checked, error) {
 	scan, err := m.callersOutside(s.ticket)
 	return checked{detail: scan.refusal(s.ticket.ID), failed: len(scan.sites) > 0}, err
 }
