@@ -5,7 +5,7 @@
                      Reference a file                                       esc  
                      @.                                                          
                                                                                  
-                     > cmd                                                       
+                     > apps                                                      
                        internal                                                  
                        README.md                                                 
                        go.mod                                                    

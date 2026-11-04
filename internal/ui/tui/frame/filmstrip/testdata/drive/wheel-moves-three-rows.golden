@@ -64,7 +64,7 @@
   Sub-agents               All activity                                     8-9/9 · wheel ↑ older  │
   3 agents · live acti…                                                                            │
                            │  read                                                            │    │
-  OVERVIEW                 │  internal/turn/loop.go                                           │    │
+  OVERVIEW                 │  internal/agent/loop/loop.go                                     │    │
   › All activity      9    │  complete                                                        │    │
                            │    412 lines, 11.8 KB                                            │    │
   ACTIVE  0                │                                                                  │    │
@@ -97,7 +97,7 @@
   OVERVIEW                 │                                                                  │    │
   › All activity      9    │  [&orchestrator]  tool              just now  [tool#9d4f10]      │    │
                            │  read                                                            │    │
-  ACTIVE  0                │  internal/turn/loop.go                                           │    │
+  ACTIVE  0                │  internal/agent/loop/loop.go                                     │    │
                            │  complete                                                        │    │
   WAITING  3               │    412 lines, 11.8 KB                                            │    │
     [&orchestrator]   .    │                                                                  │    │
@@ -158,7 +158,7 @@
   › dev-serv…  running      PID       18244                                                        │
     pid 18244               Runtime   7m 00s                                                       │
     suite     exited 0      CWD       internal/serve                                               │
-    pid 17902               Command   go run ./cmd/tofu serve --port 7411                          │
+    pid 17902               Command   go run ./apps/cli serve --port 7411                          │
                                                                                                    │
                                                                                                    │
                            OUTPUT  ·  wheel / PgUp / PgDn                                          │
@@ -188,7 +188,7 @@
   › dev-serv…  running      PID       18244                                                        │
     pid 18244               Runtime   7m 00s                                                       │
     suite     exited 0      CWD       internal/serve                                               │
-    pid 17902               Command   go run ./cmd/tofu serve --port 7411                          │
+    pid 17902               Command   go run ./apps/cli serve --port 7411                          │
                                                                                                    │
                                                                                                    │
                            OUTPUT  ·  wheel / PgUp / PgDn                                          │

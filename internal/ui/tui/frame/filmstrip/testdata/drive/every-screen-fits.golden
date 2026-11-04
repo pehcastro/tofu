@@ -68,7 +68,7 @@ Select an edit reference to read every changed line.
   › d…  running      PID       18244                       │
     pid 18244        Runtime   7m 00s                      │
     …  exited 0      CWD       internal/serve              │
-    pid 17902        Command   go run ./cmd/tofu serve     │
+    pid 17902        Command   go run ./apps/cli serve     │
                                --port 7411                 │
                                                            │
                                                            │
@@ -180,7 +180,7 @@ Select an edit reference to read every changed line.
   › dev…  running      PID       18244                                         │
     pid 18244          Runtime   7m 00s                                        │
     su…  exited 0      CWD       internal/serve                                │
-    pid 17902          Command   go run ./cmd/tofu serve --port 7411           │
+    pid 17902          Command   go run ./apps/cli serve --port 7411           │
                                                                                │
                                                                                │
                       OUTPUT  ·  wheel / PgUp / PgDn                           │
@@ -256,7 +256,7 @@ Select an edit reference to read every changed line.
   Sub-agents                All activity                                      8-10/10 · wheel ↑ older  │
   3 agents · live activ…                                                                               │
                             │  read                                                               │    │
-  OVERVIEW                  │  internal/turn/loop.go                                              │    │
+  OVERVIEW                  │  internal/agent/loop/loop.go                                        │    │
   › All activity      10    │  complete                                                           │    │
                             │    412 lines, 11.8 KB                                               │    │
   ACTIVE  0                 │                                                                     │    │
@@ -324,7 +324,7 @@ Select an edit reference to read every changed line.
     pid 18244                PID       18244                                                           │
     suite      exited 0      Runtime   7m 00s                                                          │
     pid 17902                CWD       internal/serve                                                  │
-                             Command   go run ./cmd/tofu serve --port 7411                             │
+                             Command   go run ./apps/cli serve --port 7411                             │
                                                                                                        │
                                                                                                        │
                             OUTPUT  ·  wheel / PgUp / PgDn                                             │
@@ -432,7 +432,7 @@ Select an edit reference to read every changed line.
   WAITING  3                     │                                                                                                    │    │
     [&orchestrator]         .    │  [&orchestrator]  tool                                                just now  [tool#9d4f10]      │    │
     Waiting for request          │  read                                                                                              │    │
-    [&c1]                   .    │  internal/turn/loop.go                                                                             │    │
+    [&c1]                   .    │  internal/agent/loop/loop.go                                                                       │    │
     stopped · read the polic…    │  complete                                                                                          │    │
     [&c2]                   .    │    412 lines, 11.8 KB                                                                              │    │
     in review · write the le…    │                                                                                                    │    │
@@ -508,7 +508,7 @@ Select an edit reference to read every changed line.
     pid 18244                     PID       18244                                                                                          │
     suite           exited 0      Runtime   7m 00s                                                                                         │
     pid 17902                     CWD       internal/serve                                                                                 │
-                                  Command   go run ./cmd/tofu serve --port 7411                                                            │
+                                  Command   go run ./apps/cli serve --port 7411                                                            │
                                                                                                                                            │
                                                                                                                                            │
                                  OUTPUT  ·  wheel / PgUp / PgDn                                                                            │

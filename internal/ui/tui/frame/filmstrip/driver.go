@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/internal/konst"
-	"tofu/internal/platform/recover"
+	"tofu/internal/platform/safe"
 	tui "tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/pickers/welcome"
 )
@@ -81,8 +81,8 @@ func (d *Driver) command(cmd tea.Cmd, cause tea.Msg) {
 	if cmd == nil {
 		return
 	}
-	failed := func(p recover.Panic) { d.deliver(delivery{cause: cause, failed: errors.New(p.Saved(d.crashes))}) }
-	recover.Go(failed, "app command", func() {
+	failed := func(p safe.Panic) { d.deliver(delivery{cause: cause, failed: errors.New(p.Saved(d.crashes))}) }
+	safe.Go(failed, "app command", func() {
 		if message := cmd(); message != nil {
 			d.deliver(delivery{message: message, cause: cause})
 		}

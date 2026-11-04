@@ -12,7 +12,7 @@
   │  [&orchestrator]  tool                            │    │
   │  just now  [tool#9d4f10]                          │    │
   │  read                                             │    │
-  │  internal/turn/loop.go                            │    │
+  │  internal/agent/loop/loop.go                      │    │
   │  complete                                         │    │
   │    412 lines, 11.8 KB                             │    ┃
   │                                                   │    ┃

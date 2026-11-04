@@ -36,8 +36,8 @@ func agentWork(at time.Time) []app.Event {
 		{Name: "c2", Doing: "write the ledger floor test", Owns: []string{"internal/judge/ledger/**"}, Since: 3 * time.Minute, Steps: 7, Total: 40, Tokens: 41800, State: roster.InReview,
 			Calls:  []subagent.Call{{ID: "7b2d01", At: at, Tool: "edit", Text: "internal/judge/ledger/floor.go", Result: "+14 -2"}},
 			Report: "the floor test fails on an empty ledger and passes on one row"},
-		{Name: "c3", Doing: "run the shell suite", Owns: []string{"internal/shell/**"}, Since: 51 * time.Second, Steps: 2, Total: 40, Tokens: 6100, State: roster.Errored,
-			Calls:  []subagent.Call{{ID: "7c3e01", At: at, Tool: "bash", Text: "go test ./internal/shell/...", Result: "exit 1\n--- FAIL: TestKillTree (0.31s)"}},
+		{Name: "c3", Doing: "run the shell suite", Owns: []string{"internal/tools/shell/process/**"}, Since: 51 * time.Second, Steps: 2, Total: 40, Tokens: 6100, State: roster.Errored,
+			Calls:  []subagent.Call{{ID: "7c3e01", At: at, Tool: "bash", Text: "go test ./internal/tools/shell/process/...", Result: "exit 1\n--- FAIL: TestKillTree (0.31s)"}},
 			Report: "exit 1: TestKillTree could not find the job object"},
 	}
 	events := []app.Event{{Kind: app.EventRequesting}}
@@ -48,7 +48,7 @@ func agentWork(at time.Time) []app.Event {
 			result(id, "spawned [&"+subAgent.Name+"]"))
 	}
 	events = append(events,
-		call("9d4f10", "read", "internal/turn/loop.go"),
+		call("9d4f10", "read", "internal/agent/loop/loop.go"),
 		result("9d4f10", "412 lines, 11.8 KB"),
 		app.Event{Kind: app.EventText, ID: "9d4f11", Text: "three sub-agents run: [&c1] reads the loader, [&c2] waits on review, [&c3] failed its suite. [tool#9d4f10] is the loop I read."})
 	return append(events, done()...)
@@ -103,7 +103,7 @@ func shellEntries(at time.Time) []shells.Entry {
 	}
 	served = append(served, "warning: slow request /ledger/floor 812ms")
 	return []shells.Entry{
-		{Name: "dev-server", Command: "go run ./cmd/tofu serve --port 7411", State: shells.Running, Started: at.Add(-7 * time.Minute), PID: 18244,
+		{Name: "dev-server", Command: "go run ./apps/cli serve --port 7411", State: shells.Running, Started: at.Add(-7 * time.Minute), PID: 18244,
 			Dir: "internal/serve", Owner: "c1", Log: strings.Join(served, "\n")},
 		{Name: "suite", Command: "go test ./internal/judge/...", State: shells.Exited, Started: at.Add(-2 * time.Minute), Ended: &exited, ExitCode: &code, PID: 17902,
 			Dir: ".", Owner: "orchestrator", Log: "ok  tofu/internal/judge 0.42s\nok  tofu/internal/judge/policy 0.18s\nok  tofu/internal/judge/ledger 0.09s"},

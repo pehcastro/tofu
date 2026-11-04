@@ -11,7 +11,7 @@
     pid 17902        Stop this shell?                                       esc                    │
                      The process ends and its log stays.                                           │
                                                                                                    │
-                      dev-server · go run ./cmd/tofu serve --port 7411                             │
+                      dev-server · go run ./apps/cli serve --port 7411                             │
                                                                                                    │
                      >  Stop the process                                                           │
                        End it now                                                                  │

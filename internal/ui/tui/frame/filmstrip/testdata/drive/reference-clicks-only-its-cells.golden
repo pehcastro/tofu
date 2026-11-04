@@ -11,7 +11,7 @@
                            │                                                                  │    │
   WAITING  3               │  [&c3]  tool                        just now  [tool#7c3e01]      │    │
     [&orchestrator]   .    │  bash                                                            │    │
-    Waiting for request    │  go test ./internal/shell/...                                    │    │
+    Waiting for request    │  go test ./internal/tools/shell/process/...                      │    │
     [&c1]             .    │  complete                                                        │    │
     stopped · read the…    │    exit 1                                                        │    │
     [&c2]             .    │    --- FAIL: TestKillTree (0.31s)                                │    │
@@ -22,7 +22,7 @@
     failed · run the s…    │                                                                  │    ┃
                            │  [&orchestrator]  tool              just now  [tool#9d4f10]      │    ┃
                            │  read                                                            │    ┃
-                           │  internal/turn/loop.go                                           │    ┃
+                           │  internal/agent/loop/loop.go                                     │    ┃
                            │  complete                                                        │    ┃
                            │    412 lines, 11.8 KB                                            │    ┃
                            │                                                                  │    ┃

@@ -98,7 +98,7 @@
   > dev-serv.  running      PID       18244                                                        |
     pid 18244               Runtime   7m 00s                                                       |
     suite     exited 0      CWD       internal/serve                                               |
-    pid 17902               Command   go run ./cmd/tofu serve --port 7411                          |
+    pid 17902               Command   go run ./apps/cli serve --port 7411                          |
                                                                                                    |
                                                                                                    |
                            OUTPUT  .  wheel / PgUp / PgDn                                          |
@@ -131,7 +131,7 @@
     pid 17902        Stop this shell?                                       esc                    |
                      The process ends and its log stays.                                           |
                                                                                                    |
-                      dev-server . go run ./cmd/tofu serve --port 7411                             |
+                      dev-server . go run ./apps/cli serve --port 7411                             |
                                                                                                    |
                      >  Stop the process                                                           |
                        End it now                                                                  |

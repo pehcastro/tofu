@@ -17,7 +17,7 @@
     [&c2]             .    │                                                                  │    │
     in review · write …    │  [&c3]  tool                        just now  [tool#7c3e01]      │    ┃
                            │  bash                                                            │    ┃
-  DEAD  1                  │  go test ./internal/shell/...                                    │    ┃
+  DEAD  1                  │  go test ./internal/tools/shell/process/...                      │    ┃
     [&c3]             ✗    │  complete                                                        │    ┃
     failed · run the s…    │    exit 1                                                        │    ┃
                            │    --- FAIL: TestKillTree (0.31s)                                │    ┃
@@ -47,7 +47,7 @@
     [&c2]             .    │                                                                  │    ┃
     in review · write …    │  [&c3]  tool                        just now  [tool#7c3e01]      │    ┃
                            │  bash                                                            │    ┃
-  DEAD  1                  │  go test ./internal/shell/...                                    │    ┃
+  DEAD  1                  │  go test ./internal/tools/shell/process/...                      │    ┃
     [&c3]             ✗    │  complete                                                        │    ┃
     failed · run the s…    │    exit 1                                                        │    ┃
                            │    --- FAIL: TestKillTree (0.31s)                                │    ┃

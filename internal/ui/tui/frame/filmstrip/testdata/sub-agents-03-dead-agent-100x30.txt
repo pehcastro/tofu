@@ -6,7 +6,7 @@
                            ╭──────────────────────────────────────────────────────────────────╮     
   OVERVIEW                 │                                                                  │     
     All activity      8    │  [&c3]  owns                                                     │     
-                           │  internal/shell/**                                               │     
+                           │  internal/tools/shell/process/**                                 │     
   ACTIVE  1                │                                                                  │     
     [&c1]             ⠁    ╰──────────────────────────────────────────────────────────────────╯     
     read the policy lo…                                                                             
@@ -14,7 +14,7 @@
   WAITING  2               │                                                                  │     
     [&orchestrator]   .    │  [&c3]  tool                        just now  [tool#7c3e01]      │     
     Waiting for request    │  bash                                                            │     
-    [&c2]             .    │  go test ./internal/shell/...                                    │     
+    [&c2]             .    │  go test ./internal/tools/shell/process/...                      │     
     in review · write …    │  complete                                                        │     
                            │    exit 1                                                        │     
   DEAD  1                  │    --- FAIL: TestKillTree (0.31s)                                │     

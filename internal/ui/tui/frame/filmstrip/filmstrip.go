@@ -63,7 +63,7 @@ type reel struct {
 }
 
 func workspaceFiles() []string {
-	return []string{"README.md", "go.mod", "internal/turn/loop.go", "internal/judge/policy/resolve.go", "cmd/tofu/main.go"}
+	return []string{"README.md", "go.mod", "internal/agent/loop/loop.go", "internal/judge/policy/resolve.go", "apps/cli/main.go"}
 }
 
 func workspace(home string) string {
@@ -252,7 +252,7 @@ func reads(from, to int) func(*reel) {
 			if step > 1 {
 				r.send(result("c"+strconv.Itoa(step-1), strconv.Itoa(step*37)+" lines, 4.1 KB"))
 			}
-			r.send(call("c"+strconv.Itoa(step), "read", "internal/turn/step"+strconv.Itoa(step)+".go"))
+			r.send(call("c"+strconv.Itoa(step), "read", "internal/agent/loop/step"+strconv.Itoa(step)+".go"))
 			r.wait(toolGap)
 		}
 	}
@@ -333,7 +333,7 @@ func askingTurn() scenario {
 func interruptedTurn() scenario {
 	return scenario{name: "interrupted", beats: append(opening(),
 		beat{"tooling", func(r *reel) {
-			r.send(call("c1", "read", "internal/turn/loop.go"))
+			r.send(call("c1", "read", "internal/agent/loop/loop.go"))
 			r.wait(toolGap)
 		}},
 		beat{"answering", func(r *reel) {
@@ -356,7 +356,7 @@ func interruptedTurn() scenario {
 func lettingToolsFinish() scenario {
 	return scenario{name: "letting-tools-finish", beats: append(opening(),
 		beat{"tooling", func(r *reel) {
-			r.send(call("c1", "read", "internal/turn/loop.go"))
+			r.send(call("c1", "read", "internal/agent/loop/loop.go"))
 			r.wait(toolGap)
 		}},
 		beat{"second-tool", func(r *reel) {
@@ -368,7 +368,7 @@ func lettingToolsFinish() scenario {
 			r.wait(beatGap)
 		}},
 		beat{"stopped", func(r *reel) {
-			r.send(result("c2", "ok tofu/internal/turn 0.42s"), app.Event{Kind: app.EventDone, Text: "cooked for"})
+			r.send(result("c2", "ok tofu/internal/agent/loop 0.42s"), app.Event{Kind: app.EventDone, Text: "cooked for"})
 			r.app.Update(app.Closed{})
 			r.wait(beatGap)
 		}},
