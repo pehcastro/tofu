@@ -74,7 +74,7 @@ func TestEveryQARuleReachesADevWhoseWorkTouchesTests(t *testing.T) {
 	}{
 		{"go-dev", "add an end to end test for resume", nil, every},
 		{"go-dev", "rename konst.Foo", nil, nil},
-		{"go-dev", "fix the flaky test", []string{"internal/turn/loop_test.go"}, every},
+		{"go-dev", "fix the flaky test", []string{"internal/agent/loop/loop_test.go"}, every},
 		{"ts-dev", "add tests for the parser", nil, every},
 		{"ts-dev", "rename a field", []string{"src/app.ts"}, nil},
 		{"ts-dev", "rename a field", []string{"src/__tests__/app.ts"}, every},
@@ -111,8 +111,8 @@ func TestALeadThatPlansReceivesTheQAAndWriterRulesInTheTaskHalf(t *testing.T) {
 		{"write a ticket for the theme picker", true},
 		{"Write the Epic for themes,", true},
 		{"plan the theme system", true},
-		{"write a ticket for internal/turn/loop.go", true},
-		{"fix the nil check in internal/turn/loop.go", false},
+		{"write a ticket for internal/agent/loop/loop.go", true},
+		{"fix the nil check in internal/agent/loop/loop.go", false},
 		{"write tickets/README.md", false},
 		{"rename the field in plan.md", false},
 	} {
@@ -167,8 +167,8 @@ func TestALeadAloneGetsTheCodingRulesAndALeadThatSpawnsDoesNot(t *testing.T) {
 		frameworks    []string
 		fire, notFire []string
 	}{
-		{"fix the nil check in internal/turn/loop.go and add tests", true, nil, nil, slices.Concat(goRules, order, testOrder), nil},
-		{"fix the nil check in internal/turn/loop.go and add tests", false, nil, nil, nil, slices.Concat(goRules, order, testOrder)},
+		{"fix the nil check in internal/agent/loop/loop.go and add tests", true, nil, nil, slices.Concat(goRules, order, testOrder), nil},
+		{"fix the nil check in internal/agent/loop/loop.go and add tests", false, nil, nil, nil, slices.Concat(goRules, order, testOrder)},
 		{"rename konst.Foo to konst.Bar in internal/konst", true, []string{"go"}, nil, slices.Concat(goRules, order), testOrder},
 		{"rename konst.Foo to konst.Bar in internal/konst", false, []string{"go"}, nil, nil, slices.Concat(goRules, order)},
 		{"rename the title in docs/guide", true, []string{"markdown"}, nil, order, goRules},

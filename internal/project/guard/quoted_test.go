@@ -18,7 +18,7 @@ func TestQuotedMessageIsTextNotGit(t *testing.T) {
 		{name: "orchestrator log quoting git commit gets no note", command: `tofu boardy log TOFU-1 "Committed: git commit fe512206"`},
 		{name: "orchestrator log quoting git stash", command: `tofu boardy log TOFU-1 "a git stash -u reverted the tree"`},
 		{name: "orchestrator log quoting git worktree", command: `tofu boardy log TOFU-1 "git worktree is refused"`},
-		{name: "grep for the text git prune", agent: "a1", command: `grep -rn "git prune" internal/snapshot`},
+		{name: "grep for the text git prune", agent: "a1", command: `grep -rn "git prune" internal/store/snapshot`},
 		{name: "echo of git prune piped into sh", agent: "a1", command: `echo "git prune" | sh`, want: "Git may not change"},
 		{name: "quoted git prune passed to another program", agent: "a1", command: `watch "git prune"`, want: "Git may not change"},
 		{name: "real git prune", agent: "a1", command: "git prune", want: "Git may not change"},

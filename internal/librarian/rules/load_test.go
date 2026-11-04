@@ -209,7 +209,7 @@ func TestLoadReadsTheMeasuredQARules(t *testing.T) {
 }
 
 func TestParseRuleRefusesAMeasuredRuleThatDeclaresAChecker(t *testing.T) {
-	_, err := parseRule([]byte("id: flake_disagreement\ndomain: qa\nkind: measured\nconcern: code_rules\nmeasurement: bench/testquality/flakerun\nchecker: comments\nsource: s\nevidence: e\n"), "library/qa/general/rules/flake_disagreement@1.yaml")
+	_, err := parseRule([]byte("id: flake_disagreement\ndomain: qa\nkind: measured\nconcern: code_rules\nmeasurement: bench/suites/rules/testquality/flakerun\nchecker: comments\nsource: s\nevidence: e\n"), "library/qa/general/rules/flake_disagreement@1.yaml")
 	if err == nil {
 		t.Fatal("parseRule accepted a measured rule carrying a checker")
 	}
@@ -223,7 +223,7 @@ func TestParseRuleRefusesEnforcedOnARuleNoCheckerCanAct(t *testing.T) {
 		kind string
 		body string
 	}{
-		{kind: string(KindMeasured), body: "id: flake_disagreement\ndomain: qa\nkind: measured\nconcern: code_rules\nmeasurement: bench/testquality/flakerun\nsource: s\nevidence: e\nmode: enforced\n"},
+		{kind: string(KindMeasured), body: "id: flake_disagreement\ndomain: qa\nkind: measured\nconcern: code_rules\nmeasurement: bench/suites/rules/testquality/flakerun\nsource: s\nevidence: e\nmode: enforced\n"},
 		{kind: string(KindHuman), body: "id: quote\ndomain: general\nkind: human\nconcern: task_shaping\ntext: read the turn\nmode: enforced\n"},
 	} {
 		_, err := parseRule([]byte(one.body), "library/"+one.kind+".yaml")
@@ -247,7 +247,7 @@ func TestParseRuleKeepsOffOnARuleNoCheckerCanActBecauseLayerDropsIt(t *testing.T
 }
 
 func TestParseRuleRefusesAStructuralRuleThatDeclaresAMeasurement(t *testing.T) {
-	_, err := parseRule([]byte("id: comments\ndomain: dev\nkind: structural\nchecker: comments\nconcern: code_rules\nmeasurement: bench/testquality/flakerun\n"), "library/dev/go/rules/comments@1.yaml")
+	_, err := parseRule([]byte("id: comments\ndomain: dev\nkind: structural\nchecker: comments\nconcern: code_rules\nmeasurement: bench/suites/rules/testquality/flakerun\n"), "library/dev/go/rules/comments@1.yaml")
 	if err == nil {
 		t.Fatal("parseRule accepted a structural rule carrying a measurement")
 	}
@@ -311,7 +311,7 @@ func TestAnAddedRuleMovesEveryCountAndBreaksNothingElse(t *testing.T) {
 		t.Fatalf("the grown library loads %d rules, want the %d shipped ones and the one added", len(grownRules), len(shipped))
 	}
 
-	task := Task{Text: "add a table test for the loader", Paths: []string{"internal/rule/load_test.go"}}
+	task := Task{Text: "add a table test for the loader", Paths: []string{"internal/librarian/rules/load_test.go"}}
 	firing := func(rules []Rule) int {
 		fired := 0
 		for _, m := range Index(rules, task) {

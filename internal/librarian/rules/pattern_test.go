@@ -42,7 +42,7 @@ func TestCheckWriteRefusesOnlyWhatTheWriteAdds(t *testing.T) {
 		{"an old colour and an unrelated line", desk, "let c = rgb(1);\n", "let c = rgb(1);\nfn b() {}\n", nil},
 		{"an old colour moved down", desk, "let c = rgb(1);\nfn a() {}\n", "fn a() {}\nlet c = rgb(1);\n", nil},
 		{"a second copy of an old colour", desk, "let c = rgb(1);\n", "let c = rgb(1);\nlet d = rgb(1);\n", []string{"raw_colour " + desk + ":2 let d = rgb(1);"}},
-		{"outside the scope", "internal/turn/head.go", "", "rgb(1)\n", nil},
+		{"outside the scope", "internal/agent/loop/head.go", "", "rgb(1)\n", nil},
 		{"under an except path", "apps/desk/crates/ui/src/theme.rs", "", "rgb(1)\n", nil},
 		{"under a nested except path", "apps/desk/crates/book/src/themes.rs", "", "rgb(1)\n", nil},
 		{"under vendor", "apps/desk/vendor/gpui-ce/src/color.rs", "", "rgb(1)\n", nil},

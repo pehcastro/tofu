@@ -142,7 +142,7 @@ func TestACallReadsAsIntentAndKeepsTheWholeCommandBehindIt(t *testing.T) {
 	}{
 		{`{"command":"go test ./...","timeout":30}`, "go test ./...", "go test ./..."},
 		{`{"command":"` + strings.ReplaceAll(long, `"`, `\"`) + `"}`, "for d in internal/* interface/* cmd/* +3 more", long},
-		{`{"path":"internal/turn/loop.go"}`, "internal/turn/loop.go", ""},
+		{`{"path":"internal/agent/loop/loop.go"}`, "internal/agent/loop/loop.go", ""},
 		{`{"pattern":"Decide","glob":"*.go"}`, "Decide in *.go", ""},
 		{`{"pattern":"Decide"}`, "Decide in " + workingDirectory, ""},
 		{`{"task":"rename the judge\n\nkeep the wire","owns":["internal/judge/**"]}`, "rename the judge", "rename the judge\n\nkeep the wire"},

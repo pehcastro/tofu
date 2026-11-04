@@ -206,7 +206,7 @@ func TestAWorkspaceMemberReachesGpuiCeThroughTheWorkspaceManifestAboveIt(t *test
 		{[]string{"apps/desk/crates/ui/src/components/tabs.rs"}, []string{"gpui-ce"}},
 		{[]string{"apps/desk/crates/ui/**"}, []string{"gpui-ce"}},
 		{[]string{"apps/desk/crates/ui/src/tabs.rs", "apps/web/src/App.tsx"}, []string{"gpui-ce", "react"}},
-		{[]string{"internal/rule/framework.go"}, nil},
+		{[]string{"internal/librarian/rules/framework.go"}, nil},
 		{nil, nil},
 	} {
 		frameworks, err := Frameworks(root, c.paths)

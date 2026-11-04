@@ -153,7 +153,7 @@ func TestTransitionTriage(t *testing.T) {
 func TestTransitionWidenAndReferences(t *testing.T) {
 	jevSaysNothingOpen(t)
 	m := managedBoard(t, "DEMO", "OPS")
-	doing := ticketWith("doing", "internal/rule/**")
+	doing := ticketWith("doing", "internal/librarian/rules/**")
 	doing.Status = Doing
 	live, err := m.Create("OPS", doing, manager)
 	if err != nil {
@@ -173,7 +173,7 @@ func TestTransitionWidenAndReferences(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = m.Widen(mine.ID, []string{"internal/rule/load.go"}, manager)
+	_, err = m.Widen(mine.ID, []string{"internal/librarian/rules/load.go"}, manager)
 	refused(t, err, live.ID)
 	if _, err := m.Widen(mine.ID, []string{"cmd/boji/main.go"}, manager); err != nil {
 		t.Fatalf("a done ticket's owns do not block a widen: %v", err)

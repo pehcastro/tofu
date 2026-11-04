@@ -26,7 +26,7 @@ func TestHeldAnswers(t *testing.T) {
 	m := managedBoard(t, "DEMO", "OPS")
 	holding(t, m, "DEMO", "parked", Backlog, "docs/**")
 	holding(t, m, "DEMO", "waiting", Review, "library/**")
-	doing := holding(t, m, "OPS", "cli", Doing, "internal/x/**", "cmd/tofu/**")
+	doing := holding(t, m, "OPS", "cli", Doing, "internal/x/**", "apps/cli/**")
 	broken, err := m.Store.TicketPath(doing.ID)
 	if err != nil {
 		t.Fatal(err)
@@ -42,8 +42,8 @@ func TestHeldAnswers(t *testing.T) {
 	cases := []struct {
 		path, ticket, glob string
 	}{
-		{"cmd/tofu/x.go", doing.ID, "cmd/tofu/**"},
-		{"cmd/tofu", doing.ID, "cmd/tofu/**"},
+		{"apps/cli/x.go", doing.ID, "apps/cli/**"},
+		{"apps/cli", doing.ID, "apps/cli/**"},
 		{"docs/x.md", "", ""},
 		{"library/a.md", "", ""},
 		{"cmd/other/x.go", "", ""},
@@ -61,8 +61,8 @@ func TestHeldAnswers(t *testing.T) {
 
 func TestCheckMoveIsTheMoveWithoutWriting(t *testing.T) {
 	m := managedBoard(t, "DEMO", "OPS")
-	a := holding(t, m, "OPS", "a", Doing, "cmd/tofu/**")
-	b := holding(t, m, "DEMO", "b", Todo, "cmd/tofu/boardy*.go")
+	a := holding(t, m, "OPS", "a", Doing, "apps/cli/**")
+	b := holding(t, m, "DEMO", "b", Todo, "apps/cli/boardy*.go")
 	path, _ := m.Store.TicketPath(b.ID)
 	before, _ := os.ReadFile(path)
 	events, _ := m.Store.Events("DEMO", 0)

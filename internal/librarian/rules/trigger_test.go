@@ -185,7 +185,7 @@ func TestIndexFiresEveryRuleThatMatchesAndHoldsBackTheRestWithAReason(t *testing
 		t.Fatalf("LoadFS: %v", err)
 	}
 
-	index := Index(rules, Task{Text: "write the changelog entry", Paths: []string{"internal/rule/trigger_test.go"}})
+	index := Index(rules, Task{Text: "write the changelog entry", Paths: []string{"internal/librarian/rules/trigger_test.go"}})
 
 	fired := map[string]string{}
 	held := map[string]string{}
@@ -211,7 +211,7 @@ func TestTheShippedIndexSaysWhatFiresForATaskAndWhy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadDir: %v", err)
 	}
-	index := Index(rules, Task{Text: "add a table test for the loader", Paths: []string{"internal/rule/load_test.go", "internal/rule/load.go"}})
+	index := Index(rules, Task{Text: "add a table test for the loader", Paths: []string{"internal/librarian/rules/load_test.go", "internal/librarian/rules/load.go"}})
 	why := map[string]string{}
 	for i, m := range index {
 		why[m.RuleID] = m.Why
@@ -223,8 +223,8 @@ func TestTheShippedIndexSaysWhatFiresForATaskAndWhy(t *testing.T) {
 	}
 	for id, want := range map[string]string{
 		"em_dash":        "always on, the rule declares no trigger",
-		"comments":       "the language go reached internal/rule/load_test.go",
-		"test_assertion": "the scope **/*_test.go reached internal/rule/load_test.go",
+		"comments":       "the language go reached internal/librarian/rules/load_test.go",
+		"test_assertion": "the scope **/*_test.go reached internal/librarian/rules/load_test.go",
 	} {
 		if why[id] != want {
 			t.Fatalf("the index says %s fires because %q, want %q", id, why[id], want)
@@ -253,8 +253,8 @@ func TestTheShippedGoRulesReachGoFilesAndNothingElse(t *testing.T) {
 		}
 	}
 
-	source := Task{Paths: []string{"internal/rule/trigger.go"}}
-	test := Task{Paths: []string{"internal/rule/trigger_test.go"}}
+	source := Task{Paths: []string{"internal/librarian/rules/trigger.go"}}
+	test := Task{Paths: []string{"internal/librarian/rules/trigger_test.go"}}
 	prose := Task{Paths: []string{"library/README.md"}}
 	fires := func(id string, task Task) bool {
 		r, shipped := scoped[id]
@@ -313,10 +313,10 @@ func TestAQARuleScopedToTestFilesFiresForATestTaskBeforeTheFileIsNamed(t *testin
 		fires []string
 	}{
 		{Task{Text: "add an end to end test for resume"}, []string{"qa_scoped"}},
-		{Task{Text: "add a cache and a test that drives it", Paths: []string{"internal/search/symbols.go"}}, []string{"qa_scoped"}},
+		{Task{Text: "add a cache and a test that drives it", Paths: []string{"internal/tools/code/search/engine/symbols.go"}}, []string{"qa_scoped"}},
 		{Task{Text: "rename konst.Foo"}, nil},
 		{Task{Text: "rename the testing field", Paths: []string{"internal/konst/konst.go"}}, nil},
-		{Task{Text: "fix the flaky one", Paths: []string{"internal/turn/loop_test.go"}}, []string{"qa_scoped", "dev_scoped", "qa_conditioned"}},
+		{Task{Text: "fix the flaky one", Paths: []string{"internal/agent/loop/loop_test.go"}}, []string{"qa_scoped", "dev_scoped", "qa_conditioned"}},
 	} {
 		var fired []string
 		for _, m := range IndexReaching(rules, DomainDev, c.task) {

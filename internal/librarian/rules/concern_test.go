@@ -69,10 +69,10 @@ func TestTheFiveNeverConditionalConcernsRefuseEveryTrigger(t *testing.T) {
 func TestTheLanguageTriggerFiresOnAGoPathAndHoldsBackAPythonRule(t *testing.T) {
 	goRule := parseProbe(t, "concern: code_rules\nlanguage: go\n")
 	pyRule := parseProbe(t, "concern: code_rules\nlanguage: python\n")
-	goTask := Task{Paths: []string{"internal/rule/load.go"}}
+	goTask := Task{Paths: []string{"internal/librarian/rules/load.go"}}
 
 	fires, why := goRule.Trigger.firesFor(goTask)
-	if !fires || !strings.Contains(why, "internal/rule/load.go") {
+	if !fires || !strings.Contains(why, "internal/librarian/rules/load.go") {
 		t.Fatalf("a go rule did not fire for a go path: %v %q", fires, why)
 	}
 	fires, why = pyRule.Trigger.firesFor(goTask)
@@ -91,15 +91,15 @@ func TestTheLanguageTriggerFiresOnAGoPathAndHoldsBackAPythonRule(t *testing.T) {
 }
 
 func TestTheScopeTriggerFiresInsideADirectoryAndHoldsBackOutsideIt(t *testing.T) {
-	scoped := parseProbe(t, "concern: domain_knowledge\nscope: internal/judge/**\n")
-	if fires, why := scoped.Trigger.firesFor(Task{Paths: []string{"internal/judge/jev/wire.go"}}); !fires {
+	scoped := parseProbe(t, "concern: domain_knowledge\nscope: internal/models/classifiers/**\n")
+	if fires, why := scoped.Trigger.firesFor(Task{Paths: []string{"internal/models/classifiers/core/wire.go"}}); !fires {
 		t.Fatalf("a scoped rule did not fire inside its directory: %q", why)
 	}
-	fires, why := scoped.Trigger.firesFor(Task{Paths: []string{"internal/turn/loop.go"}})
+	fires, why := scoped.Trigger.firesFor(Task{Paths: []string{"internal/agent/loop/loop.go"}})
 	if fires {
 		t.Fatalf("a scoped rule fired outside its directory: %q", why)
 	}
-	if !strings.Contains(why, "internal/judge/**") {
+	if !strings.Contains(why, "internal/models/classifiers/**") {
 		t.Fatalf("why = %q, want the scope that reached nothing", why)
 	}
 }

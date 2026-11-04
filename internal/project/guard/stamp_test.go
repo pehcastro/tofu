@@ -42,7 +42,7 @@ func stampRepo(t *testing.T) string {
 	put(t, repo, "internal/agent/loop/turn.go", "package turn\n")
 	put(t, repo, "internal/konst/konst.go", "package konst\n")
 	put(t, repo, ".local/boji/tickets/review/TOFU-1.md", "---\nid: TOFU-1\nowns:\n  - internal/agent/loop/**\n---\n")
-	put(t, repo, ".local/boji/tickets/review/TOFU-2.md", "---\nid: TOFU-2\nowns:\n  - internal/guard/**\n  - docs/**\n---\n")
+	put(t, repo, ".local/boji/tickets/review/TOFU-2.md", "---\nid: TOFU-2\nowns:\n  - internal/project/guard/**\n  - docs/**\n---\n")
 	put(t, repo, ".local/boji/tickets/review/TOFU-3.md", "---\nid: TOFU-3\nowns:\n  - internal/**\n---\n")
 	put(t, repo, ".local/boji/tickets/review/TOFU-4.md", "---\nid: TOFU-4\nowns:\n  - apps/cli/guard.go\n---\n")
 	put(t, repo, ".local/boji/tickets/review/TOFU-5.md", "---\nid: TOFU-5\nowns:\n  - apps/desk/**\n---\n")
@@ -92,7 +92,7 @@ func TestDoneMoveNeedsAFlowsStampForHeadAndCommittedWork(t *testing.T) {
 		{name: "a stamp for another tree", before: func() { put(t, repo, ".local/flows/"+otherTree, "tree "+otherTree+"\n") }, command: move, refused: true},
 		{name: "a treewide stamp is not a flows stamp", before: func() { stampHead(t, repo, "treewide") }, command: move, refused: true},
 		{name: "a stamp for HEAD", before: func() { stampHead(t, repo, "flows") }, command: move},
-		{name: "another ticket's uncommitted Go", before: func() { put(t, repo, "internal/guard/guard.go", "package guard\n") }, command: move},
+		{name: "another ticket's uncommitted Go", before: func() { put(t, repo, "internal/project/guard/guard.go", "package guard\n") }, command: move},
 		{name: "an uncommitted edit in an owned path", before: func() { put(t, repo, "internal/agent/loop/turn.go", "package turn\n\nconst X = 1\n") }, command: move, refused: true, want: "internal/agent/loop/turn.go"},
 		{name: "committed but not stamped", before: func() { commitAll(t, repo) }, command: move, refused: true, want: "go run ./bench/gates/flows"},
 		{name: "stamped after the commit", before: func() { stampHead(t, repo, "flows") }, command: move},

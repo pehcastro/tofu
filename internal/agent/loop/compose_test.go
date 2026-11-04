@@ -116,7 +116,7 @@ func TestTheComposedSystemPromptOverTheRealLibraryCarriesNoHostPath(t *testing.T
 		t.Fatal(err)
 	}
 	composed, err := Compose(ComposeSpec{
-		Task:         "write a test in internal/turn/compose.go",
+		Task:         "write a test in internal/agent/loop/compose.go",
 		Environment:  "<env>\nworking directory: /w\n</env>",
 		ToolGuidance: "read reads a whole file",
 		Rules:        rules,
@@ -341,11 +341,11 @@ func TestALibraryAgentsSkillsFailLoudly(t *testing.T) {
 }
 
 func TestTheTaskNamesItsPathsAndItsVerb(t *testing.T) {
-	task := TaskNamed("debug the failing test in internal/turn/loop_test.go and in README.md, not a.b")
-	if want := []string{"internal/turn/loop_test.go", "README.md"}; len(task.Paths) != len(want) {
+	task := TaskNamed("debug the failing test in internal/agent/loop/loop_test.go and in README.md, not a.b")
+	if want := []string{"internal/agent/loop/loop_test.go", "README.md"}; len(task.Paths) != len(want) {
 		t.Fatalf("expected the paths %v, got %v", want, task.Paths)
 	}
-	for i, want := range []string{"internal/turn/loop_test.go", "README.md"} {
+	for i, want := range []string{"internal/agent/loop/loop_test.go", "README.md"} {
 		if task.Paths[i] != want {
 			t.Fatalf("expected path %d to be %s, got %s", i, want, task.Paths[i])
 		}

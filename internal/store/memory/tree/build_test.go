@@ -19,7 +19,7 @@ func TestTheCheckFindsTheNamesANoteDrops(t *testing.T) {
 		{"error and file names dropped", "lead: fixed Remove in cart.go, returns ErrUnknownSKU and ErrInsufficient; added features_test.go",
 			"lead: fixed Remove in cart.go", []string{"ErrUnknownSKU", "ErrInsufficient", "features_test.go"}},
 		{"a name only inside a longer one is dropped", "lead: ErrInsufficient in my_cart.go and cart.go", "lead: ErrInsufficientStock in my_cart.go", []string{"ErrInsufficient", "cart.go"}},
-		{"a path kept as its file name is kept", "lead: changed internal/memtree/build.go", "lead: changed build.go", nil},
+		{"a path kept as its file name is kept", "lead: changed internal/store/memory/tree/build.go", "lead: changed build.go", nil},
 		{"a qualified name kept as its last part is kept", "lead: memtree.Store opens it", "lead: Store opens it", nil},
 		{"a call kept in backticks is kept", "user: make Remove() fail on an unknown sku", "user: `Remove` fails on unknown sku", nil},
 		{"slash joined error names are two names", "lead: ErrUnknownSKU/ErrInsufficient", "lead: ErrUnknownSKU", []string{"ErrInsufficient"}},

@@ -99,7 +99,7 @@ func TestShellRefusesARealWriteAndNothingElse(t *testing.T) {
 		{"echo x > $OUT", unreadable},
 		{"echo x > \"$(pwd)/a.ts\"", unreadable},
 		{"go test ./...", treeWide},
-		{"cd internal/subagent && gofmt -l .", treeWide},
+		{"cd internal/agent/subagents && gofmt -l .", treeWide},
 		{"golangci-lint run", treeWide},
 	} {
 		err := qaBoundary().Shell(driven.cmd)
@@ -190,9 +190,9 @@ func TestAnOwnedDirectoryWithoutASlashOwnsWhatIsInsideIt(t *testing.T) {
 }
 
 func TestBoundaryWriteStillRefusesAFileItDoesNotOwn(t *testing.T) {
-	boundary := NewBoundary("TOFU-690-driven", "", []string{"internal/subagent/command.go"})
-	err := boundary.Write("internal/subagent/owns.go")
-	t.Logf("owns=%v write=%q -> %v", boundary.Owns(), "internal/subagent/owns.go", err)
+	boundary := NewBoundary("TOFU-690-driven", "", []string{"internal/agent/subagents/command.go"})
+	err := boundary.Write("internal/agent/subagents/owns.go")
+	t.Logf("owns=%v write=%q -> %v", boundary.Owns(), "internal/agent/subagents/owns.go", err)
 	var denied DeniedError
 	if !errors.As(err, &denied) {
 		t.Fatalf("write of an unowned file: want DeniedError, got %v", err)
