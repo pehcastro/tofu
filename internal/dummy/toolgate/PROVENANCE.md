@@ -1,14 +1,16 @@
 # Where the tool gate cases came from
 
-Moved here from `bench/corpus/gate/` and `bench/suites/judge/cost/answers/` on 2026-11-03, TOFU-2282, byte for byte, because `bench` and `internal/judge/state` both read them. `bench/kit/corpus` reads the cases and the split; `bench/suites/judge/cost` and `internal/judge/state` read the held-out answers.
+Moved here from two bench packages on 2026-11-03, TOFU-2282, byte for byte, because `bench` and `internal/judge/state` both read them. `bench/kit/corpus` reads the cases and the split; `bench/suites/judge/cost` and `internal/judge/state` read the held-out answers.
 
-The four corpus files are 348,428 bytes. **Recorded**, with six written rows named below.
+The four corpus files, `cases.jsonl`, `cases-whole.jsonl`, `split.json` and `whole-provenance.json`, are 348,827 bytes. **Recorded**, with six written rows named below.
+
+On 2026-11-04 TOFU-2302 rewrote the repository folder names inside 25 recorded commands, 17 in `cases.jsonl` and 8 in `cases-whole.jsonl`, to the folders those packages live in now, and recomputed the lengths in `whole-provenance.json`. Nothing else in a row changed and every label still holds: each rewritten command reads, builds, tests or commits the same files under their new names.
 
 ## cases.jsonl
 
 178 labelled tool-gate cases, added on 2026-09-19. Every row carries its own `origin` and a `recorded` flag, which is the thing this file gets right that the rest of the tree did not: the caveat travels with the row. 172 rows have `origin: claude-code-transcript` or a session origin and `recorded: true`; their `recorded_at` is the transcript event timestamp.
 
-**Six rows are written**, `auth-case-1` to `auth-case-6`, and they are the six states in `bench/corpus/` that `provenance.json` there declares as authored fresh for BOJI-006. They are 3.4% of this file and they carry hand labels like the rest. See `bench/corpus/PROVENANCE.md` for what is guessed in them and for the leakage found in `auth-case-5`.
+**Six rows are written**, `auth-case-1` to `auth-case-6`, and they are the six states in `bench/kit/api/states/` that `provenance.json` there declares as authored fresh for BOJI-006. They are 3.4% of this file and they carry hand labels like the rest. See `bench/kit/api/states/PROVENANCE.md` for what is guessed in them and for the leakage found in `auth-case-5`.
 
 Labels are hand labels, `label_by: agent`, with a `label_note` per row saying the rule applied. One reviewer, no second opinion, which is the largest known weakness of the label set.
 
@@ -32,7 +34,7 @@ The rows carry no free text at all, only a case id, an arm name, a label, a verd
 
 ## Leakage
 
-**The written rows are the only ones the rule applies to**, and they are checked in `bench/corpus/PROVENANCE.md`: one of six leaks, `auth-case-5`, not repaired.
+**The written rows are the only ones the rule applies to**, and they are checked in `bench/kit/api/states/PROVENANCE.md`: one of six leaks, `auth-case-5`, not repaired.
 
 **All 178 rows were checked anyway**, on 2026-09-23: each row's own `label` searched as a whole word inside its `state` object, and separately the full verdict vocabulary searched the same way. **Rows whose state names its own label: zero.** Rows whose state contains some verdict word: 16, every one of them a real command or user message that happens to contain `block`, `safe` or `allow`, never the row's own answer. A recorded state cannot be written to name its verdict, so a hit there would be an accident rather than a corpus defect.
 

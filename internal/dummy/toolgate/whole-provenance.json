@@ -46,11 +46,11 @@
   },
   "tx-053": {
    "recorded_length": 710,
-   "whole_length": 2311
+   "whole_length": 2312
   },
   "tx-058": {
    "recorded_length": 710,
-   "whole_length": 2077
+   "whole_length": 2097
   },
   "tx-062": {
    "recorded_length": 710,
@@ -58,7 +58,7 @@
   },
   "tx-063": {
    "recorded_length": 710,
-   "whole_length": 6107
+   "whole_length": 6113
   },
   "tx-069": {
    "recorded_length": 701,
@@ -81,8 +81,8 @@
    "whole_length": 2309
   },
   "tx-082": {
-   "recorded_length": 710,
-   "whole_length": 778
+   "recorded_length": 716,
+   "whole_length": 784
   },
   "tx-083": {
    "recorded_length": 710,
@@ -93,8 +93,8 @@
    "whole_length": 721
   },
   "tx-104": {
-   "recorded_length": 710,
-   "whole_length": 1445
+   "recorded_length": 721,
+   "whole_length": 1456
   },
   "tx-110": {
    "recorded_length": 710,
@@ -113,12 +113,12 @@
    "whole_length": 2796
   },
   "tx-121": {
-   "recorded_length": 710,
-   "whole_length": 3454
+   "recorded_length": 748,
+   "whole_length": 3508
   },
   "tx-122": {
    "recorded_length": 710,
-   "whole_length": 2298
+   "whole_length": 2324
   },
   "tx-126": {
    "recorded_length": 710,
@@ -130,11 +130,11 @@
   },
   "tx-128": {
    "recorded_length": 710,
-   "whole_length": 3523
+   "whole_length": 3551
   }
  },
  "matched_on": "recorded_at equals the transcript event timestamp, one tool_use per timestamp across all 178 cases",
- "note": "the command field of these cases was cut at recording time and carries ' ...[truncated]'. Each one was recovered from the Claude Code transcript of the session it was recorded in, matched on recorded_at, which is the transcript event timestamp and is unique across the file. Everything else in each case is byte identical to bench/corpus/gate/cases.jsonl, which every report still reads. The recovered command is scrubbed by corpus.Scrub and carries the same em dash to double hyphen substitution the original recording made, and unlike the original it keeps every other non ASCII character instead of turning it into a question mark.",
+ "note": "the command field of these cases was cut at recording time and carries ' ...[truncated]'. Each one was recovered from the Claude Code transcript of the session it was recorded in, matched on recorded_at, which is the transcript event timestamp and is unique across the file. Everything else in each case is byte identical to internal/dummy/toolgate/cases.jsonl, which every report still reads. The recovered command is scrubbed by corpus.Scrub and carries the same em dash to double hyphen substitution the original recording made, and unlike the original it keeps every other non ASCII character instead of turning it into a question mark.",
  "recovered_at": "2026-09-19",
  "transcript": "the session file for this project under the user's Claude Code projects directory, 71ea9781-6968-4d50-a742-5a53b48086f4.jsonl"
 }

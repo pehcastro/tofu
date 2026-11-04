@@ -28,7 +28,7 @@
 
 ## What was removed before it was written here
 
-Every field of every row went through `bench/corpus.Scrub` inside the same test that fetched it, before the row was ever encoded. `build_test.go` also runs `corpus.LeaksIn` on the encoded row and fails the build if anything survives. None of the 21 pages carried anything the scrub matches: they are public documentation, man pages and specs with no personal path or credential shape in them, so the scrub pass is a proof of absence rather than a record of a substitution, unlike the shell corpus.
+Every field of every row went through `bench/kit/corpus.Scrub` inside the same test that fetched it, before the row was ever encoded. `build_test.go` also runs `corpus.LeaksIn` on the encoded row and fails the build if anything survives. None of the 21 pages carried anything the scrub matches: they are public documentation, man pages and specs with no personal path or credential shape in them, so the scrub pass is a proof of absence rather than a record of a substitution, unlike the shell corpus.
 
 ## Why these 21 and not larger reference pages
 
@@ -36,4 +36,4 @@ Pages such as `nodejs.org/api/fs.html` or `pkg.go.dev/strings` were fetched and 
 
 ## What a row is
 
-One JSON object per line: `source`, `url`, `task`, `content_type`, `body`. `body` is the raw fetched HTML, scrubbed. The needle is never stored: `Plant` inserts it into one paragraph unit at read time, the same way `bench/sift.Plant` does for shell output.
+One JSON object per line: `source`, `url`, `task`, `content_type`, `body`. `body` is the raw fetched HTML, scrubbed. The needle is never stored: `Plant` inserts it into one paragraph unit at read time, the same way `bench/suites/judge/sift.Plant` does for shell output.

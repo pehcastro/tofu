@@ -8,10 +8,10 @@ A turn enters this set by being copied into this directory on purpose. `session_
 
 Counts, from the test output on 2026-09-23: 19 files, 124,397 bytes. Fourteen readable turns, none of them with no step. Five files are skipped by `ReadSessions`, each because the turn carries no step and no wall clock the shared reader can bind to. 79 steps, 78 with a hand label, 1 listed in `Unlabelled`.
 
-**This is the only copy.** Until 2026-09-23 seventeen of these files were also committed under `bench/transform/testdata/sessions`, byte identical, with nothing checking that the two stayed so. TOFU-456 removed that copy because this one is the superset, the hand labels in `labels.go` are keyed to these turns, and `session_test.go` already fails on an arrival or a departure. `bench/suites/context/transform` now reads seventeen of these nineteen from here, and says in its `testdata/PROVENANCE-sessions.md` which two it leaves out and why. `bench/suites/judge/stopcheck/unique_test.go` refuses a second copy of any recording under `bench/` or `internal/dummy/`.
+**This is the only copy.** Until 2026-09-23 seventeen of these files were also committed under `bench/suites/context/transform/testdata/sessions`, byte identical, with nothing checking that the two stayed so. TOFU-456 removed that copy because this one is the superset, the hand labels in `labels.go` are keyed to these turns, and `session_test.go` already fails on an arrival or a departure. `bench/suites/context/transform` now reads seventeen of these nineteen from here, and says in its `testdata/PROVENANCE-sessions.md` which two it leaves out and why. `bench/suites/judge/stopcheck/unique_test.go` refuses a second copy of any recording under `bench/` or `internal/dummy/`.
 
-TOFU-2284 moved the set here unchanged from `bench/stopcheck/corpus` on 2026-11-03, because bench packages and `apps/cli` both read it.
+TOFU-2284 moved the set here unchanged from the stop check package, now `bench/suites/judge/stopcheck`, on 2026-11-03, because bench packages and `apps/cli` both read it.
 
 The ceiling is 256 KiB, checked by the test. These files carry whole transcripts, so the set grows by being pruned or by a deliberate decision to spend the bytes, never by accident.
 
-Nothing was relabelled or edited. The bytes are identical to the recorded files, and every one of them is a fixed point of `bench/corpus.Scrub`, which is the check that no path or name from the recording machine is in here.
+Nothing was relabelled or edited. The bytes are identical to the recorded files, and every one of them is a fixed point of `bench/kit/corpus.Scrub`, which is the check that no path or name from the recording machine is in here.

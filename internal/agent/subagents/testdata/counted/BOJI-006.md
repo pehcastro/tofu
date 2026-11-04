@@ -3,9 +3,9 @@ id: BOJI-006
 title: the first instrument, and the numbers it produced
 epic: E1
 owns:
-  - bench/api/**
-  - bench/report/**
-  - bench/corpus/**
+  - bench/kit/api/**
+  - bench/kit/report/**
+  - bench/kit/corpus/**
 owner: bench
 status: done
 ---
@@ -24,7 +24,7 @@ which exercises the identical code path `main.go` would reach with one more
 line.
 
 Ticket ownership note: the ticket's own `owns:` list as filed only named
-`bench/api/**`, `bench/report/**`, `bench/corpus/**`; the file guard refused
+`bench/kit/api/**`, `bench/kit/report/**`, `bench/kit/corpus/**`; the file guard refused
 my first write to `cmd/boji/bench.go` on exactly that mismatch. The spawn
 instructions explicitly granted `cmd/boji/bench.go` (and, by the same
 reasoning, its test file), so I added both to the ticket's `owns:` myself

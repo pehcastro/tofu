@@ -2,9 +2,9 @@
 
 Both are one real tofu run on the hono v1 task, taken out of `.tofu/sessions` and `.tofu/log` on 2026-09-23 for TOFU-437. Nothing under `.tofu` was changed, moved or deleted to make them.
 
-`session.json` is byte for byte `internal/dummy/turns/labelled/turn-18d69bfed2bf52a0.json`, until TOFU-2284 `bench/stopcheck/corpus`, sha256 `659c579cbb3db4ed82a6ab094d4e891cc279d6bfd2baef66896061f6656a4bc1`. The same turn was taken out of `.tofu/sessions` twice, by two tickets, because neither could see the other's copy. It keeps its own name here and TOFU-458 decided that on 2026-09-23: this directory is a named fixture, a transcript paired with the 91 ledger rows that belong to it, and `bench/cmd/harness.go` ships it as the default `--transcript` for `bench harness --offline`. A runtime default that reads out of another package's test corpus is worse than the second copy. The corpus copy carries no ledger and is hand labelled for stop checks, which is a different use of the same bytes.
+`session.json` is byte for byte `internal/dummy/turns/labelled/turn-18d69bfed2bf52a0.json`, until TOFU-2284 kept in the stop check package, sha256 `659c579cbb3db4ed82a6ab094d4e891cc279d6bfd2baef66896061f6656a4bc1`. The same turn was taken out of `.tofu/sessions` twice, by two tickets, because neither could see the other's copy. It keeps its own name here and TOFU-458 decided that on 2026-09-23: this directory is a named fixture, a transcript paired with the 91 ledger rows that belong to it, and `bench/cmd/harness.go` ships it as the default `--transcript` for `bench harness --offline`. A runtime default that reads out of another package's test corpus is worse than the second copy. The corpus copy carries no ledger and is hand labelled for stop checks, which is a different use of the same bytes.
 
-Until this pair existed, `MeasureTofu` had never read a recorded transcript: the only thing in `bench/harness/testdata/boji-1` was a ledger written by a generator, and the test that measures a tofu run skipped. TOFU-442 deleted that directory and pointed `parse_tofu_test.go` here.
+Until this pair existed, `MeasureTofu` had never read a recorded transcript: the only thing in `bench/kit/harness/testdata/boji-1` was a ledger written by a generator, and the test that measures a tofu run skipped. TOFU-442 deleted that directory and pointed `parse_tofu_test.go` here.
 
 ## The run
 
@@ -18,7 +18,7 @@ The turn's own `decision_ids` list 13 ids and every one of them is in this file.
 
 ## How they were taken
 
-A generator under `bench/harness`, run once and deleted, read the session file whole, passed its text through `bench/corpus.Scrub`, and wrote the result. It then read `.tofu/log/2026-09-19.jsonl` line by line, kept every row whose `turn_id` is this turn's, dropped one key from each, scrubbed and wrote them.
+A generator under `bench/kit/harness`, run once and deleted, read the session file whole, passed its text through `bench/kit/corpus.Scrub`, and wrote the result. It then read `.tofu/log/2026-09-19.jsonl` line by line, kept every row whose `turn_id` is this turn's, dropped one key from each, scrubbed and wrote them.
 
 ## What was removed
 

@@ -8,15 +8,15 @@ Five roots, dependency order bottom-up:
 
 - **`library/`**: everything shipped as data, no code, bottom of the import graph. Models, subscriptions, roles, question sets, policies (thresholds), house rules. Resolved in three layers, field by field: embedded, then `~/.boji/`, then `./.boji/`, last mention wins. Refusals are named by file and field, never skipped.
 - **`internal/`**: 19 packages. `judge/` (jev client, question, policy, ledger, state) is the instrument; `turn/` is the agent loop with its tool set (`glob`, `grep`, `search`, `symbols`, `read`, `edit`, `bash`, `web`, `github`, `plan`, `memo`); `session/` is one append-only record; plus `llm/` (wire protocols, creds, quota), `rule/`, `sift/`, `recall/`, `shell/`, `transform/`, `konst/` (every limit, one file).
-- **`cmd/tofu/`**: ~25 verbs. `run`, `judge`, `check`, `why`, `replay`, `session`, `shells`, `context`, `sift`, `label`, `library`, `rules`, `settings`, `doctor`, `login`, `models`, `frame`.
-- **`interface/tui/`**: Charm v2 stack (`charm.land`, bubbletea 2.0.9). Five views on five digits: chat, work, file edits, sub-agents, shells. Built last, deliberately. Every event carries a `#a3f9c1` id; the views are a query over one record, not five records.
+- **`apps/cli/`**: ~25 verbs. `run`, `judge`, `check`, `why`, `replay`, `session`, `shells`, `context`, `sift`, `label`, `library`, `rules`, `settings`, `doctor`, `login`, `models`, `frame`.
+- **`internal/ui/tui/app/`**: Charm v2 stack (`charm.land`, bubbletea 2.0.9). Five views on five digits: chat, work, file edits, sub-agents, shells. Built last, deliberately. Every event carries a `#a3f9c1` id; the views are a query over one record, not five records.
 - **`bench/`**: 22 benchmark packages with dated markdown reports. This is the load-bearing part.
 
 ## The unusual bits
 
 **Money is in the model name.** `claude-sub/claude-opus-5` vs `anthropic/claude-opus-5` are different entries because the same model reached two ways bills two ways. OpenRouter's key pays for Jev and nothing else; every LM call rides a subscription by speaking the vendor's wire protocol with a self-minted token.
 
-**Every mechanism must have an off-arm, and the arm has to be the thing actually replaced.** The reports are honest about losing: read `bench/stopcheck/report-2026-09-21.md`, the typed arm wins aggregate agreement 91% to 87.2% but *loses* on catching real stops, 11 of 15 against 14, and the report concludes neither arm is fit to end a turn. `bench/sift` and `bench/readworth` both record the cheap arm beating the judgement and the cheap arm shipping.
+**Every mechanism must have an off-arm, and the arm has to be the thing actually replaced.** The reports are honest about losing: read `bench/suites/judge/stopcheck/report-2026-09-21.md`, the typed arm wins aggregate agreement 91% to 87.2% but *loses* on catching real stops, 11 of 15 against 14, and the report concludes neither arm is fit to end a turn. `bench/suites/judge/sift` and `bench/suites/judge/readworth` both record the cheap arm beating the judgement and the cheap arm shipping.
 
 **No comments anywhere**, enforced by hook and by `tofu lint`. A comment is treated as a repair for a name that failed.
 
