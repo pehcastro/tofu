@@ -21,6 +21,8 @@ import (
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/store/session/drain"
+	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/write"
 	"tofu/internal/ui/toolcard"
 )
 
@@ -127,7 +129,7 @@ func (c watchedSubAgent) Ask(ctx context.Context, request core.Request) (core.De
 }
 
 func (a *watcher) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
-	if a.stop == nil || loop.SubAgentAsking(ctx) != "" {
+	if a.stop == nil || contract.SubAgentAsking(ctx) != "" {
 		return a.askThrough(ctx, a.inner, request)
 	}
 	ctx, release := a.stop.during(ctx)
@@ -203,7 +205,7 @@ func (l *leadStop) listen(report safe.Report, stops, sendNow <-chan struct{}) (q
 }
 
 func (a *watcher) askThrough(ctx context.Context, inner loop.Model, request core.Request) (core.Decision, error) {
-	asker := loop.SubAgentAsking(ctx)
+	asker := contract.SubAgentAsking(ctx)
 	answered := sinceLastReply(request.Messages)
 	a.seen.forget(asker, request.Messages[:answered])
 	for _, message := range request.Messages[answered:] {
@@ -362,7 +364,7 @@ func (a *watcher) result(message core.Message, asker string) {
 	}
 	body := loop.WithoutToolRef(message.Content)
 	result.Card, result.Group, result.GroupSummary = a.cards.settle(result.ID, body, result.Outcome, message.ToolExitCode)
-	first, appended, appends := loop.AppendedLines(body)
+	first, appended, appends := write.AppendedLines(body)
 	switch {
 	case result.Outcome.Failed():
 	case strings.HasPrefix(body, unifiedDiffHeader):

@@ -15,12 +15,12 @@ import (
 	"strings"
 	"time"
 
-	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/stat"
 	"tofu/internal/tools/code/search"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/glob"
+	"tofu/internal/tools/files/read"
 )
 
 type call struct {
@@ -40,7 +40,7 @@ func calls() []call {
 func runner(repo, name string) (contract.Tool, error) {
 	switch name {
 	case "read":
-		return loop.NewReadTool(repo)
+		return read.NewReadTool(repo)
 	case "glob":
 		return glob.NewGlob(repo)
 	case "grep", "search":

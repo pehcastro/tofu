@@ -204,7 +204,7 @@ func renderEdits(b *strings.Builder, corpus Corpus, rows []EditRow) {
 func renderReads(b *strings.Builder, corpus Corpus, rows []ReadRow) {
 	fmt.Fprintf(b, "## 2. read against cat, head and sed -n, %d reads\n\n", len(rows))
 	fmt.Fprintf(b, "Selection: %d of %d recorded ranged reads valid at the seed, spread evenly over recording order. Every recorded read addressed a range; none addressed a symbol, because tofu's read takes lines and its symbols tool parses Go only, and this seed is TypeScript. A symbol read costs a search and then a range read on every arm here, so it is not a separate row.\n\n", len(rows), corpus.ReadCandidates)
-	b.WriteString("Arms: *tofu read* is `internal/agent/loop.ReadTool` with the recorded start_line and end_line. *cat* is the whole file. *sed -n* is `sed -n 'S,Ep'`. *head and tail* is `head -n E | tail -n +S`. *2nd* means the first answer lacked the range or was over the cap.\n\n")
+	b.WriteString("Arms: *tofu read* is `internal/tools/files/read.ReadTool` with the recorded start_line and end_line. *cat* is the whole file. *sed -n* is `sed -n 'S,Ep'`. *head and tail* is `head -n E | tail -n +S`. *2nd* means the first answer lacked the range or was over the cap.\n\n")
 	b.WriteString("| case | run | file | range | of | wanted | tofu | 2nd | cat | 2nd | sed -n | 2nd | head+tail | 2nd |\n")
 	b.WriteString("|---|---|---|---|--:|--:|--:|---|--:|---|--:|---|--:|---|\n")
 	for _, row := range rows {

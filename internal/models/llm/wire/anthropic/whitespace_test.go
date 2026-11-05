@@ -18,6 +18,7 @@ import (
 	"tofu/internal/models/llm/core"
 	claudesub "tofu/internal/models/llm/providers/claude-sub"
 	"tofu/internal/models/llm/wire/anthropic"
+	"tofu/internal/tools/files/read"
 )
 
 type sentBlock struct {
@@ -102,12 +103,12 @@ func TestTheRequestAfterATruncatedBlankReplyBesideAToolCallCarriesNoBlankTextBlo
 	if err := os.WriteFile(filepath.Join(root, "note.txt"), []byte("hello\n"), 0o600); err != nil {
 		t.Fatalf("writing the note: %v", err)
 	}
-	read, err := loop.NewReadTool(root)
+	readTool, err := read.NewReadTool(root)
 	if err != nil {
 		t.Fatalf("building read: %v", err)
 	}
 	row, err := loop.Run(context.Background(), loop.Config{
-		Model: claudesub.Subscription{Wire: wire}, Spend: loop.SpendSubscription, Tools: loop.NewRegistry(read),
+		Model: claudesub.Subscription{Wire: wire}, Spend: loop.SpendSubscription, Tools: loop.NewRegistry(readTool),
 		System: "you read files", Task: "what does note.txt say", Caps: loop.Caps{MaxSteps: 3},
 		ResultBytesCap: 1 << 16, ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-test" },
 	})

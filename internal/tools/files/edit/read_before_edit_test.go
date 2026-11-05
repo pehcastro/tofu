@@ -9,9 +9,10 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/agent/loop"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit"
+	"tofu/internal/tools/files/read"
+	"tofu/internal/tools/files/write"
 )
 
 const packageJSON = "{\n  \"name\": \"moth\"\n}\n"
@@ -37,8 +38,8 @@ func call(t *testing.T, tool contract.Tool, args map[string]string) error {
 
 func turnTools(t *testing.T, dir string, ledger *contract.ReadLedger) (contract.Tool, contract.Tool, contract.Tool) {
 	t.Helper()
-	reader, readErr := loop.NewReadTool(dir)
-	writer, writeErr := loop.NewWriteTool(dir)
+	reader, readErr := read.NewReadTool(dir)
+	writer, writeErr := write.NewWriteTool(dir)
 	editor, editErr := edit.NewEdit(dir)
 	for _, err := range []error{readErr, writeErr, editErr} {
 		if err != nil {

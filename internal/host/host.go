@@ -29,6 +29,7 @@ import (
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -135,7 +136,7 @@ type Host struct {
 	turn      string
 	asking    AskingMode
 
-	reads   *loop.ReadLedger
+	reads   *contract.ReadLedger
 	inbox   *loop.Inbox
 	settled []<-chan struct{}
 	roster  *roster.Roster
@@ -730,7 +731,7 @@ func (h *Host) carry(resumed Carry) error {
 	if h.engine != nil {
 		h.engine.Renew()
 	}
-	h.reads, h.inbox, h.roster, h.spent = loop.NewReadLedger(), loop.NewInbox(), &roster.Roster{}, &tokenTally{}
+	h.reads, h.inbox, h.roster, h.spent = contract.NewReadLedger(), loop.NewInbox(), &roster.Roster{}, &tokenTally{}
 	h.ran, h.carried, h.carriedOn, h.prefix, h.shown = nil, resumed.Messages, "", &loop.Prefix{}, &shownResults{ids: map[string]bool{}}
 	for _, message := range resumed.Messages[sinceLastReply(resumed.Messages):] {
 		if message.Role == core.RoleTool {

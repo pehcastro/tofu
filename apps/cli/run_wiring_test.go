@@ -747,7 +747,7 @@ func (m *watchingModel) Ask(ctx context.Context, request core.Request) (core.Dec
 	_, err := m.store.Header(m.subAgent)
 	m.mu.Lock()
 	switch {
-	case loop.SubAgentAsking(ctx) != "":
+	case contract.SubAgentAsking(ctx) != "":
 		m.found = append(m.found, err == nil)
 	case m.leadFirst == nil:
 		onDisk := err == nil
@@ -872,7 +872,7 @@ func (m *queuedModel) Ask(ctx context.Context, request core.Request) (core.Decis
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	queue := &m.decisions
-	if loop.SubAgentAsking(ctx) != "" {
+	if contract.SubAgentAsking(ctx) != "" {
 		queue = &m.subAgents
 		m.subAgentAsked = append(m.subAgentAsked, request)
 	}
@@ -890,7 +890,7 @@ type leadRecording struct {
 }
 
 func (m *leadRecording) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
-	if loop.SubAgentAsking(ctx) == "" {
+	if contract.SubAgentAsking(ctx) == "" {
 		m.mu.Lock()
 		m.leadAsked = append(m.leadAsked, request)
 		m.mu.Unlock()

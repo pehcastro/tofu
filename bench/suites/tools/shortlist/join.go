@@ -7,6 +7,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/code/search"
 )
 
 func slashed(path string) string {
@@ -50,7 +51,7 @@ func (c JoinCounts) UnofferedRate() float64 {
 	return float64(c.Unoffered) / float64(actedOn)
 }
 
-func rowFromHit(turnID, task string, link loop.SearchLink, results map[string]string) Row {
+func rowFromHit(turnID, task string, link search.SearchLink, results map[string]string) Row {
 	bodies := unitBodies(results[link.SearchCallID])
 	files := make([]File, 0, len(link.Offered))
 	for _, offered := range link.Offered {
@@ -91,17 +92,17 @@ func BuildJoinCorpus(sessionsDir string) ([]Row, JoinCounts, error) {
 				results[message.ToolCallID] = message.Content
 			}
 		}
-		for _, link := range loop.SearchLinksOf(conversation) {
+		for _, link := range search.SearchLinksOf(conversation) {
 			counts.Searches++
 			switch link.Kind {
-			case loop.SearchLinkHit:
+			case search.SearchLinkHit:
 				counts.Hits++
-			case loop.SearchLinkUnoffered:
+			case search.SearchLinkUnoffered:
 				counts.Unoffered++
-			case loop.SearchLinkNone:
+			case search.SearchLinkNone:
 				counts.None++
 			}
-			if link.Kind != loop.SearchLinkHit {
+			if link.Kind != search.SearchLinkHit {
 				continue
 			}
 			task := strings.TrimSpace(header.Task)

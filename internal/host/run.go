@@ -27,6 +27,7 @@ import (
 	"tofu/internal/platform/fs"
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/human/plan"
 	"tofu/internal/tools/human/remember"
 	humansettings "tofu/internal/tools/human/settings"
@@ -63,7 +64,7 @@ type Hooks struct {
 	Gate     func(ctx context.Context, tool string, gated loop.GateDecision, err error)
 	Roster   *roster.Roster
 	Inbox    *loop.Inbox
-	Reads    *loop.ReadLedger
+	Reads    *contract.ReadLedger
 	Cron     *cron.Book
 }
 
@@ -163,7 +164,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		Now:      h.now,
 		Person:   person,
 		Gate: func(ctx context.Context, tool string, gated loop.GateDecision, err error) {
-			asker := loop.SubAgentAsking(ctx)
+			asker := contract.SubAgentAsking(ctx)
 			decided := Decision{Tool: tool, Verdict: Ask}
 			switch {
 			case err != nil:
@@ -667,7 +668,7 @@ func awaitPerson(emit func(Event), book *asks, config *loop.Config) loop.Person 
 		case loop.StandingOnly(ctx):
 			return loop.PersonDenied, loop.NotStanding{}
 		}
-		asked := Event{Kind: EventAwaitPerson, ID: id, Tool: request.Tool, Text: place, Args: request.Args, Agent: loop.SubAgentAsking(ctx), Accepts: accepts,
+		asked := Event{Kind: EventAwaitPerson, ID: id, Tool: request.Tool, Text: place, Args: request.Args, Agent: contract.SubAgentAsking(ctx), Accepts: accepts,
 			Reason: agentReason(request.Reason), Risk: riskOf(decision)}
 		if request.Code != nil {
 			emit(Event{Kind: EventNote, Text: asked.Agent + " asks you to run this inline code:\n" + loop.CodeShown(*request.Code)})

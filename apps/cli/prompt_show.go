@@ -22,7 +22,7 @@ func showPrompt(opts wiring.RunOpts, out, errOut io.Writer) int {
 		return runFail(errOut, err)
 	}
 	opts.Shell = shell
-	named, _, err := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, loop.NewReadLedger()), nil, shell)
+	named, _, err := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, contract.NewReadLedger()), nil, shell)
 	if err != nil {
 		return runFail(errOut, err)
 	}

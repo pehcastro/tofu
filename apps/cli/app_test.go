@@ -1027,7 +1027,7 @@ type thinkingModel struct {
 func (m *thinkingModel) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
-	asker := loop.SubAgentAsking(ctx)
+	asker := contract.SubAgentAsking(ctx)
 	if len(m.steps[asker]) == 0 {
 		return llm.Decision{Build: "stub-model", Outcome: llm.OutcomeMessage, Content: "noted"}, nil
 	}
@@ -1229,7 +1229,7 @@ func (m *clockedModel) clock() time.Time { return time.Unix(0, m.at.Load()) }
 func (m *clockedModel) Ask(ctx context.Context, _ llm.Request) (llm.Decision, error) {
 	m.mu.Lock()
 	queue := &m.steps
-	if loop.SubAgentAsking(ctx) != "" {
+	if contract.SubAgentAsking(ctx) != "" {
 		queue = &m.subAgent
 	}
 	if len(*queue) == 0 {
@@ -2788,7 +2788,7 @@ type subAgentAfterTheLead struct {
 }
 
 func (m subAgentAfterTheLead) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
-	if loop.SubAgentAsking(ctx) != "" {
+	if contract.SubAgentAsking(ctx) != "" {
 		select {
 		case <-m.leadEnded:
 		case <-time.After(3 * time.Second):
@@ -2879,7 +2879,7 @@ type leadStoppedWhileItsSubAgentWaits struct {
 
 func (m *leadStoppedWhileItsSubAgentWaits) Ask(ctx context.Context, request llm.Request) (llm.Decision, error) {
 	waiting := m.subAgentGo
-	if loop.SubAgentAsking(ctx) == "" {
+	if contract.SubAgentAsking(ctx) == "" {
 		if m.leadAsks.Add(1) != 2 {
 			return m.queuedModel.Ask(ctx, request)
 		}

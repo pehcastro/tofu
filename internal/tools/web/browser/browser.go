@@ -80,7 +80,7 @@ func (t *BrowserTabs) opens(ctx context.Context, tab int) {
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.opened[tab] = loop.SubAgentAsking(ctx)
+	t.opened[tab] = contract.SubAgentAsking(ctx)
 }
 
 func (t *BrowserTabs) Close() {

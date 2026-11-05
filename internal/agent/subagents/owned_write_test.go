@@ -7,13 +7,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
+	"tofu/internal/tools/files/write"
 )
 
 func TestAWriteToolCallOnTmpCreatesNothingInTheProject(t *testing.T) {
 	project := t.TempDir()
-	tool, err := loop.NewWriteTool(project)
+	tool, err := write.NewWriteTool(project)
 	if err != nil {
 		t.Fatal(err)
 	}

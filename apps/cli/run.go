@@ -49,9 +49,12 @@ import (
 	"tofu/internal/tools/code/symbols"
 	"tofu/internal/tools/code/test"
 	"tofu/internal/tools/code/typecheck"
+	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit"
 	"tofu/internal/tools/files/glob"
+	"tofu/internal/tools/files/read"
+	"tofu/internal/tools/files/write"
 	"tofu/internal/tools/history/quote"
 	recalltool "tofu/internal/tools/history/recall"
 	zoomtool "tofu/internal/tools/history/zoom"
@@ -404,7 +407,7 @@ func dryRun(opts wiring.RunOpts, selected models.Model, dir string, say func(str
 	home, _ := os.UserHomeDir()
 	warm := newWarmProcesses(browser.NewBrowserTabs(home))
 	defer warm.Close()
-	built, plan, err := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, loop.NewReadLedger()), warm, shell)
+	built, plan, err := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, contract.NewReadLedger()), warm, shell)
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -441,7 +444,7 @@ func runTurn(opts wiring.RunOpts, resumed runResumed, selected models.Model, clo
 	}
 	engine := &appEngine{dir: opts.Dir, open: wireOpener(), tabs: warm.tabs, warm: warm, places: places, missingJudge: missing}
 	same := func(model loop.Model) loop.Model { return model }
-	started, err := engine.startTurn(opts, host.Turn{}, host.Hooks{Lead: same, SubAgent: same, Say: writeNotice(errOut), Reads: loop.NewReadLedger()}, clock)
+	started, err := engine.startTurn(opts, host.Turn{}, host.Hooks{Lead: same, SubAgent: same, Say: writeNotice(errOut), Reads: contract.NewReadLedger()}, clock)
 	if started.Close != nil {
 		defer started.Close()
 	}
@@ -1064,7 +1067,7 @@ func runSystem(opts wiring.RunOpts) string {
 	return system
 }
 
-func readsWhen(readBeforeEdit bool, reads *loop.ReadLedger) *loop.ReadLedger {
+func readsWhen(readBeforeEdit bool, reads *contract.ReadLedger) *contract.ReadLedger {
 	if !readBeforeEdit {
 		return nil
 	}
@@ -1116,8 +1119,8 @@ func (s *storedKeys) redactor() credential.KeyRedactor {
 }
 
 type warmProcesses struct {
-	checkers *loop.Typecheckers
-	tests    *loop.TestRunners
+	checkers *checkers.Typecheckers
+	tests    *test.TestRunners
 	tabs     *browser.BrowserTabs
 	keys     storedKeys
 	memory   wiring.SessionMemoryModel
@@ -1125,7 +1128,7 @@ type warmProcesses struct {
 }
 
 func newWarmProcesses(tabs *browser.BrowserTabs) *warmProcesses {
-	return &warmProcesses{checkers: loop.NewTypecheckers(), tests: loop.NewTestRunners(), tabs: tabs, drops: loop.NewDropIndex()}
+	return &warmProcesses{checkers: checkers.NewTypecheckers(), tests: test.NewTestRunners(), tabs: tabs, drops: loop.NewDropIndex()}
 }
 
 func (w *warmProcesses) Close() {
@@ -1137,7 +1140,7 @@ func (w *warmProcesses) Close() {
 	}
 }
 
-func buildRunToolsForRun(dir, set string, ledger *loop.ReadLedger, warm *warmProcesses, shell loop.RunShell) ([]contract.Tool, *plantool.Plan, error) {
+func buildRunToolsForRun(dir, set string, ledger *contract.ReadLedger, warm *warmProcesses, shell loop.RunShell) ([]contract.Tool, *plantool.Plan, error) {
 	bashTool, bashErr := loop.NewBashToolFromShell(dir, shell)
 	if bashErr != nil {
 		return nil, nil, bashErr
@@ -1148,13 +1151,13 @@ func buildRunToolsForRun(dir, set string, ledger *loop.ReadLedger, warm *warmPro
 	return assembleRunTools(dir, set, ledger, warm, bashTool)
 }
 
-func assembleRunTools(dir, set string, ledger *loop.ReadLedger, warm *warmProcesses, bashTool *loop.BashTool) ([]contract.Tool, *plantool.Plan, error) {
+func assembleRunTools(dir, set string, ledger *contract.ReadLedger, warm *warmProcesses, bashTool *loop.BashTool) ([]contract.Tool, *plantool.Plan, error) {
 	if warm == nil {
 		warm = &warmProcesses{}
 	}
-	checkers := warm.checkers
-	readTool, readErr := loop.NewReadTool(dir)
-	writeTool, writeErr := loop.NewWriteTool(dir)
+	typecheckers := warm.checkers
+	reader, readErr := read.NewReadTool(dir)
+	writer, writeErr := write.NewWriteTool(dir)
 	if err := cmp.Or(readErr, writeErr); err != nil {
 		return nil, nil, err
 	}
@@ -1162,15 +1165,15 @@ func assembleRunTools(dir, set string, ledger *loop.ReadLedger, warm *warmProces
 	if rulesErr != nil {
 		return nil, nil, rulesErr
 	}
-	read := readTool.Reading(ledger)
-	write := writeTool.Reading(ledger).Checking(checkers).Ruling(rules)
+	readTool := reader.Reading(ledger)
+	writeTool := writer.Reading(ledger).Checking(typecheckers).Ruling(rules)
 	checked, checkErr := tools.Checked(dir, []contract.Tool{bashTool})
 	if checkErr != nil {
 		return nil, nil, checkErr
 	}
 	shell := checked[0]
 	if set == toolSetThree {
-		return tools.NewMemo().Wrap([]contract.Tool{read, write, shell}), nil, nil
+		return tools.NewMemo().Wrap([]contract.Tool{readTool, writeTool, shell}), nil, nil
 	}
 	globTool, globErr := glob.NewGlob(dir)
 	searchTool, searchErr := search.NewSearch(dir)
@@ -1179,7 +1182,7 @@ func assembleRunTools(dir, set string, ledger *loop.ReadLedger, warm *warmProces
 	projectTool, projectErr := report.New(dir)
 	verbTools, verbErr := tools.NewVerbs(dir)
 	githubTool, githubErr := github.NewGitHubPRDiff(dir)
-	typecheckTool, typecheckErr := typecheck.NewTypecheck(dir, checkers)
+	typecheckTool, typecheckErr := typecheck.NewTypecheck(dir, typecheckers)
 	testTool, testErr := test.NewTest(dir, warm.tests)
 	if err := cmp.Or(globErr, searchErr, symbolsErr, editErr, projectErr, verbErr, githubErr, typecheckErr, testErr); err != nil {
 		return nil, nil, err
@@ -1202,7 +1205,7 @@ func assembleRunTools(dir, set string, ledger *loop.ReadLedger, warm *warmProces
 		return nil, nil, err
 	}
 	plan := plantool.NewPlan()
-	full := append([]contract.Tool{read, write, shell, plan, jobs.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(checkers).Ruling(rules), typecheckTool, testTool, githubTool}, verbTools...)
+	full := append([]contract.Tool{readTool, writeTool, shell, plan, jobs.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(typecheckers).Ruling(rules), typecheckTool, testTool, githubTool}, verbTools...)
 	return tools.NewMemo().Wrap(append(append(full, webTools...), browserTools...)), plan, nil
 }
 

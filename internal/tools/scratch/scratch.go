@@ -92,7 +92,7 @@ func scratchPath(place scratch.ScratchPlace, kind string) (contract.Result, erro
 }
 
 func scratchShare(ctx context.Context, place scratch.ScratchPlace, path, note string) (contract.Result, error) {
-	if loop.SubAgentAsking(ctx) != "" {
+	if contract.SubAgentAsking(ctx) != "" {
 		return contract.Result{}, errors.New("scratch_share: only the lead shares: name the file and what it is in your report, and the lead shares it")
 	}
 	if !under(place.Dir(), path) || strings.TrimSpace(note) == "" {
@@ -179,7 +179,7 @@ func (c *crossProjectReads) allow(ctx context.Context, project string) error {
 		return errors.New("reading another project's shared folder asks the person, and no person is here to answer")
 	}
 	asker := "the lead"
-	if id := loop.SubAgentAsking(ctx); id != "" {
+	if id := contract.SubAgentAsking(ctx); id != "" {
 		asker = "the lead, for sub-agent " + id + ","
 	}
 	shown, err := json.Marshal(map[string]string{"project": project, "question": asker + " asks to read the shared folder of the project at " + project + ". Allow it for this session?"})

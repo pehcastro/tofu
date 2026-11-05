@@ -26,6 +26,8 @@ import (
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/read"
+	"tofu/internal/tools/files/write"
 	"tofu/internal/tools/human/plan"
 	shipped "tofu/library"
 )
@@ -100,24 +102,24 @@ func servedSession(t *testing.T, server http.Handler) (loop.Config, []contract.T
 	if err := os.WriteFile(filepath.Join(root, "API_SPEC.md"), []byte(strings.Repeat("GET /customers returns every customer\n", 200)), 0o600); err != nil {
 		t.Fatalf("writing the spec: %v", err)
 	}
-	read, err := loop.NewReadTool(root)
+	readTool, err := read.NewReadTool(root)
 	if err != nil {
 		t.Fatalf("building read: %v", err)
 	}
-	write, err := loop.NewWriteTool(root)
+	writeTool, err := write.NewWriteTool(root)
 	if err != nil {
 		t.Fatalf("building write: %v", err)
 	}
 	return loop.Config{
 		Model:          claudesub.Subscription{Wire: wire},
 		Spend:          loop.SpendSubscription,
-		Tools:          loop.NewRegistry(read, write),
+		Tools:          loop.NewRegistry(readTool, writeTool),
 		Environment:    sessionEnvironment,
 		Caps:           loop.Caps{MaxSteps: 5},
 		ResultBytesCap: 1 << 16,
 		ArtifactDir:    filepath.Join(root, "artifacts"),
 		NewID:          func() string { return "turn-test" },
-	}, []contract.Tool{read, write}
+	}, []contract.Tool{readTool, writeTool}
 }
 
 func sessionSpec(t *testing.T, task string, role rule.Role) loop.ComposeSpec {
@@ -487,8 +489,8 @@ func TestASessionsLaterTurnSendsTheSystemPromptAndToolsItsFirstTurnSent(t *testi
 		t.Run(changed.name, func(t *testing.T) {
 			config, server := sessionConfig(t, "text", "text")
 			description, schema := "lists the sub-agents ts-dev and go-dev", firstSchema
-			read, _ := loop.NewReadTool(t.TempDir())
-			config.Tools = loop.NewRegistry(read, describedTool{description: &description, schema: &schema})
+			readTool, _ := read.NewReadTool(t.TempDir())
+			config.Tools = loop.NewRegistry(readTool, describedTool{description: &description, schema: &schema})
 			config.Prefix = &loop.Prefix{}
 			composed, err := loop.Compose(sessionSpec(t, firstTurnTask, rule.RoleOrchestrator))
 			if err != nil {
@@ -569,10 +571,10 @@ func TestThePlanRidesAfterTheCachedPrefixAndTheCacheReadsWhatItReadWithoutIt(t *
 			bodies = append(bodies, body)
 			stream(w, steps[min(len(bodies), len(steps))-1])
 		}))
-		plan := plan.NewPlan()
-		config.Tools, config.Task, config.Caps.MaxSteps = loop.NewRegistry(append(built, plan)...), firstTurnTask, 10
+		planTool := plan.NewPlan()
+		config.Tools, config.Task, config.Caps.MaxSteps = loop.NewRegistry(append(built, planTool)...), firstTurnTask, 10
 		if shown {
-			config.Plan = plan.Shown
+			config.Plan = planTool.Shown
 		}
 		if _, err := loop.Run(context.Background(), config); err != nil {
 			t.Fatalf("running with the plan shown %v: %v", shown, err)

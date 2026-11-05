@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/files/write"
 )
 
 const undoLedgerName = "undo-turns.jsonl"
@@ -307,7 +308,7 @@ func (d *turnDigests) result(digest *TurnDigest, event session.Event) {
 		return
 	}
 	edited, body := TurnFile{Path: called.Path, Agent: event.Agent}, loop.WithoutToolRef(said.Content)
-	_, appended, appends := loop.AppendedLines(body)
+	_, appended, appends := write.AppendedLines(body)
 	switch {
 	case edited.Path == "" || said.ToolOutcome == session.ToolOutcomeFailed:
 		return

@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"tofu/bench/kit/corpus/recorded"
-	"tofu/internal/agent/loop"
+	"tofu/internal/tools/files/read"
 )
 
 var numberedLine = regexp.MustCompile(`(?m)^\d+[:\t\x{2192}]`)
@@ -21,7 +21,7 @@ func TestNoReadEverEmitsALineNumber(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "ten.txt"), []byte(body), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	tool, err := loop.NewReadTool(root)
+	tool, err := read.NewReadTool(root)
 	if err != nil {
 		t.Fatalf("building the read tool: %v", err)
 	}

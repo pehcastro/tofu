@@ -12,10 +12,10 @@ import (
 	"slices"
 	"strings"
 
-	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	edittool "tofu/internal/tools/files/edit"
 	globtool "tofu/internal/tools/files/glob"
+	"tofu/internal/tools/files/read"
 )
 
 type Outcome string
@@ -237,7 +237,7 @@ func RunReads(corpus Corpus, scratch string) ([]ReadRow, error) {
 			return nil, err
 		}
 	}
-	tool, err := loop.NewReadTool(scratch)
+	tool, err := read.NewReadTool(scratch)
 	if err != nil {
 		return nil, err
 	}
