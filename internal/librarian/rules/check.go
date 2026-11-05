@@ -10,7 +10,7 @@ import (
 	"unicode"
 
 	"tofu/internal/agent/subagents"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 	"tofu/internal/tools/project/lint"
 )
 
@@ -103,7 +103,7 @@ func checkEmDash(r Rule, a Artifact) ([]Finding, error) {
 	if !ok {
 		return nil, artifactMismatch(SubjectTextFile, a)
 	}
-	data, err := sys.ReadFile(tf.Path)
+	data, err := fs.ReadFile(tf.Path)
 	if err != nil {
 		return nil, err
 	}

@@ -17,7 +17,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	"tofu/internal/platform/scratch"
 	"tofu/internal/tools/contract"
 )
 
@@ -68,7 +68,7 @@ func (t scratchTool) Run(ctx context.Context, raw json.RawMessage) (contract.Res
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.name, err)
 	}
-	place, found := sys.ScratchOf(ctx)
+	place, found := scratch.ScratchOf(ctx)
 	if !found {
 		return contract.Result{}, fmt.Errorf("%s: this run has no scratchpad", t.name)
 	}
@@ -83,7 +83,7 @@ func (t scratchTool) Run(ctx context.Context, raw json.RawMessage) (contract.Res
 	return t.reads.read(ctx, place, args.Project, args.Path)
 }
 
-func scratchPath(place sys.ScratchPlace, kind string) (contract.Result, error) {
+func scratchPath(place scratch.ScratchPlace, kind string) (contract.Result, error) {
 	folder := map[string]string{"tmp": place.Tmp(), "out": filepath.Join(place.Dir(), "out"), "logs": filepath.Join(place.Dir(), "logs"), "shared": place.Shared(), "cache": place.Cache()}[kind]
 	if folder == "" {
 		return contract.Result{}, fmt.Errorf("scratch_path: kind %q is none of tmp, out, logs, shared or cache", kind)
@@ -91,7 +91,7 @@ func scratchPath(place sys.ScratchPlace, kind string) (contract.Result, error) {
 	return contract.Result{Content: folder, Command: "scratch path " + kind}, nil
 }
 
-func scratchShare(ctx context.Context, place sys.ScratchPlace, path, note string) (contract.Result, error) {
+func scratchShare(ctx context.Context, place scratch.ScratchPlace, path, note string) (contract.Result, error) {
 	if loop.SubAgentAsking(ctx) != "" {
 		return contract.Result{}, errors.New("scratch_share: only the lead shares: name the file and what it is in your report, and the lead shares it")
 	}
@@ -114,7 +114,7 @@ func scratchShare(ctx context.Context, place sys.ScratchPlace, path, note string
 	return contract.Result{Content: "shared as " + shared, Command: "scratch share " + filepath.Base(path)}, err
 }
 
-func scratchList(place sys.ScratchPlace, scope string) (contract.Result, error) {
+func scratchList(place scratch.ScratchPlace, scope string) (contract.Result, error) {
 	from := map[string]string{"mine": place.Dir(), "session": place.SessionDir(), "shared": place.Shared()}[scope]
 	if from == "" {
 		return contract.Result{}, fmt.Errorf("scratch_list: scope %q is none of mine, session or shared", scope)
@@ -130,7 +130,7 @@ func scratchList(place sys.ScratchPlace, scope string) (contract.Result, error) 
 		}
 		rel, _ := filepath.Rel(from, path)
 		writer := "lead"
-		if parts := strings.Split(filepath.ToSlash(rel), "/"); scope == "session" && len(parts) > 1 && parts[0] == sys.ScratchAgents {
+		if parts := strings.Split(filepath.ToSlash(rel), "/"); scope == "session" && len(parts) > 1 && parts[0] == scratch.ScratchAgents {
 			writer = parts[1]
 		}
 		lines = append(lines, fmt.Sprintf("%s  %d bytes  by %s", filepath.ToSlash(rel), info.Size(), writer))
@@ -142,14 +142,14 @@ func scratchList(place sys.ScratchPlace, scope string) (contract.Result, error) 
 	return contract.Result{Content: from + "\n" + strings.Join(lines, "\n"), Command: "scratch list " + scope}, err
 }
 
-func (c *crossProjectReads) read(ctx context.Context, place sys.ScratchPlace, project, path string) (contract.Result, error) {
+func (c *crossProjectReads) read(ctx context.Context, place scratch.ScratchPlace, project, path string) (contract.Result, error) {
 	from := place.SessionDir()
 	if project != "" {
-		root, err := sys.ScratchRootAt(project)
+		root, err := scratch.ScratchRootAt(project)
 		if err != nil {
 			return contract.Result{}, fmt.Errorf("scratch_read: %w", err)
 		}
-		if from = filepath.Join(root, sys.ScratchShared); from != place.Shared() {
+		if from = filepath.Join(root, scratch.ScratchShared); from != place.Shared() {
 			if err := c.allow(ctx, project); err != nil {
 				return contract.Result{Content: err.Error() + ", so nothing was read", Command: "scratch read " + project}, nil
 			}

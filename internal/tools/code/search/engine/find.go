@@ -17,8 +17,8 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
-	"tofu/internal/sys"
 )
 
 type Placement string
@@ -190,7 +190,7 @@ func scanTree(req Request, into *sweep, matched map[string]string, declared map[
 	var next atomic.Int64
 	var stop atomic.Bool
 	defer stop.Store(true)
-	report := sys.Crashes(req.Root)
+	report := project.Crashes(req.Root)
 	for range min(runtime.GOMAXPROCS(0), len(req.Files)) {
 		safe.Go(report, "search scan", func() {
 			var buffer []byte

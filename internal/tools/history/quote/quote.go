@@ -15,8 +15,8 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/credential"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/glob"
@@ -229,7 +229,7 @@ func quotedAgent(store *session.Store, recorded, name string) ([]Quoted, error) 
 				words += "\nit reported " + report.State + ": " + report.Text
 			}
 		}
-		hits = append(hits, Quoted{Event: name, Speaker: "the sub-agent " + name, Noun: "sub-agent", Words: sys.LoadKeyRedactor().Redact(words)})
+		hits = append(hits, Quoted{Event: name, Speaker: "the sub-agent " + name, Noun: "sub-agent", Words: credential.LoadKeyRedactor().Redact(words)})
 	}
 	return hits, nil
 }
@@ -256,7 +256,7 @@ func quotedCall(call session.Event, events []session.Event) (Quoted, error) {
 		}
 		words += "it " + cmp.Or(result.ToolOutcome, session.ToolOutcomeRan) + " and returned:\n" + cmp.Or(result.Content, result.Error)
 	}
-	return Quoted{Event: call.ID, Speaker: speaker, Noun: "call", Words: sys.LoadKeyRedactor().Redact(words)}, nil
+	return Quoted{Event: call.ID, Speaker: speaker, Noun: "call", Words: credential.LoadKeyRedactor().Redact(words)}, nil
 }
 
 func quoteSpeaker(role string) string {

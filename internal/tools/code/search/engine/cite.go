@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"strings"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type Claim string
@@ -38,7 +38,7 @@ type Cited struct {
 	Text     string
 }
 
-var citationPattern = sys.LazyRegexp(
+var citationPattern = fs.LazyRegexp(
 	`(?:^|[^A-Za-z0-9_./\\-])((?:\.\.?[/\\])*\.?[A-Za-z0-9_][A-Za-z0-9_./\\-]*\.[A-Za-z][A-Za-z0-9]{0,9})` +
 		`:([1-9][0-9]{0,8})(?:-([1-9][0-9]{0,8}))?` +
 		`(?::([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?))?`)

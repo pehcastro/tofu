@@ -3,12 +3,12 @@ package engine
 import (
 	"strings"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 var (
-	pythonDef   = sys.LazyRegexp(`^(?:async\s+)?def\s+(\w+)`)
-	pythonClass = sys.LazyRegexp(`^class\s+(\w+)`)
+	pythonDef   = fs.LazyRegexp(`^(?:async\s+)?def\s+(\w+)`)
+	pythonClass = fs.LazyRegexp(`^class\s+(\w+)`)
 )
 
 type logicalLine struct {

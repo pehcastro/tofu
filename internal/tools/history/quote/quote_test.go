@@ -12,8 +12,8 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	rule "tofu/internal/librarian/rules"
+	"tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/history/quote"
 	"tofu/library"
@@ -139,7 +139,7 @@ func TestATurnRecordedBeforeEventIDsExistedIsQuotableByItsPlaceInTheSession(t *t
 }
 
 func TestEveryPreEventIDTurnRecordedUnderThisRepositoryResolves(t *testing.T) {
-	store := session.NewStore(sys.RecordedStateDir("sessions"))
+	store := session.NewStore(project.RecordedStateDir("sessions"))
 	listing, err := store.Listing()
 	if err != nil {
 		t.Skipf("this checkout has no session store to read: %v", err)

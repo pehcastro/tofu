@@ -17,7 +17,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/tools/contract"
 )
 
@@ -108,7 +108,7 @@ func (o RuleOverride) Run(ctx context.Context, raw json.RawMessage) (contract.Re
 	case !errors.Is(err, fs.ErrNotExist):
 		return contract.Result{}, fmt.Errorf("rule_override: %w", err)
 	}
-	if err := sys.WriteFile(file, data, 0o644); err != nil {
+	if err := platformfs.WriteFile(file, data, 0o644); err != nil {
 		return contract.Result{}, fmt.Errorf("rule_override: %w", err)
 	}
 	return contract.Result{Content: "the person said yes for " + where + ", and " + file + " now overrides " + base.ID + " with by: asked. go ahead with what they asked; the prompt carries the change from the next turn."}, nil

@@ -9,7 +9,7 @@ import (
 	"tofu/apps/cli/output"
 	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 	golint "tofu/internal/tools/project/lint"
 )
 
@@ -36,7 +36,7 @@ func Verb(args []string, out, errOut io.Writer) int {
 	if len(operands) > 1 {
 		return o.Usage(fmt.Errorf("unknown argument %q", operands[1]))
 	}
-	targets := sys.GoRoots()
+	targets := fs.GoRoots()
 	if len(operands) == 1 {
 		targets = operands
 	}
@@ -59,7 +59,7 @@ func Verb(args []string, out, errOut io.Writer) int {
 func lintComments(targets []string) (lintReport, error) {
 	report := lintReport{Findings: []lintFinding{}}
 	for _, target := range targets {
-		present, err := sys.Exists(target)
+		present, err := fs.Exists(target)
 		if err != nil {
 			return lintReport{}, err
 		}

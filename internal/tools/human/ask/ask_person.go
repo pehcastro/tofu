@@ -17,9 +17,9 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/memory/entries"
-	"tofu/internal/sys"
 	"tofu/internal/tools/contract"
 )
 
@@ -145,7 +145,7 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 	if blocks, decided := loop.QuestionsBlockFrom(ctx); decided {
 		auto = !blocks
 	}
-	recorded, report := make(chan []string, 1), sys.Crashes(".")
+	recorded, report := make(chan []string, 1), project.Crashes(".")
 	if auto && reversible && a.Judge != nil {
 		acting := *a.Judge
 		acting.Rule.Mode = gate.ModeEnforced

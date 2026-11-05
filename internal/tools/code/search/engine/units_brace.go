@@ -6,7 +6,7 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 type declPattern struct {
@@ -63,8 +63,8 @@ var (
 			stops: regexp.MustCompile(`^(?:async|const|else|enum|extern|fn|for|if|impl|let|loop|match|mod|pub|return|static|struct|trait|type|union|unsafe|use|while)\b`),
 		}
 	})
-	implType     = sys.LazyRegexp(`^&?\s*(?:'\w+\s+)?(?:(?:mut|dyn)\s+)*(?:\w+::)*(\w+)`)
-	decoratorRun = sys.LazyRegexp(`(?s)^(?:(?:@[\w$.]+\s*(?:\(.*\))?|#!?\[.*\])\s*)+$`)
+	implType     = fs.LazyRegexp(`^&?\s*(?:'\w+\s+)?(?:(?:mut|dyn)\s+)*(?:\w+::)*(\w+)`)
+	decoratorRun = fs.LazyRegexp(`(?s)^(?:(?:@[\w$.]+\s*(?:\(.*\))?|#!?\[.*\])\s*)+$`)
 )
 
 type frame struct {

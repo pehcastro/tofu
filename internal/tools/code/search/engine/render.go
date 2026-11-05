@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"tofu/internal/konst"
-	"tofu/internal/sys"
+	"tofu/internal/platform/fs"
 )
 
 const (
@@ -15,7 +15,7 @@ const (
 	Unbudgeted   = 1 << 30
 )
 
-var unitHeaderPattern = sys.LazyRegexp(`(?m)^(\S+):\d+-\d+ `)
+var unitHeaderPattern = fs.LazyRegexp(`(?m)^(\S+):\d+-\d+ `)
 
 func OfferedPaths(rendered string) []string {
 	seen := make(map[string]bool)
