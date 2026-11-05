@@ -246,12 +246,7 @@ func TestTheScriptAgainstAFakeExtensionFillsEveryPhase(t *testing.T) {
 		}
 		t.Log(line)
 	}
-	var table strings.Builder
-	if err := Table(&table, rows); err != nil {
-		t.Fatal(err)
+	if summary := Summarise(rows); summary.Steps != 12 || summary.DidNotRun != 1 || summary.Failed != 0 || summary.Untimed != 0 {
+		t.Errorf("the summary reads %+v", summary)
 	}
-	if !strings.Contains(table.String(), "12 steps, 1 did not run, 0 failed") || strings.Contains(table.String(), "timed no phase") {
-		t.Errorf("the table reads\n%s", table.String())
-	}
-	t.Log("\n" + table.String())
 }

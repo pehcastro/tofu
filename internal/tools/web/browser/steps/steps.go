@@ -210,18 +210,3 @@ func Summarise(rows []Row) Summary {
 	}
 	return summary
 }
-
-func Table(w io.Writer, rows []Row) error {
-	summary := Summarise(rows)
-	var b strings.Builder
-	fmt.Fprintf(&b, "%-18s %10s %10s\n", "phase", "p50", "p90")
-	for _, phase := range summary.Phases {
-		fmt.Fprintf(&b, "%-18s %10.2f %10.2f\n", phase.Name, phase.P50, phase.P90)
-	}
-	fmt.Fprintf(&b, "%d steps, %d did not run, %d failed\n", summary.Steps, summary.DidNotRun, summary.Failed)
-	if summary.Untimed > 0 {
-		fmt.Fprintf(&b, "the extension timed no phase on %d steps: evaluate, settle and act read 0 there, and native holds them\n", summary.Untimed)
-	}
-	_, err := io.WriteString(w, b.String())
-	return err
-}
