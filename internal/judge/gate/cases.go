@@ -3,12 +3,9 @@ package gate
 import (
 	"encoding/json"
 	"errors"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
-
-	platformfs "tofu/internal/platform/fs"
 )
 
 type BlockCase struct {
@@ -71,27 +68,4 @@ func (r BlockCase) AppendTo(file string) error {
 	}
 	_, err = cases.Write(append(line, '\n'))
 	return errors.Join(err, cases.Close())
-}
-
-func HomeCasesFiles() ([]string, error) {
-	home, err := platformfs.HomeConfigDir()
-	if err != nil {
-		return nil, err
-	}
-	projects := filepath.Join(home, platformfs.ProjectsDirName)
-	entries, err := os.ReadDir(projects)
-	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var files []string
-	for _, entry := range entries {
-		file := CasesFile(filepath.Join(projects, entry.Name()))
-		if _, err := os.Stat(file); err == nil {
-			files = append(files, file)
-		}
-	}
-	return files, nil
 }
