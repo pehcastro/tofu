@@ -1,10 +1,5 @@
 package corpus
 
-import (
-	"reflect"
-	"strings"
-)
-
 type UnreadKey struct {
 	Level  string
 	Key    string
@@ -67,61 +62,4 @@ var DeliberatelyUnread = []UnreadKey{
 	{"step", "phase", "explore, edit, verify or report, derived from the step's own tool calls, which are already read; no bench point reads it from the corpus yet"},
 	{"call", "hooks", "the hooks that ran on a call and what they said; no bench point reads hook outcomes from the corpus yet"},
 	{"message_call", "arguments", "the raw arguments an assistant message's tool call carried; no bench point reads it from the corpus yet"},
-}
-
-func taggedKeys(t reflect.Type) map[string]bool {
-	keys := map[string]bool{}
-	for i := 0; i < t.NumField(); i++ {
-		name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
-		if name == "" || name == "-" {
-			continue
-		}
-		keys[strings.ToLower(name)] = true
-	}
-	return keys
-}
-
-func knownKeys(level string) map[string]bool {
-	switch level {
-	case "turn":
-		known := taggedKeys(reflect.TypeOf(RecordedTurn{}))
-		known["wallclockms"] = true
-		known["contextceiling"] = true
-		known["contexttarget"] = true
-		known["autocompaction"] = true
-		return known
-	case "step":
-		known := taggedKeys(reflect.TypeOf(RecordedStep{}))
-		known["assistanttext"] = true
-		known["prompttokens"] = true
-		known["completiontokens"] = true
-		known["toolcalls"] = true
-		return known
-	case "call":
-		known := taggedKeys(reflect.TypeOf(RecordedCall{}))
-		known["exitcode"] = true
-		known["durationms"] = true
-		known["resultbytes"] = true
-		known["renderedbytes"] = true
-		known["resulthash"] = true
-		return known
-	case "message":
-		known := taggedKeys(reflect.TypeOf(RecordedMessage{}))
-		known["toolcallid"] = true
-		known["toolcalls"] = true
-		return known
-	case "message_call":
-		return taggedKeys(reflect.TypeOf(RecordedToolCallName{}))
-	}
-	return nil
-}
-
-func ignoredKeys(level string) map[string]bool {
-	ignored := map[string]bool{}
-	for _, entry := range DeliberatelyUnread {
-		if entry.Level == level {
-			ignored[strings.ToLower(entry.Key)] = true
-		}
-	}
-	return ignored
 }

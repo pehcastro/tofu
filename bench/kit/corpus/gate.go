@@ -5,11 +5,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 
 	"tofu/internal/dummy/toolgate"
-	"tofu/internal/judge/gate"
 )
 
 const TruncationMark = " ...[truncated]"
@@ -78,26 +76,6 @@ func GateRecords() ([]Record, error) {
 
 func GateWholeCommandRecords() ([]Record, error) {
 	return gateRecordsIn(toolgate.CasesWhole)
-}
-
-func HomeGateRecords() ([]Record, error) {
-	files, err := gate.HomeCasesFiles()
-	if err != nil {
-		return nil, err
-	}
-	var records []Record
-	for _, file := range files {
-		raw, err := os.ReadFile(file)
-		if err != nil {
-			return nil, err
-		}
-		read, err := parseGateRecords(file, raw)
-		if err != nil {
-			return nil, err
-		}
-		records = append(records, read...)
-	}
-	return records, nil
 }
 
 func gateRecordsIn(path string) ([]Record, error) {

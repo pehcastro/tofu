@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -19,6 +20,35 @@ import (
 )
 
 const sleeperEnv = "TOFU_BENCH_SLEEPER"
+
+func Spend(rows []Row) string {
+	b := &strings.Builder{}
+	fmt.Fprint(b, "SPEND, each arm in its own unit\n")
+	sorted := append([]Row(nil), rows...)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].Version != sorted[j].Version {
+			return sorted[i].Version < sorted[j].Version
+		}
+		return sorted[i].Arm < sorted[j].Arm
+	})
+	for _, r := range sorted {
+		fmt.Fprintf(b, "%s v%d: %s. tokens %d in, %d out. wall clock %d ms. turns %d\n",
+			r.Arm, r.Version, spendUnitOf(r), r.BilledInput, r.BilledOutput, r.WallClockMS, r.Turns)
+	}
+	fmt.Fprint(b, "the units do not add: anthropic subscription quota, chatgpt subscription quota and typesafe dollars are three different currencies, "+
+		"and a row that spends none of a currency is not cheaper than one that spends some of another. Compare within a column, never across.\n")
+	return b.String()
+}
+
+func spendUnitOf(r Row) string {
+	if r.ModelDollars != nil {
+		return fmt.Sprintf("api key, %.4f dollars on the model, %.4f on jev", *r.ModelDollars, r.JudgeDollars)
+	}
+	if r.Arm == ArmTofu {
+		return fmt.Sprintf("subscription quota for the model, %.4f typesafe dollars for jev", r.JudgeDollars)
+	}
+	return "subscription quota, no money left the account"
+}
 
 func TestSleeperHelperOutlivesAnyCapTheRunnerSets(t *testing.T) {
 	if os.Getenv(sleeperEnv) != "1" {

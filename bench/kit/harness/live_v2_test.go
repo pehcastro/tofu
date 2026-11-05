@@ -2,6 +2,7 @@ package harness
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -59,7 +60,14 @@ func TestV2TofuArmRunsLiveAndProducesARow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := StoreTranscript(sessionDir, recorded); err != nil {
+	transcript, err := json.MarshalIndent(recorded, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(sessionDir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sessionDir, recorded.ID+singleFileSuffix), transcript, 0o600); err != nil {
 		t.Fatal(err)
 	}
 

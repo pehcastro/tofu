@@ -1,7 +1,10 @@
 package task_test
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -35,6 +38,16 @@ type StoredRow struct {
 	GateReasons       string      `json:"gate_reasons"`
 	Gaps              []string    `json:"gaps"`
 	Row               harness.Row `json:"row"`
+}
+
+func revisionOf(root string, version int, part task.Part) (string, error) {
+	path := task.Path(root, version, part)
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("every v%d run is scored against the %s tracked at %s, and it could not be read, so no row from this run can be trusted: %w", version, part, path, err)
+	}
+	sum := sha256.Sum256(body)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func repositoryRoot(t *testing.T) string {
@@ -96,7 +109,7 @@ func TestEveryPartOfBothVersionsIsTrackedAndHashable(t *testing.T) {
 	for _, benched := range task.All() {
 		version := benched.Version
 		for _, part := range []task.Part{task.Prompt, task.Checklist, task.Checker} {
-			revision, err := task.Revision(root, version, part)
+			revision, err := revisionOf(root, version, part)
 			if err != nil {
 				t.Errorf("v%d %s: %v", version, part, err)
 				continue
@@ -160,7 +173,7 @@ func TestTheStoredV2RowNamesTheChecklistRevisionItScoredAgainst(t *testing.T) {
 		task.Checker:   stored.CheckerRevision,
 		task.Prompt:    stored.PromptRevision,
 	} {
-		revision, err := task.Revision(root, v2RowVersion, part)
+		revision, err := revisionOf(root, v2RowVersion, part)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -235,7 +248,7 @@ func TestStoreTheV2Row(t *testing.T) {
 
 func mustRevise(t *testing.T, root string, part task.Part) string {
 	t.Helper()
-	revision, err := task.Revision(root, v2RowVersion, part)
+	revision, err := revisionOf(root, v2RowVersion, part)
 	if err != nil {
 		t.Fatal(err)
 	}
