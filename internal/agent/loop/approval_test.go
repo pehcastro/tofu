@@ -13,6 +13,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/files/write"
 )
 
 type failingGate struct{}
@@ -38,7 +39,7 @@ type writeRun struct {
 func (w writeRun) do(t *testing.T) (ToolCallRow, string, bool) {
 	t.Helper()
 	root := t.TempDir()
-	write, err := NewWriteTool(root)
+	writer, err := write.NewWriteTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +48,7 @@ func (w writeRun) do(t *testing.T) (ToolCallRow, string, bool) {
 		ctx = t.Context()
 	}
 	model := &leadAndSubAgent{lead: []core.Decision{called("write", map[string]any{"path": w.path, "content": "a note"}), claimDecision("done")}}
-	row, err := Run(ctx, Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write), Caps: Caps{MaxSteps: 4}, ResultBytesCap: 4096, Project: root,
+	row, err := Run(ctx, Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(writer), Caps: Caps{MaxSteps: 4}, ResultBytesCap: 4096, Project: root,
 		ArtifactDir: filepath.Join(root, "artifacts"), Gate: w.gate, GateMode: w.mode, Person: w.person, Task: "write a note"})
 	if err != nil {
 		t.Fatal(err)

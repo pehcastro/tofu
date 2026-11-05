@@ -17,6 +17,7 @@ import (
 	"tofu/internal/models/llm/core"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/files/read"
 )
 
 type ForkKind string
@@ -503,13 +504,13 @@ func dropPicture(message *core.Message) int {
 }
 
 func pictureDrop(step int, call core.ToolCall, message core.Message, freed int) recall.Drop {
-	var read readArgs
-	_ = json.Unmarshal(call.Arguments, &read)
+	var picture read.ReadArgs
+	_ = json.Unmarshal(call.Arguments, &picture)
 	bytes := 0
 	for _, image := range message.Images {
 		bytes += len(image.Data)
 	}
-	return recall.Drop{Step: step, Tool: call.Name, Path: read.Path, Bytes: bytes, TokensFreed: freed, Reason: recall.DroppedAged}
+	return recall.Drop{Step: step, Tool: call.Name, Path: picture.Path, Bytes: bytes, TokensFreed: freed, Reason: recall.DroppedAged}
 }
 
 func picturesToDrop(messages []core.Message) int {

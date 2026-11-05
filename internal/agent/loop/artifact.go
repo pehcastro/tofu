@@ -24,6 +24,7 @@ import (
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/read"
 	"tofu/library/questions"
 )
 
@@ -244,13 +245,13 @@ func (j *keepJudge) refetched(called ToolCallRow) string {
 		return ""
 	}
 	var fetched fetchArgs
-	var read readArgs
+	var picture read.ReadArgs
 	key, what := dropKey{}, ""
 	switch {
 	case called.Tool == (FetchTool{}).Name() && json.Unmarshal(called.Args, &fetched) == nil:
 		key, what = dropKey{handle: fetched.Handle}, "artifact "+fetched.Handle
-	case called.Tool == (&ReadTool{}).Name() && json.Unmarshal(called.Args, &read) == nil:
-		key, what = j.keyOf(recall.Drop{Path: read.Path}), "picture "+read.Path
+	case called.Tool == (&read.ReadTool{}).Name() && json.Unmarshal(called.Args, &picture) == nil:
+		key, what = j.keyOf(recall.Drop{Path: picture.Path}), "picture "+picture.Path
 	}
 	if key == (dropKey{}) {
 		return ""
@@ -316,12 +317,12 @@ func (d *DropIndex) lookup(id string, key dropKey, events func(string) ([]sessio
 	defer d.mu.Unlock()
 	held := d.held(id)
 	if !held.scanned {
-		read, err := events(id)
+		sessionEvents, err := events(id)
 		if err != nil {
 			return nil, false
 		}
 		logged := map[dropKey]*recall.Drop{}
-		for _, event := range read {
+		for _, event := range sessionEvents {
 			var row compactionRow
 			if event.Kind != session.EventCompaction || json.Unmarshal(event.Body, &row) != nil || row.Compaction == nil {
 				continue
@@ -390,7 +391,7 @@ func capsLineWidth(tool string, args json.RawMessage) bool {
 	case "artifact_fetch", "search":
 		return false
 	case "read":
-		var ranged readArgs
+		var ranged read.ReadArgs
 		return json.Unmarshal(args, &ranged) != nil || (ranged.StartLine <= 0 && ranged.EndLine <= 0)
 	}
 	return true

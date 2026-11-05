@@ -27,6 +27,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/edit"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -259,11 +260,11 @@ func personOnlyRefusal(ctx context.Context, config Config, request GateRequest) 
 }
 
 func AsTheLead(ctx context.Context) context.Context {
-	return context.WithValue(ctx, subAgentKey{}, "")
+	return context.WithValue(ctx, contract.SubAgentKey{}, "")
 }
 
 func answerer(ctx context.Context) string {
-	if SubAgentAsking(ctx) != "" {
+	if contract.SubAgentAsking(ctx) != "" {
 		return "the orchestrator"
 	}
 	return allowedByThePerson
@@ -405,7 +406,7 @@ func keepsToScratch(boundary *subagents.Boundary, request GateRequest) bool {
 	}
 	switch request.Tool {
 	case "write", "edit":
-		paths, err := TargetPaths(request.Tool, request.Args)
+		paths, err := edit.TargetPaths(request.Tool, request.Args)
 		return err == nil && !slices.ContainsFunc(paths, func(target string) bool { return !boundary.Scratched(target) })
 	case bashToolName:
 		return boundary.KeepsToScratch(args.Command)
@@ -427,7 +428,7 @@ func keepsToOwns(boundary *subagents.Boundary, request GateRequest) bool {
 	}
 	switch request.Tool {
 	case "write", "edit":
-		paths, err := TargetPaths(request.Tool, request.written())
+		paths, err := edit.TargetPaths(request.Tool, request.written())
 		return err == nil && !slices.ContainsFunc(paths, func(target string) bool { return !owned(target) })
 	case bashToolName:
 		touched := 0
@@ -488,7 +489,7 @@ func CallPlace(request GateRequest, cwd string) string {
 	case request.Code != nil:
 		return request.Tool + " " + codePlace + CodeSum(*request.Code)
 	case request.Tool == "edit":
-		paths, _ := TargetPaths(request.Tool, request.Args)
+		paths, _ := edit.TargetPaths(request.Tool, request.Args)
 		return request.Tool + " " + strings.Join(paths, " ")
 	case args.Path != "":
 		return request.Tool + " " + args.Path
@@ -628,7 +629,7 @@ func PersonOnly(project string, request GateRequest) bool {
 }
 
 func harnessFileWritten(project string, request GateRequest) (string, bool) {
-	paths, err := TargetPaths(request.Tool, request.written())
+	paths, err := edit.TargetPaths(request.Tool, request.written())
 	if err != nil {
 		return "", true
 	}

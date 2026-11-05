@@ -12,6 +12,7 @@ import (
 	"tofu/internal/agent/subagents"
 	toolgate "tofu/internal/judge/points/tool_gate"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 )
 
 type seenByAll struct {
@@ -27,7 +28,7 @@ func (m *seenByAll) Ask(ctx context.Context, request core.Request) (core.Decisio
 	defer m.mu.Unlock()
 	last := request.Messages[len(request.Messages)-1].Content
 	queue, saw := &m.subAgent, &m.subSaw
-	if SubAgentAsking(ctx) == "" {
+	if contract.SubAgentAsking(ctx) == "" {
 		queue, saw = &m.lead, &m.leadSaw
 	}
 	*saw = append(*saw, last)
@@ -56,7 +57,7 @@ type gateSeeing struct {
 
 func (g *gateSeeing) Decide(ctx context.Context, request GateRequest) (GateDecision, error) {
 	g.mu.Lock()
-	g.seen = append(g.seen, SubAgentAsking(ctx)+":"+request.Tool)
+	g.seen = append(g.seen, contract.SubAgentAsking(ctx)+":"+request.Tool)
 	g.mu.Unlock()
 	return asksForSubAgents{}.Decide(ctx, request)
 }

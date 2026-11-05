@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
 	"tofu/internal/tools/contract"
 )
 

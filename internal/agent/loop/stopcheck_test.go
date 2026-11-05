@@ -11,6 +11,8 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/points"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/files/read"
+	"tofu/internal/tools/files/write"
 	shipped "tofu/library"
 )
 
@@ -160,11 +162,11 @@ func spawnCall(id, task string, owns ...string) core.Decision {
 
 func orchestratorTurn(t *testing.T, root string, decisions []core.Decision) (Config, *SpawnTool) {
 	t.Helper()
-	write, err := NewWriteTool(root)
+	writer, err := write.NewWriteTool(root)
 	if err != nil {
 		t.Fatalf("building the write tool: %v", err)
 	}
-	read, err := NewReadTool(root)
+	reader, err := read.NewReadTool(root)
 	if err != nil {
 		t.Fatalf("building the read tool: %v", err)
 	}
@@ -172,7 +174,7 @@ func orchestratorTurn(t *testing.T, root string, decisions []core.Decision) (Con
 	base := Config{
 		Model:          &stubModel{decisions: decisions},
 		Spend:          SpendAPIKey,
-		Tools:          NewRegistry(read, write),
+		Tools:          NewRegistry(reader, writer),
 		Caps:           Caps{MaxSteps: 20},
 		ResultBytesCap: 4096,
 		ArtifactDir:    filepath.Join(root, "artifacts"),
@@ -181,7 +183,7 @@ func orchestratorTurn(t *testing.T, root string, decisions []core.Decision) (Con
 	spawn := NewSpawnTool(orchestratorID, base, &subagents.Roster{})
 	orchestrator := base
 	orchestrator.Task = "hand the work to a sub-agent"
-	orchestrator.Tools, orchestrator.Inbox = NewRegistry(read, write, spawn), spawn.Inbox
+	orchestrator.Tools, orchestrator.Inbox = NewRegistry(reader, writer, spawn), spawn.Inbox
 	return orchestrator, spawn
 }
 

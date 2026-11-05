@@ -15,6 +15,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/edit"
 )
 
 func claimedTools(registry Registry, store *session.Store, own string) Registry {
@@ -74,7 +75,7 @@ func (t claimed) check(raw json.RawMessage) (string, error) {
 			note = heldNote(claims, unread)
 		}
 	} else {
-		if written, err = TargetPaths(t.Name(), raw); err != nil {
+		if written, err = edit.TargetPaths(t.Name(), raw); err != nil {
 			return "", err
 		}
 	}
@@ -90,7 +91,7 @@ func (t claimed) check(raw json.RawMessage) (string, error) {
 		}
 		for _, claim := range claims {
 			if held, _ := subagents.Matches(path, claim.Owns); held {
-				return "", fmt.Errorf("%s refused: %s is held by side chat %s while its turn runs: write it when that turn ends, or leave it to that chat%s", t.Name(), path, sideName(claim), NoneWritten(len(written)))
+				return "", fmt.Errorf("%s refused: %s is held by side chat %s while its turn runs: write it when that turn ends, or leave it to that chat%s", t.Name(), path, sideName(claim), edit.NoneWritten(len(written)))
 			}
 		}
 	}

@@ -11,6 +11,7 @@ import (
 
 	"tofu/internal/agent/hooks"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -92,7 +93,7 @@ func hookRefusal(ctx context.Context, config Config, request GateRequest, pre ho
 		return "this call did not run: a PreToolUse hook refused it: " + pre.Block
 	}
 	if pre.Ask != "" {
-		if config.Person != nil && config.Notify != nil && SubAgentAsking(ctx) == "" {
+		if config.Person != nil && config.Notify != nil && contract.SubAgentAsking(ctx) == "" {
 			config.Notify("a PreToolUse hook asks you before " + request.Tool + " runs: " + pre.Ask)
 		}
 		if _, refused := personRefusal(ctx, config.Person, request, GateDecision{HookAsk: pre.Ask}, "this call did not run: a PreToolUse hook asks first: "+pre.Ask); refused != "" {

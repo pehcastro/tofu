@@ -12,6 +12,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/read"
 )
 
 const bigLinePad = "............................................"
@@ -45,11 +46,11 @@ func readBigFile(t *testing.T, args string, truncate bool) (string, string) {
 	if err := os.WriteFile(filepath.Join(root, "big.txt"), []byte(body.String()), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	read, err := NewReadTool(root)
+	reader, err := read.NewReadTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return runOneTool(t, read, args, truncate)
+	return runOneTool(t, reader, args, truncate)
 }
 
 func fetchAt(t *testing.T, dir, rendered string, offset int) string {

@@ -12,6 +12,9 @@ import (
 	"tofu/internal/models/llm/wire/openai"
 	"tofu/internal/models/transport"
 	"tofu/internal/stat"
+	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/read"
+	"tofu/internal/tools/files/write"
 )
 
 const (
@@ -114,11 +117,11 @@ func runOne(ctx context.Context, model iturn.Model, task Task, armName string, m
 }
 
 func buildTools(dir string) (iturn.Registry, error) {
-	readTool, err := iturn.NewReadTool(dir)
+	readTool, err := read.NewReadTool(dir)
 	if err != nil {
 		return iturn.Registry{}, err
 	}
-	writeTool, err := iturn.NewWriteTool(dir)
+	writeTool, err := write.NewWriteTool(dir)
 	if err != nil {
 		return iturn.Registry{}, err
 	}
@@ -126,7 +129,7 @@ func buildTools(dir string) (iturn.Registry, error) {
 	if err != nil {
 		return iturn.Registry{}, err
 	}
-	ledger := iturn.NewReadLedger()
+	ledger := contract.NewReadLedger()
 	return iturn.NewRegistry(readTool.Reading(ledger), writeTool.Reading(ledger), bashTool), nil
 }
 

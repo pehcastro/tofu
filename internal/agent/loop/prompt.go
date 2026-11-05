@@ -14,6 +14,7 @@ import (
 	"tofu/internal/librarian/skills"
 	"tofu/internal/platform/fs"
 	"tofu/internal/store/settings"
+	"tofu/internal/tools/contract"
 )
 
 const EveryToolIsRelativeToTheWorkingDirectory = "you are working inside one directory. every path you name is relative to it and nothing above it exists. "
@@ -102,7 +103,7 @@ func Redated(environment string, clock func() time.Time) string {
 func environmentBlock(dir string, now time.Time, shell *RunShell) string {
 	lines := []string{
 		"<env>",
-		"working directory: " + absolute(dir),
+		"working directory: " + contract.Absolute(dir),
 		"platform: " + fs.OS() + "/" + fs.Arch(),
 		todaysDate + now.Format(time.DateOnly),
 	}
@@ -148,7 +149,7 @@ func ProjectInstructionsInOrder(dir, home string, capBytes int, choice string) (
 	folders := skills.ProjectFolders(dir, home)
 	chosenIn := map[string]string{}
 	for _, name := range settings.InstructionFiles(choice) {
-		at := slices.IndexFunc(folders, func(folder string) bool { return isFile(filepath.Join(folder, name)) })
+		at := slices.IndexFunc(folders, func(folder string) bool { return contract.IsFile(filepath.Join(folder, name)) })
 		if at < 0 {
 			continue
 		}
@@ -200,7 +201,7 @@ func readInstructions(path string) string {
 }
 
 func gitBranch(dir string) string {
-	at := absolute(dir)
+	at := contract.Absolute(dir)
 	for {
 		marker := filepath.Join(at, ".git")
 		if info, err := os.Stat(marker); err == nil {

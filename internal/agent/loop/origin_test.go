@@ -11,12 +11,13 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/files/read"
 	"tofu/internal/tools/shell/process"
 )
 
 func TestEveryTextEnteringTheSessionSaysWhereItCameFrom(t *testing.T) {
 	root := t.TempDir()
-	read, err := NewReadTool(root)
+	reader, err := read.NewReadTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,11 +33,11 @@ func TestEveryTextEnteringTheSessionSaysWhereItCameFrom(t *testing.T) {
 		usersRoute: {claimDecision("the users route is added")},
 	})
 	store, id := session.NewStore(t.TempDir()), session.NewEventID()
-	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(read, bash), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
+	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(reader, bash), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
 		ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" }, Sessions: store, Session: id}
 	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	lead := base
-	lead.Task, lead.Tools, lead.Inbox = "start the backup and hand the users route to a sub-agent", NewRegistry(read, bash, spawn), spawn.Inbox
+	lead.Task, lead.Tools, lead.Inbox = "start the backup and hand the users route to a sub-agent", NewRegistry(reader, bash, spawn), spawn.Inbox
 	typed := make(chan string, 1)
 	led := startLead(WithShellRegistry(context.Background(), process.OpenAt(t.TempDir())), lead, typed)
 	waitFor(t, "the lead's first turn to end", func() bool { return len(led.turns()) >= 1 })

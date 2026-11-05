@@ -13,6 +13,9 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/code/test"
+	"tofu/internal/tools/code/typecheck/checkers"
+	"tofu/internal/tools/contract"
 )
 
 func editedSince(project string, definition subagents.Definition, rounds []Row) ([]ToolCallRow, string) {
@@ -43,7 +46,7 @@ func gateExemptions(project string, definition subagents.Definition, rounds []Ro
 	for _, check := range []string{"test", "typecheck"} {
 		last := ""
 		for _, call := range sinceEdit {
-			if call.Tool == check && call.Error != typecheckUnanswered {
+			if call.Tool == check && call.Error != checkers.TypecheckUnanswered {
 				last = call.Error
 			}
 		}
@@ -55,11 +58,11 @@ func gateExemptions(project string, definition subagents.Definition, rounds []Ro
 		return exempt
 	}
 	if slices.Contains(definition.Gate, "test") {
-		if _, refused := vitestPackage(filepath.Dir(lastEdit)); strings.HasPrefix(refused.FailureText, testNoTests) {
+		if _, refused := test.VitestPackage(filepath.Dir(lastEdit)); strings.HasPrefix(refused.FailureText, test.NoTests) {
 			exempt["test"] = refused.FailureText
 		}
 	}
-	if manifest, found := findUp(filepath.Dir(lastEdit), "Cargo.toml"); found && slices.Contains(definition.Gate, "cargo test") && !crateHoldsTests(filepath.Dir(manifest)) {
+	if manifest, found := contract.FindUp(filepath.Dir(lastEdit), "Cargo.toml"); found && slices.Contains(definition.Gate, "cargo test") && !crateHoldsTests(filepath.Dir(manifest)) {
 		named, _ := filepath.Rel(project, manifest)
 		exempt["cargo test"] = "cargo test is not needed: the crate of " + filepath.ToSlash(named) + " has no #[test] and no tests directory, so there is nothing to run"
 	}
@@ -121,7 +124,7 @@ func cargoOwned(project, lastEdit string, owns []string, printedPath string) boo
 	}
 	path, found := filepath.FromSlash(strings.ReplaceAll(printedPath, `\`, "/")), true
 	if !filepath.IsAbs(path) {
-		path, found = findUp(filepath.Dir(lastEdit), path)
+		path, found = contract.FindUp(filepath.Dir(lastEdit), path)
 	}
 	relative, err := filepath.Rel(project, path)
 	if !found || err != nil {
@@ -144,7 +147,7 @@ func gateMissed(project string, recipes map[string]string, definition subagents.
 		}
 		said := check + " did not run"
 		for _, call := range sinceEdit {
-			if !gateRan(check, call, recipes) || call.Error == typecheckUnanswered {
+			if !gateRan(check, call, recipes) || call.Error == checkers.TypecheckUnanswered {
 				continue
 			}
 			printed := printedBy(rounds, call.Call)
@@ -177,7 +180,7 @@ func gateMissed(project string, recipes map[string]string, definition subagents.
 				said = fmt.Sprintf("%s exited %d%s", check, *call.ExitCode, quoted)
 			case !mine:
 				said = ""
-			case call.Error != "" && !strings.HasPrefix(call.Error, testNoTests):
+			case call.Error != "" && !strings.HasPrefix(call.Error, test.NoTests):
 				said = check + " failed" + quoted
 			default:
 				said = ""
@@ -267,7 +270,7 @@ func typecheckOwnError(project string, owns []string, printed, scope string) (qu
 	if !filepath.IsAbs(scope) {
 		scope = filepath.Join(project, scope)
 	}
-	tsconfig, found := findUp(scope, tsconfigName)
+	tsconfig, found := contract.FindUp(scope, checkers.TsconfigName)
 	if len(owns) == 0 || !hasList || !found {
 		return errorLine(printed), true
 	}

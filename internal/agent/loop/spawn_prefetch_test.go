@@ -16,6 +16,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit"
+	"tofu/internal/tools/files/read"
 	"tofu/internal/tools/registry"
 )
 
@@ -70,12 +71,12 @@ func TestABriefNamingFilesStartsTheSubAgentHoldingThemAndItsEditIsNotRefused(t *
 			t.Fatal(err)
 		}
 	}
-	ledger := loop.NewReadLedger()
-	read, err := loop.NewReadTool(root)
+	ledger := contract.NewReadLedger()
+	reader, err := read.NewReadTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	edit, err := edit.NewEdit(root)
+	editor, err := edit.NewEdit(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +88,7 @@ func TestABriefNamingFilesStartsTheSubAgentHoldingThemAndItsEditIsNotRefused(t *
 	base := loop.Config{
 		Model:          script,
 		Spend:          loop.SpendAPIKey,
-		Tools:          loop.NewRegistry(registry.NewMemo().Wrap([]contract.Tool{read.Reading(ledger), edit.Reading(ledger)})...),
+		Tools:          loop.NewRegistry(registry.NewMemo().Wrap([]contract.Tool{reader.Reading(ledger), editor.Reading(ledger)})...),
 		Caps:           loop.Caps{MaxSteps: 5},
 		ResultBytesCap: 4096,
 		ArtifactDir:    filepath.Join(outside, "artifacts"),

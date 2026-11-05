@@ -8,6 +8,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/edit"
 )
 
 type ownedTool struct {
@@ -37,7 +38,7 @@ func boundaryRefusal(tools Registry, call core.ToolCall) string {
 }
 
 func (t ownedTool) refusal(raw json.RawMessage) error {
-	paths, err := TargetPaths(t.Name(), raw)
+	paths, err := edit.TargetPaths(t.Name(), raw)
 	if err != nil {
 		return err
 	}
@@ -46,7 +47,7 @@ func (t ownedTool) refusal(raw json.RawMessage) error {
 			return ReadOnlyError{Tool: t.Name()}
 		}
 		if err := t.boundary.Write(path); err != nil {
-			return fmt.Errorf("%s: %w%s", t.Name(), err, NoneWritten(len(paths)))
+			return fmt.Errorf("%s: %w%s", t.Name(), err, edit.NoneWritten(len(paths)))
 		}
 	}
 	return nil

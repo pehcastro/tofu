@@ -19,6 +19,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/platform/credential"
 	"tofu/internal/platform/fs"
+	"tofu/internal/tools/files/read"
 )
 
 const leadKey, sideKey, usersRoute = "lead", "side", "add the users route"
@@ -110,16 +111,16 @@ func waitFor(t *testing.T, what string, done func() bool) {
 func crewLead(t *testing.T, model *crew) Config {
 	t.Helper()
 	root := t.TempDir()
-	read, err := NewReadTool(root)
+	reader, err := read.NewReadTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(read), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
+	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(reader), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
 		ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" }}
 	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	spawn.SubAgents.Defined = []subagents.Definition{{Name: "ts-dev", Runs: subagents.RunsModel}}
 	lead := base
-	lead.Task, lead.Tools, lead.Inbox = "hand the work to a sub-agent", NewRegistry(read, spawn), spawn.Inbox
+	lead.Task, lead.Tools, lead.Inbox = "hand the work to a sub-agent", NewRegistry(reader, spawn), spawn.Inbox
 	return lead
 }
 

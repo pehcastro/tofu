@@ -16,6 +16,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/files/read"
 )
 
 type recordingModel struct {
@@ -38,7 +39,7 @@ func TestTheMemoryViewIsOnceInEveryRequestHeldWithinAGenerationAndFreshAtEachFor
 	if err := os.WriteFile(filepath.Join(root, "big.txt"), []byte(strings.Repeat("a line of the parser\n", 2000)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	read, err := loop.NewReadTool(root)
+	reader, err := read.NewReadTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +51,7 @@ func TestTheMemoryViewIsOnceInEveryRequestHeldWithinAGenerationAndFreshAtEachFor
 	config := loop.Config{
 		Model:          model,
 		Spend:          loop.SpendAPIKey,
-		Tools:          loop.NewRegistry(read),
+		Tools:          loop.NewRegistry(reader),
 		System:         "you are tofu",
 		Memory:         view,
 		Prefix:         &loop.Prefix{},

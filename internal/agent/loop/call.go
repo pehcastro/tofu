@@ -140,7 +140,7 @@ func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, 
 func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts) (ToolCallRow, core.Message, bool) {
 	call := g.call
 	started := time.Now()
-	ctx = context.WithValue(context.WithValue(context.WithValue(ctx, shellOwnerKey{}, g.author), spawnSiteKey{}, g.site), runningModelKey{}, g.model)
+	ctx = context.WithValue(context.WithValue(context.WithValue(ctx, contract.ShellOwnerKey{}, g.author), spawnSiteKey{}, g.site), runningModelKey{}, g.model)
 	tool, ok := tools.byName[call.Name]
 	if !ok {
 		row, answer := rejectedCall(call, started, "unknown tool "+strconv.Quote(call.Name), g.id, g.parent, g.author)

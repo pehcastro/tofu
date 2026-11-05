@@ -25,6 +25,7 @@ import (
 	"tofu/internal/platform/safe"
 	"tofu/internal/platform/scratch"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 )
@@ -198,14 +199,14 @@ func probeArgsFor(name string) []string {
 func projectInterpreters(dir string) []string {
 	var want []string
 	if body, err := os.ReadFile(filepath.Join(dir, "package.json")); err == nil {
-		var manifest packageManifest
+		var manifest checkers.PackageManifest
 		_ = json.Unmarshal(body, &manifest)
-		want = append(want, "node", lockfileManager(dir, manifest))
+		want = append(want, "node", checkers.LockfileManager(dir, manifest))
 	}
-	if isFile(filepath.Join(dir, "go.mod")) {
+	if contract.IsFile(filepath.Join(dir, "go.mod")) {
 		want = append(want, "go")
 	}
-	if isFile(filepath.Join(dir, "pyproject.toml")) {
+	if contract.IsFile(filepath.Join(dir, "pyproject.toml")) {
 		want = append(want, "python")
 	}
 	return want
@@ -401,7 +402,7 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (contract.R
 		return contract.Result{}, errors.New("bash: background needs a shell registry and none is attached to this turn")
 	}
 	cmd := t.command(context.Background(), ctx, args.Command)
-	got, err := registry.YieldReady(ctx, cmd, args.Command, shellOwnerFrom(ctx), process.Wait{
+	got, err := registry.YieldReady(ctx, cmd, args.Command, contract.ShellOwnerFrom(ctx), process.Wait{
 		Within: konst.BackgroundReadyMillis * time.Millisecond,
 		Poll:   konst.ReadyPollMillis * time.Millisecond,
 		Port:   process.NamedPort(string(t.root), args.Command, cmd.Env),
@@ -446,7 +447,7 @@ func (t *BashTool) runOrMove(ctx context.Context, registry *process.Registry, co
 		wait.Early, stop = inbox.whenTyped(project.Crashes(string(t.root)))
 		defer stop()
 	}
-	got, err := registry.YieldReady(ctx, t.command(context.Background(), ctx, command), command, shellOwnerFrom(ctx), wait)
+	got, err := registry.YieldReady(ctx, t.command(context.Background(), ctx, command), command, contract.ShellOwnerFrom(ctx), wait)
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("bash: %w", err)
 	}
@@ -489,7 +490,7 @@ func (t *BashTool) runOrMove(ctx context.Context, registry *process.Registry, co
 }
 
 func ledByTheLead(ctx context.Context) bool {
-	owner := shellOwnerFrom(ctx)
+	owner := contract.ShellOwnerFrom(ctx)
 	return owner == "" || owner == session.AuthorOrchestrator
 }
 
@@ -595,7 +596,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 	if strings.TrimSpace(args.Command) == "" {
 		return contract.Result{}, errors.New("bash: command is required unless check_port is set")
 	}
-	owner := shellOwnerFrom(ctx)
+	owner := contract.ShellOwnerFrom(ctx)
 	subAgent := !ledByTheLead(ctx)
 	if registry := ShellRegistryFrom(ctx); registry != nil {
 		owned := registry.Owning(args.Command)

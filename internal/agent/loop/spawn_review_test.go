@@ -12,6 +12,8 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/code/test"
+	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
 )
 
@@ -314,13 +316,13 @@ func TestAResumedSubAgentIsOneSubAgentInTheLogAndItsChatLineSaysSo(t *testing.T)
 
 func TestATestToolAnsweringNoTestsAfterTheEditIsNotAFailure(t *testing.T) {
 	rows := gatedRun(t, "", tsDev,
-		edited("src/users.ts"), called("typecheck", map[string]any{}), called("test", map[string]any{"fail": testNoTests + "\npackage.json names no test runner"}), claimDecision("done")).rows
+		edited("src/users.ts"), called("typecheck", map[string]any{}), called("test", map[string]any{"fail": test.NoTests + "\npackage.json names no test runner"}), claimDecision("done")).rows
 	reopenedFor(t, rows, 1)
 }
 
 func TestATypecheckStillWarmingIsNotRunRatherThanFailed(t *testing.T) {
 	rows := gatedRun(t, "", tsDev,
-		edited("src/users.ts"), called("test", map[string]any{}), called("typecheck", map[string]any{"fail": typecheckUnanswered}), claimDecision("done"),
+		edited("src/users.ts"), called("test", map[string]any{}), called("typecheck", map[string]any{"fail": checkers.TypecheckUnanswered}), claimDecision("done"),
 		called("typecheck", map[string]any{}), claimDecision("done")).rows
 	reopenedFor(t, rows, 2, "typecheck did not run")
 	if strings.Contains(rows[1].Task, "typecheck failed") {

@@ -17,6 +17,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/edit"
 )
 
 const (
@@ -291,14 +292,14 @@ func (t sideWrite) Name() string { return t.tool.Name() }
 func (t sideWrite) Definition() core.Tool { return t.tool.Definition() }
 
 func (t sideWrite) refusal(raw json.RawMessage) error {
-	paths, err := TargetPaths(t.Name(), raw)
+	paths, err := edit.TargetPaths(t.Name(), raw)
 	if err != nil {
 		return err
 	}
 	for _, path := range paths {
 		err = t.boundary.Write(path)
 		if errors.As(err, &subagents.DeniedError{}) {
-			return SideRefusedError{Tool: t.Name(), What: path + " is left as it was" + NoneWritten(len(paths)), Owns: t.boundary.Owns()}
+			return SideRefusedError{Tool: t.Name(), What: path + " is left as it was" + edit.NoneWritten(len(paths)), Owns: t.boundary.Owns()}
 		}
 		if err != nil {
 			return fmt.Errorf("%s: %w", t.Name(), err)

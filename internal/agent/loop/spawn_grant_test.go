@@ -14,6 +14,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/write"
 )
 
 func messageDoing(id, to, do string, owns ...string) core.Decision {
@@ -35,15 +36,15 @@ func writeCall(id, path string) core.Decision {
 func writingCrew(t *testing.T, model *crew) (Config, string) {
 	t.Helper()
 	root := t.TempDir()
-	write, err := NewWriteTool(root)
+	writer, err := write.NewWriteTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
+	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(writer), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
 		ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" }}
 	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	lead := base
-	lead.Task, lead.Tools, lead.Inbox = "hand the work to sub-agents", NewRegistry(write, spawn), spawn.Inbox
+	lead.Task, lead.Tools, lead.Inbox = "hand the work to sub-agents", NewRegistry(writer, spawn), spawn.Inbox
 	return lead, root
 }
 
@@ -141,7 +142,7 @@ var scratchNamed = regexp.MustCompile(`scratch folder is (\S+?),`)
 func (m *scratchCrew) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if SubAgentAsking(ctx) == "" {
+	if contract.SubAgentAsking(ctx) == "" {
 		m.leadSaw = append(m.leadSaw, request.Messages[len(request.Messages)-1].Content)
 		if len(m.lead) == 0 {
 			return core.Decision{}, errors.New("the lead has no decision left")
@@ -162,7 +163,7 @@ func (m *scratchCrew) Ask(ctx context.Context, request core.Request) (core.Decis
 
 func TestASubAgentWritesAndDeletesInItsScratchWithNoAsk(t *testing.T) {
 	root := t.TempDir()
-	write, err := NewWriteTool(root)
+	writer, err := write.NewWriteTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +186,7 @@ func TestASubAgentWritesAndDeletesInItsScratchWithNoAsk(t *testing.T) {
 		},
 	}
 	asked := 0
-	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write, bash), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096, Project: root,
+	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(writer, bash), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096, Project: root,
 		ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" },
 		Gate: asksForSubAgents{}, GateMode: GateEnforce,
 		Person: func(context.Context, GateRequest, GateDecision) (PersonAnswer, error) {
@@ -195,7 +196,7 @@ func TestASubAgentWritesAndDeletesInItsScratchWithNoAsk(t *testing.T) {
 	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	spawn.Project = root
 	lead := base
-	lead.Task, lead.Tools, lead.Inbox = "hand the probe to a sub-agent", NewRegistry(write, bash, spawn), spawn.Inbox
+	lead.Task, lead.Tools, lead.Inbox = "hand the probe to a sub-agent", NewRegistry(writer, bash, spawn), spawn.Inbox
 	startLead(t.Context(), lead, nil).wait(t)
 
 	if seen == "" {

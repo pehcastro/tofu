@@ -19,7 +19,9 @@ import (
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/edit"
 	"tofu/internal/tools/files/edit/patch"
+	"tofu/internal/tools/files/write"
 )
 
 type BudgetRefusal string
@@ -214,9 +216,9 @@ func generatedFiles(steps []subagents.ShellStep) []string {
 }
 
 func sources(r contract.Root) map[string]string {
-	listed, err := gitListing(r)
+	listed, err := contract.GitListing(r)
 	if err != nil {
-		listed, _ = walkListing(r)
+		listed, _ = contract.WalkListing(r)
 	}
 	held := map[string]string{}
 	for _, file := range listed {
@@ -248,7 +250,7 @@ func (t wroteBySubAgent) Name() string { return t.tool.Name() }
 func (t wroteBySubAgent) Definition() core.Tool { return t.tool.Definition() }
 
 func (t wroteBySubAgent) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
-	paths, _ := TargetPaths(t.Name(), raw)
+	paths, _ := edit.TargetPaths(t.Name(), raw)
 	t.writes.Wrote(paths)
 	defer t.writes.Wrote(paths)
 	return t.tool.Run(ctx, raw)
@@ -301,7 +303,7 @@ type sourceBudget struct {
 	spent   int
 	scripts []ScriptSpend
 	enabled []subagents.Definition
-	files   *WriteTool
+	files   *write.WriteTool
 	writes  *subagents.Writes
 	roster  *subagents.Roster
 }
@@ -409,7 +411,7 @@ func WithSourceBudget(tools []contract.Tool, defined []subagents.Definition) []c
 		if memoised, cached := tool.(interface{ Uncached() contract.Tool }); cached {
 			inner = memoised.Uncached()
 		}
-		if writer, writes := inner.(*WriteTool); writes {
+		if writer, writes := inner.(*write.WriteTool); writes {
 			budget.files = writer
 		}
 		if slices.Contains([]string{"write", "edit", "bash"}, tool.Name()) {
@@ -482,13 +484,13 @@ func (t budgetedTool) Run(ctx context.Context, raw json.RawMessage) (contract.Re
 	}
 	changes := []budgetArgs{args}
 	if t.Name() == "edit" {
-		edits, err := EditChanges(raw)
+		edits, err := edit.EditChanges(raw)
 		if err != nil {
 			return t.tool.Run(ctx, raw)
 		}
 		changes = make([]budgetArgs, len(edits))
-		for i, edit := range edits {
-			changes[i] = budgetArgs{Path: edit.Path, Old: edit.Old, New: edit.New}
+		for i, edited := range edits {
+			changes[i] = budgetArgs{Path: edited.Path, Old: edited.Old, New: edited.New}
 		}
 	}
 	lines := 0

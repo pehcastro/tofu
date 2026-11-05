@@ -562,7 +562,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	timing.took("scratch")
 	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, askedEffort: effort, system: system, parts: parts,
 		environment: environment + scratchWords(scratch),
-		briefFiles:  t.briefFiles(context.WithValue(ctx, subAgentKey{}, subAgentID), args, site.conversation),
+		briefFiles:  t.briefFiles(context.WithValue(ctx, contract.SubAgentKey{}, subAgentID), args, site.conversation),
 		boundary:    subagents.NewBoundary(subAgentID, scratch.Dir(), args.Owns), scratch: scratch, inbox: NewInbox(),
 		trace: spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, ticket: args.Ticket, depth: t.depth + 1}}
 	runCtx, cancel := outlivingTheWave(ctx)
@@ -622,7 +622,7 @@ func (t *SpawnTool) background(ctx context.Context, cancel context.CancelFunc, h
 	if opened.Close != nil {
 		defer opened.Close()
 	}
-	ctx = context.WithValue(context.WithValue(ctx, subAgentKey{}, held.agent.ID), boardActorKey{}, t.ticketActor(cmp.Or(held.agent.Ticket, held.agent.ID)))
+	ctx = context.WithValue(context.WithValue(ctx, contract.SubAgentKey{}, held.agent.ID), boardActorKey{}, t.ticketActor(cmp.Or(held.agent.Ticket, held.agent.ID)))
 	if held.scratch.Root != "" {
 		ctx = platformscratch.WithScratch(ctx, held.scratch)
 	}

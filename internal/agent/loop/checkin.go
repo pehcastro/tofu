@@ -22,6 +22,7 @@ import (
 	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
+	"tofu/internal/tools/contract"
 )
 
 type checkIn struct {
@@ -281,7 +282,7 @@ func (w leadWork) checkInDue(held bool, reviews []boardy.Front) bool {
 
 func (w leadWork) asks(opening, review string) string {
 	return fmt.Sprintf("%s with %d of %d sub-agents running, free todo %s and review %s: close each review, done or back to doing with the failing lines, "+
-		"and spawn free todo up to the limit in this reply, or say in one line why not.", opening, w.running, w.limit, listed(w.free), review)
+		"and spawn free todo up to the limit in this reply, or say in one line why not.", opening, w.running, w.limit, contract.Listed(w.free), review)
 }
 
 func (w leadWork) quietBecause(messages []core.Message, byThePerson bool, said string) string {
@@ -290,7 +291,7 @@ func (w leadWork) quietBecause(messages []core.Message, byThePerson bool, said s
 	if byThePerson && !slices.ContainsFunc(words, func(word string) bool { return slices.Contains(ids, strings.TrimRight(word, "-")) }) {
 		return "the person's message names none of the board work"
 	}
-	asked := w.asks(leadEndedOpening, listed(w.review))
+	asked := w.asks(leadEndedOpening, contract.Listed(w.review))
 	for i := len(messages) - 1; i >= 0; i-- {
 		if messages[i].Origin.Source != core.SourceSlots || !strings.HasPrefix(messages[i].Content, leadEndedOpening+" with ") {
 			continue
@@ -337,7 +338,7 @@ func Waiting(tickets []boardy.Front, now time.Time) (lines []string, more int) {
 
 func waitingReviews(reviews []boardy.Front, now time.Time) string {
 	waiting, more := Waiting(reviews, now)
-	said := listed(waiting)
+	said := contract.Listed(waiting)
 	if more > 0 {
 		said += fmt.Sprintf(", and %d more in review", more)
 	}

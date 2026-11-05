@@ -3,17 +3,19 @@ package loop
 import (
 	"context"
 	"encoding/json"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
 )
 
 type typecheckIn struct {
 	dir      string
-	checkers *Typecheckers
+	checkers *checkers.Typecheckers
 }
 
 func (typecheckIn) Name() string { return "typecheck" }
@@ -27,15 +29,21 @@ func (c typecheckIn) Run(ctx context.Context, _ json.RawMessage) (contract.Resul
 }
 
 func TestATsDevWhoseLastTypecheckFoundAnErrorIsReopened(t *testing.T) {
-	dir := tsProject(t, "bun", "bun.lock", map[string]string{"src/users.ts": "export const count: number = \"many\";\n"})
-	checkers := NewTypecheckers()
-	t.Cleanup(checkers.Close)
+	if _, err := exec.LookPath("bun"); err != nil {
+		t.Skip("bun is not on PATH")
+	}
+	dir := tsProjectHolding(t, map[string]string{
+		"tsconfig.json": `{"compilerOptions":{"strict":true}}`, "package.json": `{"name":"fallback"}`, "bun.lock": "{}",
+		"src/users.ts": "export const count: number = \"many\";\n",
+	})
+	typecheckers := checkers.NewTypecheckers()
+	t.Cleanup(typecheckers.Close)
 	base := Config{
 		Model: &stubModel{decisions: []core.Decision{
 			edited("src/users.ts"), called("test", map[string]any{}), called("typecheck", map[string]any{}), claimDecision("done"),
 		}},
 		Spend:          SpendAPIKey,
-		Tools:          NewRegistry(scriptedCheck("edit"), scriptedCheck("test"), typecheckIn{dir: dir, checkers: checkers}),
+		Tools:          NewRegistry(scriptedCheck("edit"), scriptedCheck("test"), typecheckIn{dir: dir, checkers: typecheckers}),
 		Caps:           Caps{MaxSteps: 20},
 		ResultBytesCap: 4096,
 		ArtifactDir:    filepath.Join(t.TempDir(), "artifacts"),

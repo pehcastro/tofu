@@ -13,6 +13,7 @@ import (
 
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/read"
 )
 
 func madeUpPNG(t *testing.T, width, height int) []byte {
@@ -46,7 +47,7 @@ func TestReadHandsAPictureToTheModel(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	read, err := NewReadTool(root)
+	reader, err := read.NewReadTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +71,7 @@ func TestReadHandsAPictureToTheModel(t *testing.T) {
 		{args: `{"path":"broken.png"}`, refused: true},
 	} {
 		t.Run(c.args, func(t *testing.T) {
-			result, err := read.Run(context.Background(), json.RawMessage(c.args))
+			result, err := reader.Run(context.Background(), json.RawMessage(c.args))
 			if c.refused {
 				if err == nil {
 					t.Fatalf("a file that only looks like a png was sent as %d image(s) and %q, want a refusal", len(result.Images), result.Content)

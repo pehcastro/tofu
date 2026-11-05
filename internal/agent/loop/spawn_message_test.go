@@ -11,6 +11,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/files/read"
 )
 
 func messageTo(id, to, text string) core.Decision {
@@ -148,15 +149,15 @@ func TestASubAgentMessagedAfterItEndedResendsItsLastRequestUnchangedThinkingIncl
 	release := model.hold(usersRoute, 2)
 	defer release()
 	root := t.TempDir()
-	read, err := NewReadTool(root)
+	reader, err := read.NewReadTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(read), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096, ArtifactDir: filepath.Join(root, "artifacts"),
+	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(reader), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096, ArtifactDir: filepath.Join(root, "artifacts"),
 		NewID: func() string { return "turn-lead" }, Sessions: session.NewStore(t.TempDir()), Session: session.NewEventID()}
 	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	lead := base
-	lead.Task, lead.Tools, lead.Inbox = "hand the work to a sub-agent", NewRegistry(read, spawn), spawn.Inbox
+	lead.Task, lead.Tools, lead.Inbox = "hand the work to a sub-agent", NewRegistry(reader, spawn), spawn.Inbox
 	led := startLead(context.Background(), lead, nil)
 	waitFor(t, "the lead's first turn to end with sub-1 running", func() bool { return len(led.turns()) == 1 })
 	release()

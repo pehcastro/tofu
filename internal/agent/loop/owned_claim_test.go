@@ -14,6 +14,8 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/read"
+	"tofu/internal/tools/files/write"
 )
 
 func claimNotes(t *testing.T, store *session.Store, owns ...string) func() error {
@@ -102,7 +104,7 @@ func TestASideChatsHeldPathsHoldAgainstSpawnGrantAndARunningSubAgent(t *testing.
 	defer release()
 	root := t.TempDir()
 	t.Chdir(root)
-	write, err := NewWriteTool(root)
+	writeTool, err := write.NewWriteTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,11 +113,11 @@ func TestASideChatsHeldPathsHoldAgainstSpawnGrantAndARunningSubAgent(t *testing.
 		t.Fatal(err)
 	}
 	store := session.OpenAt(t.TempDir())
-	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write, bash), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
+	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(writeTool, bash), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
 		ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" }, Sessions: store, Session: "lead"}
 	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	lead := base
-	lead.Task, lead.Tools, lead.Inbox, lead.Sessions = "hand the work to sub-agents", NewRegistry(write, spawn), spawn.Inbox, nil
+	lead.Task, lead.Tools, lead.Inbox, lead.Sessions = "hand the work to sub-agents", NewRegistry(writeTool, spawn), spawn.Inbox, nil
 	typed := make(chan string, 1)
 	led := startLead(t.Context(), lead, typed)
 	waitFor(t, "sub-1's first request", func() bool { return len(model.requests(writer)) >= 1 })
@@ -152,11 +154,11 @@ func TestASideChatsHeldPathsHoldAgainstSpawnGrantAndARunningSubAgent(t *testing.
 func TestASideChatSendsItsParentsSystemBytesAndItsOwnInstructionsAfterTheHead(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
-	read, err := NewReadTool(root)
+	reader, err := read.NewReadTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	write, err := NewWriteTool(root)
+	writer, err := write.NewWriteTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,7 +194,7 @@ func TestASideChatSendsItsParentsSystemBytesAndItsOwnInstructionsAfterTheHead(t 
 		}
 		config := base
 		config.Tools, config.Inbox, config.System, config.Parts, config.Instructions, config.Task, config.Sessions, config.Session, config.Prefix =
-			NewRegistry(read, write, bash, spawn), spawn.Inbox, composed.Head(), composed.Parts, "the project's rules", "say hello", store, id, prefix
+			NewRegistry(reader, writer, bash, spawn), spawn.Inbox, composed.Head(), composed.Parts, "the project's rules", "say hello", store, id, prefix
 		if _, err := Run(t.Context(), config); err != nil {
 			t.Fatal(err)
 		}

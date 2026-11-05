@@ -18,6 +18,8 @@ import (
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/read"
+	"tofu/internal/tools/files/write"
 	"tofu/library"
 )
 
@@ -35,15 +37,15 @@ func (namedTool) Run(context.Context, json.RawMessage) (contract.Result, error) 
 
 func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing.T) {
 	root := t.TempDir()
-	read, err := NewReadTool(root)
+	reader, err := read.NewReadTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	write, err := NewWriteTool(root)
+	writer, err := write.NewWriteTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := []contract.Tool{read, write, namedTool("edit"), namedTool("typecheck"), namedTool("test"), namedTool("browser_tabs"), namedTool("browser_observe"), namedTool("browser_act"), namedTool("browser_motion"), namedTool("fetch"), namedTool("glob"), namedTool("search"), namedTool("symbols"), namedTool("bash")}
+	base := []contract.Tool{reader, writer, namedTool("edit"), namedTool("typecheck"), namedTool("test"), namedTool("browser_tabs"), namedTool("browser_observe"), namedTool("browser_act"), namedTool("browser_motion"), namedTool("fetch"), namedTool("glob"), namedTool("search"), namedTool("symbols"), namedTool("bash")}
 	var names []string
 	for _, tool := range base {
 		names = append(names, tool.Name())
@@ -433,7 +435,7 @@ func TestASpawnWithNoOwnsStartsAndItsWriteEditAndNestedSpawnAreRefused(t *testin
 		`{"task":"run ping and report","owns":[]}`:        "spawned without owns, so a sub-agent you spawn holds none either",
 	} {
 		root := t.TempDir()
-		write, err := NewWriteTool(root)
+		writer, err := write.NewWriteTool(root)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -442,7 +444,7 @@ func TestASpawnWithNoOwnsStartsAndItsWriteEditAndNestedSpawnAreRefused(t *testin
 			core.ToolCall{ID: "e", Name: "edit", Arguments: json.RawMessage(`{"path":"ping-run-1.txt","old_string":"a","new_string":"b"}`)},
 			core.ToolCall{ID: "s", Name: "spawn", Arguments: json.RawMessage(`{"task":"write it for me","owns":["**"]}`)}),
 			claimDecision("ping answered three times")}}
-		base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write, namedTool("edit"), namedTool("bash")), ResultBytesCap: 4096,
+		base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(writer, namedTool("edit"), namedTool("bash")), ResultBytesCap: 4096,
 			ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }}
 		spawn := NewSpawnTool("turn-orchestrator", base, &subagents.Roster{})
 		spawn.SubAgents = SubAgents{Defined: found.Definitions}

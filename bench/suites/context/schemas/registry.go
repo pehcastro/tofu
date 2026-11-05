@@ -8,6 +8,8 @@ import (
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit"
 	"tofu/internal/tools/files/glob"
+	"tofu/internal/tools/files/read"
+	"tofu/internal/tools/files/write"
 	"tofu/internal/tools/history/quote"
 	"tofu/internal/tools/human/plan"
 	"tofu/internal/tools/project/report"
@@ -23,8 +25,8 @@ func must[T any](v T, err error) T {
 }
 
 func FullRegistry(dir string) iturn.Registry {
-	readTool := must(iturn.NewReadTool(dir))
-	writeTool := must(iturn.NewWriteTool(dir))
+	readTool := must(read.NewReadTool(dir))
+	writeTool := must(write.NewWriteTool(dir))
 	bashTool := must(iturn.NewBashTool(dir))
 	shell := must(registry.Checked(dir, []contract.Tool{bashTool}))[0]
 

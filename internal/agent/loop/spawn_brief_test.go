@@ -13,6 +13,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/read"
 	"tofu/internal/tools/registry"
 )
 
@@ -64,11 +65,11 @@ func TestTheBriefPlacesEachFileTheLeadReadInsideTheOwnedPathsOnceAndAsItIsNow(t 
 			t.Fatal(err)
 		}
 	}
-	read, err := loop.NewReadTool(root)
+	reader, err := read.NewReadTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	memoised := registry.NewMemo().Wrap([]contract.Tool{read})
+	memoised := registry.NewMemo().Wrap([]contract.Tool{reader})
 	brief := "Change src/c.ts so it exports a name; c.ts is the entry point and d.ts imports it."
 	script := &changingBeforeSpawn{
 		prefetchScript: &prefetchScript{brief: brief, lead: []core.Decision{

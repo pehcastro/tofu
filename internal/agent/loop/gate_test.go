@@ -16,6 +16,8 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/write"
 )
 
 type leadAndSubAgent struct {
@@ -29,7 +31,7 @@ func (m *leadAndSubAgent) Ask(ctx context.Context, request core.Request) (core.D
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	queue := &m.subAgent
-	if SubAgentAsking(ctx) == "" {
+	if contract.SubAgentAsking(ctx) == "" {
 		queue = &m.lead
 		m.leadSaw = append(m.leadSaw, request.Messages[len(request.Messages)-1].Content)
 	}
@@ -44,7 +46,7 @@ func (m *leadAndSubAgent) Ask(ctx context.Context, request core.Request) (core.D
 type asksForSubAgents struct{}
 
 func (asksForSubAgents) Decide(ctx context.Context, request GateRequest) (GateDecision, error) {
-	if SubAgentAsking(ctx) == "" {
+	if contract.SubAgentAsking(ctx) == "" {
 		return GateDecision{ID: "lead-" + request.Tool, Verdict: ledger.VerdictAllow}, nil
 	}
 	return GateDecision{ID: "sub-" + request.Tool, Verdict: ledger.VerdictAsk,
@@ -53,7 +55,7 @@ func (asksForSubAgents) Decide(ctx context.Context, request GateRequest) (GateDe
 
 func TestASubAgentsAskReachesTheLeadAndTheLeadsAllowRunsTheCall(t *testing.T) {
 	root := t.TempDir()
-	write, err := NewWriteTool(root)
+	writer, err := write.NewWriteTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +72,7 @@ func TestASubAgentsAskReachesTheLeadAndTheLeadsAllowRunsTheCall(t *testing.T) {
 		},
 	}
 	personAsked := 0
-	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
+	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(writer), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
 		ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" },
 		Gate: asksForSubAgents{}, GateMode: GateEnforce,
 		Person: func(context.Context, GateRequest, GateDecision) (PersonAnswer, error) {
@@ -79,7 +81,7 @@ func TestASubAgentsAskReachesTheLeadAndTheLeadsAllowRunsTheCall(t *testing.T) {
 		}}
 	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	lead := base
-	lead.Task, lead.Tools, lead.Inbox = "hand the note to a sub-agent", NewRegistry(write, spawn), spawn.Inbox
+	lead.Task, lead.Tools, lead.Inbox = "hand the note to a sub-agent", NewRegistry(writer, spawn), spawn.Inbox
 	startLead(t.Context(), lead, nil).wait(t)
 
 	if personAsked != 0 {
@@ -100,7 +102,7 @@ func TestASubAgentsAskReachesTheLeadAndTheLeadsAllowRunsTheCall(t *testing.T) {
 
 func TestASubAgentsAskCarriesItsArgumentsCutToTheCapAndNamesTheCall(t *testing.T) {
 	root := t.TempDir()
-	write, err := NewWriteTool(root)
+	writer, err := write.NewWriteTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,12 +123,12 @@ func TestASubAgentsAskCarriesItsArgumentsCutToTheCapAndNamesTheCall(t *testing.T
 			claimDecision("wrote mine/big.txt"),
 		},
 	}
-	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
+	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(writer), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
 		ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" },
 		Gate: asksForSubAgents{}, GateMode: GateEnforce}
 	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	lead := base
-	lead.Task, lead.Tools, lead.Inbox = "hand the big file to a sub-agent", NewRegistry(write, spawn), spawn.Inbox
+	lead.Task, lead.Tools, lead.Inbox = "hand the big file to a sub-agent", NewRegistry(writer, spawn), spawn.Inbox
 	startLead(t.Context(), lead, nil).wait(t)
 
 	if len(model.leadSaw) < 2 {
@@ -175,12 +177,12 @@ func TestAnAskThatRunsNamesWhatAllowedIt(t *testing.T) {
 	} {
 		t.Run(case_.name, func(t *testing.T) {
 			root := t.TempDir()
-			write, err := NewWriteTool(root)
+			writer, err := write.NewWriteTool(root)
 			if err != nil {
 				t.Fatal(err)
 			}
 			model := &leadAndSubAgent{lead: []core.Decision{called("write", map[string]any{"path": "note.txt", "content": "a note"}), claimDecision("wrote note.txt")}}
-			row, err := Run(t.Context(), Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(write), Caps: Caps{MaxSteps: 4}, ResultBytesCap: 4096,
+			row, err := Run(t.Context(), Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(writer), Caps: Caps{MaxSteps: 4}, ResultBytesCap: 4096,
 				ArtifactDir: filepath.Join(root, "artifacts"), Gate: asksWithReason{reason: case_.reason}, GateMode: GateEnforce, Person: case_.person, Task: "write a note"})
 			if err != nil {
 				t.Fatal(err)

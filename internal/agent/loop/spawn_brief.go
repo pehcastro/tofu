@@ -15,6 +15,7 @@ import (
 	platformscratch "tofu/internal/platform/scratch"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/read"
 )
 
 func (s SubAgents) prompt(inherited Config, definition subagents.Definition, task string, owns []string) (string, []PromptPart, string, error) {
@@ -127,30 +128,30 @@ type briefCandidate struct {
 }
 
 func (t *SpawnTool) briefFiles(ctx context.Context, args spawnArgs, lead []core.Message) string {
-	read, readable := t.base.Tools.byName["read"]
+	reader, readable := t.base.Tools.byName["read"]
 	if !readable {
 		return ""
 	}
-	if memoised, cached := read.(interface{ Uncached() contract.Tool }); cached {
-		read = memoised.Uncached()
+	if memoised, cached := reader.(interface{ Uncached() contract.Tool }); cached {
+		reader = memoised.Uncached()
 	}
 	named := briefPath.FindAllString(args.Task, -1)
-	if direct, isRead := read.(*ReadTool); isRead {
-		named = realPaths(direct.Root(), named)
+	if direct, isRead := reader.(*read.ReadTool); isRead {
+		named = contract.RealPaths(direct.Root(), named)
 	}
 	var candidates []briefCandidate
 	listed := map[string]bool{}
 	for _, path := range named {
-		listed[ledgerKey(path)] = true
+		listed[contract.LedgerKey(path)] = true
 		candidates = append(candidates, briefCandidate{path: path})
 	}
 	for _, message := range lead {
 		for _, call := range message.ToolCalls {
-			var leadRead readArgs
+			var leadRead read.ReadArgs
 			if call.Name != "read" || json.Unmarshal(call.Arguments, &leadRead) != nil {
 				continue
 			}
-			key := ledgerKey(leadRead.Path)
+			key := contract.LedgerKey(leadRead.Path)
 			if owned, _ := subagents.Matches(key, args.Owns); owned && !listed[key] {
 				candidates = append(candidates, briefCandidate{path: leadRead.Path, byLead: true})
 			}
@@ -160,18 +161,18 @@ func (t *SpawnTool) briefFiles(ctx context.Context, args spawnArgs, lead []core.
 	var text strings.Builder
 	var placed, skipped []string
 	for _, candidate := range candidates {
-		raw, _ := json.Marshal(readArgs{Path: candidate.path})
-		result, err := read.Run(uncountedRead(ctx), raw)
+		raw, _ := json.Marshal(read.ReadArgs{Path: candidate.path})
+		result, err := reader.Run(read.Uncounted(ctx), raw)
 		if err != nil {
 			continue
 		}
-		file := ledgerKey(result.Command)
+		file := contract.LedgerKey(result.Command)
 		if owned, _ := subagents.Matches(file, args.Owns); slices.Contains(placed, file) || candidate.byLead && !owned {
 			continue
 		}
 		placed = append(placed, file)
 		body := result.Content
-		if repaired := ledgerKey(candidate.path) != file; repaired {
+		if repaired := contract.LedgerKey(candidate.path) != file; repaired {
 			_, body, _ = strings.Cut(body, "\n")
 		}
 		if len(skipped) > 0 || text.Len()+len(body) > konst.SubAgentReferenceBytes {

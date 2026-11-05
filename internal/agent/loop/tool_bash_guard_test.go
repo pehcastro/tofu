@@ -16,7 +16,7 @@ func runBashAs(t *testing.T, owner, command string, cancelled bool) (contract.Re
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), shellOwnerKey{}, owner))
+	ctx, cancel := context.WithCancel(context.WithValue(context.Background(), contract.ShellOwnerKey{}, owner))
 	defer cancel()
 	if cancelled {
 		cancel()

@@ -1228,7 +1228,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			work, held := lead.work()
 			if held && work.open() && concluding == "" && !nudged {
 				nudged = true
-				asks := work.asks(leadEndedOpening, listed(work.review))
+				asks := work.asks(leadEndedOpening, contract.Listed(work.review))
 				checked, err := DoneDecision{Verdict: DoneAccepted}, error(nil)
 				if lead.Review != nil {
 					stopping := row

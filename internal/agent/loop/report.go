@@ -14,6 +14,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/contract"
 )
 
 type SubAgentCommand struct {
@@ -364,7 +365,7 @@ func (t *SpawnTool) boardLine(reports string) string {
 			line += "; " + id + " is " + string(w.status[id])
 		}
 	}
-	return line + "; free todo: " + listed(w.free)
+	return line + "; free todo: " + contract.Listed(w.free)
 }
 
 func BoardNudges(store boardy.Store, sizes map[string]int64) string {

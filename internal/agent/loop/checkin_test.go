@@ -10,6 +10,8 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/files/read"
+	"tofu/internal/tools/files/write"
 )
 
 const checkEvery = 40 * time.Millisecond
@@ -17,20 +19,20 @@ const checkEvery = 40 * time.Millisecond
 func checkingLead(t *testing.T, model *crew, every time.Duration) (Config, *SpawnTool) {
 	t.Helper()
 	root := t.TempDir()
-	read, err := NewReadTool(root)
+	reader, err := read.NewReadTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	write, err := NewWriteTool(root)
+	writer, err := write.NewWriteTool(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(read, write), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
+	base := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(reader, writer), Caps: Caps{MaxSteps: 20}, ResultBytesCap: 4096,
 		ArtifactDir: filepath.Join(root, "artifacts"), NewID: func() string { return "turn-lead" }}
 	spawn := NewSpawnTool("turn-lead", base, &subagents.Roster{})
 	spawn.Limits = func() SubAgentLimits { return SubAgentLimits{Running: 2, Depth: 1, CheckIn: every} }
 	lead := base
-	lead.Task, lead.Tools, lead.Inbox = "hand the work to a sub-agent", NewRegistry(read, write, spawn), spawn.Inbox
+	lead.Task, lead.Tools, lead.Inbox = "hand the work to a sub-agent", NewRegistry(reader, writer, spawn), spawn.Inbox
 	return lead, spawn
 }
 

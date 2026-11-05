@@ -15,6 +15,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/write"
 )
 
 type ranTool struct {
@@ -105,7 +106,7 @@ func TestARefusedShellWriteNamesTheCallThatDoesItInOneReply(t *testing.T) {
 func TestTheLeadSpendsOneLineBudgetAcrossDirectories(t *testing.T) {
 	var ran []string
 	budgeted := WithSourceBudget([]contract.Tool{ranTool{name: "edit", ran: &ran}, ranTool{name: "write", ran: &ran}}, nil)
-	edit, write := budgeted[0], budgeted[1]
+	edit, writeTool := budgeted[0], budgeted[1]
 	lines := func(n int) string { return strings.Repeat("x\n", n) }
 	budget := konst.OrchestratorSourceLinesPerTurn
 	quarter := budget / 4
@@ -116,11 +117,11 @@ func TestTheLeadSpendsOneLineBudgetAcrossDirectories(t *testing.T) {
 		reason BudgetRefusal
 	}{
 		{edit, "store/store.go", quarter, ""},
-		{write, "./export.go", quarter, ""},
+		{writeTool, "./export.go", quarter, ""},
 		{edit, "api/handlers.go", quarter, ""},
-		{write, "ANSWER.txt", 10 * budget, ""},
+		{writeTool, "ANSWER.txt", 10 * budget, ""},
 		{edit, "cmd/main.go", 1, ""},
-		{write, "notes/plan.md", 10 * budget, ""},
+		{writeTool, "notes/plan.md", 10 * budget, ""},
 		{edit, "report/report.go", quarter, RefusedOverLines},
 		{edit, "store/store.go", budget - 3*quarter - 1, ""},
 		{edit, "transfer/transfer.go", 1, RefusedOverLines},
@@ -153,17 +154,17 @@ func TestAWriteOverAnExistingFileSpendsTheLinesItsDiffChanges(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "big.go"), []byte(held), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	writer, err := NewWriteTool(dir)
+	writer, err := write.NewWriteTool(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ledger := NewReadLedger()
+	ledger := contract.NewReadLedger()
 	ledger.Mark(context.Background(), "big.go", []byte(held))
 	var ran []string
 	budgeted := WithSourceBudget([]contract.Tool{writer.Reading(ledger), ranTool{name: "edit", ran: &ran}}, nil)
-	write, edit := budgeted[0], budgeted[1]
+	writeTool, edit := budgeted[0], budgeted[1]
 	raw, _ := json.Marshal(map[string]string{"path": "big.go", "content": "var y0 = 2\nvar y1 = 3\n" + held[len("var x0 = 0\nvar x1 = 1\n"):]})
-	if _, err := write.Run(context.Background(), raw); err != nil {
+	if _, err := writeTool.Run(context.Background(), raw); err != nil {
 		t.Fatalf("a two line change to a 150 line file was refused: %v", err)
 	}
 	room := konst.OrchestratorSourceLinesPerTurn - 2
@@ -173,7 +174,7 @@ func TestAWriteOverAnExistingFileSpendsTheLinesItsDiffChanges(t *testing.T) {
 	}
 	raw, _ = json.Marshal(map[string]string{"path": "new.go", "content": "package x\n"})
 	var refusal SourceBudgetError
-	if _, err := write.Run(context.Background(), raw); !errors.As(err, &refusal) || refusal.Reason != RefusedOverLines || refusal.Spent != konst.OrchestratorSourceLinesPerTurn {
+	if _, err := writeTool.Run(context.Background(), raw); !errors.As(err, &refusal) || refusal.Reason != RefusedOverLines || refusal.Spent != konst.OrchestratorSourceLinesPerTurn {
 		t.Errorf("a new file past a spent budget: error %v, want a refusal over lines with the whole budget spent", err)
 	}
 }
@@ -211,11 +212,11 @@ func TestAFileTheShellPrintedWholeAfterCatCountsAsRead(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			writer, err := NewWriteTool(dir)
+			writer, err := write.NewWriteTool(dir)
 			if err != nil {
 				t.Fatal(err)
 			}
-			ledger := NewReadLedger()
+			ledger := contract.NewReadLedger()
 			var ran []string
 			shell := WithSourceBudget([]contract.Tool{writer.Reading(ledger), ranTool{name: "bash", ran: &ran, printed: c.printed}}, nil)[1]
 			raw, _ := json.Marshal(map[string]string{"command": c.command})
@@ -309,7 +310,7 @@ func TestAScriptThatWritesSourceSpendsTheLinesItChanged(t *testing.T) {
 		for _, git := range []bool{true, false} {
 			t.Run(fmt.Sprintf("%s git %v", c.name, git), func(t *testing.T) {
 				dir := scriptProject(t, git)
-				writer, err := NewWriteTool(dir)
+				writer, err := write.NewWriteTool(dir)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -333,7 +334,7 @@ func TestAScriptThatWritesSourceSpendsTheLinesItChanged(t *testing.T) {
 
 func TestAScriptPastTheBudgetRunsThenEveryFurtherWriteIsRefusedNamingIt(t *testing.T) {
 	dir := scriptProject(t, true)
-	writer, err := NewWriteTool(dir)
+	writer, err := write.NewWriteTool(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
