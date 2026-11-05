@@ -18,8 +18,9 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/stat"
+	"tofu/internal/tools/code/search"
 	"tofu/internal/tools/contract"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/files/glob"
 )
 
 type call struct {
@@ -41,9 +42,9 @@ func runner(repo, name string) (contract.Tool, error) {
 	case "read":
 		return loop.NewReadTool(repo)
 	case "glob":
-		return registry.NewGlob(repo)
+		return glob.NewGlob(repo)
 	case "grep", "search":
-		return registry.NewSearch(repo)
+		return search.NewSearch(repo)
 	}
 	return nil, fmt.Errorf("no tool named %s", name)
 }
@@ -151,7 +152,7 @@ func run(repo string, single bool, cold, warm int, out string) error {
 	if err != nil {
 		return fmt.Errorf("the repository is not at a pinned tag: %w", err)
 	}
-	files, err := registry.ListPaths(repo)
+	files, err := glob.ListPaths(repo)
 	if err != nil {
 		return err
 	}

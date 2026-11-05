@@ -14,7 +14,8 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
-	"tofu/internal/tools/registry"
+	edittool "tofu/internal/tools/files/edit"
+	globtool "tofu/internal/tools/files/glob"
 )
 
 type Outcome string
@@ -127,7 +128,7 @@ func classify(before, expected, after string, said bool) Outcome {
 }
 
 func tofuEdit(dir string, edit EditCase) (string, bool, int, error) {
-	tool, err := registry.NewEdit(dir)
+	tool, err := edittool.NewEdit(dir)
 	if err != nil {
 		return "", false, 0, err
 	}
@@ -289,7 +290,7 @@ func readArm(output, wanted string) ReadArm {
 }
 
 func RunLists(corpus Corpus) ([]ListRow, error) {
-	glob, err := registry.NewGlob(corpus.Seed)
+	glob, err := globtool.NewGlob(corpus.Seed)
 	if err != nil {
 		return nil, err
 	}

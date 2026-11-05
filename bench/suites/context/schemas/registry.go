@@ -3,8 +3,16 @@ package schemas
 import (
 	iturn "tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/code/search"
+	"tofu/internal/tools/code/symbols"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/edit"
+	"tofu/internal/tools/files/glob"
+	"tofu/internal/tools/history/quote"
+	"tofu/internal/tools/human/plan"
+	"tofu/internal/tools/project/report"
 	"tofu/internal/tools/registry"
+	"tofu/internal/tools/web/github"
 )
 
 func must[T any](v T, err error) T {
@@ -22,13 +30,13 @@ func FullRegistry(dir string) iturn.Registry {
 
 	verbTools := must(registry.NewVerbs(dir))
 	full := append([]contract.Tool{
-		readTool, writeTool, shell, registry.NewPlan(),
-		must(registry.NewProject(dir)), must(registry.NewGlob(dir)), must(registry.NewSearch(dir)),
-		must(registry.NewSymbols(dir)), must(registry.NewEdit(dir)), must(registry.NewGitHubPRDiff(dir)),
+		readTool, writeTool, shell, plan.NewPlan(),
+		must(report.New(dir)), must(glob.NewGlob(dir)), must(search.NewSearch(dir)),
+		must(symbols.NewSymbols(dir)), must(edit.NewEdit(dir)), must(github.NewGitHubPRDiff(dir)),
 	}, verbTools...)
 	full = registry.NewMemo().Wrap(full)
 
-	full = append(full, registry.NewQuote(nil, ""))
+	full = append(full, quote.NewQuote(nil, ""))
 	full = append(full, iturn.NewSpawnTool("schemas-probe", iturn.Config{}, nil))
 	full = append(full, must(iturn.NewArtifacts(dir, true)).FetchTool())
 

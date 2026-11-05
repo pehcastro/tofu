@@ -23,7 +23,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/platform/fs"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/tools/registry"
+	browsertool "tofu/internal/tools/web/browser"
 	browser "tofu/internal/tools/web/browser/driver"
 	"tofu/internal/tools/web/browser/loop"
 	"tofu/internal/tools/web/browser/motion"
@@ -224,10 +224,10 @@ func (o browserOutput) batch(home string, tab int, from string) int {
 	} else {
 		steps, err = os.ReadFile(from)
 	}
-	tabs := registry.NewBrowserTabs(home)
+	tabs := browsertool.NewBrowserTabs(home)
 	report, failed := "", 0
 	if err == nil {
-		report, failed, err = registry.BrowserBatch(context.Background(), browserEndpoint(home), tabs, tab, steps)
+		report, failed, err = browsertool.BrowserBatch(context.Background(), browserEndpoint(home), tabs, tab, steps)
 	}
 	if tab == 0 {
 		tabs.Close()

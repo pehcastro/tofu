@@ -12,7 +12,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/testkit/cli"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/human/plan"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/chat/session"
 )
@@ -32,7 +32,7 @@ func TestADryRunListsThePlanToolAndTheOffArmDoesNot(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &body); err != nil {
 		t.Fatalf("the printed request is not the request that would be sent: %v", err)
 	}
-	wanted := anthropic.ClaudeCodeToolPrefix + registry.PlanToolName
+	wanted := anthropic.ClaudeCodeToolPrefix + plan.PlanToolName
 	offered := make([]string, 0, len(body.Tools))
 	described := ""
 	for _, tool := range body.Tools {
@@ -47,15 +47,15 @@ func TestADryRunListsThePlanToolAndTheOffArmDoesNot(t *testing.T) {
 	if !strings.Contains(described, "set") || !strings.Contains(described, "start") {
 		t.Fatalf("the plan tool is offered without saying how to move an item: %q", described)
 	}
-	if three := toolNames(t, armOpts(t, "--tools", toolSetThree)); slices.Contains(three, registry.PlanToolName) {
+	if three := toolNames(t, armOpts(t, "--tools", toolSetThree)); slices.Contains(three, plan.PlanToolName) {
 		t.Fatalf("the off arm must stay the three tools the recorded runs had: %v", three)
 	}
-	t.Logf("%d tools offered, including %s", len(offered), registry.PlanToolName)
+	t.Logf("%d tools offered, including %s", len(offered), plan.PlanToolName)
 }
 
 func planCall(id, args string) core.Decision {
 	return core.Decision{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
-		{ID: id, Name: registry.PlanToolName, Arguments: json.RawMessage(args)},
+		{ID: id, Name: plan.PlanToolName, Arguments: json.RawMessage(args)},
 	}}
 }
 

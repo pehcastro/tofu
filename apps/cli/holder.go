@@ -15,7 +15,7 @@ import (
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	sessionstore "tofu/internal/store/session"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/web/browser"
 )
 
 func runHub(dir string, say func(string)) error {
@@ -64,7 +64,7 @@ func runHub(dir string, say func(string)) error {
 		if shells != nil {
 			shells = shells.ForSession(id)
 		}
-		engine := &appEngine{dir: dir, open: deckOpener(deck), tabs: registry.NewBrowserTabs(home), places: places, arms: wiring.RunOpts{DoneArm: os.Getenv(doneReviewVariable)}}
+		engine := &appEngine{dir: dir, open: deckOpener(deck), tabs: browser.NewBrowserTabs(home), places: places, arms: wiring.RunOpts{DoneArm: os.Getenv(doneReviewVariable)}}
 		live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: shells, Check: shellsverb.CronChecker(dir), Resumed: resumed.hosted(), Unrecorded: unrecorded, ProjectTurn: projectTurn, Now: clock})
 		return live, func() {
 			live.Close()

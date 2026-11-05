@@ -12,7 +12,7 @@ import (
 	skill "tofu/internal/librarian/skills"
 	claudesub "tofu/internal/models/llm/providers/claude-sub"
 	"tofu/internal/store/session"
-	"tofu/internal/tools/registry"
+	skilltool "tofu/internal/tools/knowledge/skill"
 )
 
 const AddedSkill = "bench_added_skill"
@@ -72,7 +72,7 @@ func MeasureResume(arm ResumeArm) (ResumedTurn, error) {
 		skills := skill.Discover(project, "").Skills
 		config.Tools = loop.NewRegistry()
 		if len(skills) > 0 {
-			config.Tools = loop.NewRegistry(registry.NewSkill(skills))
+			config.Tools = loop.NewRegistry(skilltool.NewSkill(skills))
 		}
 		composed, err := loop.Compose(loop.ComposeSpec{Task: task, Environment: laterEnvironment, ToolGuidance: RealToolGuidance, Rules: shipped, Skills: skills})
 		if err != nil {

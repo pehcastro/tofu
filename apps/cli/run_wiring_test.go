@@ -38,8 +38,8 @@ import (
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
 	"tofu/internal/testkit/cli"
+	crontool "tofu/internal/tools/agents/cron"
 	"tofu/internal/tools/contract"
-	"tofu/internal/tools/registry"
 	tuisession "tofu/internal/ui/tui/chat/session"
 )
 
@@ -1127,10 +1127,10 @@ func TestTheLeadAloneHoldsTheCronToolAndAFiredTurnNeverPushes(t *testing.T) {
 		for _, definition := range config.Tools.Definitions() {
 			lead = append(lead, definition.Name)
 		}
-		if !slices.Contains(lead, registry.CronToolName) {
+		if !slices.Contains(lead, crontool.CronToolName) {
 			t.Errorf("arms %v: the lead is not given the cron tool: %v", arms, lead)
 		}
-		if slices.ContainsFunc(built, func(tool contract.Tool) bool { return tool.Name() == registry.CronToolName }) {
+		if slices.ContainsFunc(built, func(tool contract.Tool) bool { return tool.Name() == crontool.CronToolName }) {
 			t.Errorf("arms %v: the cron tool is in the set a sub-agent is given", arms)
 		}
 		bash := shellsverb.WithoutPush(built)[slices.IndexFunc(built, func(tool contract.Tool) bool { return tool.Name() == "bash" })]

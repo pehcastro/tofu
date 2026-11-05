@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	tofutools "tofu/internal/tools/registry"
+	"tofu/internal/tools/code/search"
 )
 
 func TestSearchOverTheLargestTreeOnThisMachine(t *testing.T) {
@@ -20,7 +20,7 @@ func TestSearchOverTheLargestTreeOnThisMachine(t *testing.T) {
 	if _, err := os.Stat(root); err != nil {
 		t.Skip("this measurement needs .local/sources/jev-r2 and it is not on this machine")
 	}
-	searchTool, err := tofutools.NewSearch(root)
+	searchTool, err := search.NewSearch(root)
 	if err != nil {
 		t.Fatalf("building search: %v", err)
 	}

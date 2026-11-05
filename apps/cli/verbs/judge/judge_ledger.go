@@ -12,7 +12,7 @@ import (
 	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/platform/project"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/human/remember"
 	"tofu/library/questions"
 )
 
@@ -147,7 +147,7 @@ func distMap(dist []ledger.Slice) map[string]float64 {
 	return out
 }
 
-func MemoryScopeJudge(dir, log string, keys core.Keyring, say func(string)) *registry.ScopeJudge {
+func MemoryScopeJudge(dir, log string, keys core.Keyring, say func(string)) *remember.ScopeJudge {
 	layers, err := question.Layers(questions.Files(), dir)
 	var set question.Set
 	if err == nil {
@@ -163,5 +163,5 @@ func MemoryScopeJudge(dir, log string, keys core.Keyring, say func(string)) *reg
 		}
 		return nil
 	}
-	return &registry.ScopeJudge{Client: client, Set: set, Ledger: ledger.NewWriter(log)}
+	return &remember.ScopeJudge{Client: client, Set: set, Ledger: ledger.NewWriter(log)}
 }

@@ -42,8 +42,9 @@ import (
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/tools/contract"
-	tools "tofu/internal/tools/registry"
+	"tofu/internal/tools/files/glob"
 	"tofu/internal/tools/shell/process"
+	"tofu/internal/tools/web/browser"
 	"tofu/internal/ui/keymap"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/composer/paste"
@@ -87,7 +88,7 @@ type appLaunch struct {
 	registry      *process.Registry
 	registryErr   error
 	note          string
-	tabs          *tools.BrowserTabs
+	tabs          *browser.BrowserTabs
 	release       *func()
 	endSession    *func() []string
 	turnRunning   *func() (string, bool)
@@ -97,7 +98,7 @@ type appLaunch struct {
 func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	registry, registryErr := shellsverb.LaunchShellRegistry(dir)
 	home, _ := os.UserHomeDir()
-	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: tools.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), turnRunning: new(func() (string, bool)), stopRestoring: func() {}}
+	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: browser.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), turnRunning: new(func() (string, bool)), stopRestoring: func() {}}
 	safe.Go(platformproject.Crashes(dir), "state sweep", func() {
 		state, err := platformproject.ProjectStateDirAt(dir)
 		if err != nil {
@@ -308,7 +309,7 @@ func sessionEndLine(registry *process.Registry, openErr error) string {
 
 func appPaths(dir string) func() []string {
 	return func() []string {
-		listed, err := tools.ListPaths(dir)
+		listed, err := glob.ListPaths(dir)
 		if err != nil {
 			return nil
 		}
@@ -473,7 +474,7 @@ type appEngine struct {
 	arms         wiring.RunOpts
 	open         wiring.Opener
 	quota        func() []frame.Quota
-	tabs         *tools.BrowserTabs
+	tabs         *browser.BrowserTabs
 	warm         *warmProcesses
 	places       platformproject.Places
 	timed        string

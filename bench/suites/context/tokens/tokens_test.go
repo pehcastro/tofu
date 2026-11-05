@@ -10,7 +10,7 @@ import (
 	"tofu/bench/kit/corpus/recorded"
 	"tofu/internal/konst"
 	"tofu/internal/platform/fs"
-	"tofu/internal/tools/registry"
+	globtool "tofu/internal/tools/files/glob"
 )
 
 var repoRoot = fs.SourceRoot()
@@ -52,7 +52,7 @@ func TestGlobStarOnThePinnedTreeReturnsACappedList(t *testing.T) {
 		t.Fatalf("extracting %s: %v", PinnedCommit, err)
 	}
 	defer remove()
-	glob, err := registry.NewGlob(tree)
+	glob, err := globtool.NewGlob(tree)
 	if err != nil {
 		t.Fatalf("building the tool: %v", err)
 	}

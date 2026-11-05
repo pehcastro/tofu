@@ -44,11 +44,32 @@ import (
 	"tofu/internal/store/memory/tree"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
+	crontool "tofu/internal/tools/agents/cron"
+	"tofu/internal/tools/code/search"
+	"tofu/internal/tools/code/symbols"
+	"tofu/internal/tools/code/test"
+	"tofu/internal/tools/code/typecheck"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/edit"
+	"tofu/internal/tools/files/glob"
+	"tofu/internal/tools/history/quote"
+	recalltool "tofu/internal/tools/history/recall"
+	zoomtool "tofu/internal/tools/history/zoom"
+	"tofu/internal/tools/human/ask"
+	plantool "tofu/internal/tools/human/plan"
+	"tofu/internal/tools/human/remember"
+	"tofu/internal/tools/human/settings"
+	skilltool "tofu/internal/tools/knowledge/skill"
+	"tofu/internal/tools/project/report"
+	"tofu/internal/tools/project/ticket"
 	tools "tofu/internal/tools/registry"
+	"tofu/internal/tools/scratch"
+	"tofu/internal/tools/shell/jobs"
 	"tofu/internal/tools/web"
+	"tofu/internal/tools/web/browser"
 	jevloop "tofu/internal/tools/web/browser/loop"
 	"tofu/internal/tools/web/browser/recipe"
+	"tofu/internal/tools/web/github"
 	shipped "tofu/library"
 )
 
@@ -65,7 +86,7 @@ const (
 
 type runtime struct {
 	model        loop.Model
-	plan         *tools.Plan
+	plan         *plantool.Plan
 	accounts     loop.Accounts
 	spend        loop.Spend
 	budget       recall.Budget
@@ -80,7 +101,7 @@ type runtime struct {
 	open         wiring.Opener
 	wrapSubAgent func(loop.Model, recall.Budget) (loop.Model, error)
 	orchestrator models.Model
-	tabs         *tools.BrowserTabs
+	tabs         *browser.BrowserTabs
 	leadAsks     loop.Person
 	cron         *cron.Book
 	places       platformproject.Places
@@ -96,9 +117,9 @@ type runtime struct {
 }
 
 func (r runtime) leadTools(lead []contract.Tool) loop.Registry {
-	scheduled := contract.Tool(loop.ListedOnly{Tool: tools.Cron{}, Why: "tofu run has no host to fire a job, so one made here would never run: schedule it in the app or tofu serve"})
+	scheduled := contract.Tool(loop.ListedOnly{Tool: crontool.Cron{}, Why: "tofu run has no host to fire a job, so one made here would never run: schedule it in the app or tofu serve"})
 	if r.cron != nil {
-		scheduled = tools.Cron{Book: r.cron, Now: r.now, Told: r.notify}
+		scheduled = crontool.Cron{Book: r.cron, Now: r.now, Told: r.notify}
 	}
 	return loop.NewRegistry(append(slices.Clone(lead), scheduled)...)
 }
@@ -381,7 +402,7 @@ func dryRun(opts wiring.RunOpts, selected models.Model, dir string, say func(str
 	}
 	opts.Shell = shell
 	home, _ := os.UserHomeDir()
-	warm := newWarmProcesses(tools.NewBrowserTabs(home))
+	warm := newWarmProcesses(browser.NewBrowserTabs(home))
 	defer warm.Close()
 	built, plan, err := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, loop.NewReadLedger()), warm, shell)
 	if err != nil {
@@ -412,7 +433,7 @@ func runTurn(opts wiring.RunOpts, resumed runResumed, selected models.Model, clo
 		return runFail(errOut, err)
 	}
 	home, _ := os.UserHomeDir()
-	warm := newWarmProcesses(tools.NewBrowserTabs(home))
+	warm := newWarmProcesses(browser.NewBrowserTabs(home))
 	defer warm.Close()
 	missing := missingJudgeRefuses
 	if opts.GateArm == gateOff {
@@ -694,17 +715,17 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 		built = slices.DeleteFunc(slices.Clone(built), func(tool contract.Tool) bool { return tool.Name() == tools.DocsToolName })
 	}
 	if run.sessions != nil && opts.ToolSet != toolSetThree {
-		built = append(slices.Clone(built), tools.NewQuote(run.sessions, sessionID))
+		built = append(slices.Clone(built), quote.NewQuote(run.sessions, sessionID))
 	}
 	if opts.ToolSet != toolSetThree {
-		built = append(slices.Clone(built), tools.ScratchTools(run.leadAsks)...)
+		built = append(slices.Clone(built), scratch.ScratchTools(run.leadAsks)...)
 	}
 	prompt, err := composeRun(opts, built, run)
 	if err != nil {
 		return loop.Config{}, nil, err
 	}
 	if len(prompt.skills) > 0 {
-		built = append(slices.Clone(built), tools.NewSkill(prompt.skills))
+		built = append(slices.Clone(built), skilltool.NewSkill(prompt.skills))
 	}
 	opts, environment, composed := prompt.opts, prompt.environment, prompt.composed
 	dir := cmp.Or(opts.Dir, ".")
@@ -784,12 +805,12 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 		rules, _, err := wiring.LoadRules("", dir)
 		return rules, err
 	}
-	asking := []contract.Tool{tools.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].Dir, Project: layers[1].Dir}, tools.AskPerson{}}
+	asking := []contract.Tool{settings.RuleOverride{Ask: run.leadAsks, Running: running, Global: layers[0].Dir, Project: layers[1].Dir}, ask.AskPerson{}}
 	if run.leadAsks != nil {
 		asking[1] = askPersonTool(dir, run.places.Log, run.leadAsks, config.Inbox, run.keys.keyring(), run.notify)
 	}
 	if run.sessions != nil && memoryOn(dir) {
-		asking = append(asking, tools.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: judgeverb.MemoryScopeJudge(dir, run.places.Log, run.keys.keyring(), run.notify),
+		asking = append(asking, remember.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: judgeverb.MemoryScopeJudge(dir, run.places.Log, run.keys.keyring(), run.notify),
 			Auto: func() bool { on, _ := settingspkg.IntFor(dir, settingspkg.AutoMemory); return on != 0 }})
 	}
 	if wiring.BoardManaged(dir) {
@@ -799,8 +820,8 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 		}
 		store.Speakers = map[string]boardy.Author{sessionID: *boardy.LeadAuthor(sessionID, "", "", config.Slug)}
 		board := boardy.Managed{Local: boardy.Local{Store: store}, Person: string(boardy.RolePerson), Lead: sessionID}
-		config.Board, config.TicketGrant, config.TicketTools = &board, tools.TicketGrant, tools.TicketTools
-		leadTickets, err := tools.TicketTools(board, sessionID)
+		config.Board, config.TicketGrant, config.TicketTools = &board, ticket.Grant, ticket.Tools
+		leadTickets, err := ticket.Tools(board, sessionID)
 		if err != nil {
 			return loop.Config{}, nil, err
 		}
@@ -812,7 +833,7 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 		}
 	}
 	if opts.Agent == "" && episodesOn(dir) {
-		zoom := &tools.Zoom{Project: dir, Compactor: func(ask loop.RecordedAsk) (tree.Compact, tree.CompactAll, func()) {
+		zoom := &zoomtool.Zoom{Project: dir, Compactor: func(ask loop.RecordedAsk) (tree.Compact, tree.CompactAll, func()) {
 			open := wireOpener()
 			if run.memory == nil {
 				opened := wiring.OpenMemoryModel(dir, run.orchestrator, open)
@@ -822,7 +843,7 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 			one, all := run.memory.Model(dir, run.orchestrator, open).Compactors(ask)
 			return one, all, func() {}
 		}}
-		asking = append(asking, zoom, tools.Recall{Zoom: zoom, Sessions: run.sessions, Session: sessionID})
+		asking = append(asking, zoom, recalltool.Recall{Zoom: zoom, Sessions: run.sessions, Session: sessionID})
 	}
 	if opts.NoSubAgents || opts.ToolSet == toolSetThree {
 		config.Tools = run.leadTools(append(slices.Clone(built), asking...))
@@ -883,7 +904,7 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 	orchestrating := append(loop.WithSourceBudget(append(own, spawner), prompt.subAgents.Defined), asking...)
 	if run.gate != nil {
 		spawner.SettingsTool = true
-		orchestrating = append(orchestrating, tools.NewSettings(settingspkg.Paths(dir)))
+		orchestrating = append(orchestrating, settings.NewSettings(settingspkg.Paths(dir)))
 	}
 	config.Tools = run.leadTools(orchestrating)
 	return config, spawner, nil
@@ -954,7 +975,7 @@ func scanSubAgents(dir string, built []contract.Tool) subagents.Found {
 	}
 	known := append(slices.Clone(names), "fetch", "web_search")
 	for _, driver := range []string{settingspkg.DriverSteps, settingspkg.DriverGoal} {
-		every, _ := tools.NewBrowser(tools.BrowserSettings{Mode: settingspkg.BrowserDrive, Driver: driver})
+		every, _ := browser.NewBrowser(browser.BrowserSettings{Mode: settingspkg.BrowserDrive, Driver: driver})
 		for _, tool := range every {
 			known = append(known, tool.Name())
 		}
@@ -1097,13 +1118,13 @@ func (s *storedKeys) redactor() credential.KeyRedactor {
 type warmProcesses struct {
 	checkers *loop.Typecheckers
 	tests    *loop.TestRunners
-	tabs     *tools.BrowserTabs
+	tabs     *browser.BrowserTabs
 	keys     storedKeys
 	memory   wiring.SessionMemoryModel
 	drops    *loop.DropIndex
 }
 
-func newWarmProcesses(tabs *tools.BrowserTabs) *warmProcesses {
+func newWarmProcesses(tabs *browser.BrowserTabs) *warmProcesses {
 	return &warmProcesses{checkers: loop.NewTypecheckers(), tests: loop.NewTestRunners(), tabs: tabs, drops: loop.NewDropIndex()}
 }
 
@@ -1116,7 +1137,7 @@ func (w *warmProcesses) Close() {
 	}
 }
 
-func buildRunToolsForRun(dir, set string, ledger *loop.ReadLedger, warm *warmProcesses, shell loop.RunShell) ([]contract.Tool, *tools.Plan, error) {
+func buildRunToolsForRun(dir, set string, ledger *loop.ReadLedger, warm *warmProcesses, shell loop.RunShell) ([]contract.Tool, *plantool.Plan, error) {
 	bashTool, bashErr := loop.NewBashToolFromShell(dir, shell)
 	if bashErr != nil {
 		return nil, nil, bashErr
@@ -1127,7 +1148,7 @@ func buildRunToolsForRun(dir, set string, ledger *loop.ReadLedger, warm *warmPro
 	return assembleRunTools(dir, set, ledger, warm, bashTool)
 }
 
-func assembleRunTools(dir, set string, ledger *loop.ReadLedger, warm *warmProcesses, bashTool *loop.BashTool) ([]contract.Tool, *tools.Plan, error) {
+func assembleRunTools(dir, set string, ledger *loop.ReadLedger, warm *warmProcesses, bashTool *loop.BashTool) ([]contract.Tool, *plantool.Plan, error) {
 	if warm == nil {
 		warm = &warmProcesses{}
 	}
@@ -1151,22 +1172,22 @@ func assembleRunTools(dir, set string, ledger *loop.ReadLedger, warm *warmProces
 	if set == toolSetThree {
 		return tools.NewMemo().Wrap([]contract.Tool{read, write, shell}), nil, nil
 	}
-	globTool, globErr := tools.NewGlob(dir)
-	searchTool, searchErr := tools.NewSearch(dir)
-	symbolsTool, symbolsErr := tools.NewSymbols(dir)
-	editTool, editErr := tools.NewEdit(dir)
-	projectTool, projectErr := tools.NewProject(dir)
+	globTool, globErr := glob.NewGlob(dir)
+	searchTool, searchErr := search.NewSearch(dir)
+	symbolsTool, symbolsErr := symbols.NewSymbols(dir)
+	editTool, editErr := edit.NewEdit(dir)
+	projectTool, projectErr := report.New(dir)
 	verbTools, verbErr := tools.NewVerbs(dir)
-	githubTool, githubErr := tools.NewGitHubPRDiff(dir)
-	typecheckTool, typecheckErr := tools.NewTypecheck(dir, checkers)
-	testTool, testErr := tools.NewTest(dir, warm.tests)
+	githubTool, githubErr := github.NewGitHubPRDiff(dir)
+	typecheckTool, typecheckErr := typecheck.NewTypecheck(dir, checkers)
+	testTool, testErr := test.NewTest(dir, warm.tests)
 	if err := cmp.Or(globErr, searchErr, symbolsErr, editErr, projectErr, verbErr, githubErr, typecheckErr, testErr); err != nil {
 		return nil, nil, err
 	}
 	webTools, webErr := buildWebTools(dir, warm.keys.keyring())
 	home, _ := os.UserHomeDir()
 	settingsDir := cmp.Or(dir, ".")
-	browserTools, browserErr := tools.NewBrowser(tools.BrowserSettings{
+	browserTools, browserErr := browser.NewBrowser(browser.BrowserSettings{
 		Home:     home,
 		Profile:  settingspkg.TextSaying(settingsDir, settingspkg.BrowserProfile, nil),
 		Headless: settingspkg.IntSaying(settingsDir, settingspkg.BrowserHeadless, nil) != 0,
@@ -1180,16 +1201,16 @@ func assembleRunTools(dir, set string, ledger *loop.ReadLedger, warm *warmProces
 	if err := cmp.Or(webErr, browserErr); err != nil {
 		return nil, nil, err
 	}
-	plan := tools.NewPlan()
-	full := append([]contract.Tool{read, write, shell, plan, tools.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(checkers).Ruling(rules), typecheckTool, testTool, githubTool}, verbTools...)
+	plan := plantool.NewPlan()
+	full := append([]contract.Tool{read, write, shell, plan, jobs.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(checkers).Ruling(rules), typecheckTool, testTool, githubTool}, verbTools...)
 	return tools.NewMemo().Wrap(append(append(full, webTools...), browserTools...)), plan, nil
 }
 
-func planAsOffered(model models.Model, built []contract.Tool, plan *tools.Plan) ([]contract.Tool, *tools.Plan) {
+func planAsOffered(model models.Model, built []contract.Tool, plan *plantool.Plan) ([]contract.Tool, *plantool.Plan) {
 	if model.Plan != models.PlanWithheld {
 		return built, plan
 	}
-	return slices.DeleteFunc(built, func(tool contract.Tool) bool { return tool.Name() == tools.PlanToolName }), nil
+	return slices.DeleteFunc(built, func(tool contract.Tool) bool { return tool.Name() == plantool.PlanToolName }), nil
 }
 
 func browserSlug(dir string) (slug, key string) {
@@ -1323,7 +1344,7 @@ func buildWebTools(dir string, keys core.Keyring) ([]contract.Tool, error) {
 	if err != nil {
 		return nil, err
 	}
-	return tools.NewWeb(config), nil
+	return web.NewWeb(config), nil
 }
 
 func askedAsOf(row loop.Row, spawned []loop.Spawned, slug, windows string) (string, string) {

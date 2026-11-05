@@ -10,13 +10,13 @@ import (
 	"tofu/bench/suites/tools/tools"
 	toolscorpus "tofu/bench/suites/tools/tools/corpus"
 	"tofu/internal/models/classifiers/core"
-	tofutools "tofu/internal/tools/registry"
+	"tofu/internal/tools/files/glob"
 )
 
 const repoFileBytesCap = 200_000
 
 func LoadRepoFiles(root string) ([]shortlist.File, error) {
-	paths, err := tofutools.ListPaths(root)
+	paths, err := glob.ListPaths(root)
 	if err != nil {
 		return nil, err
 	}

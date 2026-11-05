@@ -7,8 +7,8 @@ import (
 
 	"tofu/bench/suites/tools/tools"
 	toolscorpus "tofu/bench/suites/tools/tools/corpus"
+	searchtool "tofu/internal/tools/code/search"
 	"tofu/internal/tools/contract"
-	tofutools "tofu/internal/tools/registry"
 )
 
 const nativeToolTimeout = 60 * time.Second
@@ -19,7 +19,7 @@ type nativeResult struct {
 }
 
 func TofuSearch(root string, q toolscorpus.Asked) tools.Outcome {
-	search, err := tofutools.NewSearch(root)
+	search, err := searchtool.NewSearch(root)
 	if err != nil {
 		return tools.Outcome{Version: "tofu search", Skipped: err.Error()}
 	}
