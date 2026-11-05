@@ -43,9 +43,14 @@ exit 0
         "summary": "how tofu reads and drives your Chrome tabs, the tofu tab group, the badge, and what tofu never does there"
       },
       {
+        "topic": "calibration",
+        "title": "Calibration",
+        "summary": "how tofu calibrate fits a decision point's cut on labelled cases, checks it on a held-out half and a rerun, and writes the lock that lets the point leave shadow"
+      },
+      {
         "topic": "commands",
         "title": "Commands in the app",
-        "summary": "every slash command the app's composer takes, how /compact shrinks the history the next turn carries, and how /undo puts files back"
+        "summary": "every slash command the app's composer takes, how /compact shrinks the history the next turn carries, how /fork and /branch start a new line by hand, how /undo puts files back, and how /permissions lists and revokes a standing answer"
       },
       {
         "topic": "context",

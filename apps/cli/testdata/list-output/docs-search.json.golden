@@ -49,6 +49,10 @@ exit 0
         "do": "tofu docs browser"
       },
       {
+        "text": "Calibration",
+        "do": "tofu docs calibration"
+      },
+      {
         "text": "Commands in the app",
         "do": "tofu docs commands"
       },

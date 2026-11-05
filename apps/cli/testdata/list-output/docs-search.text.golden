@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           72 matches
+Docs · "change the colours"                                           73 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -22,6 +22,8 @@ Docs · "change the colours"                                           72 matche
     → tofu docs boardy
   Browser
     → tofu docs browser
+  Calibration
+    → tofu docs calibration
   Commands in the app
     → tofu docs commands
   Context

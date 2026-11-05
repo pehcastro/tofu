@@ -27,8 +27,8 @@ exit 0
     "models": 21,
     "subscriptions": 2,
     "roles": 0,
-    "questions": 29,
-    "doc_pages": 35,
+    "questions": 22,
+    "doc_pages": 36,
     "doc_entries": 107,
     "proxy": "rtk",
     "proxy_from": "library",
@@ -45,18 +45,9 @@ exit 0
         "refused": 0
       },
       {
-        "name": "fetch",
-        "rules": 0,
-        "thresholds": 1,
-        "skills": 0,
-        "agents": 0,
-        "references": 0,
-        "refused": 0
-      },
-      {
         "name": "general",
         "rules": 32,
-        "thresholds": 7,
+        "thresholds": 5,
         "skills": 0,
         "agents": 2,
         "references": 4,

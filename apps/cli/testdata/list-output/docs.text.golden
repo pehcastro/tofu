@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 107 asks                                                        35 topics
+Docs · 107 asks                                                        36 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -64,8 +64,14 @@ browser  how tofu reads and drives your Chrome tabs, the tofu tab group, the
   allow fewer actions in one browser task
     → tofu settings set browserSteps 10
 
+calibration  how tofu calibrate fits a decision point's cut on labelled cases,
+  checks it on a held-out half and a rerun, and writes the lock that lets the
+  point leave shadow
+
 commands  every slash command the app's composer takes, how /compact shrinks
-  the history the next turn carries, and how /undo puts files back
+  the history the next turn carries, how /fork and /branch start a new line by
+  hand, how /undo puts files back, and how /permissions lists and revokes a
+  standing answer
   free room in the context before the next turn
     → /compact in the app, between turns
   undo what the last turn changed
