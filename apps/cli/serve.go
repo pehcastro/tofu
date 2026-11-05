@@ -23,6 +23,8 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/catalog"
+	claudesub "tofu/internal/models/llm/providers/claude-sub"
+	codexsub "tofu/internal/models/llm/providers/codex-sub"
 	"tofu/internal/models/llm/quota"
 	"tofu/internal/models/transport"
 	platformproject "tofu/internal/platform/project"
@@ -128,7 +130,7 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return serveFail(errOut, err)
 	}
-	kept, err := quota.NewPoller(nil, time.Now, nil, wiring.RecordQuotaReading)
+	kept, err := quota.NewPoller(nil, time.Now, wiring.UsageEndpoints(nil), wiring.RecordQuotaReading)
 	if err != nil {
 		return serveFail(errOut, err)
 	}
@@ -137,7 +139,7 @@ func serveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if deck != nil {
 		_ = os.Setenv(cassetteVariable, plan.cassette)
 		wires = func() []string { return append(wiring.RunWires(), wiring.WireMeta) }
-		if os.Getenv(quota.ClaudeUsageURLVariable) == "" && os.Getenv(quota.CodexUsageURLVariable) == "" {
+		if os.Getenv(claudesub.UsageURLVariable) == "" && os.Getenv(codexsub.UsageURLVariable) == "" {
 			polled = nil
 		}
 	}

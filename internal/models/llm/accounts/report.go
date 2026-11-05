@@ -13,7 +13,7 @@ const (
 	reloginWarning = konst.CredReloginWarnDays * 24 * time.Hour
 )
 
-func DoctorState(now time.Time) string {
+func DoctorState(now time.Time, specs Specs) string {
 	path, err := Path()
 	if err != nil {
 		return "unknown: " + err.Error()
@@ -25,7 +25,7 @@ func DoctorState(now time.Time) string {
 	if !exists {
 		return "none"
 	}
-	store, err := Open(path)
+	store, err := Open(path, specs)
 	if err != nil {
 		return "unreadable: " + err.Error()
 	}

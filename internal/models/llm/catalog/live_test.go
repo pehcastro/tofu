@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"tofu/internal/models/llm/accounts"
+	claudesub "tofu/internal/models/llm/providers/claude-sub"
+	codexsub "tofu/internal/models/llm/providers/codex-sub"
 	"tofu/internal/models/transport"
 )
 
@@ -19,12 +21,13 @@ func liveAccount(t *testing.T, spec SubscriptionSpec) Account {
 	if err != nil {
 		t.Fatalf("locating the credential store: %v", err)
 	}
-	store, err := accounts.Open(path)
+	specs := accounts.Specs{accounts.ClaudeSub: claudesub.Spec(), accounts.CodexSub: codexsub.Spec()}
+	store, err := accounts.Open(path, specs)
 	if err != nil {
 		t.Skipf("no credential store, run tofu login %s: %v", spec.Wire, err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	credential, err := accounts.Lookup(spec.Wire)
+	credential, err := specs.Lookup(spec.Wire)
 	if err != nil {
 		t.Fatalf("looking up the %s spec: %v", spec.Wire, err)
 	}

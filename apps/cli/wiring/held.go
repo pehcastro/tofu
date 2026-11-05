@@ -39,7 +39,7 @@ func OpenStoredCredentials() (*accounts.Store, error) {
 	if err != nil || !present {
 		return nil, err
 	}
-	return accounts.Open(path)
+	return accounts.Open(path, Specs())
 }
 
 type HeldStore struct {
@@ -53,7 +53,7 @@ func HoldStore() HeldStore {
 	if err != nil {
 		return HeldStore{Err: err}
 	}
-	store, err := accounts.Open(path)
+	store, err := accounts.Open(path, Specs())
 	return HeldStore{Store: store, Path: path, Err: err}
 }
 

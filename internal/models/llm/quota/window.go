@@ -1,6 +1,7 @@
 package quota
 
 import (
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -35,15 +36,29 @@ type Window struct {
 	ResetsAt time.Time
 }
 
-const windowModelMark = ":"
+const (
+	WindowModelMark  = ":"
+	PercentFull      = 100
+	epochMillisFloor = 1e12
+)
+
+func EpochTime(seconds float64) time.Time {
+	if seconds <= 0 || math.IsNaN(seconds) || math.IsInf(seconds, 0) {
+		return time.Time{}
+	}
+	if seconds >= epochMillisFloor {
+		return time.UnixMilli(int64(seconds)).UTC()
+	}
+	return time.Unix(int64(seconds), 0).UTC()
+}
 
 func (w Window) Binds(spends []string) bool {
-	period, scope, scoped := strings.Cut(w.ID, windowModelMark)
+	period, scope, scoped := strings.Cut(w.ID, WindowModelMark)
 	if !scoped {
 		return true
 	}
 	return slices.ContainsFunc(spends, func(spend string) bool {
-		spendPeriod, spendScope, ok := strings.Cut(spend, windowModelMark)
+		spendPeriod, spendScope, ok := strings.Cut(spend, WindowModelMark)
 		return ok && spendScope != "" && spendPeriod == period &&
 			strings.Contains(strings.ToLower(scope), strings.ToLower(spendScope))
 	})

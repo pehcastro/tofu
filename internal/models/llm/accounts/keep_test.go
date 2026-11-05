@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"tofu/internal/models/llm/accounts"
+	claudesub "tofu/internal/models/llm/providers/claude-sub"
+	codexsub "tofu/internal/models/llm/providers/codex-sub"
 )
 
 type grantLog struct {
@@ -63,8 +65,8 @@ func keptStore(t *testing.T, endpoint http.Handler) *accounts.Store {
 	t.Helper()
 	server := httptest.NewServer(endpoint)
 	t.Cleanup(server.Close)
-	t.Setenv(accounts.ClaudeTokenURLVariable, server.URL)
-	store, err := accounts.Open(filepath.Join(t.TempDir(), "credentials.db"))
+	t.Setenv(claudesub.TokenURLVariable, server.URL)
+	store, err := accounts.Open(filepath.Join(t.TempDir(), "credentials.db"), accounts.Specs{accounts.ClaudeSub: claudesub.Spec(), accounts.CodexSub: codexsub.Spec()})
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -210,7 +212,7 @@ func TestARefusalAfterAPeerRotatedUsesThePeersToken(t *testing.T) {
 	id := account(t, store, "peer", "refresh-0", time.Now().Add(-time.Minute), time.Now().Add(-time.Hour))
 	peerWrites(t, store, endpoint, id, "refresh-peer", time.Now().Add(time.Hour))
 
-	token, err := accounts.NewAccountManager(store, mustSpec(t), id).Access(context.Background())
+	token, err := accounts.NewAccountManager(store, claudesub.Spec(), id).Access(context.Background())
 	if err != nil || token != "access-peer" {
 		t.Fatalf("after a peer rotated the token the refused refresh gave %q, %v", token, err)
 	}
@@ -228,7 +230,7 @@ func TestARefusalAfterAPeerRotatedToAStaleTokenRetriesOnce(t *testing.T) {
 	id := account(t, store, "peer", "refresh-0", time.Now().Add(-time.Minute), time.Now().Add(-time.Hour))
 	peerWrites(t, store, endpoint, id, "refresh-peer", time.Now().Add(-time.Minute))
 
-	token, err := accounts.NewAccountManager(store, mustSpec(t), id).Access(context.Background())
+	token, err := accounts.NewAccountManager(store, claudesub.Spec(), id).Access(context.Background())
 	if err != nil || token != "access-2" {
 		t.Fatalf("a refused refresh after a stale peer rotation gave %q, %v", token, err)
 	}
@@ -243,7 +245,7 @@ func TestASecondRefusalAfterTheReloadSetsTheAccountAsideAndStops(t *testing.T) {
 	id := account(t, store, "peer", "refresh-0", time.Now().Add(-time.Minute), time.Now().Add(-time.Hour))
 	peerWrites(t, store, endpoint, id, "refresh-peer", time.Now().Add(-time.Minute))
 
-	if _, err := accounts.NewAccountManager(store, mustSpec(t), id).Access(context.Background()); err == nil {
+	if _, err := accounts.NewAccountManager(store, claudesub.Spec(), id).Access(context.Background()); err == nil {
 		t.Fatal("two refusals produced a token")
 	}
 	if got := endpoint.grants(); !slices.Equal(got, []string{"refresh-0", "refresh-peer"}) {
@@ -274,7 +276,7 @@ func TestEachRefusalNamesItsOwnReason(t *testing.T) {
 			endpoint := &grantLog{refuse: map[string]refusal{"refresh-0": c.given}}
 			store := keptStore(t, endpoint)
 			id := account(t, store, "refused", "refresh-0", time.Now().Add(-time.Minute), time.Now().Add(-time.Hour))
-			if _, err := accounts.NewAccountManager(store, mustSpec(t), id).Access(context.Background()); err == nil {
+			if _, err := accounts.NewAccountManager(store, claudesub.Spec(), id).Access(context.Background()); err == nil {
 				t.Fatal("a refusal produced a token")
 			}
 			cause := rowOf(t, store, id).DisabledCause
@@ -303,13 +305,4 @@ func TestAServerRefreshExpiryWarnsOnlyWhenNear(t *testing.T) {
 	if gone.Unusable(now) == "" {
 		t.Fatal("a refresh token the server said has expired reads usable")
 	}
-}
-
-func mustSpec(t *testing.T) accounts.Spec {
-	t.Helper()
-	spec, err := accounts.Lookup(string(accounts.ClaudeSub))
-	if err != nil {
-		t.Fatalf("lookup: %v", err)
-	}
-	return spec
 }

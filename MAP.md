@@ -161,7 +161,8 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 | `internal/models/llm/wire/codex/` | the Codex protocol |
 | `internal/models/llm/wire/openai/` | the OpenAI-compatible chat protocol, used for OpenRouter |
 | `internal/models/llm/wire/pins/` | the program that raises the pinned client versions |
-| `internal/models/llm/providers/claude-sub/` | the Claude subscription as a source that pays |
+| `internal/models/llm/providers/claude-sub/` | the Claude subscription as a source that pays, its sign-in spec and usage endpoint |
+| `internal/models/llm/providers/codex-sub/` | the Codex subscription sign-in spec and usage endpoint |
 | `internal/models/classifiers/` | the route from a classifier binding to its provider |
 | `internal/models/classifiers/core/` | the classifier client: request, answer, validate, confidence, caps, fallback, key, record |
 | `internal/models/classifiers/catalog/` | the pinned classifier builds |

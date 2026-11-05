@@ -292,7 +292,9 @@ func (a *Accounts) read(ctx context.Context) ([]quota.Candidate, map[int64]accou
 }
 
 func (a *Accounts) Quota() (*quota.Poller, error) {
-	a.polling.Do(func() { a.poller, a.pollerErr = quota.NewPoller(nil, a.Now, a.URLs, RecordQuotaReading) })
+	a.polling.Do(func() {
+		a.poller, a.pollerErr = quota.NewPoller(nil, a.Now, UsageEndpoints(a.URLs), RecordQuotaReading)
+	})
 	return a.poller, a.pollerErr
 }
 
@@ -488,7 +490,7 @@ func OpenAccounts(opts RunOpts, selected catalog.Model) (*Accounts, loop.Spend, 
 		return &Accounts{ModelID: modelID, Now: time.Now, Fixed: model}, spend, err
 	}
 	provider := accounts.Provider(selected.Subscription)
-	spec, err := accounts.Lookup(string(provider))
+	spec, err := Specs().Lookup(string(provider))
 	if err != nil {
 		return nil, spend, err
 	}
@@ -496,7 +498,7 @@ func OpenAccounts(opts RunOpts, selected catalog.Model) (*Accounts, loop.Spend, 
 	if err != nil {
 		return nil, spend, err
 	}
-	store, err := accounts.Open(path)
+	store, err := accounts.Open(path, Specs())
 	if err != nil {
 		return nil, spend, err
 	}

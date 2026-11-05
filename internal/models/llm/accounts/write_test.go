@@ -27,7 +27,7 @@ func lockedStore(t *testing.T, expires time.Time) (*Manager, *Store, *atomic.Int
 		})
 	}))
 	t.Cleanup(server.Close)
-	store, err := Open(filepath.Join(t.TempDir(), "credentials.db"))
+	store, err := Open(filepath.Join(t.TempDir(), "credentials.db"), nil)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

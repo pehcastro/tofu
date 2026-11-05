@@ -70,7 +70,7 @@ func (k *Keeper) manager(row Row) (*Manager, error) {
 	if manager, made := k.managers[row.ID]; made {
 		return manager, nil
 	}
-	spec, err := Lookup(string(row.Credential.Provider))
+	spec, err := k.store.specs.Lookup(string(row.Credential.Provider))
 	if err != nil {
 		return nil, err
 	}

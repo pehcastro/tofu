@@ -301,7 +301,7 @@ func storeCredential(t *testing.T, provider accounts.Provider) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := accounts.Open(path)
+	store, err := accounts.Open(path, wiring.Specs())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2661,7 +2661,7 @@ func TestFiftyStepsOnOneAccountPollItsQuotaAtMostTwice(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := accounts.Open(path)
+	store, err := accounts.Open(path, wiring.Specs())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2670,7 +2670,7 @@ func TestFiftyStepsOnOneAccountPollItsQuotaAtMostTwice(t *testing.T) {
 		Identity: accounts.Identity{Email: "codex@example.com", AccountID: "account-1"}}, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	spec, err := accounts.Lookup(string(accounts.CodexSub))
+	spec, err := wiring.Specs().Lookup(string(accounts.CodexSub))
 	if err != nil {
 		t.Fatal(err)
 	}

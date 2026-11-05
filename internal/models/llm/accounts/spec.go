@@ -1,10 +1,7 @@
 package accounts
 
 import (
-	"cmp"
-	"encoding/base64"
 	"fmt"
-	"os"
 	"time"
 )
 
@@ -15,18 +12,12 @@ const (
 	CodexSub  Provider = "codex-sub"
 )
 
-const (
-	retiredClaudeWord = "anthropic"
-	retiredCodexWord  = "codex"
-)
-
 func AllProviders() []Provider {
 	return []Provider{ClaudeSub, CodexSub}
 }
 
-var retiredProviderWords = map[string]Provider{
-	retiredClaudeWord: ClaudeSub,
-	retiredCodexWord:  CodexSub,
+func retiredProviderWords() map[string]Provider {
+	return map[string]Provider{"anthropic": ClaudeSub, "codex": CodexSub}
 }
 
 func Canonical(name string) (Provider, bool) {
@@ -35,7 +26,7 @@ func Canonical(name string) (Provider, bool) {
 			return known, true
 		}
 	}
-	if source, retired := retiredProviderWords[name]; retired {
+	if source, retired := retiredProviderWords()[name]; retired {
 		return source, true
 	}
 	return "", false
@@ -56,18 +47,6 @@ const (
 )
 
 const KindOAuth = "oauth"
-
-const (
-	ClaudeTokenURLVariable = "TOFU_CLAUDE_TOKEN_URL"
-	CodexTokenURLVariable  = "TOFU_CODEX_TOKEN_URL"
-)
-
-const (
-	anthropicClientIDBase64 = "OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl"
-	codexClientID           = "app_EMoamEEZ73f0CkXaXp7hrann"
-	codexAuthClaim          = "https://api.openai.com/auth"
-	claudeCodeSDKVersion    = "0.112.1"
-)
 
 type Spec struct {
 	Provider            Provider
@@ -91,74 +70,16 @@ type Spec struct {
 	Instructions        string
 }
 
-func Lookup(name string) (Spec, error) {
+type Specs map[Provider]Spec
+
+func (s Specs) Lookup(name string) (Spec, error) {
 	source, err := ParseProvider(name)
 	if err != nil {
 		return Spec{}, err
 	}
-	switch source {
-	case ClaudeSub:
-		return claudeSubSpec(), nil
-	case CodexSub:
-		return codexSubSpec(), nil
+	spec, known := s[source]
+	if !known {
+		return Spec{}, fmt.Errorf("cred: no sign-in spec for %s", source)
 	}
-	return Spec{}, err
-}
-
-func claudeSubSpec() Spec {
-	clientID, _ := base64.StdEncoding.DecodeString(anthropicClientIDBase64)
-	return Spec{
-		Provider:     ClaudeSub,
-		ClientID:     string(clientID),
-		AuthorizeURL: "https://claude.ai/oauth/authorize",
-		Scopes: []string{
-			"org:create_api_key",
-			"user:profile",
-			"user:inference",
-			"user:sessions:claude_code",
-			"user:mcp_servers",
-			"user:file_upload",
-		},
-		AuthorizeParams:     map[string]string{"code": "true"},
-		CallbackPort:        54545,
-		CallbackPath:        "/callback",
-		PortFallback:        true,
-		TokenURL:            cmp.Or(os.Getenv(ClaudeTokenURLVariable), "https://api.anthropic.com/v1/oauth/token"),
-		TokenBody:           BodyJSON,
-		SendStateOnExchange: true,
-		RefreshHeaders: map[string]string{
-			"anthropic-beta": "oauth-2025-04-20",
-			"User-Agent":     "anthropic-sdk-typescript/" + claudeCodeSDKVersion + " userOAuthProvider",
-		},
-		ExpirySkew:    5 * time.Minute,
-		AccountIDPath: "account.uuid",
-		EmailPath:     "account.email_address",
-		OrgIDPath:     "organization.uuid",
-		OrgNamePath:   "organization.name",
-		Instructions: "Complete login in your browser. If the browser cannot reach this machine, " +
-			"run again with --paste and paste the final redirect URL or authorization code.",
-	}
-}
-
-func codexSubSpec() Spec {
-	return Spec{
-		Provider:     CodexSub,
-		ClientID:     codexClientID,
-		AuthorizeURL: "https://auth.openai.com/oauth/authorize",
-		Scopes:       []string{"openid", "profile", "email", "offline_access", "api.connectors.read", "api.connectors.invoke"},
-		AuthorizeParams: map[string]string{
-			"id_token_add_organizations": "true",
-			"codex_cli_simplified_flow":  "true",
-			"originator":                 "tofu",
-		},
-		CallbackPort:       1455,
-		CallbackPath:       "/auth/callback",
-		PortFallback:       false,
-		TokenURL:           cmp.Or(os.Getenv(CodexTokenURLVariable), "https://auth.openai.com/oauth/token"),
-		TokenBody:          BodyForm,
-		IdentityTokenField: "id_token",
-		AccountIDPath:      codexAuthClaim + ".chatgpt_account_id",
-		EmailPath:          "email",
-		Instructions:       "A browser window should open. Complete login to finish.",
-	}
+	return spec, nil
 }

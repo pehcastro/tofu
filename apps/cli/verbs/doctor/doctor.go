@@ -102,7 +102,7 @@ func State(now time.Time) host.DoctorReport {
 		Verdict:     host.DoctorReady,
 		Blockers:    wiring.DoctorBlockers(),
 		Credentials: credentials(now),
-		Store:       accounts.DoctorState(now),
+		Store:       accounts.DoctorState(now, wiring.Specs()),
 		Gate:        host.DoctorGate{Variable: located.Name, Source: gateSource(located), Path: located.Path},
 		Library:     library,
 		Rules:       rules,

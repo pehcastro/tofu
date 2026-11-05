@@ -1,4 +1,4 @@
-package anthropic
+package anthropic_test
 
 import (
 	"bytes"
@@ -17,6 +17,8 @@ import (
 
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/core"
+	claudesub "tofu/internal/models/llm/providers/claude-sub"
+	"tofu/internal/models/llm/wire/anthropic"
 )
 
 const (
@@ -24,7 +26,7 @@ const (
 	headerOnlyCacheWriteTokens = 2997
 )
 
-func liveWire(t *testing.T) *Wire {
+func liveWire(t *testing.T) *anthropic.Wire {
 	t.Helper()
 	if os.Getenv("TOFU_LIVE_ANTHROPIC") != "1" {
 		t.Skip("set TOFU_LIVE_ANTHROPIC=1 to spend a turn of the subscription quota")
@@ -33,17 +35,14 @@ func liveWire(t *testing.T) *Wire {
 	if err != nil {
 		t.Fatalf("locating the credential store: %v", err)
 	}
-	store, err := accounts.Open(path)
+	spec := claudesub.Spec()
+	store, err := accounts.Open(path, accounts.Specs{accounts.ClaudeSub: spec})
 	if err != nil {
 		t.Skipf("no credential store, run tofu login claude-sub: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	spec, err := accounts.Lookup(string(accounts.ClaudeSub))
-	if err != nil {
-		t.Fatalf("looking up the anthropic spec: %v", err)
-	}
 
-	wire, err := New(Config{
+	wire, err := anthropic.New(anthropic.Config{
 		Model:     cmp.Or(os.Getenv("TOFU_LIVE_ANTHROPIC_MODEL"), liveModel),
 		Token:     accounts.NewManager(store, spec).Token,
 		SessionID: "00000000-0000-4000-8000-000000000001",
@@ -57,7 +56,7 @@ func liveWire(t *testing.T) *Wire {
 
 func TestLiveCompletion(t *testing.T) {
 	wire := liveWire(t)
-	result, dump, err := wire.Ask(context.Background(), Request{
+	result, dump, err := wire.Ask(context.Background(), anthropic.Request{
 		MaxTokens: 16,
 		Messages:  []core.Message{{Role: core.RoleUser, Content: "Reply with the single word: ok"}},
 	})
@@ -65,7 +64,7 @@ func TestLiveCompletion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("asking: %v", err)
 	}
-	if dump.Attestation != AttestationPatched {
+	if dump.Attestation != anthropic.AttestationPatched {
 		t.Fatalf("attestation is %s", dump.Attestation)
 	}
 	t.Logf("model %s stop %s content %q usage %+v warnings %v",
@@ -86,7 +85,7 @@ func TestLiveWritesTheInstructionPrefixOnTheFirstRequest(t *testing.T) {
 	tools := []core.Tool{{Name: "read", Description: "Read a file."}, {Name: "write", Description: "Write a file."}}
 	messages := []core.Message{{Role: core.RoleUser, Content: "Reply with the single word: ok"}}
 
-	first, dump, err := wire.Ask(context.Background(), Request{
+	first, dump, err := wire.Ask(context.Background(), anthropic.Request{
 		MaxTokens: 16, System: system, Tools: tools, Messages: messages})
 	if err != nil {
 		t.Fatalf("first send: %v", err)
@@ -100,7 +99,7 @@ func TestLiveWritesTheInstructionPrefixOnTheFirstRequest(t *testing.T) {
 			first.Usage.CacheWrite, headerOnlyCacheWriteTokens)
 	}
 
-	second, _, err := wire.Ask(context.Background(), Request{MaxTokens: 16, System: system, Tools: tools,
+	second, _, err := wire.Ask(context.Background(), anthropic.Request{MaxTokens: 16, System: system, Tools: tools,
 		Messages: append(messages,
 			core.Message{Role: core.RoleAssistant, Content: first.Content},
 			core.Message{Role: core.RoleUser, Content: "Reply with the single word: ok"})})
@@ -130,7 +129,7 @@ func TestLiveDescribesAPastedImage(t *testing.T) {
 	wire := liveWire(t)
 	messages := []core.Message{{Role: core.RoleUser, Content: "What single color is this square? Reply with one word.",
 		Images: []core.Image{{MediaType: "image/png", Data: redSquarePNG(t)}}}}
-	result, dump, err := wire.Ask(context.Background(), Request{MaxTokens: 16, Messages: messages})
+	result, dump, err := wire.Ask(context.Background(), anthropic.Request{MaxTokens: 16, Messages: messages})
 	t.Logf("request dump:\n%s", dump)
 	if err != nil {
 		t.Fatalf("asking: %v", err)
@@ -158,12 +157,12 @@ func TestLiveToolCallRoundTrip(t *testing.T) {
 	messages := []core.Message{{Role: core.RoleUser,
 		Content: "Call the _probe tool once with question=\"colour\", then reply with its answer and nothing else."}}
 
-	first, dump, err := wire.Ask(context.Background(), Request{MaxTokens: 256, Tools: tools, Messages: messages})
+	first, dump, err := wire.Ask(context.Background(), anthropic.Request{MaxTokens: 256, Tools: tools, Messages: messages})
 	t.Logf("request dump:\n%s", dump)
 	if err != nil {
 		t.Fatalf("first turn: %v", err)
 	}
-	if first.Stop != StopToolUse || len(first.ToolCalls) != 1 {
+	if first.Stop != anthropic.StopToolUse || len(first.ToolCalls) != 1 {
 		t.Fatalf("the model did not call the tool once: %+v", first)
 	}
 	t.Logf("first turn stop %s call %s %s %s", first.Stop,
@@ -176,13 +175,13 @@ func TestLiveToolCallRoundTrip(t *testing.T) {
 		core.Message{Role: core.RoleAssistant, Content: first.Content, ToolCalls: first.ToolCalls},
 		core.Message{Role: core.RoleTool, ToolCallID: first.ToolCalls[0].ID, Content: "chartreuse"},
 	)
-	second, secondDump, err := wire.Ask(context.Background(), Request{MaxTokens: 64, Tools: tools, Messages: messages})
+	second, secondDump, err := wire.Ask(context.Background(), anthropic.Request{MaxTokens: 64, Tools: tools, Messages: messages})
 	t.Logf("second request dump:\n%s", secondDump)
 	if err != nil {
 		t.Fatalf("second turn: %v", err)
 	}
 	t.Logf("second turn stop %s content %q usage %+v", second.Stop, second.Content, second.Usage)
-	if second.Stop != StopEnd || second.Content == "" {
+	if second.Stop != anthropic.StopEnd || second.Content == "" {
 		t.Fatalf("the turn did not complete: %+v", second)
 	}
 }

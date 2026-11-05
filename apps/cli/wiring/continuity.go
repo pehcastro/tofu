@@ -121,7 +121,7 @@ func (a *Accounts) budgetFor(model catalog.Model) (recall.Budget, error) {
 }
 
 func (a *Accounts) on(model catalog.Model, budget recall.Budget) (*Accounts, error) {
-	spec, err := cred.Lookup(string(model.Subscription))
+	spec, err := Specs().Lookup(string(model.Subscription))
 	if err != nil {
 		return nil, err
 	}

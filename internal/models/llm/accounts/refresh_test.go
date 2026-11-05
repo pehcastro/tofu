@@ -31,7 +31,7 @@ func (e *tokenEndpoint) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 
 func seeded(t *testing.T, tokenURL, access string, expires time.Time) (*accounts.Store, accounts.Spec) {
 	t.Helper()
-	store, err := accounts.Open(filepath.Join(t.TempDir(), "credentials.db"))
+	store, err := accounts.Open(filepath.Join(t.TempDir(), "credentials.db"), nil)
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

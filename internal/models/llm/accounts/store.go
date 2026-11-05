@@ -52,14 +52,15 @@ type Row struct {
 }
 
 type Store struct {
-	db *sql.DB
+	db    *sql.DB
+	specs Specs
 }
 
 func Path() (string, error) {
 	return platformcredential.CredentialStorePath()
 }
 
-func Open(path string) (*Store, error) {
+func Open(path string, specs Specs) (*Store, error) {
 	db, err := platformcredential.OpenCredentialStore(path)
 	if err != nil {
 		return nil, err
@@ -68,7 +69,7 @@ func Open(path string) (*Store, error) {
 		_ = db.Close()
 		return nil, err
 	}
-	store := &Store{db: db}
+	store := &Store{db: db, specs: specs}
 	if err := store.renameRetiredSources(); err != nil {
 		_ = store.Close()
 		return nil, err
@@ -81,7 +82,7 @@ func Open(path string) (*Store, error) {
 }
 
 func (s *Store) renameRetiredSources() error {
-	for retired, source := range retiredProviderWords {
+	for retired, source := range retiredProviderWords() {
 		if _, err := s.db.Exec(
 			`UPDATE OR IGNORE credentials SET provider = ? WHERE provider = ?`,
 			string(source), retired); err != nil {
@@ -97,7 +98,7 @@ func (s *Store) captureMissingKeys() error {
 		return err
 	}
 	for _, row := range rows {
-		spec, err := Lookup(string(row.Credential.Provider))
+		spec, err := s.specs.Lookup(string(row.Credential.Provider))
 		if err != nil || spec.IdentityTokenField == "" {
 			continue
 		}

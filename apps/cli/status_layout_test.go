@@ -161,7 +161,7 @@ func TestLogoutWithTwoAccountsNamesBothAndRemovesOnlyTheOneNumbered(t *testing.T
 		t.Fatalf("logout printed %q, want %q", out.String(), want)
 	}
 	path, _ := accounts.Path()
-	store, err := accounts.Open(path)
+	store, err := accounts.Open(path, wiring.Specs())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func savedAccountAs(t *testing.T, email string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	store, err := accounts.Open(path)
+	store, err := accounts.Open(path, wiring.Specs())
 	if err != nil {
 		t.Fatal(err)
 	}

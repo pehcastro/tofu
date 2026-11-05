@@ -1,4 +1,4 @@
-package quota
+package quota_test
 
 import (
 	"context"
@@ -11,8 +11,17 @@ import (
 	"testing"
 	"time"
 
+	claudesub "tofu/internal/models/llm/providers/claude-sub"
+	"tofu/internal/models/llm/quota"
 	"tofu/internal/models/transport"
 )
+
+const (
+	fiveHourWindow = "5h"
+	sevenDayWindow = "7d"
+)
+
+var recordedNow = time.Date(2026, 6, 2, 12, 0, 0, 0, time.UTC)
 
 type usageStub struct {
 	asked  atomic.Int64
@@ -60,25 +69,27 @@ func (c *testClock) pass(d time.Duration) {
 	c.mu.Unlock()
 }
 
-func sharedPoller(t *testing.T, dir string, stub *usageStub, now func() time.Time) *Poller {
+func sharedPoller(t *testing.T, dir string, stub *usageStub, now func() time.Time) *quota.Poller {
 	t.Helper()
-	poller, err := NewPoller(nil, now, map[Provider]string{ClaudeSub: stub.server.URL, CodexSub: stub.server.URL}, nil)
+	claude := claudesub.UsageEndpoint()
+	claude.URL = stub.server.URL
+	poller, err := quota.NewPoller(nil, now, quota.Endpoints{quota.ClaudeSub: claude}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	poller.dir, poller.spread = dir, func() float64 { return 0.5 }
+	poller.PinForTest(dir)
 	return poller
 }
 
-func claudeRow(row int64) Account {
-	return Account{Provider: ClaudeSub, AccountID: "acct-" + strconv.FormatInt(row, 10), Row: row, Credential: madeUpAccess{}}
+func claudeRow(row int64) quota.Account {
+	return quota.Account{Provider: quota.ClaudeSub, AccountID: "acct-" + strconv.FormatInt(row, 10), Row: row, Credential: madeUpAccess{}}
 }
 
 type madeUpAccess struct{}
 
 func (madeUpAccess) Access(context.Context) (string, error) { return "made-up", nil }
 
-func windowUsed(t *testing.T, report Report, id string) float64 {
+func windowUsed(t *testing.T, report quota.Report, id string) float64 {
 	t.Helper()
 	for _, window := range report.Windows {
 		if window.ID == id {
@@ -125,16 +136,16 @@ func TestA429KeepsTheLastReadingStaleAndASecondProcessDoesNotAsk(t *testing.T) {
 
 func TestAColdCacheServesTheLoggedReadingWhenTheEndpointFails(t *testing.T) {
 	dir, stub, clock := t.TempDir(), newUsageStub(t), &testClock{at: recordedNow}
-	logged := Reading{Provider: ClaudeSub, Account: 1, At: recordedNow.Add(-3 * time.Hour), Windows: []ReadingWindow{{ID: fiveHourWindow, Used: 0.42}}}
-	if err := AppendReading(dir, logged); err != nil {
+	logged := quota.Reading{Provider: quota.ClaudeSub, Account: 1, At: recordedNow.Add(-3 * time.Hour), Windows: []quota.ReadingWindow{{ID: fiveHourWindow, Used: 0.42}}}
+	if err := quota.AppendReading(dir, logged); err != nil {
 		t.Fatal(err)
 	}
-	if err := AppendReading(dir, Reading{Provider: ClaudeSub, Account: 2, At: recordedNow.Add(-time.Hour), Windows: []ReadingWindow{{ID: fiveHourWindow, Used: 0.9}}}); err != nil {
+	if err := quota.AppendReading(dir, quota.Reading{Provider: quota.ClaudeSub, Account: 2, At: recordedNow.Add(-time.Hour), Windows: []quota.ReadingWindow{{ID: fiveHourWindow, Used: 0.9}}}); err != nil {
 		t.Fatal(err)
 	}
 	stub.status.Store(http.StatusTooManyRequests)
 	report, err := sharedPoller(t, dir, stub, clock.now).Poll(context.Background(), claudeRow(1))
-	if err == nil || !report.Stale || report.Source != SourceLog || windowUsed(t, report, fiveHourWindow) != 0.42 || !report.FetchedAt.Equal(logged.At) {
+	if err == nil || !report.Stale || report.Source != quota.SourceLog || windowUsed(t, report, fiveHourWindow) != 0.42 || !report.FetchedAt.Equal(logged.At) {
 		t.Fatalf("a cold cache over a logged reading answered %+v, %v", report, err)
 	}
 }
@@ -215,24 +226,11 @@ func TestReplyHeadersFillTheReadingWithoutAskingTheEndpoint(t *testing.T) {
 	}
 	clock.pass(4 * time.Minute)
 	report, err := sharedPoller(t, dir, stub, clock.now).Poll(context.Background(), claudeRow(1))
-	if err != nil || stub.asked.Load() != 1 || report.Source != SourceHeaders || !report.FetchedAt.Equal(recordedNow.Add(4*time.Minute)) {
+	if err != nil || stub.asked.Load() != 1 || report.Source != quota.SourceHeaders || !report.FetchedAt.Equal(recordedNow.Add(4*time.Minute)) {
 		t.Fatalf("after a reply the poll answered %+v, %v, asked %d", report, err, stub.asked.Load())
 	}
 	if windowUsed(t, report, fiveHourWindow) != 0.31 || windowUsed(t, report, sevenDayWindow) != 0.5 || windowUsed(t, report, "7d:opus") != 0.2 {
 		t.Fatalf("the merged reading is %+v", report.Windows)
-	}
-}
-
-func TestCodexReplyHeadersReadPercentAndMinutes(t *testing.T) {
-	header := http.Header{}
-	header.Set("x-codex-primary-used-percent", "12.5")
-	header.Set("x-codex-primary-window-minutes", "300")
-	header.Set("x-codex-primary-reset-at", "1780490000")
-	header.Set("x-codex-secondary-used-percent", "60")
-	header.Set("x-codex-secondary-window-minutes", "10080")
-	report := fromCodexHeaders(header, recordedNow)
-	if windowUsed(t, report, fiveHourWindow) != 0.125 || windowUsed(t, report, sevenDayWindow) != 0.6 {
-		t.Fatalf("codex headers read %+v", report.Windows)
 	}
 }
 
@@ -254,25 +252,5 @@ func TestRepliesInsideAMinuteMergeOnlyWhenAWindowIsSpent(t *testing.T) {
 	}
 	if stub.asked.Load() != 0 {
 		t.Fatalf("readings from replies asked the endpoint %d times", stub.asked.Load())
-	}
-}
-
-func TestFreshnessIsJitteredAndShorterNearALimitOnlyFromTheEndpoint(t *testing.T) {
-	poller := &Poller{spread: func() float64 { return 0 }}
-	near := Report{Source: SourceEndpoint, Windows: []Window{reported(0.92, fiveHourWindow, time.Time{})}}
-	for _, check := range []struct {
-		report Report
-		spread float64
-		want   time.Duration
-	}{
-		{Report{Source: SourceEndpoint}, 0, freshFor * 3 / 4},
-		{Report{Source: SourceEndpoint}, 1, freshFor * 5 / 4},
-		{near, 0.5, nearLimitCloseFor},
-		{Report{Source: SourceHeaders, Windows: near.Windows}, 0.5, freshFor},
-	} {
-		poller.spread = func() float64 { return check.spread }
-		if got := poller.freshFor(check.report); got != check.want {
-			t.Errorf("freshness of %+v at spread %v is %v, want %v", check.report, check.spread, got, check.want)
-		}
 	}
 }

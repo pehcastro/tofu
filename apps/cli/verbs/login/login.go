@@ -157,7 +157,7 @@ func login(args []string, in io.Reader, prompts io.Writer, now time.Time) (Recei
 
 func retiredLogin(word string) *output.Refusal {
 	provider := word
-	spec, err := accounts.Lookup(word)
+	spec, err := wiring.Specs().Lookup(word)
 	switch {
 	case err == nil:
 		provider = string(spec.Provider)
@@ -172,7 +172,7 @@ func providerFor(verb string, want host.AccountRole, args []string) (accounts.Sp
 		return accounts.Spec{}, output.UsageRefusal("no "+string(want)+" provider named", Usage)
 	}
 	provider := args[0]
-	spec, err := accounts.Lookup(provider)
+	spec, err := wiring.Specs().Lookup(provider)
 	switch {
 	case err == nil && string(spec.Provider) != provider:
 		return accounts.Spec{}, output.UsageRefusal(provider+" is now "+string(spec.Provider), wiring.CommandFor(verb, host.RoleLLM, string(spec.Provider)))
@@ -309,7 +309,7 @@ func signIn(spec accounts.Spec, paste bool, in io.Reader, prompts io.Writer, now
 	if err != nil {
 		return Receipt{}, output.Failure(err.Error(), "")
 	}
-	store, err := accounts.Open(path)
+	store, err := accounts.Open(path, wiring.Specs())
 	if err != nil {
 		return Receipt{}, output.Failure(err.Error(), "")
 	}

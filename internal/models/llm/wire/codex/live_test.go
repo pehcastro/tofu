@@ -8,6 +8,7 @@ import (
 
 	"tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/core"
+	codexsub "tofu/internal/models/llm/providers/codex-sub"
 )
 
 const liveModel = "gpt-5.1-codex"
@@ -23,15 +24,12 @@ func liveWire(t *testing.T) *Wire {
 	if err != nil {
 		t.Fatalf("locating the credential store: %v", err)
 	}
-	store, err := accounts.Open(path)
+	spec := codexsub.Spec()
+	store, err := accounts.Open(path, accounts.Specs{accounts.CodexSub: spec})
 	if err != nil {
 		t.Skipf("no credential store, run tofu login codex-sub: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	spec, err := accounts.Lookup(string(accounts.CodexSub))
-	if err != nil {
-		t.Fatalf("looking up the codex spec: %v", err)
-	}
 
 	wire, err := New(Config{
 		Model:          cmp.Or(os.Getenv("TOFU_LIVE_CODEX_MODEL"), liveModel),

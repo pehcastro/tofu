@@ -118,7 +118,7 @@ func PollCredentials(ctx context.Context, now func() time.Time, kept *quota.Poll
 	if err != nil || !present {
 		return nil, err
 	}
-	store, err := accounts.Open(path)
+	store, err := accounts.Open(path, Specs())
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func PollRows(ctx context.Context, store *accounts.Store, rows []accounts.Row, n
 		recordErr = quota.AppendReading(readings, reading)
 		return recordErr
 	}
-	poller, err := quota.NewPoller(nil, now, urls, record)
+	poller, err := quota.NewPoller(nil, now, UsageEndpoints(urls), record)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func PollRowsOn(ctx context.Context, store *accounts.Store, rows []accounts.Row,
 		if results[i].Unusable = row.Unusable(now()); results[i].Unusable != "" {
 			continue
 		}
-		spec, err := accounts.Lookup(string(row.Credential.Provider))
+		spec, err := Specs().Lookup(string(row.Credential.Provider))
 		if err != nil {
 			return nil, err
 		}

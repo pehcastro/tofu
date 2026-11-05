@@ -6,21 +6,12 @@ import (
 	"io"
 	"math/rand/v2"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/transport"
 	"tofu/internal/platform/fs"
-)
-
-const (
-	anthropicUsageURL      = "https://api.anthropic.com/api/oauth/usage"
-	codexUsageURL          = "https://chatgpt.com/backend-api/wham/usage"
-	ClaudeUsageURLVariable = "TOFU_CLAUDE_USAGE_URL"
-	CodexUsageURLVariable  = "TOFU_CODEX_USAGE_URL"
 )
 
 const (
@@ -48,32 +39,43 @@ type Account struct {
 	ClientVersion string
 }
 
+type Endpoint struct {
+	URL         string
+	SetHeaders  func(request *http.Request, account Account)
+	Parse       func(body []byte, now time.Time) (Report, error)
+	FromHeaders func(header http.Header, now time.Time) Report
+}
+
+type Endpoints map[Provider]Endpoint
+
+func (e Endpoints) of(provider Provider) Endpoint {
+	endpoint, known := e[provider]
+	if !known {
+		panic("quota: unknown provider " + string(provider))
+	}
+	return endpoint
+}
+
 type Poller struct {
-	http   *http.Client
-	now    func() time.Time
-	spread func() float64
-	urls   map[Provider]string
-	record func(Reading) error
-	dir    string
+	http      *http.Client
+	now       func() time.Time
+	spread    func() float64
+	endpoints Endpoints
+	record    func(Reading) error
+	dir       string
 }
 
 func NewPoller(
 	httpClient *http.Client,
 	now func() time.Time,
-	urls map[Provider]string,
+	endpoints Endpoints,
 	record func(Reading) error,
 ) (*Poller, error) {
 	dir, err := fs.QuotaDir()
 	if err != nil {
 		return nil, err
 	}
-	if urls == nil {
-		urls = map[Provider]string{
-			ClaudeSub: cmp.Or(os.Getenv(ClaudeUsageURLVariable), anthropicUsageURL),
-			CodexSub:  cmp.Or(os.Getenv(CodexUsageURLVariable), codexUsageURL),
-		}
-	}
-	return &Poller{http: cmp.Or(httpClient, &http.Client{}), now: now, spread: rand.Float64, urls: urls, record: record, dir: dir}, nil
+	return &Poller{http: cmp.Or(httpClient, &http.Client{}), now: now, spread: rand.Float64, endpoints: endpoints, record: record, dir: dir}, nil
 }
 
 func (p *Poller) Poll(ctx context.Context, account Account) (Report, error) {
@@ -193,25 +195,16 @@ func (p *Poller) fetch(ctx context.Context, account Account) (Report, time.Durat
 		return Report{}, 0, transport.Fail("quota.Poll", transport.KindMissingCredential, err,
 			"the %s credential could not be resolved", account.Provider)
 	}
+	endpoint := p.endpoints.of(account.Provider)
 	ctx, cancel := context.WithTimeout(ctx, pollTimeout)
 	defer cancel()
-	request, err := http.NewRequestWithContext(ctx, http.MethodGet, p.urls[account.Provider], nil)
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.URL, nil)
 	if err != nil {
 		return Report{}, 0, transport.Fail("quota.Poll", transport.KindBadRequest, err, "building the usage request")
 	}
 	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Accept", "application/json")
-	switch account.Provider {
-	case ClaudeSub:
-		request.Header.Set("User-Agent", anthropic.ClaudeCodeUserAgent(cmp.Or(account.ClientVersion, anthropic.PinnedClaudeCodeVersion)))
-	case CodexSub:
-		request.Header.Set("User-Agent", "tofu")
-		if account.AccountID != "" {
-			request.Header.Set("ChatGPT-Account-Id", account.AccountID)
-		}
-	default:
-		panic("quota: unknown provider " + string(account.Provider))
-	}
+	endpoint.SetHeaders(request, account)
 	response, err := p.http.Do(request)
 	if err != nil {
 		return Report{}, 0, transport.Fail("quota.Poll", transport.KindProvider, err, "asking the %s usage endpoint", account.Provider)
@@ -230,10 +223,6 @@ func (p *Poller) fetch(ctx context.Context, account Account) (Report, time.Durat
 				" and it is not asked again inside this call",
 		}
 	}
-	if account.Provider == ClaudeSub {
-		report, err := FromAnthropicUsage(body, p.now())
-		return report, 0, err
-	}
-	report, err := FromCodexUsage(body, p.now())
+	report, err := endpoint.Parse(body, p.now())
 	return report, 0, err
 }

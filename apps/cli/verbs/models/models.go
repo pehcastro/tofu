@@ -385,7 +385,7 @@ func reloadSignedIn(ctx context.Context, held wiring.HeldStore, pinning jevPinni
 	versions, _ := wiring.SubFingerprint(".")
 	for _, provider := range cred.AllProviders() {
 		source := host.ReloadSource{Source: string(provider), State: SourceNotSignedIn, Hint: wiring.LoginHint(string(provider))}
-		credential, err := cred.Lookup(string(provider))
+		credential, err := wiring.Specs().Lookup(string(provider))
 		if err != nil {
 			settled = append(settled, failedSource(source, "sign-in unreadable", err))
 			continue

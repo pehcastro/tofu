@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"tofu/internal/models/llm/core"
+	claudesub "tofu/internal/models/llm/providers/claude-sub"
 	"tofu/internal/models/llm/quota"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/models/llm/wire/codex"
@@ -198,7 +199,9 @@ func TestTheUsagePollClaimsTheRaisedGlobalVersion(t *testing.T) {
 		_, _ = io.WriteString(w, `{}`)
 	}))
 	t.Cleanup(listening.Close)
-	poller, err := quota.NewPoller(nil, time.Now, map[quota.Provider]string{quota.ClaudeSub: listening.URL}, nil)
+	endpoint := claudesub.UsageEndpoint()
+	endpoint.URL = listening.URL
+	poller, err := quota.NewPoller(nil, time.Now, quota.Endpoints{quota.ClaudeSub: endpoint}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
