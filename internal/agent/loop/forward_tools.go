@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"context"
 	"encoding/json"
 
 	"tofu/internal/models/llm/core"
@@ -9,9 +10,14 @@ import (
 	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit"
+	"tofu/internal/tools/files/read"
+	"tofu/internal/tools/files/write"
 )
 
 type (
+	ReadTool        = read.ReadTool
+	WriteTool       = write.WriteTool
+	readArgs        = read.ReadArgs
 	SearchLink      = search.SearchLink
 	Typecheckers    = checkers.Typecheckers
 	TestRunners     = test.TestRunners
@@ -26,6 +32,14 @@ const (
 	typecheckUnanswered = checkers.TypecheckUnanswered
 	testNoTests         = test.NoTests
 )
+
+func NewReadTool(root string) (*ReadTool, error) { return read.NewReadTool(root) }
+
+func NewWriteTool(root string) (*WriteTool, error) { return write.NewWriteTool(root) }
+
+func AppendedLines(result string) (int, []string, bool) { return write.AppendedLines(result) }
+
+func uncountedRead(ctx context.Context) context.Context { return read.Uncounted(ctx) }
 
 func EditChanges(raw json.RawMessage) ([]edit.EditChange, error) { return edit.EditChanges(raw) }
 

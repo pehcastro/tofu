@@ -1,4 +1,4 @@
-package loop
+package write
 
 import (
 	"context"
@@ -15,7 +15,8 @@ import (
 	"tofu/internal/konst"
 	rule "tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/sys"
+	platformfs "tofu/internal/platform/fs"
+	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit/patch"
 )
@@ -24,8 +25,8 @@ const writePerm = 0o644
 
 type WriteTool struct {
 	root     contract.Root
-	ledger   *ReadLedger
-	checkers *Typecheckers
+	ledger   *contract.ReadLedger
+	checkers *checkers.Typecheckers
 	rules    []rule.Rule
 }
 
@@ -37,15 +38,19 @@ func NewWriteTool(root string) (*WriteTool, error) {
 	return &WriteTool{root: resolved}, nil
 }
 
-func (t *WriteTool) Reading(ledger *ReadLedger) *WriteTool {
+func (t *WriteTool) Reading(ledger *contract.ReadLedger) *WriteTool {
 	t.ledger = ledger
 	return t
 }
 
-func (t *WriteTool) Checking(checkers *Typecheckers) *WriteTool {
-	t.checkers = checkers
+func (t *WriteTool) Checking(typecheckers *checkers.Typecheckers) *WriteTool {
+	t.checkers = typecheckers
 	return t
 }
+
+func (t *WriteTool) Root() contract.Root { return t.root }
+
+func (t *WriteTool) Ledger() *contract.ReadLedger { return t.ledger }
 
 func (t *WriteTool) Ruling(rules []rule.Rule) *WriteTool {
 	t.rules = rules
@@ -103,9 +108,9 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 		return contract.Result{}, fmt.Errorf("write: %w", err)
 	}
 	if readErr != nil {
-		err = sys.WriteFile(resolved, []byte(args.Content), writePerm)
+		err = platformfs.WriteFile(resolved, []byte(args.Content), writePerm)
 	} else {
-		change := ChangeOf(string(held), args.Content)
+		change := contract.ChangeOf(string(held), args.Content)
 		if !t.ledger.Saw(ctx, args.Path, held) {
 			return contract.Result{}, fmt.Errorf("write: %s exists and has not been read in this session or has changed since, so replacing it whole is refused rather than trusted against a guess: %s",
 				args.Path, t.ledger.Refuse(ctx, args.Path, held, change))
@@ -144,7 +149,7 @@ func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArg
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("write: reading %s before appending to it: %w", args.Path, err)
 	}
-	lead, endings := EndingsOf(string(held))
+	lead, endings := contract.EndingsOf(string(held))
 	if len(held) > 0 && !strings.HasSuffix(lead, "\n") {
 		lead += "\n"
 	}
@@ -155,7 +160,7 @@ func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArg
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("write: %w", err)
 	}
-	change := ChangeOf(string(held), after)
+	change := contract.ChangeOf(string(held), after)
 	if !t.ledger.Saw(ctx, args.Path, held) {
 		return contract.Result{}, fmt.Errorf("write: %s has not been read in this session or has changed since, so appending to it is refused: %s",
 			args.Path, t.ledger.Refuse(ctx, args.Path, held, change))

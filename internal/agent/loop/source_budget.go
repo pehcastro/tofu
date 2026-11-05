@@ -255,7 +255,7 @@ func (t wroteBySubAgent) Run(ctx context.Context, raw json.RawMessage) (contract
 }
 
 func (b *sourceBudget) writtenBySubAgents(paths []string) []string {
-	root := b.files.root
+	root := b.files.Root()
 	var written []string
 	for _, path := range paths {
 		resolved, err := root.Resolve(path)
@@ -337,7 +337,7 @@ func (b *sourceBudget) linesChanged(tool string, args budgetArgs) int {
 	if args.Append || b.files == nil {
 		return whole
 	}
-	resolved, err := b.files.root.Resolve(args.Path)
+	resolved, err := b.files.Root().Resolve(args.Path)
 	if err != nil {
 		return whole
 	}
@@ -369,7 +369,7 @@ func (b *sourceBudget) markPrinted(ctx context.Context, command, printed string)
 	if b.files == nil || !printing {
 		return
 	}
-	root := string(b.files.root)
+	root := string(b.files.Root())
 	named := briefPath.FindAllString(printed, -1)
 	for _, arg := range args {
 		matches, _ := filepath.Glob(filepath.Join(root, arg))
@@ -382,13 +382,13 @@ func (b *sourceBudget) markPrinted(ctx context.Context, command, printed string)
 	printed = strings.ReplaceAll(printed, "\r\n", "\n")
 	slices.Sort(named)
 	for _, path := range slices.Compact(named) {
-		resolved, err := b.files.root.Resolve(path)
+		resolved, err := b.files.Root().Resolve(path)
 		if err != nil {
 			continue
 		}
 		body, err := os.ReadFile(resolved)
 		if err == nil && len(body) > 0 && strings.Contains(printed, strings.ReplaceAll(string(body), "\r\n", "\n")) {
-			b.files.ledger.Mark(ctx, path, body)
+			b.files.Ledger().Mark(ctx, path, body)
 		}
 	}
 }
@@ -455,7 +455,7 @@ func (t budgetedTool) runShell(ctx context.Context, raw json.RawMessage, command
 		}
 		return result, err
 	}
-	root := t.budget.files.root
+	root := t.budget.files.Root()
 	if t.budget.spent >= konst.OrchestratorSourceLinesPerTurn && !scriptsOutsideSource(root, steps) {
 		return contract.Result{}, t.refuse(SourceBudgetError{Reason: RefusedSpentScript})
 	}

@@ -1,4 +1,4 @@
-package loop
+package write
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
 	"tofu/internal/tools/contract"
 )
 
@@ -98,7 +99,7 @@ func TestWriteKeepsModeAndFollowsSymlink(t *testing.T) {
 	}
 }
 
-func appendThrough(t *testing.T, dir string, ledger *ReadLedger, content string) (contract.Result, error) {
+func appendThrough(t *testing.T, dir string, ledger *contract.ReadLedger, content string) (contract.Result, error) {
 	t.Helper()
 	tool, err := NewWriteTool(dir)
 	if err != nil {
@@ -127,7 +128,7 @@ func TestWriteAppendAfterRead(t *testing.T) {
 			if err := os.WriteFile(target, []byte(row.file), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			ledger := NewReadLedger()
+			ledger := contract.NewReadLedger()
 			ledger.Mark(context.Background(), "a.test.ts", []byte(row.file))
 			result, err := appendThrough(t, dir, ledger, row.content)
 			if err != nil {
@@ -164,7 +165,7 @@ func TestWriteAppendRefused(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			ledger := NewReadLedger()
+			ledger := contract.NewReadLedger()
 			if row.read != "" {
 				ledger.Mark(context.Background(), "a.test.ts", []byte(row.read))
 			}

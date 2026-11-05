@@ -1,4 +1,4 @@
-package loop
+package read
 
 import (
 	"bytes"
@@ -27,7 +27,7 @@ type readSeen struct {
 
 type ReadTool struct {
 	root   contract.Root
-	ledger *ReadLedger
+	ledger *contract.ReadLedger
 	mutex  sync.Mutex
 	seen   map[string]readSeen
 }
@@ -40,10 +40,12 @@ func NewReadTool(root string) (*ReadTool, error) {
 	return &ReadTool{root: resolved, seen: map[string]readSeen{}}, nil
 }
 
-func (t *ReadTool) Reading(ledger *ReadLedger) *ReadTool {
+func (t *ReadTool) Reading(ledger *contract.ReadLedger) *ReadTool {
 	t.ledger = ledger
 	return t
 }
+
+func (t *ReadTool) Root() contract.Root { return t.root }
 
 func (t *ReadTool) Name() string { return "read" }
 
@@ -65,14 +67,14 @@ func (t *ReadTool) Definition() core.Tool {
 	}
 }
 
-type readArgs struct {
+type ReadArgs struct {
 	Path      string `json:"path"`
 	StartLine int    `json:"start_line"`
 	EndLine   int    `json:"end_line"`
 }
 
 func (t *ReadTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
-	var args readArgs
+	var args ReadArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("read: arguments are not the expected shape: %w", err)
 	}
@@ -83,11 +85,11 @@ func (t *ReadTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 	repair := ""
 	content, err := os.ReadFile(resolved)
 	if errors.Is(err, fs.ErrNotExist) {
-		found, listErr := lookalikes(t.root, args.Path)
+		found, listErr := contract.Lookalikes(t.root, args.Path)
 		if listErr != nil {
 			return contract.Result{}, fmt.Errorf("read: %w", listErr)
 		}
-		repaired, note, refusal := RepairPath(args.Path, "file", found)
+		repaired, note, refusal := contract.RepairPath(args.Path, "file", found)
 		if refusal != nil {
 			return contract.Result{}, fmt.Errorf("read: %w", refusal)
 		}
@@ -134,7 +136,7 @@ func (t *ReadTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 
 type uncountedReadKey struct{}
 
-func uncountedRead(ctx context.Context) context.Context {
+func Uncounted(ctx context.Context) context.Context {
 	return context.WithValue(ctx, uncountedReadKey{}, true)
 }
 
@@ -144,7 +146,7 @@ func (t *ReadTool) noteRepeat(ctx context.Context, path string, content []byte, 
 	}
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
-	key, hash := shellOwnerFrom(ctx)+" "+ledgerKey(path), sha256.Sum256(append([]byte(text), content...))
+	key, hash := contract.ShellOwnerFrom(ctx)+" "+contract.LedgerKey(path), sha256.Sum256(append([]byte(text), content...))
 	seen := t.seen[key]
 	if seen.hash != hash {
 		seen = readSeen{hash: hash}
