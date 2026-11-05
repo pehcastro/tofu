@@ -10,7 +10,9 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/code/test"
+	"tofu/internal/tools/code/typecheck"
+	"tofu/internal/tools/code/typecheck/checkers"
 )
 
 func checkedProject(t *testing.T, files map[string]string) string {
@@ -22,20 +24,20 @@ func checkedProject(t *testing.T, files map[string]string) string {
 	return dir
 }
 
-func checkTools(t *testing.T, dir string) (registry.Typecheck, registry.Test) {
+func checkTools(t *testing.T, dir string) (typecheck.Typecheck, test.Test) {
 	t.Helper()
-	checkers, runners := loop.NewTypecheckers(), loop.NewTestRunners()
-	t.Cleanup(checkers.Close)
+	typecheckers, runners := checkers.NewTypecheckers(), test.NewTestRunners()
+	t.Cleanup(typecheckers.Close)
 	t.Cleanup(runners.Close)
-	typecheck, err := registry.NewTypecheck(dir, checkers)
+	typer, err := typecheck.NewTypecheck(dir, typecheckers)
 	if err != nil {
 		t.Fatal(err)
 	}
-	test, err := registry.NewTest(dir, runners)
+	tester, err := test.NewTest(dir, runners)
 	if err != nil {
 		t.Fatal(err)
 	}
-	return typecheck, test
+	return typer, tester
 }
 
 func pathCall(tool, path string) core.ToolCall {
@@ -62,7 +64,7 @@ func TestATypecheckOrTestThatFindsAFailureRecordsItAndACleanOneDoesNot(t *testin
 	if out, err := install.CombinedOutput(); err != nil {
 		t.Skipf("vitest could not be installed from the bun cache: %v\n%s", err, out)
 	}
-	typecheck, test := checkTools(t, dir)
+	typer, tester := checkTools(t, dir)
 	model := &recordingModel{calls: []core.ToolCall{
 		pathCall("typecheck", "src/broken.ts"), pathCall("typecheck", "src/sum.ts"),
 		pathCall("test", "src/broken.test.ts"), pathCall("test", "src/sum.test.ts"),
@@ -70,7 +72,7 @@ func TestATypecheckOrTestThatFindsAFailureRecordsItAndACleanOneDoesNot(t *testin
 	row, err := loop.Run(context.Background(), loop.Config{
 		Model:          model,
 		Spend:          loop.SpendSubscription,
-		Tools:          loop.NewRegistry(typecheck, test),
+		Tools:          loop.NewRegistry(typer, tester),
 		Task:           "check the project",
 		ResultBytesCap: konst.TurnResultBytesCap,
 		ArtifactDir:    t.TempDir(),
@@ -101,13 +103,13 @@ func TestATestCallOnAProjectWithoutVitestIsNotAPass(t *testing.T) {
 		{map[string]string{"package.json": `{"name":"bare"}`, "src/a.ts": "export {};\n"}, "test: this project has no tests"},
 	} {
 		dir := checkedProject(t, project.files)
-		_, test := checkTools(t, dir)
+		_, tester := checkTools(t, dir)
 		name := "a.test.ts"
 		if _, found := project.files[name]; !found {
 			name = "src/a.ts"
 		}
 		raw, _ := json.Marshal(map[string]string{"path": name})
-		result, err := test.Run(context.Background(), raw)
+		result, err := tester.Run(context.Background(), raw)
 		if err != nil || result.FailureText != project.error {
 			t.Errorf("%s: failure %q, want %q, %v\n%s", project.files["package.json"], result.FailureText, project.error, err, result.Content)
 		}
