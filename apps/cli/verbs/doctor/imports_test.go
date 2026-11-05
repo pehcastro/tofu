@@ -20,8 +20,8 @@ func everyRuleMatched(files map[string]string) map[string]string {
 		"apps/cli/wiring/wiring.go":             "package wiring\n",
 		"apps/cli/verbs/doctor/doctor.go":       "package doctor\n",
 		"library/embed.go":                      "package library\n",
-		"internal/judge/questions/questions.go": "package questions\n\nimport \"tofu/internal/sys\"\n\nfunc Name() string { return sys.OS() }\n",
-		"internal/sys/sys.go":                   "package sys\n\nfunc OS() string { return \"windows\" }\n",
+		"internal/judge/questions/questions.go": "package questions\n\nimport \"tofu/internal/platform/fs\"\n\nfunc Name() string { return fs.OS() }\n",
+		"internal/platform/fs/os.go":            "package fs\n\nfunc OS() string { return \"windows\" }\n",
 		"internal/konst/konst.go":               "package konst\n",
 		"internal/platform/safe/safe.go":        "package safe\n",
 	}
@@ -59,7 +59,7 @@ func TestImportsFailsOnACommandImportingBench(t *testing.T) {
 		t.Fatalf("exit = %d, want %d, output %q", code, output.ExitVerdict, out.String())
 	}
 	for _, want := range []string{
-		"Imports · 18 packages · 19 rules",
+		"Imports · 17 packages · 18 rules",
 		"✗ 1 violations\n",
 		"  ✗ tofu/apps                          never tofu/bench\n",
 		"violations\n  ✗ tofu/apps/cli  imports tofu/bench/suites/judge/cost\n",
@@ -76,7 +76,7 @@ func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
 		"internal/judge/gate/rule.go":        "package gate\n\nimport \"tofu/internal/agent/loop\"\n\nfunc Decide() int { return loop.Step() }\n",
 		"internal/models/transport/retry.go": "package transport\n\nfunc Retries() int { return 3 }\n",
 		"internal/judge/ledger/row.go":       "package ledger\n\nimport \"tofu/internal/models/transport\"\n\nfunc N() int { return transport.Retries() }\n",
-		"internal/judge/state/state.go":      "package state\n\nimport \"tofu/internal/judge/ledger\"\n\nfunc N() int { return ledger.N() }\n",
+		"internal/judge/points/points.go":    "package points\n\nimport \"tofu/internal/judge/ledger\"\n\nfunc N() int { return ledger.N() }\n",
 	}))
 
 	report, err := readImports(dir)
@@ -85,7 +85,7 @@ func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
 	}
 	want := importViolation{From: "tofu/internal/judge/gate", To: "tofu/internal/agent/loop", Rule: "under tofu/internal, " +
 		"a package in tofu/internal/judge imports only " +
-		"tofu/internal/judge, tofu/internal/sys, tofu/internal/konst, tofu/internal/platform/safe, " +
+		"tofu/internal/judge, tofu/internal/konst, tofu/internal/platform/safe, " +
 		"tofu/internal/platform/fs, tofu/internal/platform/project, tofu/internal/platform/clipboard, " +
 		"tofu/internal/platform/console, tofu/internal/platform/scratch, tofu/internal/platform/credential, " +
 		"tofu/internal/platform/profile, tofu/internal/platform/build, " +
@@ -106,7 +106,7 @@ func TestImportsPassesOnATreeThatObeysTheRules(t *testing.T) {
 	if code != output.ExitOK {
 		t.Fatalf("exit = %d, want %d, output %q", code, output.ExitOK, out.String())
 	}
-	if first := strings.SplitN(out.String(), "\n", 2)[0]; !strings.HasPrefix(first, "Imports · 18 packages · 19 rules ") || !strings.HasSuffix(first, " ✓ no violations") {
+	if first := strings.SplitN(out.String(), "\n", 2)[0]; !strings.HasPrefix(first, "Imports · 17 packages · 18 rules ") || !strings.HasSuffix(first, " ✓ no violations") {
 		t.Fatalf("title %q, want the counts and no violations", first)
 	}
 	if strings.Contains(out.String(), "✗") {

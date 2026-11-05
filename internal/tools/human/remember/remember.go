@@ -15,8 +15,8 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
+	memoryscope "tofu/internal/judge/points/memory_scope"
 	question "tofu/internal/judge/questions"
-	"tofu/internal/judge/state"
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	llm "tofu/internal/models/llm/core"
@@ -53,13 +53,13 @@ func (j *ScopeJudge) judge(ctx context.Context, entry entries.Entry, project str
 	}
 	full, _ := filepath.Abs(project)
 	ignored := exec.CommandContext(ctx, "git", "-C", full, "check-ignore", "-q", fs.StateDir(full)).Run() == nil
-	body, builder, err := state.BuildMemoryScope(state.MemoryScopeState{Candidate: entry.Text, Said: entry.Said, Repository: filepath.Base(full), RepositoryTofuIgnored: ignored})
+	body, builder, err := memoryscope.BuildMemoryScope(memoryscope.MemoryScopeState{Candidate: entry.Text, Said: entry.Said, Repository: filepath.Base(full), RepositoryTofuIgnored: ignored})
 	if err != nil {
 		return scopeJudgement{refusesLocal: true}
 	}
 	shadow := "the person's pick on the card is the label; a names_private yes refuses project local"
-	row := ledger.Row{Point: state.MemoryScopePoint, Questions: j.Set.Name, Version: j.Set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: builder, State: body,
-		Reason: &ledger.Reason{Question: state.MemoryNamesPrivateQuestion, Comparison: ">= its no", Mode: ledger.ModeShadow, ModeReason: &shadow}}
+	row := ledger.Row{Point: memoryscope.MemoryScopePoint, Questions: j.Set.Name, Version: j.Set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: builder, State: body,
+		Reason: &ledger.Reason{Question: memoryscope.MemoryNamesPrivateQuestion, Comparison: ">= its no", Mode: ledger.ModeShadow, ModeReason: &shadow}}
 	asked := make([]core.Question, len(j.Set.Questions))
 	for i, q := range j.Set.Questions {
 		asked[i] = q.ToJev()
@@ -71,10 +71,10 @@ func (j *ScopeJudge) judge(ctx context.Context, entry entries.Entry, project str
 		return scopeJudgement{row: row, refusesLocal: true}
 	}
 	decision.Record(&row, asked, j.Set.QuestionsVersion)
-	private := decision.Answers[state.MemoryNamesPrivateQuestion].Noul
+	private := decision.Answers[memoryscope.MemoryNamesPrivateQuestion].Noul
 	row.Reason.Value, row.Reason.Threshold = private, 1-private
-	judged := scopeJudgement{row: row, refusesLocal: state.RefusesProjectLocal(private, true)}
-	if picked, err := entries.ParseScope(state.MemoryScopeOf(decision.Answers[state.MemoryScopeQuestion].Choice)); err == nil && (picked != entries.ProjectLocal || !judged.refusesLocal) {
+	judged := scopeJudgement{row: row, refusesLocal: memoryscope.RefusesProjectLocal(private, true)}
+	if picked, err := entries.ParseScope(memoryscope.MemoryScopeOf(decision.Answers[memoryscope.MemoryScopeQuestion].Choice)); err == nil && (picked != entries.ProjectLocal || !judged.refusesLocal) {
 		judged.pick = picked
 	}
 	return judged
@@ -302,7 +302,7 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (contract.Result
 	}
 	row, err := r.Judge.record(judged, verdict)
 	if err != nil {
-		return contract.Result{}, fmt.Errorf("remember: the %s row did not write: %w", state.MemoryScopePoint, err)
+		return contract.Result{}, fmt.Errorf("remember: the %s row did not write: %w", memoryscope.MemoryScopePoint, err)
 	}
 	pick, _ := ctx.Value(memoryPickKey{}).(MemoryPick)
 	switch {
@@ -319,7 +319,7 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (contract.Result
 		if err != nil {
 			return contract.Result{Content: "the person could not be asked, so nothing was kept: " + err.Error()}, nil
 		}
-		if err := r.Judge.label(row, cmp.Or(string(picked), state.MemoryScopeNone)); err != nil {
+		if err := r.Judge.label(row, cmp.Or(string(picked), memoryscope.MemoryScopeNone)); err != nil {
 			return contract.Result{}, fmt.Errorf("remember: the person's pick did not reach the ledger, so nothing was kept: %w", err)
 		}
 		switch {

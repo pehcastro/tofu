@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"tofu/internal/agent/loop"
-	"tofu/internal/judge/state"
+	toolgate "tofu/internal/judge/points/tool_gate"
 	rule "tofu/internal/librarian/rules"
 	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
@@ -315,7 +315,7 @@ func TestEveryCheckOnAnEditCallReadsFileTwo(t *testing.T) {
 		t.Errorf("the place of a call that writes b.go is %q", place)
 	}
 	for _, key := range []string{"edits", "Edits"} {
-		targets := state.TargetsOf(state.ToolGateInput{Tool: "edit", Cwd: project, ProjectDir: project,
+		targets := toolgate.TargetsOf(toolgate.ToolGateInput{Tool: "edit", Cwd: project, ProjectDir: project,
 			Input: map[string]any{"path": "a.go", "old_string": "x", "new_string": "y", key: []any{map[string]any{"path": "b.go", "old_string": "x", "new_string": "y"}}}})
 		if len(targets.Targets) != 2 || !strings.HasSuffix(targets.Targets[1].Path, "/b.go") {
 			t.Errorf("jev's write targets for an edit whose file two is under %q: %+v", key, targets)

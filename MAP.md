@@ -51,7 +51,6 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 - `internal/tools/registry/` or `internal/tools/<category>/`: which agent gets which tool, and the wrappers every call passes through, are in `internal/tools/registry/`; each tool is its own package in its category.
 - `internal/judge/` or `internal/models/classifiers/`: the decision and its question are in `internal/judge/`; the client that asks the classifier is in `internal/models/classifiers/`.
 - `library/` or `internal/librarian/`: a file a person edits is in `library/`; the code that loads it and picks what reaches a prompt is in `internal/librarian/`.
-- `internal/sys/` or `internal/platform/`: new operating system code goes in `internal/platform/`; `internal/sys/` only forwards to it until its callers move.
 - `docs/` or `library/docs/`: both. A feature gets a public page in `docs/` and an in-app page in `library/docs/`.
 - `CHANGELOG.md` or `library/changelog/`: both, byte for byte; a test compares them.
 - `bench/` or a `_test.go`: a number that is measured and compared goes in `bench/suites/<area>/`, following `bench/README.md`.
@@ -66,7 +65,7 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 - nothing under `apps/cli/wiring/` imports `apps/cli/verbs/`
 - each package under `apps/cli/verbs/` imports no other one under it
 - `library/` imports no tofu package
-- the leaves, `internal/sys/`, `internal/konst/` and every package under `internal/platform/`, import only each other
+- the leaves, `internal/konst/` and every package under `internal/platform/`, import only each other
 - under `internal/`, a package in `internal/judge/` imports only `internal/judge/`, the leaves, `internal/models/transport/`, `internal/models/classifiers/core/` and `internal/models/classifiers/providers/`
 
 ## apps
@@ -182,8 +181,6 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 | `internal/judge/points/memory_scope/` | the memory scope decision |
 | `internal/judge/gate/` | the pure policy: load, lock, resolve, decide, fallback |
 | `internal/judge/ledger/` | the decision ledger: write, read, canon, precedent, spend, tally |
-| `internal/judge/state/` | forwards to `internal/judge/points/` until its callers move |
-| `internal/judge/method/` | forwards to `internal/judge/points/` until its callers move |
 
 ## internal/librarian, store, project, host
 
@@ -254,7 +251,6 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 | `internal/platform/profile/` | the owner's profile folder |
 | `internal/platform/build/` | the revision, version and Go version, and where the desk build is |
 | `internal/platform/safe/` | panic recovery and restart |
-| `internal/sys/` | forwards to `internal/platform/` until its callers move |
 | `internal/testkit/cli/` | helpers for verb tests: scratch project, empty home |
 | `internal/testkit/golden/` | golden files |
 | `internal/konst/` | every limit and constant |

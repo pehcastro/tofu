@@ -3,21 +3,21 @@ package library_test
 import (
 	"testing"
 
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 	"tofu/library"
 )
 
 func TestTheBinaryCarriesTheMethodTableAndEveryWiredPointStatesItsCost(t *testing.T) {
-	table, err := method.Load(library.Files())
+	table, err := points.Load(library.Files())
 	if err != nil {
-		t.Fatalf("the binary does not ship %s: %v", method.TableFile, err)
+		t.Fatalf("the binary does not ship %s: %v", points.TableFile, err)
 	}
 	if table.Notes == "" {
 		t.Error("the shipped table carries no notes, and the one place says what it is for")
 	}
 	wired := 0
 	for _, chosen := range table.Choices {
-		if chosen.Method == method.Unwired {
+		if chosen.Method == points.Unwired {
 			continue
 		}
 		wired++

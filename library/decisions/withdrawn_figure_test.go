@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"tofu/internal/judge/method"
+	"tofu/internal/judge/points"
 )
 
 var recordableCount = regexp.MustCompile(`\d+ recordable`)
@@ -29,7 +29,7 @@ func parkCitationIssues(why string) []string {
 }
 
 func TestTheFileShortlistReasonDoesNotRestateTheWithdrawnRatio(t *testing.T) {
-	table, err := method.Load(os.DirFS(".."))
+	table, err := points.Load(os.DirFS(".."))
 	if err != nil {
 		t.Fatalf("loading the shipped method table: %v", err)
 	}
