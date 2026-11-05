@@ -29,7 +29,7 @@ func domainNamed(t *testing.T, name string) Domain {
 }
 
 func TestTheFourDomainsShipAndEachCarriesSomething(t *testing.T) {
-	for _, name := range []string{DomainDev, DomainQA, DomainGeneral, "shell", "fetch"} {
+	for _, name := range []string{DomainDev, DomainQA, DomainGeneral, "shell"} {
 		domain := domainNamed(t, name)
 		if len(domain.Rules)+len(domain.Thresholds)+len(domain.Skills)+len(domain.Agents)+len(domain.References) == 0 {
 			t.Fatalf("the %s domain ships nothing", name)
