@@ -18,7 +18,7 @@ import (
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
 	"tofu/internal/store/snapshot"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/history/quote"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -58,7 +58,7 @@ type Identity struct {
 func (i *Identity) stamp(seq int64) { i.Seq = seq }
 
 func (i *Identity) refer() {
-	i.Ref = registry.QuoteRef(i.Item)
+	i.Ref = quote.QuoteRef(i.Item)
 	if i.Item != "" && i.Item == i.Agent {
 		i.Ref = "[&" + i.Agent + "]"
 	}
@@ -469,7 +469,7 @@ type ShellListening struct {
 
 func (s *ShellStarted) refer() {
 	s.Identity.refer()
-	s.Ref = cmp.Or(registry.QuoteRef(s.call), s.Ref)
+	s.Ref = cmp.Or(quote.QuoteRef(s.call), s.Ref)
 }
 
 type ShellKept string

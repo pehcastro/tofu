@@ -10,7 +10,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/store/memory/entries"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/human/remember"
 )
 
 func TestServeDataQueriesAreTypedAndMemoryReachesTheLead(t *testing.T) {
@@ -148,7 +148,7 @@ func TestServeDataRememberAnswersCarryTheScope(t *testing.T) {
 			picked <- event.ID
 		}
 	}, h.memoryPicks)
-	offer := registry.MemoryOffer{Statement: "tabs, not spaces", Said: "I prefer tabs", Scope: entries.UserLocal, Scopes: []entries.Scope{entries.Global, entries.UserLocal, entries.Project, entries.ProjectLocal}}
+	offer := remember.MemoryOffer{Statement: "tabs, not spaces", Said: "I prefer tabs", Scope: entries.UserLocal, Scopes: []entries.Scope{entries.Global, entries.UserLocal, entries.Project, entries.ProjectLocal}}
 	for _, answers := range [][2]string{{"remember_global", "user-global"}, {"remember_project", "project-global"}, {"remember_user_local", "user-local"}, {"remember_project_local", "project-local"}, {"allow_once", "ignored"}, {"reject_once", ""}} {
 		kept := make(chan entries.Scope, 1)
 		go func() {

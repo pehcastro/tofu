@@ -26,7 +26,7 @@ import (
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/human/plan"
 	shipped "tofu/library"
 )
 
@@ -569,7 +569,7 @@ func TestThePlanRidesAfterTheCachedPrefixAndTheCacheReadsWhatItReadWithoutIt(t *
 			bodies = append(bodies, body)
 			stream(w, steps[min(len(bodies), len(steps))-1])
 		}))
-		plan := registry.NewPlan()
+		plan := plan.NewPlan()
 		config.Tools, config.Task, config.Caps.MaxSteps = loop.NewRegistry(append(built, plan)...), firstTurnTask, 10
 		if shown {
 			config.Plan = plan.Shown

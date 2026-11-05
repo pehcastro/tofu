@@ -15,6 +15,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/edit"
 	"tofu/internal/tools/registry"
 )
 
@@ -74,7 +75,7 @@ func TestABriefNamingFilesStartsTheSubAgentHoldingThemAndItsEditIsNotRefused(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	edit, err := registry.NewEdit(root)
+	edit, err := edit.NewEdit(root)
 	if err != nil {
 		t.Fatal(err)
 	}

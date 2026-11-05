@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"tofu/internal/store/memory/entries"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/human/remember"
 )
 
 func TestTheDeskReadsEveryScopeOfMemoryAndItsTree(t *testing.T) {
@@ -88,7 +88,7 @@ func TestTheDeskReadsEveryScopeOfMemoryAndItsTree(t *testing.T) {
 
 func TestARememberPickSendsMemoryScoped(t *testing.T) {
 	book := &replies[entries.Scope]{}
-	offer := registry.MemoryOffer{Statement: "tabs, not spaces", Said: "I prefer tabs", Scope: entries.UserLocal, Scopes: []entries.Scope{entries.Global, entries.UserLocal}}
+	offer := remember.MemoryOffer{Statement: "tabs, not spaces", Said: "I prefer tabs", Scope: entries.UserLocal, Scopes: []entries.Scope{entries.Global, entries.UserLocal}}
 	for _, c := range []struct {
 		name   string
 		answer *entries.Scope

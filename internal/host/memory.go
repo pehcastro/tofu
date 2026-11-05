@@ -16,7 +16,7 @@ import (
 	"tofu/internal/store/memory/entries"
 	memtree "tofu/internal/store/memory/tree"
 	"tofu/internal/store/session"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/human/remember"
 )
 
 const MemoryNone = "none"
@@ -60,8 +60,8 @@ const (
 	ScopedByAuto   = "auto"
 )
 
-func keptMemory(emit func(Event)) func(registry.MemoryKept) {
-	return func(kept registry.MemoryKept) {
+func keptMemory(emit func(Event)) func(remember.MemoryKept) {
+	return func(kept remember.MemoryKept) {
 		emit(Event{Kind: EventMemoryScoped, ID: session.NewEventID(), Scoped: &MemoryScoped{Statement: kept.Statement, Offered: kept.Offered, Picked: string(kept.Kept), By: ScopedByAuto}})
 	}
 }
@@ -198,8 +198,8 @@ func (h *Host) answerMemory(id string, scope entries.Scope, said *Resolution) bo
 	})
 }
 
-func pickMemory(emit func(Event), book *replies[entries.Scope]) registry.MemoryPick {
-	return func(ctx context.Context, offer registry.MemoryOffer) (entries.Scope, error) {
+func pickMemory(emit func(Event), book *replies[entries.Scope]) remember.MemoryPick {
+	return func(ctx context.Context, offer remember.MemoryOffer) (entries.Scope, error) {
 		shown, err := json.Marshal(map[string]string{"statement": offer.Statement, "scope": string(offer.Scope), "said": offer.Said})
 		if err != nil {
 			return "", err

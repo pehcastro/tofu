@@ -6,7 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/history/quote"
 	"tofu/internal/ui/tui/chat/feed"
 	"tofu/internal/ui/tui/input/pointer"
 )
@@ -80,7 +80,7 @@ func (a *App) insertReference(ref string, focusChat bool) bool {
 		if id == "" {
 			return false
 		}
-		token = registry.QuoteRef(strings.TrimPrefix(id, "#"))
+		token = quote.QuoteRef(strings.TrimPrefix(id, "#"))
 	}
 	if focusChat {
 		a.current, a.dialogs = screenChat, nil

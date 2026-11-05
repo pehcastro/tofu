@@ -8,6 +8,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/glob"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -44,7 +45,7 @@ func (c cited) Run(ctx context.Context, raw json.RawMessage) (contract.Result, e
 	}
 	_ = json.Unmarshal(raw, &args)
 	root := string(c.root)
-	result.Content = withNote(result.Content, engine.Cite(root, result.Content, leadingDirs(root, args.Command)...).Text)
+	result.Content = glob.WithNote(result.Content, engine.Cite(root, result.Content, leadingDirs(root, args.Command)...).Text)
 	return result, nil
 }
 

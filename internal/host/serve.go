@@ -27,7 +27,7 @@ import (
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/store/snapshot"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/history/quote"
 	"tofu/internal/tools/shell/process"
 	"tofu/internal/ui/statusline"
 )
@@ -637,7 +637,7 @@ func (s *server) send(p TurnSendParams) (any, error) {
 		item, asked := l.items.loggedAs(mention)
 		s.mu.Unlock()
 		if item != "" {
-			quoted := registry.QuoteRef(strings.TrimPrefix(asked, "#"))
+			quoted := quote.QuoteRef(strings.TrimPrefix(asked, "#"))
 			task, mention = strings.ReplaceAll(task, mention, quoted), quoted
 		}
 		if !strings.HasPrefix(mention, "[") {

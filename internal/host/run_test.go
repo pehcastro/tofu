@@ -21,7 +21,8 @@ import (
 	llm "tofu/internal/models/llm/core"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/human/plan"
+	"tofu/internal/tools/human/settings"
 )
 
 const overrideAsked = "no_unit_test_after_code"
@@ -418,7 +419,7 @@ func TestAwaitPersonUnderAnAlreadyGrantedRuleWritesNoOutcome(t *testing.T) {
 }
 
 func TestARuleQuestionIsAskedEveryTimeAndNeverFillsTheAlwaysHereCache(t *testing.T) {
-	request := loop.GateRequest{Tool: registry.RuleOverride{}.Name(), Args: json.RawMessage(`{"rule":"no_unit_test_after_code","change":"off","question":"A rule stops me: no_unit_test_after_code."}`)}
+	request := loop.GateRequest{Tool: settings.RuleOverride{}.Name(), Args: json.RawMessage(`{"rule":"no_unit_test_after_code","change":"off","question":"A rule stops me: no_unit_test_after_code."}`)}
 	book := &asks{standing: map[string]Answer{askedPlace(request): AlwaysHere}}
 	next := Denied
 	var shown []Event
@@ -460,11 +461,11 @@ func TestTheLeadsLogCloseErrorReachesTheChatOnceAndATurnsErrorIsNotRepeated(t *t
 }
 
 func TestEveryPlanStateTheToolHasIsDrawable(t *testing.T) {
-	drawn := statedPlan([]registry.PlanItem{
-		{Text: "pending", State: registry.PlanPending},
-		{Text: "running", State: registry.PlanRunning},
-		{Text: "done", State: registry.PlanDone},
-		{Text: "dropped", State: registry.PlanDropped},
+	drawn := statedPlan([]plan.PlanItem{
+		{Text: "pending", State: plan.PlanPending},
+		{Text: "running", State: plan.PlanRunning},
+		{Text: "done", State: plan.PlanDone},
+		{Text: "dropped", State: plan.PlanDropped},
 	})
 	want := []PlanItem{
 		{Text: "pending", State: PlanPending},
@@ -478,13 +479,13 @@ func TestEveryPlanStateTheToolHasIsDrawable(t *testing.T) {
 }
 
 func TestDrawnPlanStateNamesEveryToolPlanState(t *testing.T) {
-	want := map[registry.PlanState]PlanState{
-		registry.PlanPending: PlanPending,
-		registry.PlanRunning: PlanRunning,
-		registry.PlanDone:    PlanDone,
-		registry.PlanDropped: PlanDropped,
+	want := map[plan.PlanState]PlanState{
+		plan.PlanPending: PlanPending,
+		plan.PlanRunning: PlanRunning,
+		plan.PlanDone:    PlanDone,
+		plan.PlanDropped: PlanDropped,
 	}
-	for _, state := range []registry.PlanState{registry.PlanPending, registry.PlanRunning, registry.PlanDone, registry.PlanDropped} {
+	for _, state := range []plan.PlanState{plan.PlanPending, plan.PlanRunning, plan.PlanDone, plan.PlanDropped} {
 		expected, named := want[state]
 		if !named {
 			t.Fatalf("%s carries no expected drawn state, so a new plan state can reach drawnPlanState untested", state)

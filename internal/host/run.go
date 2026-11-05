@@ -27,7 +27,9 @@ import (
 	"tofu/internal/platform/fs"
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/human/plan"
+	"tofu/internal/tools/human/remember"
+	humansettings "tofu/internal/tools/human/settings"
 )
 
 const (
@@ -68,7 +70,7 @@ type Hooks struct {
 type Prepared struct {
 	Config    loop.Config
 	Spawner   *loop.SpawnTool
-	Plan      *registry.Plan
+	Plan      *plan.Plan
 	Ceiling   int
 	MaxSteps  int
 	Decisions func() int
@@ -148,11 +150,11 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	images := imagesOf(task)
 	watch := &watcher{held: h.roster, spent: h.spent, emit: emit, now: h.now, turnID: live.Turn, seen: h.shown, stop: &leadStop{}}
 	var prepared Prepared
-	person, asking := awaitPerson(emit, h.asks, &prepared.Config), loop.WithQuestionsBlock(loop.WithShellRegistry(registry.WithMemoryKept(context.WithValue(ctx, cronFiredKey{}, h.cronFired), keptMemory(emit)), h.shells), h.questionsBlock)
+	person, asking := awaitPerson(emit, h.asks, &prepared.Config), loop.WithQuestionsBlock(loop.WithShellRegistry(remember.WithMemoryKept(context.WithValue(ctx, cronFiredKey{}, h.cronFired), keptMemory(emit)), h.shells), h.questionsBlock)
 	if live.Unattended {
 		person = unattended
 	} else {
-		asking = loop.WithPersonForm(registry.WithMemoryPick(asking, pickMemory(emit, h.memoryPicks)), askForm(emit, h.questions))
+		asking = loop.WithPersonForm(remember.WithMemoryPick(asking, pickMemory(emit, h.memoryPicks)), askForm(emit, h.questions))
 	}
 	prepared, err = h.engine.Prepare(Turn{ID: watch.turnID, Session: id, Task: task, Pick: pick, Images: images}, Hooks{
 		Lead:     func(model loop.Model) loop.Model { watch.inner = model; return watch },
@@ -643,7 +645,7 @@ func awaitPerson(emit func(Event), book *asks, config *loop.Config) loop.Person 
 		places, _ := config.ResolvedPlaces()
 		place := askedPlace(request)
 		var overriding struct{ Rule, Question string }
-		if request.Tool == (registry.RuleOverride{}).Name() {
+		if request.Tool == (humansettings.RuleOverride{}).Name() {
 			_ = json.Unmarshal(request.Args, &overriding)
 		}
 		standsAt, accepts := place, []ApprovalDecision{AllowOnce, AllowFor, AllowAlways, RejectOnce, RejectAlways, Cancelled}
@@ -920,7 +922,7 @@ func loopGuardWords(guard *loop.LoopGuardStop) string {
 		" and getting the same result " + strconv.Itoa(guard.Repeats) + " times in a row"
 }
 
-func statedPlan(items []registry.PlanItem) []PlanItem {
+func statedPlan(items []plan.PlanItem) []PlanItem {
 	drawn := make([]PlanItem, 0, len(items))
 	for _, item := range items {
 		drawn = append(drawn, PlanItem{Phase: item.Phase, Text: item.Text, State: drawnPlanState(item.State)})
@@ -928,15 +930,15 @@ func statedPlan(items []registry.PlanItem) []PlanItem {
 	return drawn
 }
 
-func drawnPlanState(state registry.PlanState) PlanState {
+func drawnPlanState(state plan.PlanState) PlanState {
 	switch state {
-	case registry.PlanPending:
+	case plan.PlanPending:
 		return PlanPending
-	case registry.PlanRunning:
+	case plan.PlanRunning:
 		return PlanRunning
-	case registry.PlanDone:
+	case plan.PlanDone:
 		return PlanDone
-	case registry.PlanDropped:
+	case plan.PlanDropped:
 		return PlanDropped
 	}
 	panic("host: unknown plan item state " + string(state))

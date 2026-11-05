@@ -13,7 +13,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/history/quote"
 )
 
 type heldModel struct {
@@ -169,8 +169,8 @@ func TestTurnSendKeepsAMentionWhereItWasAndEveryLineCarriesTheTokenForItsItem(t 
 		var about Identity
 		if json.Unmarshal(line.Params, &about) == nil && about.Item != "" {
 			lines++
-			if about.Ref != registry.QuoteRef(about.Item) {
-				t.Errorf("%s carries ref %q for item %q, want %q", line.Method, about.Ref, about.Item, registry.QuoteRef(about.Item))
+			if about.Ref != quote.QuoteRef(about.Item) {
+				t.Errorf("%s carries ref %q for item %q, want %q", line.Method, about.Ref, about.Item, quote.QuoteRef(about.Item))
 			}
 		}
 		return line.Method == "turn.completed"

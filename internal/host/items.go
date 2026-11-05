@@ -13,7 +13,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/history/quote"
 )
 
 const (
@@ -79,7 +79,7 @@ func (s *items) bind(logged session.Event) {
 func (s *items) loggedAs(ref string) (item, asked string) {
 	asked = ref
 	for minted, id := range s.logged {
-		if registry.QuoteRef(minted) != ref {
+		if quote.QuoteRef(minted) != ref {
 			continue
 		}
 		if item != "" {

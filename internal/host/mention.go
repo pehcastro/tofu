@@ -6,15 +6,15 @@ import (
 	"strings"
 
 	"tofu/internal/store/session"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/history/quote"
 )
 
 type MentionOutcome string
 
 const (
-	MentionItem      MentionOutcome = MentionOutcome(registry.QuoteItem)
-	MentionNotFound  MentionOutcome = MentionOutcome(registry.QuoteNotFound)
-	MentionAmbiguous MentionOutcome = MentionOutcome(registry.QuoteAmbiguous)
+	MentionItem      MentionOutcome = MentionOutcome(quote.QuoteItem)
+	MentionNotFound  MentionOutcome = MentionOutcome(quote.QuoteNotFound)
+	MentionAmbiguous MentionOutcome = MentionOutcome(quote.QuoteAmbiguous)
 )
 
 func (MentionOutcome) enum() []string {
@@ -52,15 +52,15 @@ func (s *server) resolveMention(p MentionParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	found, err := registry.ResolveQuote(store, recorded, asked)
-	if errors.Is(err, registry.ErrQuoteNoID) {
+	found, err := quote.ResolveQuote(store, recorded, asked)
+	if errors.Is(err, quote.ErrQuoteNoID) {
 		return nil, &Refusal{Code: CodeBadParams, Message: err.Error()}
 	}
 	if err != nil {
 		return nil, err
 	}
 	resolved := MentionResolved{Outcome: MentionOutcome(found.Outcome), Ref: ref, Session: found.Session}
-	if found.Outcome == registry.QuoteItem {
+	if found.Outcome == quote.QuoteItem {
 		line, _, _ := strings.Cut(strings.TrimSpace(found.Words), "\n")
 		resolved.Ref, resolved.Item, resolved.Speaker, resolved.Line = found.Ref, cmp.Or(item, found.Event), found.Speaker, line
 	}

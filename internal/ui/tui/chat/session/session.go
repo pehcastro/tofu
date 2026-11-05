@@ -17,7 +17,8 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	isession "tofu/internal/store/session"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/history/quote"
+	"tofu/internal/tools/human/plan"
 	"tofu/internal/ui/tui/chat/markdown"
 	"tofu/internal/ui/tui/composer/paste"
 	"tofu/internal/ui/tui/look/look"
@@ -199,7 +200,7 @@ func New(now func() time.Time, prose Prose) Model {
 	styles := look.ComposerStyles()
 	styles.Cursor.Shape = tea.CursorBar
 	composer.SetStyles(styles)
-	return Model{now: now, prose: prose, composer: composer, following: true, began: now(), unshown: map[string]bool{}, opened: map[string]bool{}, FeedID: registry.ShortID}
+	return Model{now: now, prose: prose, composer: composer, following: true, began: now(), unshown: map[string]bool{}, opened: map[string]bool{}, FeedID: quote.ShortID}
 }
 
 func (m *Model) Focus() tea.Cmd { return m.composer.Focus() }
@@ -331,7 +332,7 @@ func (m *Model) mint() string {
 }
 
 func (m *Model) Append(entry Entry) {
-	if entry.Kind == Tool && entry.Head == registry.PlanToolName {
+	if entry.Kind == Tool && entry.Head == plan.PlanToolName {
 		if entry.ID != "" {
 			m.unshown[entry.ID] = true
 		}

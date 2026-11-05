@@ -15,7 +15,7 @@ import (
 	library "tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
 	isettings "tofu/internal/store/settings"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/history/quote"
 	"tofu/internal/ui/keymap"
 	"tofu/internal/ui/tui/chat/feed"
 	"tofu/internal/ui/tui/composer/keyfield"
@@ -119,7 +119,7 @@ func (a *App) quoteSelection() tea.Cmd {
 		return nil
 	}
 	cmd := a.show(screenChat)
-	a.view.Insert(registry.QuoteRef(selected) + " ")
+	a.view.Insert(quote.QuoteRef(selected) + " ")
 	return cmd
 }
 

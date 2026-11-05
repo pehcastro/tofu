@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"tofu/internal/platform/credential"
-	"tofu/internal/tools/registry"
+	"tofu/internal/tools/agents/cron"
 )
 
 type emitter struct {
@@ -43,7 +43,7 @@ func loadKeyMask() keyMask {
 func (h *Host) emitter() *emitter { return &emitter{h: h, keyMask: h.keys()} }
 
 func (e *emitter) emit(event Event) {
-	if event.Kind == EventToolCall && event.Tool == registry.CronToolName {
+	if event.Kind == EventToolCall && event.Tool == cron.CronToolName {
 		e.h.armCron()
 	}
 	if event.Kind == EventTextDelta {
