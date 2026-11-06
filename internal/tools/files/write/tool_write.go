@@ -18,6 +18,7 @@ import (
 	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/edit"
 	"tofu/internal/tools/files/edit/patch"
 )
 
@@ -65,7 +66,7 @@ func (t *WriteTool) Definition() core.Tool {
 		Description: "writes a file inside the turn's working directory, replacing it whole. " +
 			"the result says the file was created when it was not there before, " +
 			"and is a unified diff of what changed when it was. " +
-			"a .ts or .tsx file is then typechecked with the project's own tsc, and its errors end the result: fix them before moving on. " +
+			"a .ts or .tsx file is then typechecked with the project's own tsc, a .go file with go vet, a .rs file with cargo check and a .py file with pyright or mypy, and their errors end the result: fix them before moving on. " +
 			"on a project too large to recheck at once, the result says the check runs in the background and shows the errors its last check found. " +
 			"with append true the content goes after the end of a file read in this session, with a newline between when the file has none at its end, and the result shows the appended lines numbered",
 		Parameters: map[string]any{
@@ -135,7 +136,7 @@ func (t *WriteTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 		After:   args.Content,
 		Diff:    patch.Unified(args.Path, before, args.Content),
 	}
-	return contract.Result{Content: t.checkers.Typechecked(ctx, resolved, strings.Join(append([]string{preview.Result()}, ruled...), "\n")), Command: args.Path, Rules: fires}, nil
+	return contract.Result{Content: edit.Checked(ctx, t.checkers, t.root, resolved, strings.Join(append([]string{preview.Result()}, ruled...), "\n")), Command: args.Path, Rules: fires}, nil
 }
 
 func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArgs) (contract.Result, error) {
@@ -178,7 +179,7 @@ func (t *WriteTool) appendTo(ctx context.Context, resolved string, args writeArg
 	for i, line := range lines {
 		shown += fmt.Sprintf("\n%d\t%s", first+i, line)
 	}
-	return contract.Result{Content: t.checkers.Typechecked(ctx, resolved, strings.Join(append([]string{shown}, ruled...), "\n")), Command: args.Path, Rules: fires}, nil
+	return contract.Result{Content: edit.Checked(ctx, t.checkers, t.root, resolved, strings.Join(append([]string{shown}, ruled...), "\n")), Command: args.Path, Rules: fires}, nil
 }
 
 const (

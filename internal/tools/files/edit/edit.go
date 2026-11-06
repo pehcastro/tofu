@@ -74,7 +74,7 @@ func (e Edit) Definition() core.Tool {
 			"on a go file, symbol names one whole declaration instead, Resolve or Root.Resolve for a method, and new_string becomes all of it. " +
 			"give old_string or symbol, not both. " +
 			"edits lists more changes of the same shape, to this file or others, and the call writes all of them or none. " +
-			"returns a unified diff per file, ending on a .ts or .tsx file with tsc's errors: fix them before moving on. " +
+			"returns a unified diff per file, ending on a .ts, .tsx, .go, .rs or .py file with the errors its checker finds: fix them before moving on. " +
 			"write creates a file or replaces a whole one",
 		Parameters: map[string]any{"type": "object", "properties": properties},
 	}
@@ -132,7 +132,7 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 	var fires []rule.Fire
 	for i, plan := range plans {
 		e.ledger.Rewrote(ctx, plan.preview.Path, []byte(plan.preview.After), plan.change)
-		shown[i] = e.checkers.Typechecked(ctx, plan.resolved, strings.Join(append([]string{plan.preview.Diff}, plan.notes...), "\n"))
+		shown[i] = Checked(ctx, e.checkers, e.root, plan.resolved, strings.Join(append([]string{plan.preview.Diff}, plan.notes...), "\n"))
 		targets[i] = plan.preview.Path
 		fires = append(fires, plan.fires...)
 	}
