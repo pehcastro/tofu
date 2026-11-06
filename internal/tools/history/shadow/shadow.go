@@ -70,12 +70,25 @@ type Started struct {
 	Turn   Turn
 	Calls  func() []Call
 	commit string
+	parent *Started
 }
 
 type startedKey struct{}
 
 func (s Started) Into(ctx context.Context) context.Context {
+	if parent, inTurn := StartedIn(ctx); inTurn {
+		s.parent = &parent
+	}
 	return context.WithValue(ctx, startedKey{}, s)
+}
+
+func (s Started) Parent() (Started, bool) {
+	if s.parent == nil {
+		return Started{}, false
+	}
+	parent := *s.parent
+	parent.Calls = func() []Call { return nil }
+	return parent, true
 }
 
 func StartedIn(ctx context.Context) (Started, bool) {

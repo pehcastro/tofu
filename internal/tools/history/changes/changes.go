@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -31,19 +32,24 @@ func (Changes) Definition() core.Tool {
 		Description: "lists what this turn changed in the project, read from the shadow store tofu commits at every turn's start and end, never from the project's own git: " +
 			"each file with lines added and removed and the ids of the calls that named it, and every file outside the owns the turn holds. " +
 			"a file the person changed between turns is not listed. " +
-			fmt.Sprintf("turns n lists the last n ended turns of every session instead, newest first, each under its session id, at most %d.", konst.ChangesTurnsShown),
+			fmt.Sprintf("turns n lists the last n ended turns of every session instead, newest first, each under its session id, at most %d. ", konst.ChangesTurnsShown) +
+			"of parent lists what the turn that spawned this one has changed so far, while it is still running; a sub-agent reviewing the lead's work calls it that way.",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"turns": map[string]any{"type": "integer", "minimum": 1, "maximum": konst.ChangesTurnsShown},
+				"of":    map[string]any{"type": "string", "enum": []string{ofParent}},
 			},
 		},
 	}
 }
 
+const ofParent = "parent"
+
 func (c Changes) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
-		Turns int `json:"turns"`
+		Turns int    `json:"turns"`
+		Of    string `json:"of"`
 	}
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &args); err != nil {
@@ -58,6 +64,17 @@ func (c Changes) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 	var turns []shadow.Changed
 	var err error
 	started, inTurn := shadow.StartedIn(ctx)
+	switch {
+	case args.Of == "":
+	case args.Of != ofParent:
+		return contract.Result{}, fmt.Errorf("changes: of is %q, and the only value is %s", args.Of, ofParent)
+	case args.Turns != 0:
+		return contract.Result{}, errors.New("changes: of parent reads one running turn, so it takes no turns")
+	default:
+		if started, inTurn = started.Parent(); !inTurn {
+			return contract.Result{}, errors.New("changes: of parent reads the turn that spawned this one, and no turn spawned this one")
+		}
+	}
 	if inTurn && args.Turns == 0 {
 		var live shadow.Changed
 		live, err = started.Live(timed)
