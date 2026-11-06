@@ -442,3 +442,15 @@
   do: tofu tool read '{"path":"order.go","at":"Total"}' --dir .
   check: tofu tool list --dir .
   topic: tools
+- ask: can this project build here, and which env keys are missing
+  do: tofu tool env '{}' --dir .
+  check: tofu tool list --dir .
+  topic: tools
+- ask: see what is in the project database without writing to it
+  do: tofu tool db '{"env":"DATABASE_URL"}' --dir .
+  check: tofu tool list --dir .
+  topic: tools
+- ask: get a type for a json sample
+  do: tofu tool shape '{"path":"orders.json"}' --dir .
+  check: tofu tool list --dir .
+  topic: tools

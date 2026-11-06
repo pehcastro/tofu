@@ -1,7 +1,7 @@
 ---
 topic: tools
 title: What the tools return
-summary: what read, edit, write, bash, shell, typecheck, test, plan, fetch, web_search and history give the model, and how to see it for yourself
+summary: what read, edit, write, bash, shell, typecheck, test, plan, fetch, web_search, history, env, http, record, profile, shape and db give the model, and how to see it for yourself
 verbs: tool
 ---
 
@@ -34,7 +34,7 @@ by hand and prints the exact text the model would read.
   declarations it names, the same error at many places folded into one.
 
 ```text
-test: go test -json -count=1 . in E:\tofu-scratchpad\t\d2361-162046\go, 1629 ms
+test: go test -json -count=1 . in C:\work\shop\go, 1629 ms
 go test: 1 passed, 1 failed, 1 skipped
 FAIL TestDiscounted order_test.go:17: got 650, want 675
 skipped: TestShipping
@@ -83,11 +83,49 @@ skipped: TestShipping
   stated` under its header. `web_search` puts each result's date beside its
   title when the provider gives one.
 
+## Environment, observe and data
+
+- `env` says `ready` or `not ready`, each toolchain the project declares
+  with the version wanted and the one on `PATH`, and each key
+  `.env.example` names as set or missing. It never prints a value.
+- `shell` with `op` `ports` gives one JSON line per port: `pid`, `command`,
+  the kept shell and `started_by` as `this_session`, `other_session` or
+  `outside`, or `free`. It never kills, and it needs a running session.
+- `http` calls a server on this machine only, found from the kept shell
+  that listens or from `port`, and returns the status, the time, the
+  headers worth reading and the body. A JSON array comes back as its first
+  3 items and the type of every item.
+- `record` with `start` saves the plain http a command makes, through a
+  proxy only that command sees, and `replay` answers the same command from
+  the recording with the server down. `https` is not intercepted.
+- `profile` runs `go test` with one package, `node` or `python` under a
+  profiler and returns the ten costliest functions with `flat`, `cum` and
+  `path:line`, then the hottest call path.
+- `shape` prints the type of a JSON sample in the project's language,
+  with every field that is optional or a union marked and the item it
+  first happens in.
+- `db` reads SQLite or Postgres read only: the schema with no `query`, or
+  the first 20 rows and the count of one statement. The connection comes
+  from a key in `.env`, `DATABASE_URL` by default, and is never printed.
+
+```text
+not ready: 1 of 2 env keys not set
+toolchains:
+go: want 1.22 from go.mod, have 1.25.7
+env keys from .env.example:
+ORDER_API_URL: set in .env
+ORDER_DB_PATH: missing from .env
+```
+
 ## How to
 
 - `tofu tool test '{"path":"."}' --dir .` runs the tests of one package.
 - `tofu tool typecheck '{"path":"broken"}' --dir .` checks one directory.
 - `tofu tool read '{"path":"order.go","at":"Total"}' --dir .` reads around
   a declaration.
+- `tofu tool env '{}' --dir .` says what this project is missing here.
+- `tofu tool db '{"env":"ORDER_DB_PATH"}' --dir .` prints a database's
+  schema.
+- `tofu tool shape '{"path":"orders.json"}' --dir .` types a JSON file.
 - `tofu tool list --dir .` names every tool a run offers.
 - `tofu docs tool` says how `tofu tool` itself works.

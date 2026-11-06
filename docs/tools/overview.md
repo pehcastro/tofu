@@ -10,8 +10,9 @@ tofu runs every call itself, in the working directory, and records it in the
 session. The command line and the app build the same tool set.
 
 Most tools are tofu's own Go code: `read`, `write`, `edit`, `glob`,
-`search`, `symbols`, `project_report`, `fetch`, `web_search`, `plan`, the
-browser tools and the sub-agent tools. A few wrap a program: `bash` wraps your
+`search`, `symbols`, `project_report`, `fetch`, `web_search`, `plan`, `env`,
+`http`, `record`, `shape`, `db`, the browser tools and the sub-agent tools.
+`profile` runs the project's own profiler. A few wrap a program: `bash` wraps your
 shell, `typecheck` and `test` wrap the project's own checkers and test
 runners for Go, Rust, Python and TypeScript, `github_pr_diff` wraps `gh`, and
 the `tofu_*` verbs run the tofu binary.
@@ -27,6 +28,9 @@ model would receive. See [One tool call by hand](/docs/cli/tool).
 | [Web](/docs/tools/web) | web_search, fetch, github_pr_diff |
 | [Work](/docs/tools/work) | plan, settings, artifact_fetch, history, ask_person, skill, tofu verbs |
 | [Sub-agents](/docs/tools/sub-agents) | spawn, message, subagents, ask |
+| [Environment](/docs/tools/environment) | env, shell ports |
+| [Observe](/docs/tools/observe) | http, record, profile |
+| [Data](/docs/tools/data) | shape, db |
 | [Browser](/docs/automation/browser-tools) | browser_tabs, browser_observe, browser_act, browser_read, browser_do, browser_motion |
 
 Each tool's description says only what the model needs before it calls the

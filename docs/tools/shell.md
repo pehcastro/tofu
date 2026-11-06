@@ -209,9 +209,10 @@ stop them there or from the command line.
 | `bash` | `timeout_ms` | a hard limit, only when 30,000 or less |
 | `bash` | `background` | keep a server or watcher alive |
 | `bash` | `check_port` | who holds a port, without an HTTP request |
-| `shell` | `op` | `wait` until it ends, `logs` for the last 200 lines, `stop`, or `restart` |
-| `shell` | `name` | the name `bash` returned, such as `bash-1` |
+| `shell` | `op` | `wait` until it ends, `logs` for the last 200 lines, `stop`, `restart`, or `ports` for who listens on a port |
+| `shell` | `name` | the name `bash` returned, such as `bash-1`; `ports` needs none |
 | `shell` | `for` | with `wait`, a line, port, file or address to wait for |
+| `shell` | `port` | with `ports`, the one port to ask about; see [Environment](/docs/tools/environment) |
 
 ## Commands
 
