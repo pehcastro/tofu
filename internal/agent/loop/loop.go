@@ -32,6 +32,7 @@ import (
 	"tofu/internal/tools/agents/done"
 	"tofu/internal/tools/agents/forget"
 	"tofu/internal/tools/agents/note"
+	"tofu/internal/tools/code/search"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/history/shadow"
 	"tofu/internal/tools/human/plan"
@@ -336,7 +337,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 
 	hooks, untrustedHooks := hookEngine(ctx, config, origin)
-	ctx = context.WithValue(ctx, hookEngineKey{}, hooks)
+	ctx = search.WithTurnTask(context.WithValue(ctx, hookEngineKey{}, hooks), config.Task)
 	row.Warnings = append(row.Warnings, untrustedHooks...)
 	var hookWarnings sync.Mutex
 	fire := func(ctx context.Context, in hook.Input) hook.Verdict {
@@ -971,6 +972,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}{asked.said, reply})
 	}
 	noticeStep := config.Caps.MaxSteps - max(1, int(math.Ceil(float64(config.Caps.MaxSteps)*konst.TurnStepCapNoticeShare)))
+	underForgetShare := !slices.ContainsFunc(messages, forgetOffered) || sentTokens(messages[:len(messages)-1]) <= forgetShareTokens(budget)
 	for step := 1; ; step++ {
 		if err := ctx.Err(); err != nil {
 			return fail(err)
@@ -1073,6 +1075,14 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			recorded.listChange("pictures dropped", "step "+strconv.Itoa(step)+" sends the newest "+strconv.Itoa(konst.ImageResultsKept)+
 				" pictures, so tofu dropped the "+strconv.Itoa(len(drops))+" oldest", nil, messages)
 			recordPictureDrops(step, tokensBefore, messages, drops)
+		}
+		used := sentTokens(messages)
+		crossed := underForgetShare && used > forgetShareTokens(budget)
+		underForgetShare = used <= forgetShareTokens(budget)
+		if crossed && slices.ContainsFunc(definitions, func(tool core.Tool) bool { return tool.Name == forget.Name }) {
+			offer := forgetOffer(messages, artifacts.preview, used, budget.Ceiling())
+			recorded.notice(offer)
+			messages = append(messages, inserted(core.Origin{Source: core.SourceNotice, Name: forget.Name}, offer))
 		}
 		measureSent := func() recall.Occupancy {
 			sent := historyOf(messages)

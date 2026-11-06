@@ -638,12 +638,13 @@ const (
 )
 
 const (
-	ContextResultsShown  = 5
-	ContextStaleShown    = 20
-	ContextLabelChars    = 80
-	BudgetSubAgentsShown = 20
-	NotesMost            = 20
-	NoteBytes            = 500
+	ContextResultsShown     = 5
+	ContextStaleShown       = 20
+	ContextLabelChars       = 80
+	ContextForgetOfferShare = 0.7
+	BudgetSubAgentsShown    = 20
+	NotesMost               = 20
+	NoteBytes               = 500
 )
 
 const (
