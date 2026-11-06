@@ -4,17 +4,21 @@ use std::time::Instant;
 
 use gpui::{
     AnyElement, App, Bounds, Element, ElementId, Global, GlobalElementId, InspectorElementId,
-    IntoElement, LayoutId, Pixels, Refineable, Style, StyleRefinement, Window,
+    IntoElement, LayoutId, Pixels, Window,
 };
+#[cfg(feature = "screen-settings")]
+use gpui::{Refineable, Style, StyleRefinement};
 
 #[derive(Clone, Copy)]
 pub enum Phase {
     Layout,
+    #[cfg(feature = "screen-settings")]
     Compute,
     Prepaint,
     Paint,
 }
 
+#[cfg(feature = "screen-settings")]
 impl Phase {
     fn word(self) -> &'static str {
         match self {
@@ -33,16 +37,19 @@ struct Watched(Option<Spans>);
 
 impl Global for Watched {}
 
+#[cfg(feature = "screen-settings")]
 pub fn watch(cx: &mut App) -> Spans {
     let spans = Spans::default();
     cx.set_global(Watched(Some(Rc::clone(&spans))));
     spans
 }
 
+#[cfg(feature = "screen-settings")]
 pub fn unwatch(cx: &mut App) {
     cx.set_global(Watched(None));
 }
 
+#[cfg(feature = "screen-settings")]
 pub fn told(spans: &Spans, since: Instant) -> String {
     let ms = |at: Instant| at.duration_since(since).as_secs_f64() * 1000.0;
     spans
@@ -144,12 +151,14 @@ impl Element for Timed {
     }
 }
 
+#[cfg(feature = "screen-settings")]
 pub struct Rooted {
     name: &'static str,
     style: StyleRefinement,
     child: AnyElement,
 }
 
+#[cfg(feature = "screen-settings")]
 pub fn rooted(name: &'static str, style: StyleRefinement, child: impl IntoElement) -> Rooted {
     Rooted {
         name,
@@ -158,6 +167,7 @@ pub fn rooted(name: &'static str, style: StyleRefinement, child: impl IntoElemen
     }
 }
 
+#[cfg(feature = "screen-settings")]
 impl IntoElement for Rooted {
     type Element = Self;
 
@@ -166,6 +176,7 @@ impl IntoElement for Rooted {
     }
 }
 
+#[cfg(feature = "screen-settings")]
 impl Element for Rooted {
     type RequestLayoutState = ();
     type PrepaintState = ();

@@ -252,12 +252,14 @@ pub fn head(folder: PathBuf) -> Head {
     })
 }
 
+#[cfg(feature = "screen-intro")]
 pub fn branches(folder: &Path) -> Result<Vec<String>, String> {
     GitBinary::open(folder)
         .and_then(|git| git.branches())
         .map_err(|error| error.to_string())
 }
 
+#[cfg(feature = "screen-intro")]
 pub fn switch(folder: &Path, branch: &str) -> Result<(), String> {
     GitBinary::open(folder)
         .and_then(|git| git.switch(branch))
