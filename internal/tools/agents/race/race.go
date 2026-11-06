@@ -59,8 +59,11 @@ func (r Race) Definition() core.Tool {
 	text := map[string]any{"type": "string"}
 	return core.Tool{
 		Name: Name,
-		Description: fmt.Sprintf("races %d to %d sub-agents on rival briefs for one job, each in its own copy of the project under the scratchpad, so no two touch one file. ", r.limits.Fewest, r.limits.Most) +
-			"briefs are the whole tasks, one sub-agent each, all running at once on the person's model with no sub-agents of their own. " +
+		Description: fmt.Sprintf("use when the person asks for %d to %d whole approaches to one job built and compared: race builds them all at once rather than one after another, one brief per approach, the whole of it including its tests. ", r.limits.Fewest, r.limits.Most) +
+			"each brief runs on its own sub-agent in its own copy of the project under the scratchpad, so rival approaches that change the same file never meet in the working tree. " +
+			"this is the tool for that request, in place of writing each approach into the tree in turn, through checkpoint save and back or by writing both and deleting the loser; whatif edits only files that already exist, so it cannot build a new package. " +
+			"pick whatif to try one or two small edits, and edit for one fix. " +
+			"the sub-agents run on the person's model with no sub-agents of their own. " +
 			"check, path, name and command take whatif's shape and judge each run's edits on the real project through whatif's overlay as soon as the run ends. " +
 			"the first run whose check passes is applied to the working tree and the rest are stopped and never touch it. " +
 			"returns every run's outcome, its cost, its requests and its check digest, and the winner's diff. when no run passes nothing is applied and the tree is byte for byte as it was",
