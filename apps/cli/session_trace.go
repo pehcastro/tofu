@@ -83,7 +83,7 @@ type traceRow struct {
 }
 
 func (row traceRow) is(kind traceKind) bool {
-	return row.Kind == kind || kind == kindError && row.Outcome == traceFailed || kind == kindStop && row.Outcome == traceStopped
+	return row.Kind == kind || kind == kindCall && row.Kind == kindShell || kind == kindError && row.Outcome == traceFailed || kind == kindStop && row.Outcome == traceStopped
 }
 
 func (row traceRow) who() string { return cmp.Or(row.Agent, traceLead) }

@@ -40,6 +40,7 @@ type Reads struct {
 
 type readArgs struct {
 	Path      string `json:"path"`
+	At        any    `json:"at"`
 	StartLine int    `json:"start_line"`
 	EndLine   int    `json:"end_line"`
 	Handle    string `json:"handle"`
@@ -58,6 +59,9 @@ func readsInStep(step StepBody, reasoning bool) []Read {
 			args = readArgs{}
 		}
 		source, span := args.Path, lineSpan(args.StartLine, args.EndLine)
+		if args.At != nil {
+			span = fmt.Sprint("around ", args.At)
+		}
 		if call.Tool == artifactFetchTool {
 			source, span = args.Handle, byteSpan(args.Offset, args.Length)
 		}

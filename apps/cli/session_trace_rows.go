@@ -130,7 +130,12 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 				answered.State = "refused"
 			}
 			reason, gate := callReason(result.ResultBody), gateWords(result, nil, event.Call)
-			answered.Text = traced(call.Tool+" → "+answered.State, ruleWords(result.Rules), sized(result.ResultBytes), took(result.DurationMS), output.OneLine(cmp.Or(reason, checkSummary(call.Tool, result.Content))), gate, output.OneLine(string(call.Args)))
+			var read struct{ Path string }
+			var returned struct{ Command string }
+			if call.Tool == "read" && json.Unmarshal(call.Args, &read) == nil && json.Unmarshal(event.Body, &returned) == nil {
+				returned.Command = strings.TrimSpace(strings.TrimPrefix(returned.Command, read.Path))
+			}
+			answered.Text = traced(call.Tool+" → "+answered.State, returned.Command, ruleWords(result.Rules), sized(result.ResultBytes), took(result.DurationMS), output.OneLine(cmp.Or(reason, checkSummary(call.Tool, result.Content))), gate, output.OneLine(string(call.Args)))
 			if result.ToolOutcome != session.ToolOutcomeSkipped && (result.Error != "" || result.Refused || result.ToolOutcome == session.ToolOutcomeFailed || result.ToolOutcome == session.ToolOutcomeAborted) {
 				answered.Outcome = traceProblem(result.ToolOutcome == session.ToolOutcomeAborted, cmp.Or(reason, answered.State))
 			}
