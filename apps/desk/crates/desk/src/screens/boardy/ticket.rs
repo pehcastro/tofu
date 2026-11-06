@@ -81,6 +81,7 @@ const FENCE: &str = "```";
 const PARAGRAPH: &str = "\n\n";
 const LOGGED: &str = "logged";
 const LOOSE_EVIDENCE: &str = "Evidence that names no acceptance line";
+const BEFORE: &str = "Before, captured ahead of the change";
 const NO_EVIDENCE: &str = "no evidence names this line yet";
 const FOLD_SECONDS: i64 = 2;
 const EXACT_TIME: &str = "%a %b %-d %Y, %H:%M:%S";
@@ -107,6 +108,7 @@ pub(super) enum Verdict {
     Concerns,
     Blocked,
     NeedsYou,
+    NotPossible,
 }
 
 impl Verdict {
@@ -122,6 +124,7 @@ impl Verdict {
             Wire::DoneWithConcerns => Some(Verdict::Concerns),
             Wire::Blocked => Some(Verdict::Blocked),
             Wire::NeedsYou => Some(Verdict::NeedsYou),
+            Wire::NotPossible => Some(Verdict::NotPossible),
             Wire::Unknown(raw) => {
                 eprintln!(
                     "desk: boardy: tofu sent the verdict {raw}, which the desk does not know"
@@ -140,13 +143,16 @@ impl Verdict {
             Verdict::Concerns => "Done with concerns",
             Verdict::Blocked => "Blocked",
             Verdict::NeedsYou => "Needs you",
+            Verdict::NotPossible => "Not possible",
         }
     }
 
     fn color(self, theme: &Theme) -> Rgba {
         theme.color(match self {
             Verdict::Verified | Verdict::Done => ColorToken::GitAdded,
-            Verdict::NotVerified | Verdict::Blocked => ColorToken::StatusDanger,
+            Verdict::NotVerified | Verdict::Blocked | Verdict::NotPossible => {
+                ColorToken::StatusDanger
+            }
             Verdict::Inconclusive | Verdict::Concerns => ColorToken::StatusWarn,
             Verdict::NeedsYou => ColorToken::StatusAccent,
         })
@@ -180,6 +186,7 @@ pub(super) enum Line {
     Unanswered { at: usize },
     Kept { at: usize },
     Evidence { at: usize },
+    Before { at: usize },
 }
 
 impl Line {
@@ -190,7 +197,7 @@ impl Line {
             | Line::Asked { .. }
             | Line::Unanswered { .. } => Tab::Conversation,
             Line::Kept { .. } => Tab::History,
-            Line::Evidence { .. } => Tab::Evidence,
+            Line::Evidence { .. } | Line::Before { .. } => Tab::Evidence,
         }
     }
 }
@@ -293,6 +300,10 @@ pub(super) fn thread(events: &[Event], said: &[Said]) -> Vec<Line> {
                 true => continue,
                 false => Line::Evidence { at },
             },
+            Kind::Before | Kind::LateBefore => match quiet {
+                true => continue,
+                false => Line::Before { at },
+            },
             Kind::Commented | Kind::Unknown(_) if evidence(event) => match quiet {
                 true => continue,
                 false => Line::Evidence { at },
@@ -326,6 +337,7 @@ pub(super) fn thread(events: &[Event], said: &[Said]) -> Vec<Line> {
             | Kind::Assigned
             | Kind::Hook
             | Kind::HookFailed
+            | Kind::NotPossible
             | Kind::Unknown(_) => Line::Kept { at },
         };
         lines.push(line);
@@ -1298,7 +1310,7 @@ fn tabs(opened: &Opened, cx: &Context<Boardy>) -> PillTabs {
 fn entry(line: &Line, seen: &Seen, window: &mut Window, cx: &mut Context<Boardy>) -> Option<Div> {
     match *line {
         Line::Said { at, moved } => message(at, moved, seen, window, cx),
-        Line::Evidence { at } => message(at, None, seen, window, cx),
+        Line::Evidence { at } | Line::Before { at } => message(at, None, seen, window, cx),
         Line::Handoff { at } => handoff(at, seen, window, cx),
         Line::Asked { at, answer } => {
             let asked = seen.event(at)?;
@@ -1376,22 +1388,39 @@ fn proofs(seen: &Seen, window: &mut Window, cx: &mut Context<Boardy>) -> Vec<Div
             .map(|shown| shown.pl(px(REPLY_INDENT)))
             .collect::<Vec<_>>()
     };
-    let mut groups: Vec<Div> = accounted
+    let captured: Vec<Div> = seen
+        .opened
+        .lines
         .iter()
-        .zip(1..)
-        .map(|(line, n)| {
-            let shown = drawn(Some(n), window, cx);
+        .filter_map(|line| match *line {
+            Line::Before { at } => message(at, None, seen, window, cx),
+            _ => None,
+        })
+        .map(|shown| shown.pl(px(REPLY_INDENT)))
+        .collect();
+    let mut groups: Vec<Div> = (!captured.is_empty())
+        .then(|| {
             div()
                 .flex()
                 .flex_col()
                 .gap(px(REPLY_GAP))
-                .child(acceptance_row(n, line, theme))
-                .when(shown.is_empty(), |group| {
-                    group.child(div().pl(px(REPLY_INDENT)).child(note(NO_EVIDENCE, theme)))
-                })
-                .children(shown)
+                .child(caption(BEFORE.to_owned(), theme))
+                .children(captured)
         })
+        .into_iter()
         .collect();
+    groups.extend(accounted.iter().zip(1..).map(|(line, n)| {
+        let shown = drawn(Some(n), window, cx);
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(REPLY_GAP))
+            .child(acceptance_row(n, line, theme))
+            .when(shown.is_empty(), |group| {
+                group.child(div().pl(px(REPLY_INDENT)).child(note(NO_EVIDENCE, theme)))
+            })
+            .children(shown)
+    }));
     let loose = drawn(None, window, cx);
     if !loose.is_empty() {
         groups.push(
@@ -1751,7 +1780,8 @@ fn kept_glyph(kind: &Kind) -> Glyph {
         Kind::Handed | Kind::Spawned => Glyph::Agents,
         Kind::Rule | Kind::Waiting | Kind::Hook | Kind::HookFailed => Glyph::Settings,
         Kind::Requested | Kind::Accepted | Kind::RequestDropped => Glyph::Inbox,
-        Kind::Evidence => Glyph::Check,
+        Kind::Evidence | Kind::Before | Kind::LateBefore => Glyph::Check,
+        Kind::NotPossible => Glyph::Ellipsis,
         Kind::Commented | Kind::Asked | Kind::Answered | Kind::Messaged | Kind::Reported => {
             Glyph::Talk
         }
@@ -1802,6 +1832,9 @@ fn did(event: &Event) -> String {
             Some(line) => format!("logged evidence for line {line}"),
             None => "logged evidence".to_owned(),
         },
+        Kind::Before => "logged a before capture".to_owned(),
+        Kind::LateBefore => "logged a late before capture".to_owned(),
+        Kind::NotPossible => format!("said it is not possible: {text}"),
         Kind::Asked => "asked".to_owned(),
         Kind::Answered => "answered".to_owned(),
         Kind::Spawned => "spawned an agent".to_owned(),

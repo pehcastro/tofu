@@ -6,10 +6,10 @@ mod items;
 mod mention;
 mod mirror;
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::io::ErrorKind;
 use std::ops::Range;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
@@ -33,7 +33,7 @@ use desk_core::sessions::SessionRow;
 use desk_ui::components::ask::{
     Act, Answer as Offer, Ask, Asking, Choice, Pick, Question, Risk, Shape, ask_bar,
 };
-use desk_ui::components::chat::{FIND_RESERVE, Hit, fail, find_hits};
+use desk_ui::components::chat::{FIND_RESERVE, Hit, fail, find_hits, note};
 use desk_ui::components::composer::{Composer, inline_picker, paperclip};
 use desk_ui::components::find::FindBar;
 use desk_ui::components::form::TextArea;
@@ -59,6 +59,7 @@ pub use mirror::{ChatMirror, mirror};
 const CLIENT: &str = "tofu-desk";
 const TOFU_VARIABLE: &str = "DESK_TOFU";
 const EMAILS_FILE: &str = "emails.json";
+const RECORDED: &str = ".cassette";
 const SIGN_IN_POLL: Duration = Duration::from_millis(500);
 const ANCHOR_HOLD: Duration = Duration::from_millis(1600);
 #[cfg(windows)]
@@ -160,6 +161,12 @@ enum Opening {
     Closed,
     Pending,
     Open(String),
+}
+
+enum Parted {
+    Joined,
+    Left,
+    Told(SharedString),
 }
 
 struct Slot {
@@ -400,10 +407,12 @@ pub struct Chat {
     parsed: items::Parsed,
     transcript: Store,
     opening: Opening,
+    parted: Parted,
     items: Rc<Vec<Item>>,
     feed: Entity<Feed>,
     area: Entity<TextArea>,
     card: Option<Card>,
+    answered: BTreeSet<String>,
     own_answer: Entity<TextArea>,
     asking: SessionAsking,
     project: String,
@@ -500,8 +509,14 @@ pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<An
                 .new(|cx| Chat::new(Link::Recorded(replay), store, window, cx))
                 .into())
         }
+        Some(recorded) if recorded.ends_with(RECORDED) => {
+            let replay = Replay::once(Path::new(recorded))?;
+            Ok(cx
+                .new(|cx| Chat::new(Link::Recorded(replay), store, window, cx))
+                .into())
+        }
         Some(other) => Err(format!(
-            "the chat runs a live session, or replays 36-agents, not {other}"
+            "the chat runs a live session, or replays 36-agents or a {RECORDED} file, not {other}"
         )),
     }
 }
@@ -737,10 +752,12 @@ impl Chat {
             parsed: items::Parsed::new(),
             transcript: Store::default(),
             opening: Opening::Closed,
+            parted: Parted::Joined,
             items: Rc::default(),
             feed,
             area,
             card: None,
+            answered: BTreeSet::new(),
             own_answer,
             asking: SessionAsking::Auto,
             project: String::new(),
@@ -1298,6 +1315,7 @@ impl Chat {
             None => self.restart(cx),
         }
         self.problem = None;
+        self.parted = Parted::Joined;
         if let Some(row) = self
             .rows
             .iter()
@@ -1616,6 +1634,7 @@ impl Chat {
             cx.notify();
         });
         self.orders.clear();
+        self.parted = Parted::Joined;
         self.transcript = Store::default();
         self.forget_view(cx);
     }
@@ -1651,14 +1670,23 @@ impl Chat {
     }
 
     fn absorb(&mut self, event: &Event) -> Result<(), ModelError> {
-        let granted = match event {
+        let granted: Vec<(String, Entry)> = match event {
             Event::Notification(Notification::ApprovalResolved(resolved)) => self
                 .transcript
                 .sessions
                 .get(&resolved.session)
-                .and_then(|session| items::granted(session, resolved))
-                .map(|entry| (resolved.session.clone(), entry)),
-            _ => None,
+                .into_iter()
+                .flat_map(|session| {
+                    let elsewhere = (!self.answered.remove(&resolved.approval))
+                        .then(|| items::resolved(session, resolved))
+                        .flatten();
+                    elsewhere
+                        .into_iter()
+                        .chain(items::granted(session, resolved))
+                })
+                .map(|entry| (resolved.session.clone(), entry))
+                .collect(),
+            _ => Vec::new(),
         };
         let before: Vec<(String, usize)> = self
             .transcript
@@ -1688,10 +1716,10 @@ impl Chat {
                 None => order.push(entry),
             }
         }
-        if let Some((session, entry)) = granted
-            && let Some(found) = self.transcript.sessions.get(&session)
-        {
-            items::place(found, self.orders.entry(session).or_default(), entry);
+        for (session, entry) in granted {
+            if let Some(found) = self.transcript.sessions.get(&session) {
+                items::place(found, self.orders.entry(session).or_default(), entry);
+            }
         }
         if let Event::Notification(Notification::ApprovalRevoked(revoked)) = event
             && let Some(order) = self.orders.get_mut(&revoked.session)
@@ -1702,6 +1730,13 @@ impl Chat {
     }
 
     fn apply(&mut self, event: &Event, cx: &mut Context<Self>) {
+        if let (Parted::Left, Event::Notification(Notification::Note(told))) = (&self.parted, event)
+            && told.agent.is_none()
+        {
+            eprintln!("desk: tofu told this window {}", told.text);
+            self.parted = Parted::Told(told.text.clone().into());
+            return cx.notify();
+        }
         if let (Some(history), Event::Notification(notification)) = (&mut self.history, event) {
             if let Notification::TurnStarted(started) = notification
                 && history.pages.is_empty()
@@ -1739,6 +1774,17 @@ impl Chat {
                 eprintln!("desk: turn {} started", started.turn);
                 self.awaiting_delta
                     .insert(started.turn.clone(), Instant::now());
+                if let Link::Ready(_) = self.link {
+                    self.relist(cx);
+                }
+            }
+            Event::Notification(Notification::SessionUpdated(updated))
+                if updated.session.is_empty() =>
+            {
+                eprintln!("desk: another member started a new session, this window has none");
+                self.orders.clear();
+                self.parted = Parted::Left;
+                self.forget_view(cx);
                 if let Link::Ready(_) = self.link {
                     self.relist(cx);
                 }
@@ -2771,6 +2817,7 @@ impl Chat {
                 self.fail("the session is still opening".to_owned(), cx);
             }
             Opening::Closed => {
+                self.parted = Parted::Joined;
                 self.set_opening(Opening::Pending, cx);
                 let params = SessionOpenParams {
                     asking: Some(self.asking.clone()),
@@ -2892,6 +2939,7 @@ impl Chat {
                     return;
                 };
                 let said = String::from(answer.decision.clone());
+                self.answered.insert(shown.key.clone());
                 bridge
                     .answer(&shown.id, &answer)
                     .map(|()| format!("approval {} answered {said}", shown.key))
@@ -2948,6 +2996,9 @@ impl Chat {
         let Link::Recorded(replay) = &mut self.link else {
             return;
         };
+        if replay.played() {
+            return;
+        }
         window.request_animation_frame();
         match replay.step() {
             Ok(Step::Feed(event)) => self.take(&[event], cx),
@@ -3169,6 +3220,15 @@ impl Render for Chat {
             .problem
             .clone()
             .map(|problem| fail("tofu", problem, "", &theme));
+        let told = match &self.parted {
+            Parted::Told(text) => Some(
+                note(text.clone(), &theme)
+                    .w_full()
+                    .max_w(px(CONTENT_WIDTH))
+                    .mx_auto(),
+            ),
+            Parted::Joined | Parted::Left => None,
+        };
         let meter = match &self.link {
             Link::Recorded(replay) => Some(replay.meter()),
             Link::Starting | Link::Ready(_) | Link::Gone | Link::Fed => None,
@@ -3213,6 +3273,7 @@ impl Render for Chat {
                     .flex_col()
                     .gap(px(DOCK_GAP))
                     .p(px(DOCK_INSET))
+                    .children(told)
                     .children(problem)
                     .children(ask)
                     .child(composer),

@@ -12,7 +12,7 @@ use crate::protocol::{
 };
 use crate::query::Answer;
 
-pub use session::{Agent, Message, PersonAsk, PersonKind, Role, Session, Shell, Tool, Turn};
+pub use session::{Agent, Message, PersonAsk, PersonKind, Role, Session, Shell, Told, Tool, Turn};
 pub use status::{Change, Status, StatusState, Statuses};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,6 +116,23 @@ impl Store {
                 self.lineage.values_mut().for_each(Answer::again);
                 Ok(())
             }
+            Event::Notification(Notification::SessionUpdated(updated))
+                if updated.session.is_empty() =>
+            {
+                self.sessions.clear();
+                self.open = None;
+                self.trace = Answer::default();
+                self.info = Answer::default();
+                Ok(())
+            }
+            Event::Notification(Notification::CronUpdated(updated))
+                if updated.session.is_empty() =>
+            {
+                self.sessions
+                    .values_mut()
+                    .for_each(|session| session.cron = None);
+                Ok(())
+            }
             Event::Notification(Notification::SessionListed(_)) => Ok(()),
             Event::Notification(Notification::Status(report)) => self.statuses.report(report),
             Event::Notification(Notification::Unknown { method, .. }) => {
@@ -168,7 +185,7 @@ impl Store {
 fn session_of(notification: &Notification) -> Result<Option<&str>, ModelError> {
     use Notification as N;
     Ok(Some(match notification {
-        N::BoardyChanged(_) | N::ScratchChanged(_) => return Ok(None),
+        N::BoardyChanged(_) | N::ScratchChanged(_) | N::MemoryChanged(_) => return Ok(None),
         N::AccountState(e) => &e.session,
         N::SessionTurnsUpdated(e) => &e.session,
         N::SettingsChanged(e) => &e.session,

@@ -2163,6 +2163,16 @@ pub fn cron_row(
     prompt: impl Into<SharedString>,
     theme: &Theme,
 ) -> Div {
+    origin_row(Glyph::Cron, job, schedule, prompt, theme)
+}
+
+pub fn origin_row(
+    mark: Glyph,
+    who: impl Into<SharedString>,
+    head: impl Into<SharedString>,
+    said: impl Into<SharedString>,
+    theme: &Theme,
+) -> Div {
     row(theme)
         .text_color(ink(theme, HOVER_TEXT))
         .child(
@@ -2171,11 +2181,11 @@ pub fn cron_row(
                 .w(px(MARK))
                 .flex()
                 .justify_center()
-                .child(glyph(Glyph::Cron, ICON_SMALL, ink(theme, T3))),
+                .child(glyph(mark, ICON_SMALL, ink(theme, T3))),
         )
-        .child(agent(job, None, theme))
-        .child(dim(schedule, theme))
-        .child(line(prompt).text_color(ink(theme, T3)))
+        .child(agent(who, None, theme))
+        .child(dim(head, theme))
+        .child(line(said).text_color(ink(theme, T3)))
 }
 
 pub fn agents(

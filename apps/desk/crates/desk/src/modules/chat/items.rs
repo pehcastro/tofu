@@ -15,7 +15,7 @@ use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::chat::{
     self, Agent, AgentMark, Block, Call, CallState, Ink, Marks, Object, OnLink, Phrase, Said,
     Streaming, ToolCard, ToolFold, Verdict, agent_row, calls, command, cron_row, fail, foot,
-    fork_divider, linked_lead, name_tone, note, tool_section, you,
+    fork_divider, linked_lead, name_tone, note, origin_row, tool_section, you,
 };
 use desk_ui::components::chip::{GitStatus, badge, file_chip, git_name};
 use desk_ui::components::glyph::Glyph;
@@ -43,6 +43,7 @@ const ROW_SLOT: usize = 4;
 const FRAME_LOG: &str = "DESK_FRAME_LOG";
 const ARGUMENT_KEYS: [&str; 4] = ["command", "path", "pattern", "url"];
 const QUEUED: &str = "queued";
+const TOFU: &str = "tofu";
 const QUOTED: &str = "> ";
 const VERDICT: &str = "sub-agent ";
 const VERDICT_IS: &str = " is ";
@@ -87,6 +88,7 @@ pub enum Entry {
         until: Option<String>,
         revoked: bool,
     },
+    Resolved(String),
 }
 
 #[derive(Clone, PartialEq)]
@@ -168,6 +170,10 @@ pub enum Item {
         alone: Rc<Vec<Called>>,
     },
     Note(SharedString),
+    Told {
+        head: SharedString,
+        said: SharedString,
+    },
     Fork {
         session: SharedString,
         tokens: u64,
@@ -222,6 +228,32 @@ pub fn granted(session: &Session, resolved: &ApprovalResolved) -> Option<Entry> 
         until: resolved.until.clone(),
         revoked: false,
     })
+}
+
+pub fn resolved(session: &Session, resolved: &ApprovalResolved) -> Option<Entry> {
+    let (_, asked) = session.approvals.get(&resolved.approval)?;
+    let decision = String::from(resolved.decision.clone());
+    let until = resolved.until.as_deref().unwrap_or_default();
+    let read = match decision.as_str() {
+        "allow_once" => "allowed once".to_owned(),
+        "allow_always" => "allowed always".to_owned(),
+        "allow_for" => format!("allowed for {}", until.get(11..16).unwrap_or(until)),
+        "reject_once" => "rejected".to_owned(),
+        "reject_always" => "rejected always".to_owned(),
+        "remember_project"
+        | "remember_global"
+        | "remember_user_local"
+        | "remember_project_local" => match resolved.standing {
+            Some(false) => "remembered reject".to_owned(),
+            _ => "remembered allow".to_owned(),
+        },
+        "cancelled" => "cancelled".to_owned(),
+        _ => decision.clone(),
+    };
+    Some(Entry::Resolved(format!(
+        "{} {}: {read} by {}",
+        asked.tool, asked.target, resolved.by
+    )))
 }
 
 pub fn revoke(order: &mut [Entry], target: &str) {
@@ -285,6 +317,7 @@ pub fn settled(session: &Session, entry: &Entry) -> bool {
             true
         }
         Entry::Grant { revoked, .. } => *revoked,
+        Entry::Resolved(_) => true,
     }
 }
 
@@ -306,7 +339,8 @@ pub fn place(session: &Session, order: &mut Vec<Entry>, entry: Entry) {
         | Entry::Task(_)
         | Entry::Worked { .. }
         | Entry::Done(_)
-        | Entry::Grant { .. }) => {
+        | Entry::Grant { .. }
+        | Entry::Resolved(_)) => {
             if !quiet(session, &entry) {
                 close(order);
             }
@@ -366,7 +400,8 @@ fn quiet(session: &Session, entry: &Entry) -> bool {
                 || echoed(session, *at)
                 || match message.role {
                     Role::Assistant => message.text.is_empty(),
-                    Role::Inbox | Role::Thinking | Role::Taken | Role::Harness(_) => true,
+                    Role::Harness(_) => message.told().is_none(),
+                    Role::Inbox | Role::Thinking | Role::Taken => true,
                     Role::User
                     | Role::Steer
                     | Role::Queued(_)
@@ -390,7 +425,7 @@ fn quiet(session: &Session, entry: &Entry) -> bool {
             .get(turn)
             .is_none_or(|ended| !spoken_to(&ended.origin.kind)),
         Entry::Tool(_) | Entry::Spawn(_) | Entry::Report(_) => true,
-        Entry::Worked { .. } | Entry::Grant { .. } => false,
+        Entry::Worked { .. } | Entry::Grant { .. } | Entry::Resolved(_) => false,
     }
 }
 
@@ -513,7 +548,11 @@ pub fn item(session: &Session, entry: &Entry, was: Option<&Item>, parsed: &Parse
                     message.complete,
                     (was, parsed),
                 ))),
-                Role::Inbox | Role::Thinking | Role::Taken | Role::Harness(_) => None,
+                Role::Harness(_) => message.told().map(|told| Item::Told {
+                    head: told.head.into(),
+                    said: told.said.into(),
+                }),
+                Role::Inbox | Role::Thinking | Role::Taken => None,
                 Role::Note => fork(&message.text).or(Some(Item::Note(text))),
                 Role::Failure => Some(Item::Failure(text)),
             }
@@ -577,6 +616,7 @@ pub fn item(session: &Session, entry: &Entry, was: Option<&Item>, parsed: &Parse
                 revoked: *revoked,
             })
         }
+        Entry::Resolved(said) => Some(Item::Note(said.clone().into())),
     }
 }
 
@@ -1189,6 +1229,7 @@ pub fn shapes(items: &[Item]) -> (usize, usize, usize) {
             | Item::Lead(_)
             | Item::Cron { .. }
             | Item::Note(_)
+            | Item::Told { .. }
             | Item::Fork { .. }
             | Item::Failure(_)
             | Item::Foot(_)
@@ -1201,6 +1242,7 @@ pub fn pieces(item: &Item) -> Vec<String> {
         Item::You { text, .. } => vec![text.to_string()],
         Item::Lead(said) => chat::pieces(&said.blocks),
         Item::Grant { said, .. } => vec![said.to_string()],
+        Item::Told { head, said } => vec![format!("{head} {said}")],
         Item::Cron { .. }
         | Item::Tool(_)
         | Item::Worked { .. }
@@ -1295,6 +1337,9 @@ pub fn render(
                 .into_any_element()
         }
         Item::Note(text) => note(text.clone(), theme).into_any_element(),
+        Item::Told { head, said } => {
+            origin_row(Glyph::Talk, TOFU, head.clone(), said.clone(), theme).into_any_element()
+        }
         Item::Fork { session, tokens } => fork_divider(
             ("chat-fork", at),
             fork_label(forks, *tokens).into(),

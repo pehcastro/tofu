@@ -151,6 +151,9 @@ pub fn spoken(event: &Event) -> bool {
     match event.kind {
         BoardyEventKind::Commented
         | BoardyEventKind::Evidence
+        | BoardyEventKind::Before
+        | BoardyEventKind::LateBefore
+        | BoardyEventKind::NotPossible
         | BoardyEventKind::Asked
         | BoardyEventKind::Answered
         | BoardyEventKind::Spawned

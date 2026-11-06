@@ -404,7 +404,9 @@ impl Boardy {
         }
         eprintln!("desk: boardy init {key} in {}", self.project);
         let params = InitRequest {
+            hooks: Vec::new(),
             key: key.clone(),
+            mode: None,
             name: key.clone(),
         };
         self.send::<BoardyInit>(params, cx, move |boardy, reply, cx| match reply {

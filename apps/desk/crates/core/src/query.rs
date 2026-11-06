@@ -181,6 +181,9 @@ fn ledger_decision(row: &LedgerRow, session: &str, turn: &str, seq: i64) -> Deci
         answers: Vec::new(),
         at: row.at.clone(),
         call: None,
+        duration_ms: None,
+        model: None,
+        provider: None,
         enforced: reason
             .and_then(|reason| reason.mode.as_deref())
             .is_some_and(|mode| mode == "enforced"),

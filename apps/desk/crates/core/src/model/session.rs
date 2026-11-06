@@ -25,6 +25,65 @@ pub enum Role {
     Harness(OriginSub),
 }
 
+const PICKED: &str = " › ";
+const PICKS_JOINED: &str = " · ";
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Told {
+    pub head: String,
+    pub said: String,
+}
+
+fn told_head(sub: &OriginSub) -> Option<&str> {
+    match sub {
+        OriginSub::Answer => Some("you answered"),
+        OriginSub::AnswerLate => Some("you answered after the timeout"),
+        OriginSub::AnswerNone => Some("nobody answered in time, so the recommended option stands"),
+        OriginSub::AnswerDismissed => Some("you dismissed the question"),
+        OriginSub::AnswerUndelivered => Some("no app could show the question"),
+        OriginSub::Unknown(raw) => Some(raw),
+        OriginSub::Task
+        | OriginSub::Typed
+        | OriginSub::Steer
+        | OriginSub::ForkTask
+        | OriginSub::Brief
+        | OriginSub::Report
+        | OriginSub::ReportLead
+        | OriginSub::Ask
+        | OriginSub::Message
+        | OriginSub::ShellExit
+        | OriginSub::NudgeAnswerFirst
+        | OriginSub::NudgeSlots
+        | OriginSub::NudgeHandback
+        | OriginSub::NudgeCheck
+        | OriginSub::NudgeStepCap
+        | OriginSub::NudgeBlankAnswer
+        | OriginSub::NudgeLastWord
+        | OriginSub::Continue
+        | OriginSub::ForkCarry
+        | OriginSub::ForkState
+        | OriginSub::Plan
+        | OriginSub::ReplyCut
+        | OriginSub::Environment
+        | OriginSub::Notice
+        | OriginSub::Failure
+        | OriginSub::Gate
+        | OriginSub::SpawnLine
+        | OriginSub::ShellHolder
+        | OriginSub::Fire
+        | OriginSub::SessionStart
+        | OriginSub::PromptSubmit
+        | OriginSub::PreTool
+        | OriginSub::PostTool
+        | OriginSub::Stop
+        | OriginSub::View
+        | OriginSub::Episodes
+        | OriginSub::Saved
+        | OriginSub::Load
+        | OriginSub::Reference => None,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Message {
     pub turn: String,
@@ -108,6 +167,25 @@ pub struct Shell {
     pub raw: Option<Vec<(i64, String)>>,
     pub output_end: i64,
     pub released_at: Option<i64>,
+}
+
+impl Message {
+    pub fn told(&self) -> Option<Told> {
+        let Role::Harness(sub) = &self.role else {
+            return None;
+        };
+        let head = told_head(sub)?.to_owned();
+        let picks: Vec<&str> = self
+            .text
+            .lines()
+            .filter(|line| line.contains(PICKED))
+            .collect();
+        let said = match picks.is_empty() {
+            true => self.text.trim().to_owned(),
+            false => picks.join(PICKS_JOINED),
+        };
+        Some(Told { head, said })
+    }
 }
 
 impl Shell {
@@ -406,6 +484,7 @@ impl Session {
                 kind: OriginKind::Tofu,
                 name: None,
                 schedule: None,
+                shown: None,
                 sub: OriginSub::Continue,
                 id: None,
                 exit: None,
@@ -548,7 +627,7 @@ impl Session {
                     shell.mention.clone_from(&e.r#ref);
                 }
             }
-            N::BoardyChanged(_) | N::ScratchChanged(_) => {}
+            N::BoardyChanged(_) | N::ScratchChanged(_) | N::MemoryChanged(_) => {}
             N::TurnCompleted(e) => {
                 if let TurnCompletedStatus::Unknown(value) = &e.status {
                     return Err(ModelError::UnknownValue {
@@ -564,11 +643,18 @@ impl Session {
                 turn.worked_for_ms = e.worked_for_ms;
             }
             N::MessageUser(e) => {
+                let role = speaker(&e.origin)?;
+                let told = matches!(&role, Role::Harness(sub) if told_head(sub).is_some());
+                let text = match (&e.origin.shown, told) {
+                    (Some(shown), _) => shown.clone(),
+                    (None, true) => String::new(),
+                    (None, false) => e.text.clone(),
+                };
                 self.messages.push(Message {
                     turn: e.turn.clone(),
                     agent: e.agent.clone(),
-                    role: speaker(&e.origin)?,
-                    text: e.text.clone(),
+                    role,
+                    text,
                     images: attached(&e.images)?,
                     complete: true,
                     at: e.sent_at.clone(),
@@ -854,6 +940,104 @@ impl Session {
             N::SessionForked(e) => self.forks.push((**e).clone()),
             N::Unknown { method, .. } => return Err(ModelError::UnknownEvent(method.clone())),
         }
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Notification, Role, Session, Told};
+
+    fn heard(sub: &str, shown: Option<&str>) -> Result<Session, String> {
+        let mut origin = serde_json::json!({"kind": "tofu", "sub": sub, "name": "q1"});
+        if let Some(shown) = shown {
+            origin["shown"] = shown.into();
+        }
+        let line = serde_json::json!({
+            "session": "s1",
+            "turn": "t1",
+            "item": "i1",
+            "seq": 7,
+            "text": "the answer to your ask_person question: {\"outcome\":\"submitted\"}",
+            "origin": origin,
+        });
+        let notification =
+            Notification::parse("message.user", line).map_err(|error| error.to_string())?;
+        let mut session = Session::default();
+        session
+            .apply(&notification)
+            .map_err(|error| error.to_string())?;
+        Ok(session)
+    }
+
+    fn told(session: &Session) -> Option<Told> {
+        session.messages.first().and_then(super::Message::told)
+    }
+
+    #[test]
+    fn an_unknown_origin_sub_is_told_by_its_raw_sub() -> Result<(), String> {
+        let session = heard("answer.someday", Some("tofu said\nWhich db › sqlite"))?;
+        assert_eq!(
+            told(&session),
+            Some(Told {
+                head: "answer.someday".to_owned(),
+                said: "Which db › sqlite".to_owned(),
+            })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn an_unknown_origin_sub_with_nothing_shown_never_shows_the_raw_json() -> Result<(), String> {
+        let session = heard("answer.someday", None)?;
+        assert_eq!(
+            told(&session),
+            Some(Told {
+                head: "answer.someday".to_owned(),
+                said: String::new(),
+            })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn each_answer_sub_reads_its_own_words_and_the_chosen_option() -> Result<(), String> {
+        let shown = "you answered\nWhich db › sqlite\nWhy › it ships in the binary";
+        let read = |sub: &str| -> Result<Option<String>, String> {
+            Ok(told(&heard(sub, Some(shown))?).map(|told| told.head))
+        };
+        assert_eq!(read("answer")?.as_deref(), Some("you answered"));
+        assert_eq!(
+            read("answer.late")?.as_deref(),
+            Some("you answered after the timeout")
+        );
+        assert_eq!(
+            read("answer.none")?.as_deref(),
+            Some("nobody answered in time, so the recommended option stands")
+        );
+        assert_eq!(
+            read("answer.dismissed")?.as_deref(),
+            Some("you dismissed the question")
+        );
+        assert_eq!(
+            read("answer.undelivered")?.as_deref(),
+            Some("no app could show the question")
+        );
+        assert_eq!(
+            told(&heard("answer", Some(shown))?).map(|told| told.said),
+            Some("Which db › sqlite · Why › it ships in the binary".to_owned())
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_known_tofu_sub_that_is_no_answer_stays_untold() -> Result<(), String> {
+        let session = heard("notice", None)?;
+        assert_eq!(told(&session), None);
+        assert!(matches!(
+            session.messages.first().map(|m| &m.role),
+            Some(Role::Harness(_))
+        ));
         Ok(())
     }
 }

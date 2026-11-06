@@ -1,5 +1,5 @@
 use std::cell::{Cell, RefCell};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -21,6 +21,7 @@ pub enum Step {
 pub struct Replay {
     lines: Vec<String>,
     next: usize,
+    looped: bool,
     started: Rc<Cell<Option<Instant>>>,
     samples: Rc<RefCell<Vec<Duration>>>,
 }
@@ -62,8 +63,22 @@ fn report(samples: &[Duration]) {
 
 impl Replay {
     pub fn read() -> Result<Replay, String> {
-        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CASSETTE);
-        let text = std::fs::read_to_string(&path)
+        Replay::from(
+            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CASSETTE),
+            true,
+        )
+    }
+
+    pub fn once(path: &Path) -> Result<Replay, String> {
+        Replay::from(path, false)
+    }
+
+    pub fn played(&self) -> bool {
+        !self.looped && self.next >= self.lines.len()
+    }
+
+    fn from(path: &Path, looped: bool) -> Result<Replay, String> {
+        let text = std::fs::read_to_string(path)
             .map_err(|error| format!("the chat cannot read {}: {error}", path.display()))?;
         Ok(Replay {
             lines: text
@@ -72,13 +87,14 @@ impl Replay {
                 .map(str::to_owned)
                 .collect(),
             next: 0,
+            looped,
             started: Rc::default(),
             samples: Rc::default(),
         })
     }
 
     pub fn step(&mut self) -> Result<Step, String> {
-        if self.samples.borrow().len() >= WARMUP + FRAMES {
+        if self.looped && self.samples.borrow().len() >= WARMUP + FRAMES {
             report(&self.samples.borrow());
             return Ok(Step::Report);
         }

@@ -450,6 +450,15 @@
         "model": {
           "type": "string"
         },
+        "moves": {
+          "items": {
+            "$ref": "#/$defs/subagent.Transition"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "ref": {
           "type": "string"
         },
@@ -544,6 +553,28 @@
       },
       "required": [
         "decision"
+      ],
+      "type": "object"
+    },
+    "ApprovalList": {
+      "additionalProperties": false,
+      "properties": {
+        "session": {
+          "type": "string"
+        },
+        "standing": {
+          "items": {
+            "$ref": "#/$defs/StandingAnswer"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "session",
+        "standing"
       ],
       "type": "object"
     },
@@ -729,7 +760,18 @@
           ],
           "type": "string"
         },
+        "given": {
+          "format": "date-time",
+          "type": "string"
+        },
         "item": {
+          "type": "string"
+        },
+        "kept": {
+          "enum": [
+            "session",
+            "process"
+          ],
           "type": "string"
         },
         "ref": {
@@ -915,7 +957,23 @@
     "Compaction": {
       "additionalProperties": false,
       "properties": {
+        "focus": {
+          "type": "string"
+        },
+        "focused": {
+          "type": "integer"
+        },
         "into": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "continuation",
+            "account-spent",
+            "compact",
+            "fork",
+            "branch"
+          ],
           "type": "string"
         },
         "results": {
@@ -929,6 +987,7 @@
         }
       },
       "required": [
+        "kind",
         "results",
         "tokensBefore",
         "tokensAfter"
@@ -1035,11 +1094,17 @@
         "bytes_per_thousand_tokens": {
           "type": "integer"
         },
+        "carried_from": {
+          "$ref": "#/$defs/CarriedFrom"
+        },
         "ceiling": {
           "type": "integer"
         },
         "fork": {
           "$ref": "#/$defs/ContextFork"
+        },
+        "fork_kind": {
+          "type": "string"
         },
         "items": {
           "items": {
@@ -1213,7 +1278,21 @@
         "ended": {
           "type": "string"
         },
+        "expires": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "fires": {
+          "type": "integer"
+        },
         "id": {
+          "type": "string"
+        },
+        "lastFired": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "lastResult": {
           "type": "string"
         },
         "next": {
@@ -1227,6 +1306,9 @@
           "type": "string"
         },
         "schedule": {
+          "type": "string"
+        },
+        "until": {
           "type": "string"
         }
       },
@@ -1334,6 +1416,9 @@
         "call": {
           "type": "string"
         },
+        "durationMs": {
+          "type": "integer"
+        },
         "enforced": {
           "type": "boolean"
         },
@@ -1343,10 +1428,16 @@
         "item": {
           "type": "string"
         },
+        "model": {
+          "type": "string"
+        },
         "overridesRule": {
           "type": "string"
         },
         "point": {
+          "type": "string"
+        },
+        "provider": {
           "type": "string"
         },
         "reason": {
@@ -3356,6 +3447,22 @@
       ],
       "type": "object"
     },
+    "MemoryChanged": {
+      "additionalProperties": false,
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "scope",
+        "file"
+      ],
+      "type": "object"
+    },
     "MemoryEditParams": {
       "additionalProperties": false,
       "properties": {
@@ -4014,12 +4121,19 @@
         "schedule": {
           "type": "string"
         },
+        "shown": {
+          "type": "string"
+        },
         "sub": {
           "enum": [
             "task",
             "typed",
             "steer",
             "answer",
+            "answer.late",
+            "answer.none",
+            "answer.dismissed",
+            "answer.undelivered",
             "fork.task",
             "brief",
             "report",
@@ -4044,6 +4158,7 @@
             "failure",
             "gate",
             "spawn.line",
+            "shell.holder",
             "fire",
             "session_start",
             "prompt_submit",
@@ -5109,6 +5224,9 @@
         "kind": {
           "type": "string"
         },
+        "message": {
+          "type": "integer"
+        },
         "model": {
           "type": "string"
         },
@@ -5172,6 +5290,9 @@
         },
         "session": {
           "type": "string"
+        },
+        "words": {
+          "type": "string"
         }
       },
       "required": [
@@ -5196,6 +5317,19 @@
       "required": [
         "session"
       ],
+      "type": "object"
+    },
+    "SessionCompactParams": {
+      "additionalProperties": false,
+      "properties": {
+        "focus": {
+          "type": "string"
+        },
+        "session": {
+          "type": "string"
+        }
+      },
+      "required": [],
       "type": "object"
     },
     "SessionDetail": {
@@ -6456,6 +6590,9 @@
         "agent": {
           "type": "string"
         },
+        "by": {
+          "type": "string"
+        },
         "item": {
           "type": "string"
         },
@@ -7235,6 +7372,17 @@
           ],
           "type": "string"
         },
+        "given": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "kept": {
+          "enum": [
+            "session",
+            "process"
+          ],
+          "type": "string"
+        },
         "target": {
           "type": "string"
         },
@@ -7695,6 +7843,15 @@
         "lines": {
           "type": "integer"
         },
+        "outcome": {
+          "enum": [
+            "ran",
+            "failed",
+            "aborted",
+            "skipped"
+          ],
+          "type": "string"
+        },
         "output": {
           "type": "string"
         },
@@ -7724,6 +7881,7 @@
         "seq",
         "tool",
         "failed",
+        "outcome",
         "bytes",
         "lines",
         "durationMs",
@@ -8329,7 +8487,8 @@
             "error",
             "truncated",
             "loop_guard",
-            "cancelled"
+            "cancelled",
+            "fork_stop"
           ],
           "type": "string"
         },
@@ -8750,6 +8909,18 @@
             "none"
           ],
           "type": "string"
+        },
+        "unreadable_lines": {
+          "type": "integer"
+        },
+        "window_spend": {
+          "items": {
+            "$ref": "#/$defs/WindowSpend"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         }
       },
       "required": [
@@ -8982,6 +9153,46 @@
         "id",
         "used_fraction",
         "used_reported"
+      ],
+      "type": "object"
+    },
+    "WindowSpend": {
+      "additionalProperties": false,
+      "properties": {
+        "account": {
+          "type": "string"
+        },
+        "requests": {
+          "type": "integer"
+        },
+        "runs_out_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "since": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "used_fraction_per_day": {
+          "type": "number"
+        },
+        "weighted_per_day": {
+          "type": "number"
+        },
+        "weighted_tokens": {
+          "type": "number"
+        },
+        "window": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "account",
+        "window",
+        "since",
+        "requests",
+        "weighted_tokens",
+        "weighted_per_day"
       ],
       "type": "object"
     },
@@ -9461,10 +9672,188 @@
       ],
       "type": "object"
     },
+    "boardy.BypassAnswerAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "bypass": {
+          "$ref": "#/$defs/boardy.BypassRequest"
+        },
+        "moved": {
+          "$ref": "#/$defs/boardy.Ticket"
+        }
+      },
+      "required": [
+        "bypass"
+      ],
+      "type": "object"
+    },
+    "boardy.BypassAnswerRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "why": {
+          "type": "string"
+        },
+        "yes": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "yes"
+      ],
+      "type": "object"
+    },
+    "boardy.BypassListAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        },
+        "bypasses": {
+          "items": {
+            "$ref": "#/$defs/boardy.BypassRequest"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "flagged": {
+          "items": {
+            "$ref": "#/$defs/boardy.FlaggedHook"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "board",
+        "bypasses",
+        "flagged"
+      ],
+      "type": "object"
+    },
+    "boardy.BypassListRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "board": {
+          "type": "string"
+        }
+      },
+      "required": [],
+      "type": "object"
+    },
+    "boardy.BypassRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "accept": {
+          "type": "string"
+        },
+        "answer": {
+          "type": "string"
+        },
+        "answered_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "answered_by": {
+          "type": "string"
+        },
+        "applied": {
+          "type": "boolean"
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "by": {
+          "type": "string"
+        },
+        "by_kind": {
+          "type": "string"
+        },
+        "event": {
+          "type": "string"
+        },
+        "from": {
+          "enum": [
+            "triage",
+            "backlog",
+            "todo",
+            "doing",
+            "review",
+            "done",
+            "dropped",
+            "blocked",
+            "needs-decision"
+          ],
+          "type": "string"
+        },
+        "hook": {
+          "type": "string"
+        },
+        "hook_sum": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        },
+        "ticket": {
+          "type": "string"
+        },
+        "to": {
+          "enum": [
+            "triage",
+            "backlog",
+            "todo",
+            "doing",
+            "review",
+            "done",
+            "dropped",
+            "blocked",
+            "needs-decision"
+          ],
+          "type": "string"
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "ticket",
+        "hook",
+        "hook_sum",
+        "event",
+        "from",
+        "to",
+        "why",
+        "by",
+        "by_kind",
+        "accept",
+        "at",
+        "state"
+      ],
+      "type": "object"
+    },
     "boardy.Changed": {
       "additionalProperties": false,
       "properties": {
         "board": {
+          "type": "string"
+        },
+        "by": {
           "type": "string"
         },
         "paths": {
@@ -9556,6 +9945,9 @@
         "default": {
           "type": "string"
         },
+        "effort": {
+          "type": "string"
+        },
         "files": {
           "items": {
             "type": "string"
@@ -9585,6 +9977,8 @@
             "moved",
             "commented",
             "evidence",
+            "before",
+            "late_before",
             "rule",
             "waiting",
             "requested",
@@ -9599,6 +9993,7 @@
             "spawned",
             "messaged",
             "reported",
+            "not_possible",
             "hook",
             "hook-failed"
           ],
@@ -9617,6 +10012,12 @@
           "type": "integer"
         },
         "question": {
+          "type": "integer"
+        },
+        "ran_on": {
+          "type": "string"
+        },
+        "revision": {
           "type": "integer"
         },
         "session": {
@@ -9650,7 +10051,8 @@
             "done",
             "done with concerns",
             "blocked",
-            "needs you"
+            "needs you",
+            "not possible"
           ],
           "type": "string"
         },
@@ -9753,6 +10155,22 @@
       "required": [],
       "type": "object"
     },
+    "boardy.FlaggedHook": {
+      "additionalProperties": false,
+      "properties": {
+        "hook": {
+          "type": "string"
+        },
+        "times": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "hook",
+        "times"
+      ],
+      "type": "object"
+    },
     "boardy.GetAnswer": {
       "additionalProperties": false,
       "properties": {
@@ -9842,6 +10260,15 @@
         "arg": {
           "type": "string"
         },
+        "bypass": {
+          "type": "string"
+        },
+        "bypassed": {
+          "type": "integer"
+        },
+        "description": {
+          "type": "string"
+        },
         "do": {
           "type": "string"
         },
@@ -9855,10 +10282,21 @@
           "format": "date-time",
           "type": "string"
         },
+        "name": {
+          "type": "string"
+        },
         "on": {
           "type": "string"
         },
         "scope": {
+          "enum": [
+            "board",
+            "project",
+            "user"
+          ],
+          "type": "string"
+        },
+        "shadowed_by": {
           "enum": [
             "board",
             "project",
@@ -9893,7 +10331,19 @@
     "boardy.InitRequest": {
       "additionalProperties": false,
       "properties": {
+        "hooks": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "key": {
+          "type": "string"
+        },
+        "mode": {
           "type": "string"
         },
         "name": {
@@ -10524,6 +10974,9 @@
         "source": {
           "type": "string"
         },
+        "takes_over": {
+          "$ref": "#/$defs/boardy.HookRow"
+        },
         "words": {
           "$ref": "#/$defs/boardy.Words"
         }
@@ -10770,6 +11223,9 @@
         "assignee": {
           "type": "string"
         },
+        "before": {
+          "type": "string"
+        },
         "blocks": {
           "items": {
             "type": "string"
@@ -10795,6 +11251,9 @@
             "null"
           ]
         },
+        "driven": {
+          "type": "string"
+        },
         "duplicates": {
           "items": {
             "type": "string"
@@ -10805,6 +11264,12 @@
           ]
         },
         "epic": {
+          "type": "string"
+        },
+        "error_case": {
+          "type": "string"
+        },
+        "feasibility": {
           "type": "string"
         },
         "id": {
@@ -10900,6 +11365,9 @@
             "blocked",
             "needs-decision"
           ],
+          "type": "string"
+        },
+        "still_works": {
           "type": "string"
         },
         "title": {
@@ -11256,6 +11724,33 @@
               "const": "2.0"
             },
             "method": {
+              "const": "approval.list"
+            },
+            "params": {
+              "$ref": "#/$defs/NoParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
               "const": "approval.revoke"
             },
             "params": {
@@ -11527,6 +12022,33 @@
             },
             "method": {
               "const": "session.compact"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionCompactParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.fork"
             },
             "params": {
               "$ref": "#/$defs/SessionParams"
@@ -13983,6 +14505,60 @@
               "const": "2.0"
             },
             "method": {
+              "const": "boardy.bypass.list"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.BypassListRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "boardy.bypass.answer"
+            },
+            "params": {
+              "$ref": "#/$defs/boardy.BypassAnswerRequest"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
               "const": "scratch.list"
             },
             "params": {
@@ -14090,10 +14666,13 @@
             "resume",
             "new",
             "compact",
+            "fork",
+            "branch",
             "undo",
             "cron",
             "turn",
-            "diff-turn"
+            "diff-turn",
+            "standing"
           ],
           "type": "string"
         },
@@ -15677,6 +16256,9 @@
         "schedule": {
           "type": "string"
         },
+        "shown": {
+          "type": "string"
+        },
         "sub": {
           "type": "string"
         }
@@ -15702,13 +16284,25 @@
         "kind": {
           "type": "string"
         },
+        "mode": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
         "off": {
           "type": "boolean"
         },
         "per_turn": {
           "type": "boolean"
         },
+        "reason_kind": {
+          "type": "string"
+        },
         "rule": {
+          "type": "string"
+        },
+        "state": {
           "type": "string"
         },
         "tokens": {
@@ -15825,6 +16419,26 @@
         "prompt",
         "sent",
         "carried"
+      ],
+      "type": "object"
+    },
+    "session.RuleFinding": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string"
+        },
+        "rule": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule",
+        "mode",
+        "at"
       ],
       "type": "object"
     },
@@ -16272,6 +16886,15 @@
         },
         "path": {
           "type": "string"
+        },
+        "references": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         }
       },
       "required": [
@@ -16516,6 +17139,15 @@
             "null"
           ]
         },
+        "unreached_references": {
+          "items": {
+            "$ref": "#/$defs/subagent.Reference"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "written_model": {
           "type": "string"
         }
@@ -16569,6 +17201,15 @@
     "subagent.Reference": {
       "additionalProperties": false,
       "properties": {
+        "frameworks": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "name": {
           "type": "string"
         },
@@ -16579,6 +17220,29 @@
       "required": [
         "name",
         "path"
+      ],
+      "type": "object"
+    },
+    "subagent.Transition": {
+      "additionalProperties": false,
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "move": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "round": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "agent",
+        "move",
+        "round"
       ],
       "type": "object"
     },
@@ -16860,6 +17524,15 @@
         },
         "result_hash": {
           "type": "string"
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/session.RuleFinding"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
         },
         "sift_saved_bytes": {
           "type": "integer"
@@ -17769,6 +18442,26 @@
           "const": "2.0"
         },
         "method": {
+          "const": "memory.changed"
+        },
+        "params": {
+          "$ref": "#/$defs/MemoryChanged"
+        }
+      },
+      "required": [
+        "jsonrpc",
+        "method",
+        "params"
+      ],
+      "type": "object"
+    },
+    {
+      "additionalProperties": false,
+      "properties": {
+        "jsonrpc": {
+          "const": "2.0"
+        },
+        "method": {
           "const": "item.persisted"
         },
         "params": {
@@ -17965,6 +18658,9 @@
             },
             {
               "$ref": "#/$defs/SessionState"
+            },
+            {
+              "$ref": "#/$defs/ApprovalList"
             },
             {
               "$ref": "#/$defs/StandingAnswer"
@@ -18183,6 +18879,12 @@
               "$ref": "#/$defs/boardy.RuleTestAnswer"
             },
             {
+              "$ref": "#/$defs/boardy.BypassListAnswer"
+            },
+            {
+              "$ref": "#/$defs/boardy.BypassAnswerAnswer"
+            },
+            {
               "$ref": "#/$defs/sys.ScratchReport"
             },
             {
@@ -18227,6 +18929,7 @@
   "x-capabilities": [
     "approvals",
     "revoke",
+    "standing",
     "questions",
     "resync",
     "shells",
@@ -18244,6 +18947,8 @@
     "sendNow",
     "run",
     "compact",
+    "fork",
+    "branch",
     "history",
     "ledger",
     "typed",
@@ -18313,6 +19018,9 @@
     },
     "item.persisted": {
       "$ref": "#/$defs/Persisted"
+    },
+    "memory.changed": {
+      "$ref": "#/$defs/MemoryChanged"
     },
     "memory.scoped": {
       "$ref": "#/$defs/MemoryScopedEvent"
@@ -18451,6 +19159,14 @@
         "$ref": "#/$defs/WriteReceipt"
       }
     },
+    "approval.list": {
+      "params": {
+        "$ref": "#/$defs/NoParams"
+      },
+      "result": {
+        "$ref": "#/$defs/ApprovalList"
+      }
+    },
     "approval.revoke": {
       "params": {
         "$ref": "#/$defs/ApprovalRevokeParams"
@@ -18489,6 +19205,22 @@
       },
       "result": {
         "$ref": "#/$defs/boardy.BoardsAnswer"
+      }
+    },
+    "boardy.bypass.answer": {
+      "params": {
+        "$ref": "#/$defs/boardy.BypassAnswerRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.BypassAnswerAnswer"
+      }
+    },
+    "boardy.bypass.list": {
+      "params": {
+        "$ref": "#/$defs/boardy.BypassListRequest"
+      },
+      "result": {
+        "$ref": "#/$defs/boardy.BypassListAnswer"
       }
     },
     "boardy.create": {
@@ -19061,7 +19793,7 @@
     },
     "session.compact": {
       "params": {
-        "$ref": "#/$defs/SessionParams"
+        "$ref": "#/$defs/SessionCompactParams"
       },
       "result": {
         "$ref": "#/$defs/Compaction"
@@ -19073,6 +19805,14 @@
       },
       "result": {
         "$ref": "#/$defs/SessionFind"
+      }
+    },
+    "session.fork": {
+      "params": {
+        "$ref": "#/$defs/SessionParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Compaction"
       }
     },
     "session.history": {
