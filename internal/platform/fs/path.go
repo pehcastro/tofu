@@ -50,7 +50,7 @@ func HomeConfigDir() (string, error) {
 	if err := usableHome(home); err != nil {
 		return "", err
 	}
-	if testing.Testing() && !Inside(os.TempDir(), home) {
+	if testing.Testing() && !Inside(os.TempDir(), home) && !Inside(os.Getenv("GOTMPDIR"), home) {
 		return StateDir(filepath.Join(testStateParent(), "home")), nil
 	}
 	return StateDir(home), nil
