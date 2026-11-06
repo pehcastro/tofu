@@ -623,3 +623,5 @@ const (
 	ContextLabelChars    = 80
 	BudgetSubAgentsShown = 20
 )
+
+const SpawnEstimateRunsMost = 20

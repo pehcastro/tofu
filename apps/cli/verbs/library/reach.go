@@ -99,8 +99,11 @@ func (t reachTally) read(header session.Header, events []session.Event) {
 			if what, name := wiring.LibraryLoad(call); what != "" {
 				t.saw(what, name, header.ID, false, event.At).Calls++
 			}
-			var spawned struct{ Agent string }
-			if call.Tool == loop.SpawnToolName && json.Unmarshal(call.Args, &spawned) == nil {
+			var spawned struct {
+				Agent    string
+				Estimate bool
+			}
+			if call.Tool == loop.SpawnToolName && json.Unmarshal(call.Args, &spawned) == nil && !spawned.Estimate {
 				t.saw(wiring.LibraryWhatAgent, cmp.Or(spawned.Agent, wiring.LibraryUnnamedAgent), header.ID, false, event.At).Calls++
 			}
 		case session.EventToolResult:

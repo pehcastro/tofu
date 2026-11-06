@@ -3,6 +3,7 @@ package loop
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"maps"
 	"path/filepath"
@@ -51,7 +52,9 @@ func (c Config) CallByHand(ctx context.Context, call core.ToolCall) (core.Messag
 		}
 		return core.Message{}, NotCalledByHandError{Tool: call.Name, Why: "is not offered to this turn, which is offered " + strings.Join(offeredNames, ", ")}
 	}
-	if slices.Contains(answersOnlyInATurn(), call.Name) {
+	var spawning spawnArgs
+	estimating := call.Name == SpawnToolName && json.Unmarshal(call.Arguments, &spawning) == nil && spawning.Estimate
+	if slices.Contains(answersOnlyInATurn(), call.Name) && !estimating {
 		return core.Message{}, NotCalledByHandError{Tool: call.Name, Why: "answers only inside a live turn: it starts, reaches or reads a running sub-agent or its lead, which needs a model and a session that is running"}
 	}
 	redactor := credential.LoadKeyRedactor()

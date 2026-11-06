@@ -332,9 +332,10 @@ func (t *SpawnTool) Definition() core.Tool {
 		raise = "the person can raise either in the settings menu, and you can ask to with the settings tool, which the person answers."
 	}
 	properties := map[string]any{
-		"task":    map[string]any{"type": "string"},
-		"mission": map[string]any{"type": "string", "description": "the work in a handful of words, as a board entry reads: work on BOJI-395. the task is the brief and is kept whole"},
-		"owns":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+		"task":     map[string]any{"type": "string"},
+		"estimate": map[string]any{"type": "boolean", "description": "true returns the median cost, calls and minutes of this agent type's finished runs in this project and starts nothing"},
+		"mission":  map[string]any{"type": "string", "description": "the work in a handful of words, as a board entry reads: work on BOJI-395. the task is the brief and is kept whole"},
+		"owns":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 	}
 	if t.base.Board != nil {
 		properties["ticket"] = map[string]any{"type": "string", "description": "the board ticket this sub-agent works, such as DEMO-2: its owns become the sub-agent's paths and owns given here are ignored"}
@@ -349,7 +350,7 @@ func (t *SpawnTool) Definition() core.Tool {
 	return core.Tool{
 		Name: SpawnToolName,
 		Description: "hands one piece of work to a sub-agent with its own context and its own conversation, and returns at once with its name while it works in the background. task is the whole brief the sub-agent starts from. " +
-			"its report, rather than its transcript, comes to you later as a message naming it. a reply whose calls are all spawns ends your turn once they start. " +
+			"its report, rather than its transcript, comes to you later as a message naming it. every start names the median cost, calls and minutes of that agent type's past runs here; set estimate to read them alone with nothing started. a reply whose calls are all spawns ends your turn once they start. " +
 			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths; leave owns out for a sub-agent that only reads, runs commands or researches, and every write it tries is refused. " + t.ticketNeed() + cite +
 			fmt.Sprintf("At most %d sub-agents running at once, nested at most %d deep. These are the person's settings %s and %s: %s",
 				limits.Running, limits.Depth, settings.SubAgentsPerTurn, settings.SubAgentDepth, raise),
@@ -381,12 +382,13 @@ func (t *SpawnTool) ticketNeed() string {
 }
 
 type spawnArgs struct {
-	Task    string   `json:"task"`
-	Mission string   `json:"mission,omitempty"`
-	Owns    []string `json:"owns"`
-	Agent   string   `json:"agent,omitempty"`
-	Effort  string   `json:"effort,omitempty"`
-	Ticket  string   `json:"ticket,omitempty"`
+	Task     string   `json:"task"`
+	Mission  string   `json:"mission,omitempty"`
+	Owns     []string `json:"owns"`
+	Agent    string   `json:"agent,omitempty"`
+	Effort   string   `json:"effort,omitempty"`
+	Ticket   string   `json:"ticket,omitempty"`
+	Estimate bool     `json:"estimate,omitempty"`
 }
 
 func (a spawnArgs) mission() string {
@@ -412,6 +414,70 @@ func (a spawnArgs) mission() string {
 	return strings.TrimRight(cut, " ,;:") + "..."
 }
 
+const unnamedAgent = "a sub-agent on the lead's model"
+
+func (t *SpawnTool) estimate(agent string) (string, error) {
+	who := cmp.Or(agent, unnamedAgent)
+	var headers []session.Header
+	if t.base.Sessions != nil {
+		listing, err := t.base.Sessions.ReadOnce().Listing()
+		if err != nil {
+			return "", err
+		}
+		headers = listing.Sessions
+	}
+	slices.SortFunc(headers, func(a, b session.Header) int { return b.At.Compare(a.At) })
+	var usd, calls, walls []float64
+	sessionsRead, costed := 0, false
+	for _, header := range headers {
+		ran := map[string]int{}
+		for _, run := range header.Agents {
+			if run.Definition == agent && run.EndedAt != nil && len(walls) < konst.SpawnEstimateRunsMost {
+				ran[run.Agent] = len(walls)
+				usd, calls, walls = append(usd, 0), append(calls, 0), append(walls, float64(run.EndedAt.Sub(run.StartedAt)))
+			}
+		}
+		if len(ran) == 0 {
+			continue
+		}
+		sessionsRead++
+		requests, err := t.base.Sessions.EventsOf(header.ID, session.EventRequest)
+		if err != nil {
+			return "", err
+		}
+		for _, request := range requests {
+			at, theirs := ran[request.Agent]
+			var body struct {
+				CostUSD *float64 `json:"cost_usd"`
+			}
+			if !theirs || json.Unmarshal(request.Body, &body) != nil {
+				continue
+			}
+			calls[at]++
+			if body.CostUSD != nil {
+				usd[at], costed = usd[at]+*body.CostUSD, true
+			}
+		}
+	}
+	if len(walls) == 0 {
+		return "no history: " + who + " has no finished run recorded in this project, so there is no estimate", nil
+	}
+	cost := strconv.FormatFloat(median(usd), 'f', 4, 64) + " USD"
+	if !costed {
+		cost = "no cost recorded"
+	}
+	return fmt.Sprintf("estimate for %s, the median of its last %d finished runs in %d sessions: %s, %s calls, %s of wall time",
+		who, len(walls), sessionsRead, cost, strconv.FormatFloat(median(calls), 'f', -1, 64), time.Duration(median(walls)).Round(time.Second)), nil
+}
+
+func median(values []float64) float64 {
+	sorted, middle := slices.Sorted(slices.Values(values)), len(values)/2
+	if len(sorted)%2 == 1 {
+		return sorted[middle]
+	}
+	return (sorted[middle-1] + sorted[middle]) / 2
+}
+
 func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	timing := startSpawnTiming()
 	var args spawnArgs
@@ -423,6 +489,16 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	warm, naming := t.warmups[site.call], t.naming
 	t.mu.Unlock()
 	defer naming.passed(site.call)
+	if args.Estimate {
+		if _, err := t.SubAgents.Named(args.Agent); err != nil {
+			return contract.Result{}, err
+		}
+		said, err := t.estimate(args.Agent)
+		if err != nil {
+			return contract.Result{}, fmt.Errorf("spawn: no estimate: %w", err)
+		}
+		return contract.Result{Content: said + ". nothing was started", Command: "spawn estimate " + cmp.Or(args.Agent, unnamedAgent)}, nil
+	}
 	if strings.TrimSpace(args.Task) == "" {
 		return contract.Result{}, errors.New("spawn: task is required")
 	}
@@ -582,6 +658,11 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 		t.background(runCtx, cancel, held, opened, site, task, core.Origin{Source: core.SourceBrief, Name: t.orchestratorID}, warm)
 	})
 	said := narrowed + clampedWords(effort, opened) + held.runningWords()
+	if estimated, err := t.estimate(definition.Name); err != nil {
+		said += "\n\nno estimate: " + err.Error()
+	} else {
+		said += "\n\n" + estimated
+	}
 	if boardSizes != nil {
 		if err := t.base.Board.Fire(rules.WhenAfter, rules.HookAgentSpawn, "", args.Ticket, t.base.Session); err != nil {
 			said += "\n\na board hook after agent.spawn failed: " + err.Error()
