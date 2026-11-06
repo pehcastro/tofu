@@ -16,12 +16,13 @@ items that never reached an agent instead.
 
 - reached: for a rule, it fired into a prompt or a check found it in a
   tool result; for a reference or a skill, it was offered or loaded; for
-  an agent, its definition was a sub-agent's prompt; for a tool, a request
-  offered it
+  an agent, a spawn call named it or its definition was a sub-agent's
+  prompt; for a tool, a request offered it
 - held: a rule weighed for a prompt and held back, or a skill hidden from
   the listing
-- calls: tool calls, and loads of a skill or reference with the `skill`
-  and `reference` tools
+- calls: tool calls, loads of a skill or reference with the `skill`
+  and `reference` tools, and spawns of an agent
+- a spawn that names no agent counts as `unnamed`
 - each count is of sessions, so twenty turns of one session count once
 - a tool counts as used only when it is called, so a tool offered in every
   session and never called is listed by `--never`

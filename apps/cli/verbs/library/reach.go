@@ -13,6 +13,7 @@ import (
 	"tofu/apps/cli/output"
 	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
+	"tofu/internal/agent/loop"
 	"tofu/internal/cli/render"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/store/session"
@@ -97,6 +98,10 @@ func (t reachTally) read(header session.Header, events []session.Event) {
 			t.saw(whatTool, call.Tool, header.ID, false, event.At).Calls++
 			if what, name := wiring.LibraryLoad(call); what != "" {
 				t.saw(what, name, header.ID, false, event.At).Calls++
+			}
+			var spawned struct{ Agent string }
+			if call.Tool == loop.SpawnToolName && json.Unmarshal(call.Args, &spawned) == nil {
+				t.saw(wiring.LibraryWhatAgent, cmp.Or(spawned.Agent, wiring.LibraryUnnamedAgent), header.ID, false, event.At).Calls++
 			}
 		case session.EventToolResult:
 			var result session.ResultBody
@@ -190,7 +195,10 @@ func reachLines(page cli.Page, report reach, now time.Time) []string {
 			if row.Held > 0 {
 				said = append(said, "held in "+output.Plural(row.Held, "session"))
 			}
-			if row.Calls > 0 || kind == whatTool {
+			switch {
+			case row.Calls > 0 && kind == wiring.LibraryWhatAgent:
+				said = append(said, output.Plural(row.Calls, "spawn"))
+			case row.Calls > 0 || kind == whatTool:
 				said = append(said, output.Plural(row.Calls, "call"))
 			}
 			if !row.LastAt.IsZero() {

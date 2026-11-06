@@ -18,6 +18,7 @@ const (
 	LibraryWhatAgent     = "agent"
 	LibraryWhatSkill     = "skill"
 	LibraryWhatReference = "reference"
+	LibraryUnnamedAgent  = "unnamed"
 )
 
 func LibrarySource() (fs.FS, string, string) {
@@ -37,7 +38,7 @@ func LibraryItem(part session.PromptPart) (string, string) {
 	case part.Rule != "":
 		return LibraryWhatRule, part.Rule
 	case part.Kind == string(rules.ConcernIdentity) && (part.Agent != "" || part.File != ""):
-		return LibraryWhatAgent, cmp.Or(part.Agent, "unnamed")
+		return LibraryWhatAgent, cmp.Or(part.Agent, LibraryUnnamedAgent)
 	case part.Kind == string(loop.ConcernSkills) && part.Name != "":
 		return LibraryWhatSkill, part.Name
 	case part.Kind == string(loop.ConcernReferences):

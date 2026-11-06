@@ -2,7 +2,7 @@
 title: Reach
 description: tofu library reach counts, across every session recorded in a project, which rules, references, skills, agents and tools reached an agent, and lists the ones that never did.
 order: 6
-updated: 2026-11-01
+updated: 2026-11-06
 ---
 
 `tofu library reach` reads every session recorded for the project you run it
@@ -15,12 +15,14 @@ items that never reached an agent instead.
 | Rule | It fired into a prompt, or a check found it in a tool result | It was weighed for a prompt and held back | |
 | Reference | It was offered in a sub-agent's prompt, or loaded | | Loads with the `reference` tool |
 | Skill | It was listed or loaded into a prompt | It was hidden from the listing | Loads with the `skill` tool |
-| Agent | Its definition was a sub-agent's prompt | | |
+| Agent | A spawn call named it, or its definition was a sub-agent's prompt | | Spawn calls naming it |
 | Tool | A request offered it | | Calls the model made |
 
 Each count is of sessions, so a rule that fired in twenty turns of one session
 counts once. A tool counts as used only when it is called, so a tool offered
-in every session and never called is in `--never`.
+in every session and never called is in `--never`. An agent from the
+project's own `.tofu/agents` counts the same way, and a spawn that names no
+agent counts as `unnamed`.
 
 ## Why it exists
 
@@ -62,5 +64,5 @@ A project with no session prints that no session is recorded and exits 0.
 | `name` | The rule id, or the file or tool name |
 | `reached` | Sessions it reached; for a tool, sessions that offered it |
 | `held` | Sessions it was held back in |
-| `calls` | Tool calls, or loads of a skill or reference |
+| `calls` | Tool calls, loads of a skill or reference, or spawns of an agent |
 | `last_at` | When it was last seen, left out when never |
