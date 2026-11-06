@@ -22,7 +22,7 @@ clock. A verb starts in about 6 ms of package init, and `docs`, `changelog`,
 
 These pages answer one question each. Type `tofu docs` to see every question
 with the command that answers it, `tofu docs <topic>` for a page, or
-`tofu docs "a few words"` to find the closest answers.
+`tofu docs "a few words"` to find the closest answers. Every verb answers `--help` with its usage line and exit 0.
 
 Topics:
 

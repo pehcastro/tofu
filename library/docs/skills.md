@@ -35,7 +35,7 @@ and `test-plan`, and lists them beside yours for the lead and for every
 library sub-agent, each of which carries the skill tool. A skill of yours
 with the same name is offered instead of the shipped one. The lead also
 lists the library's general references, such as `contract`, and reads one
-whole with the `reference` tool, as a library sub-agent reads its own.
+whole with the `reference` tool, as a library sub-agent reads its own. An agent that loads a skill, by its definition or by the model's choice, can open that skill's references with the same tool, and a sub-agent is offered the references its stack reaches.
 
 `SKILL.md` opens with front matter:
 

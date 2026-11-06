@@ -223,7 +223,10 @@ a name or an id, for the session `●` marks: `tofu session trace head`,
 started, how long it was worked on, counting each turn from its first
 event to its last, and every generation with how it began, its steps,
 active time and size, its branches and its sub-agents. On a conversation
-of 80 generations it answers in about 0.7 s.
+of 80 generations it answers in about 0.7 s. A handle ending in `.N`, such
+as `tofu session brisk-amber-heron#4mhr1.2`, prints that generation alone,
+and `--family` beside it prints the whole family again. A number past the
+last generation is refused, naming the last.
 
 ```sh
 tofu session find brisk-amber-heron --tool bash

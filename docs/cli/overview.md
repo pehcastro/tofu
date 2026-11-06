@@ -33,9 +33,10 @@ Run a verb with no arguments, or a wrong one, to get its usage line:
 A subcommand or flag tofu does not know gets its usage line and then the
 closest one it does know, as `did you mean tofu session list`.
 
-`tofu help` lists every verb, and `tofu run --help`, `tofu sift --help`,
-`tofu drive --help` and `tofu serve --help` print the long forms. The usage lines below are copied
-from tofu itself.
+`tofu help` lists every verb. Every verb answers `--help` with its usage
+line and exit 0, such as `tofu boardy --help`, and `tofu run --help`,
+`tofu sift --help`, `tofu drive --help` and `tofu serve --help` print the
+long forms. The usage lines below are copied from tofu itself.
 
 ## Commands
 

@@ -105,6 +105,13 @@ finished the same hidden tests in 63 s where medium took 78 s, so the lead
 sets effort per spawn. An effort the model lacks runs at the nearest one it
 has, so a spawn never fails on it.
 
+**Siblings wait only where it pays.** On a model whose catalog entry says
+`prompt_cache: prefix`, the first of several sub-agents spawned together
+leads and the rest wait for its first answer, so they read the prompt it
+cached. On a model that caches no prefix they all start at once. A model
+that does not say is treated as caching one. `tofu session trace` names
+which sub-agent led, which waited and for how long, and why.
+
 **A sub-agent is light.** Each one allocates about 35% less than it did, and
 under one vCPU and 128 MB of memory tofu runs ten sub-agents at about 0.7 MB
 each.

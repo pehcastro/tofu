@@ -42,7 +42,7 @@ The steps a script takes, among others:
 - `wait TEXT`, `absent TEXT`: what must or must not be on the screen
 - `count TEXT`: print how many rows of the screen hold TEXT, as
   `count TEXT: N`, so a run proves a message shows once rather than only
-  that it shows; `count` with no text is refused
+  that it shows; `count` with no text is refused; `idle` waits until no turn runs and no sub-agent works
 - `screen`: print the screen as it stands
 - `environment`: print the environment block the last turn sent
 - `requests`: print every request sent so far
@@ -108,7 +108,7 @@ with `steps.drive` holding:
     wait cooked for
     requests text 2
 
-prints the settings, then request 2 with every message and its text.
+prints the settings, then request 2 with every message and its text, and ends naming the session it recorded and the `tofu session trace` command that reads it.
 `tofu drive --help` prints every step, every flag, and the cassette's
 fields.
 

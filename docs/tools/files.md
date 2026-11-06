@@ -126,8 +126,11 @@ matches, a case-insensitive retry tells an absence from a wrong pattern.
 
 ## symbols
 
-`symbols` uses the Go parser to answer where an identifier is declared,
-what it calls, and who calls it. It matches on the name rather than types, so
+`symbols` answers where an identifier is declared, what it calls, and who
+calls it, in Go, Rust and TypeScript (`.go`, `.rs`, `.ts`, `.tsx`): Go
+through the Go parser, Rust and TypeScript by their braces. The owns check
+on `tofu boardy move <id> doing` reads the same three. It matches on the
+name rather than types, so
 a call through an interface isn't found, and the result says so. Parameters:
 `name`, `path`.
 

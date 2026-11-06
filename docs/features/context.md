@@ -37,6 +37,13 @@ exchange, once the history passes 4,096 characters. The cache lives one hour
 on a subscription. On the Codex wire, requests carry the session as a cache
 key. Over 24 turns, 88% of billed input was a cache read.
 
+**The head a session first sent is held.** When a rule, a memory entry or a
+tool description changes mid-session, the system prompt and the tool list
+stay as the session first sent them, and the change reaches the model once,
+as a note after that cached head. The held head survives a resume, a
+restore and `/compact`, so the next request still reads the cache.
+`tofu session request <name> last` shows the note in the message list.
+
 **A request carries only what the step needs.** Tool descriptions say what a
 model needs before it calls a tool, and the rest of the guidance arrives in
 the error when its case happens. A `tofu run` whose task names a few files in
@@ -103,6 +110,13 @@ word on its own line, so a correction made three forks ago still holds.
 It keeps the newest 24,000 bytes, and a message over 4,000 bytes keeps its
 start. A conversation continued or resumed over the target forks before
 its first request, so the whole history is never sent first.
+
+**Your standing orders and your files go with it.** Jev reads each
+sentence you wrote with `standing_order@1`, and the carry keeps as a
+standing order each one that gives a lasting instruction about how to
+work; with no classifier bound a fixed word list decides, and each answer
+is a ledger row. The carry also holds whole the files the lead read and
+left unchanged, and `tofu session trace <name> --kind fork` names them.
 
 ## Watching and changing it
 

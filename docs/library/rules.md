@@ -21,6 +21,12 @@ reaches a prompt only when all of them match:
 | `task` | The task contains `debug`, `explore`, `review` or `write` |
 | `role` | The prompt is the `orchestrator`'s or a `sub-agent`'s |
 
+Jev decides two of them. `task_kind@1` names the task's kind for `task`,
+and `rule_applies@1` reads the task and its paths for each rule whose
+`touches` would otherwise decide. With no classifier bound, or when Jev
+does not answer, the word list and the regular expression decide, and the
+prompt says which of the two did, as `tofu run --show-prompt` prints.
+
 The paths a task names are its words with a `/`, a `\` or a file extension,
 plus a sub-agent's `owns`. The `concern` orders rules in the prompt. A rule
 that fires for every task of an agent goes in the system prompt; one that
@@ -124,6 +130,11 @@ reuse: rules that don't change with the task stay in the cached prefix.
   or sub-agent), `trigger` (what the task or its paths matched), `mode` (the
   rule's own mode is off) or `setting` (a setting or an override turned it
   off). `--json` rows carry `reason_kind` and `mode`.
+- **See every judge point's mode**: `tofu rules list` names each rule's mode
+  and how it is turned on, and every judge point, such as `stop_check@1`,
+  with `○` shadow, which only records, `●` enforced, or `✗` with why it
+  cannot run. `tofu run --show-prompt` ends with one `point <id>: <mode>`
+  line per point.
 - **Add one**: `tofu rules add no_yaml "never write yaml by hand"`, then add
   triggers to the file.
 - **Turn one off**: `tofu rules off em_dash`; `tofu rules remove` undoes it.

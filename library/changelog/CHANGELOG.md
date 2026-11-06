@@ -10,6 +10,81 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.21 - 2026-11-05
+
+A board that closes an ask only against the person's own words, and sessions you can fork by hand, read back as people read them and continue from the command line.
+
+### Added
+
+- `/fork` starts a fresh line now, `/branch N` restarts from your Nth message and keeps the old line open, and `/compact <focus>` keeps whole every old result that names the focus; `tofu serve` answers `session.fork` and `session.branch`, and a member app compacts the host's session.
+- `/side` opens a side chat beside the session in use, sending the lead's system prompt and tools so it reads the lead's cache.
+- `/permissions` lists every always and never answer standing in the session, and `/permissions revoke <n>` takes one back; `tofu serve` answers `approval.list` and `approval.revoke`.
+- `/orders` opens the orders tab, which lists every order the lead sent a sub-agent.
+- `tofu run --session <name|id|head>` works a task as that session's next turn, on the session's own model, and its first line says where the model came from.
+- `tofu session transcript` prints a session as people read it, with `--from`, `--to` and `--md`, and `tofu session work <name> --ticket <id>` lists one ticket's brief, spawn, moves and report across every generation.
+- `head` names the project's head session in every session verb, and `tofu session <name>.N` prints that generation alone.
+- `tofu session request <name>` lists the session's requests and takes `last`; its `cache` line names each cache breakpoint and marks the kept head, and `--has <origin>` lists where a message from that origin sits in each request.
+- `tofu session trace` lists forks with `--kind fork` and the files each carried whole, every rule, reference, skill and question set each agent was given with `--kind library`, the rows one origin started with `--from`, and the account each turn ran on; `--full` takes the filters and a test row carries its counts.
+- `tofu library reach` counts which rules, references, skills, agents and tools reached an agent across a project's sessions, and lists the ones that never did.
+- `tofu rules why <session>` names each rule fired, held or dropped with its reason, and `tofu rules list` and `tofu run --show-prompt` name every judge point's mode.
+- `tofu calibrate <rule@version> --cases --split` fits a decision point's cut on labelled cases, checks it on a held-out half and a rerun, and writes the lock that lets the point leave shadow; `tofu doctor` names the lock.
+- `tofu replay --point` rescores a question-set threshold from the stored readings.
+- The `advisor` reads each plan the lead sets against your messages, in shadow under `planAdvisor`, and writes Missing and Extra rows to `tofu session trace --kind advisor`.
+- `stop_check` reads every hand-back in shadow, and a lead that stops with board work open is asked it about its own stop.
+- `tofu boardy init --mode empty` or `--mode custom --hooks <ids>` starts a board with no hooks or the named ones; every board policy is a hook `tofu boardy rule list` shows with its name, description and bypass, and a refusal names the bypass.
+- `tofu boardy bypass list` and `tofu boardy bypass answer <B> yes|no` answer a held bypass; one unanswered for 24 hours expires, and a hook bypassed 3 times in 7 days is flagged.
+- `tofu boardy request new|add|show|review|list` keeps what the person asked, word for word, with the tickets cut from it, and a request is done only after a review against those words.
+- `tofu boardy new` asks for Before, Driven path, Still works and Empty or error case, and Feasibility for a visual or platform effect; `tofu boardy set` fills them on an older ticket.
+- `tofu boardy move <id> done` needs a before capture logged with `tofu boardy log --before` ahead of the evidence, `--late <build>` for one run on the pre-change build, evidence for every acceptance line, and a reason Jev does not read as naming an open part.
+- `tofu boardy epic research` and `tofu boardy epic design --first` come before a new epic takes its first ticket, and it takes a second only once one is done.
+- The `doneReview` setting, `screen` by default, sends a sub-agent back while an acceptance line has no evidence, up to the round cap; `--done-review` sets it for one run.
+- A sub-agent that finds its ticket cannot be done as asked reports `not_possible`, the ticket moves to needs-decision, and the question goes to you in the chat.
+- A sub-agent's report lists each check with its exit code and first error line, and the callers of what it changed.
+- A correction said twice in one session is proposed as a rule, and a repeated instruction is answered with a check and a ticket; the memory entry that already covers it is quoted with the ledger row `tofu why` explains.
+- The `fork` and `autoCompaction` settings each turn off, and `scratchRoots` is a declared global setting.
+- Every verb answers `--help` with its usage line and exit 0.
+- `tofu drive desk` opens the desk app on a hidden desktop, takes its steps and keeps screenshots; a `tofu drive` script takes `idle` and `count`, and the run names the session it recorded.
+- Chrome runs `tofu-browser`, a copy of tofu that `tofu browser install` and `tofu update` keep current, and the relay sleeps while unused, waking on the first call; `tofu browser` prints which and `browserSleepMinutes` sets when.
+- The `symbols` tool and the owns check on `tofu boardy move <id> doing` read Rust and TypeScript.
+
+### Changed
+
+- The source moved into `apps/cli`, `internal`, `bench` and `library`; behaviour is unchanged.
+- `/compact` keeps the head of the history byte for byte, so the next request reads it from cache, and Jev keeps the old results the work still needs; `tofu session trace --kind compaction` names each cut result.
+- A fork carries whole the files the lead read and left unchanged, and the standing orders Jev picks from your sentences.
+- A session holds the system prompt and tools it first sent: a rule, memory or tool change mid-session reaches the model as a note after that head, across a resume, a restore and `/compact`.
+- Jev names a task's kind and decides which framework rules reach it, with the word list and the regular expression as the fallback; `tofu run --show-prompt` says which decided.
+- A sub-agent is offered the references its stack reaches, and an agent that loads a skill can open its references with the `reference` tool.
+- Sub-agents spawned together wait for the first one's answer only on a model whose catalog entry caches a prefix; `tofu session trace` says which led and why.
+- A spawn on a ticket records its effort, and a second effort raise under one acceptance is refused.
+
+### Fixed
+
+- A fork and `/compact` carry the parent's task, model, account, environment, pasted pictures, running sub-agents, cron jobs and standing answers, and fire the `SessionStart` compact hook.
+- A compacted session keeps its held prompt across a restart, and a fork that cannot shrink stops and sends the last word.
+- After `/new` every member of the host follows, and a side chat waits for the new session; a member joining mid-turn sees the turn's opening message.
+- A steer is carried once, every member reads who answered an ask and how, and a shell notice reaches the lead as tofu, not as you.
+- A side chat runs on the model it was branched with.
+- Memory turned off stays off for the session, a memory added outside it reaches the next turn once, and a sub-agent reads memory in the lead's order.
+- Skills turned off leave every agent's listed skills unloaded, and a missing skill says so.
+- A dropped picture is recorded and its re-read labelled.
+- Every account spent stops the turn, and a fork on a spent account asks the next account.
+- A check skipped for want of a tool records `skipped`, not failed, and no longer reopens the ticket; the `test` tool runs vitest 2.1 projects.
+- A send-back quotes the sub-agent's own failing line.
+- `tofu run --show-prompt` prints the shell and board text a real run sends and fires no hook; `tofu run --agent` is refused on an arm that spawns no sub-agent, and `--no-gate` runs with no classifier bound.
+- `tofu run` lists `ask_person` and `cron`, so a session begun there reads its cache in `tofu serve`, and a board nudge reaches the lead once.
+- `tofu --continue` opens the last fork at once and loads older ones one by one, and `tofu serve` reads history faster.
+- `tofu session drain` in a project with no session says so, and a session line with other spacing is read.
+- `tofu why` takes the call id the trace prints, and an unknown id names the ledger and sessions it searched.
+- A repeated `--labels` or `--owns` on `tofu boardy` adds to the list, an empty done reason is refused, and the owns check names a Go caller by its package.
+- `tofu boardy catchup` ends an answer at the next heading, and a not-possible report reaches needs-decision.
+- `tofu drive` reads `--quota`, `--clipboard` and relative paths from where it started, refuses a home that is or holds the real one, and records the model a cassette request asked for.
+- Every tab tofu opens in Chrome joins its group.
+- A narrow tab row shortens tabs instead of cutting one, and an `ask_person` answer is drawn as an answer.
+- `tofu undo` leaves out junctions that lead out of the project.
+- On Windows, reading `projects.json` retries a sharing violation.
+- A project library copy layers over the shipped rules, and `tofu rules why --help` prints its usage.
+
 ## 0.5.20 - 2026-10-28
 
 Every window on a session sees the same live session: who changed what, every sub-agent's own steps and review, and the whole chat back to its first generation.

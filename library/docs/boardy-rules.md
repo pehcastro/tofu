@@ -74,7 +74,7 @@ Library hooks, read from the binary, scope `library`:
 - `drafted`, A ticket is drafted, on `ticket.create`, `triage.request`, `ticket.move` and `ticket.close`.
 - `feasibility`, A platform effect states its feasibility, on `ticket.create`, `triage.request`, `ticket.move` and `ticket.close`.
 - `done_reason`, Done says nothing is open, on a close to done.
-- `callers_owned`, Callers are owned, on a move to doing. The person or the lead bypasses it with `tofu boardy move <ticket> doing --bypass callers_owned --why <reason>`; nobody accepts it, the move passes, and the bypass is a `rule` line in `events.jsonl`.
+- `callers_owned`, Callers are owned, on a move to doing. The person or the lead bypasses it with `tofu boardy move <ticket> doing --bypass callers_owned --why <reason>`; nobody accepts it, the move passes, and the bypass is a `rule` line in `events.jsonl`. A hook that names who accepts its bypass holds the move until they answer: `tofu boardy bypass list` shows each one, `tofu boardy bypass answer <B> yes|no --why <text>` answers it, one unanswered for 24 hours expires, and a hook bypassed 3 times in 7 days is flagged.
 - `before_on_time`, A before is captured on time, on `ticket.log`, unless it is logged with `--late <commit or build>`.
 
 `tofu boardy init --mode empty` starts a board with none of the 23, and `--mode custom --hooks may_move,drafted` with only the named ones. Such a board keeps a `rules/.mode` file, so `tofu doctor` does not offer it the starter hooks again.

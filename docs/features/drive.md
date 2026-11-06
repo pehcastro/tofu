@@ -14,6 +14,10 @@ screenshot and a step log instead of a sentence.
 
 - `tofu drive` runs the terminal app from a script of steps, with no
   terminal and no model call: the model is a cassette of recorded replies.
+- A terminal script waits with `idle` until no turn runs and no sub-agent
+  works, and `count TEXT` prints how many screen rows hold TEXT, so a run
+  proves a message shows once. The run ends naming the session it recorded
+  and the `tofu session trace` command that reads it.
 - `tofu drive desk` opens the desk app, takes its steps, and writes a
   screenshot once the window has painted, one at each `shot` step and one at
   the end, with a step log beside them. It prints the folder they are in and

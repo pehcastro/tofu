@@ -37,6 +37,12 @@ folder, `rust-dev` handled deep recursion in 3 of 3 runs against 1 of 6 and
 added `.unwrap()` 0 times against 2, `py-dev` left 0 ruff and mypy findings
 against 3, and `go-dev` left 2 lint findings against 4.
 
+**What it does not carry whole, it is offered.** A sub-agent is offered by
+name the references its stack reaches, and every agent that loads a skill
+can open that skill's references, all with the `reference` tool. `tofu
+session trace <name> --kind library` lists each one offered, dropped or
+read, and `tofu library reach` counts them across the project's sessions.
+
 **The model is set apart from the file.** A line in `agent-models.yaml`
 overrides the file's `model`, so you change what an agent runs on without
 editing it.

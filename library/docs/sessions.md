@@ -88,7 +88,7 @@ lists this project's conversations, one row per family, newest first, `●` on t
 
 prints the family: when it started, how long it was worked on (each turn from its first event to its
 last), and each generation with how it began, its steps, active time and size, its branches and
-sub-agents, in about 0.7 s on 80 generations.
+sub-agents, in about 0.7 s on 80 generations. A handle ending in `.N` prints that generation alone, and `--family` beside it the whole family.
 
     tofu session find <name|id|head> --tool bash
 

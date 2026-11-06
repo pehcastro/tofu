@@ -96,6 +96,13 @@ A bypass of `callers_owned` is
 the move passes, and the bypass is a line in the board's `events.jsonl`
 that `tofu boardy catchup` counts.
 
+A hook of your own can name who accepts its bypass. Until they answer, the
+bypass is held and the move waits: `tofu boardy bypass list` shows each one
+with its state, and `tofu boardy bypass answer B1 yes --why "generated
+file"` lets the move through, or `no` keeps it refused. A bypass left
+unanswered for 24 hours expires. A hook bypassed 3 times in 7 days is
+flagged in the list, so the hook or the work gets fixed.
+
 `tofu boardy init --mode empty` starts a board with none of them, and
 `--mode custom --hooks may_move,drafted` with only the named ones.
 `tofu boardy rule remove <id>` deletes a starter hook's file; for a library
