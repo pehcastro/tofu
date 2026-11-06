@@ -1219,6 +1219,7 @@ func leadToolConstructors() []func(dir string) (contract.Tool, error) {
 		newClaimsTool,
 		debugTool,
 		formatTool,
+		depsTool,
 	}
 }
 

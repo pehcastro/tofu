@@ -638,6 +638,13 @@ const TestCPUs = 4
 const FormatRunMillis = 60_000
 
 const (
+	DepsRequestMillis   = 10_000
+	DepsRunMillis       = 120_000
+	DepsAdvisoriesShown = 10
+	DepsOutputLines     = 40
+)
+
+const (
 	TypecheckExplainWindowLines  = 5
 	TypecheckExplainErrors       = 10
 	TypecheckExplainPlaces       = 5
