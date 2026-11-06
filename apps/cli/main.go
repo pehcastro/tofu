@@ -78,6 +78,8 @@ Verbs:
             or add, set or remove one
   why       explain a ledger row, or the last one
   run       work a task in a directory until it is done
+  tool      list the tools a run offers, or run one tool call by hand
+            and print the result the model would receive
   judge     read a state and a question battery, print the answers
   check     run the tool gate on a shell command, in shadow, and log it
   session   list the recorded sessions, read one, rename one, or continue one
@@ -350,6 +352,8 @@ func verbNamed(name string) verb {
 		return verb{withoutIn(projectHostVerb), projectHostUsage}
 	case "run":
 		return verb{run: withoutIn(runVerb)}
+	case "tool":
+		return verb{withoutIn(toolVerb), toolUsage}
 	case "judge":
 		return verb{judgeverb.Verb, judgeverb.Usage}
 	case "check":

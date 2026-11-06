@@ -11,31 +11,17 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/librarian/rules"
-	"tofu/internal/models/llm/core"
-	platformproject "tofu/internal/platform/project"
-	"tofu/internal/store/session"
-	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/tools/contract"
 )
 
 func showPrompt(opts wiring.RunOpts, out, errOut io.Writer) int {
-	shell, err := loop.ResolveRunShell(settingspkg.TextSaying(opts.Dir, settingspkg.Shell, writeNotice(errOut)))
+	hand, err := handConfig(opts, "", nil, writeNotice(errOut))
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	opts.Shell = shell
-	named, _, err := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, contract.NewReadLedger()), nil, shell)
-	if err != nil {
-		return runFail(errOut, err)
+	if hand.gateErr != nil {
+		writeNotice(errOut)("a run would gate no tool call and send no settings tool: " + hand.gateErr.Error())
 	}
-	prompt, err := composeRun(opts, named, runtime{notify: writeNotice(errOut), open: wiring.OpenWire})
-	if err != nil {
-		return runFail(errOut, err)
-	}
-	offered, board, err := offeredTools(opts, prompt, named, writeNotice(errOut))
-	if err != nil {
-		return runFail(errOut, err)
-	}
+	prompt, board, offered := hand.prompt, hand.board, hand.config.OfferedTools()
 	opts, instructions, composed := prompt.opts, prompt.instructions, prompt.composed
 	sent := loop.Config{System: composed.Head(), Instructions: prompt.files, Memory: prompt.memory, Environment: composed.WithTaskRules(prompt.environment) + board.attached, Task: opts.Task, Notes: []string{board.notified}}
 	system, firstUser := sent.SystemMessage(), sent.FirstUserMessage()
@@ -107,33 +93,4 @@ func showPrompt(opts wiring.RunOpts, out, errOut io.Writer) int {
 	_, _ = fmt.Fprintf(out, "\ncomposed system prompt %d bytes against %d uncomposed, %+d bytes\n",
 		len(sent.System), uncomposed, len(sent.System)-uncomposed)
 	return output.ExitOK
-}
-
-func offeredTools(opts wiring.RunOpts, prompt composedRun, named []contract.Tool, notify func(string)) ([]core.Tool, leadForeseen, error) {
-	var board leadForeseen
-	sessions, err := session.OpenIn(cmp.Or(opts.Dir, "."))
-	if err != nil {
-		return nil, board, err
-	}
-	places, err := platformproject.ResolvePlaces(".")
-	if err != nil {
-		return nil, board, err
-	}
-	keys := &storedKeys{}
-	var gate *toolGate
-	if opts.GateArm != gateOff {
-		if gate, err = toolGateOn(opts.Dir, places.Log, keys.keyring()); err != nil {
-			notify("a run would gate no tool call and send no settings tool: " + err.Error())
-		}
-	}
-	config, spawner, err := runConfig(opts, named, runtime{open: wiring.OpenWire, composed: &prompt, foreseen: &board, sessions: sessions, gate: gate, keys: keys, places: places})
-	if err != nil || opts.Agent == "" {
-		return config.OfferedTools(), board, err
-	}
-	agent, err := prompt.subAgents.Named(opts.Agent)
-	if err != nil {
-		return nil, leadForeseen{}, err
-	}
-	offered, err := spawner.OfferedToRecordedSpawn(agent, opts.Task)
-	return offered, leadForeseen{}, err
 }

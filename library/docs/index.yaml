@@ -426,3 +426,7 @@
   do: tofu guard git commit-msg .git/COMMIT_EDITMSG
   check: tofu guard git release-docs .git/COMMIT_EDITMSG
   topic: guard
+- ask: run one tool call by hand and see what the model would read
+  do: tofu tool read '{"path":"README.md"}' --dir .
+  check: tofu tool list --dir .
+  topic: tool

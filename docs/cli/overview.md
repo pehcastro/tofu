@@ -2,7 +2,7 @@
 title: Reference
 description: Every tofu verb and its usage line, as tofu help and each verb print them.
 order: 1
-updated: 2026-10-24
+updated: 2026-11-06
 ---
 
 `tofu` with no arguments opens the app in the current directory. `tofu <verb>`
@@ -176,8 +176,13 @@ tofu changelog [--all] [--json]
 tofu docs [topic | "a few words"] [--json]
 tofu frame [NAME] [--width N] [--height N] [--plain] [--list]
 tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--width N] [--height N] [--plain] [--fresh | --continue] [ARM]
+tofu tool list [--dir <dir>] [--agent <name>] [--session <name|id|head>], or tofu tool <name> <json> [--dir <dir>] [--agent <name>] [--session <name|id|head>] [--sift free|judged]
 tofu migrate [--dry-run] [--json]
 ```
+
+`tofu tool` lists the tools a run offers and runs one tool call by hand,
+printing the exact text the model would receive. See [One tool call by
+hand](/docs/cli/tool).
 
 ### Frontends
 
