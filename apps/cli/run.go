@@ -1223,6 +1223,7 @@ func leadToolConstructors() []func(dir string) (contract.Tool, error) {
 	return []func(dir string) (contract.Tool, error){
 		envTool,
 		newChangesTool,
+		codemodTool,
 	}
 }
 

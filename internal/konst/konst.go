@@ -608,3 +608,11 @@ const (
 	ShadowStoreKeptBytes        = 536870912
 	ChangesTurnsShown           = 20
 )
+
+const (
+	CodemodRunMillis    = 60 * 1000
+	CodemodFilesScanned = 5000
+	CodemodSitesShown   = 40
+	CodemodDiffBytes    = 16 * 1024
+	CodemodCheckerBytes = 4 * 1024
+)
