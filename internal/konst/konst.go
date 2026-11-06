@@ -647,6 +647,12 @@ const (
 )
 
 const (
+	RecordRunMillis   = 120_000
+	RecordBodyBytes   = 8 << 20
+	RecordOutputLines = 40
+)
+
+const (
 	DepsRequestMillis   = 10_000
 	DepsRunMillis       = 120_000
 	DepsAdvisoriesShown = 10
