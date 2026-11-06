@@ -653,6 +653,12 @@ const (
 )
 
 const (
+	DBRowsShown   = 20
+	DBCellBytes   = 120
+	DBQueryMillis = 10_000
+)
+
+const (
 	DepsRequestMillis   = 10_000
 	DepsRunMillis       = 120_000
 	DepsAdvisoriesShown = 10
