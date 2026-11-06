@@ -43,17 +43,19 @@ func (Shells) Definition() core.Tool {
 			"wait with for returns as soon as the thing is ready, as JSON with met, after_ms and the matched line, or met false and its last lines: for is a regex over every line it printed, such as listening on, or port:3000, file:dist/app.js, or an http:// address that must answer 200. "+
 			"logs folds what it printed into templates with counts, and the end of a log file its command names, such as -Log build.log or > build.log; a later logs prints only new_since_last_call. "+
 			"stop kills its whole process tree, children included, so the port it held is free when this returns. "+
-			"restart stops it and starts the same command in the same folder under the same name. never stop a server with kill, taskkill or pkill", konst.ShellWaitMillis/1000),
+			"restart stops it and starts the same command in the same folder under the same name. never stop a server with kill, taskkill or pkill. "+
+			"ports needs no name and says, one JSON line per port, who listens on port, or on every port when port is left out: pid, command, the shell holding it and started_by this_session, other_session or outside, or free; it never kills", konst.ShellWaitMillis/1000),
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"op":         map[string]any{"type": "string", "enum": []string{"wait", "logs", "stop", "restart"}},
-				"name":       map[string]any{"type": "string", "description": "the shell's name, as bash returned it"},
+				"op":         map[string]any{"type": "string", "enum": []string{"wait", "logs", "stop", "restart", "ports"}},
+				"name":       map[string]any{"type": "string", "description": "the shell's name, as bash returned it; every op but ports needs it"},
+				"port":       map[string]any{"type": "integer", "description": "only for ports: the one port to ask about"},
 				"until":      map[string]any{"type": "string", "description": "only for wait: text the command prints once the thing waited for is ready, such as Listening on, so a server that never exits ends the wait"},
 				"for":        map[string]any{"type": "string", "description": "only for wait: a regex over its lines, port:N, file:path, or an http:// or https:// address answering 200"},
 				"timeout_ms": map[string]any{"type": "integer", "description": fmt.Sprintf("only for wait with for: how long to wait, at most %d", konst.ShellWaitMillis)},
 			},
-			"required": []string{"op", "name"},
+			"required": []string{"op"},
 		},
 	}
 }
@@ -64,6 +66,7 @@ type shellArgs struct {
 	Until     string `json:"until"`
 	For       string `json:"for"`
 	TimeoutMS int64  `json:"timeout_ms"`
+	Port      int    `json:"port"`
 }
 
 func (s Shells) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
@@ -89,6 +92,9 @@ func (s Shells) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 
 func (s Shells) runOp(ctx context.Context, registry *process.Registry, args shellArgs) (string, *int, error) {
 	switch args.Op {
+	case "ports":
+		held, err := ports(ctx, registry, args.Port)
+		return held, nil, err
 	case "stop":
 		return args.Name + " stopped, with every process it started", nil, registry.AgentKill(args.Name)
 	case "restart":
@@ -147,7 +153,7 @@ func (s Shells) runOp(ctx context.Context, registry *process.Registry, args shel
 		now := time.Now()
 		return state + ", " + registry.Timing(ended, now).Words(now) + ". its last lines:\n" + tail, ended.ExitCode, nil
 	}
-	return "", nil, fmt.Errorf("op %q is not wait, logs, stop or restart", args.Op)
+	return "", nil, fmt.Errorf("op %q is not wait, logs, stop, restart or ports", args.Op)
 }
 
 func (s *Seen) follow(registry *process.Registry, entry process.Shell) (string, bool, error) {
