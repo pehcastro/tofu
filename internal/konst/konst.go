@@ -657,6 +657,11 @@ const (
 )
 
 const (
+	ShapeSampleBytes       = 16 << 20
+	ShapeErrorContextBytes = 40
+)
+
+const (
 	TypecheckExplainWindowLines  = 5
 	TypecheckExplainErrors       = 10
 	TypecheckExplainPlaces       = 5
