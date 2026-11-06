@@ -309,8 +309,17 @@ const (
 const (
 	MutateWorkers                 = 1
 	MutateTimeoutCoefficient      = 5
+	MutateMutantsCap              = 50
 	MutateChildMemoryCeilingBytes = 4 * 1024 * 1024 * 1024
 	DiffTableMaxCells             = 10 * 1000 * 1000
+)
+
+const (
+	MapBudgetTokens   = 1000
+	MapRankDamping    = 0.85
+	MapRankIterations = 50
+	MapMentionWeight  = 10
+	MapSignatureBytes = 120
 )
 
 const (
@@ -601,6 +610,9 @@ const (
 	SymbolsPreviewChars    = 120
 	LspStderrLines         = 5
 	LspStderrBytes         = 4096
+
+	SymbolsDiagnosticsWaitMillis = 10_000
+	LspDiagnosticsSettleMillis   = 700
 )
 
 const (
