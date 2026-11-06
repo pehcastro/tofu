@@ -10,7 +10,7 @@ tofu runs every call itself, in the working directory, and records it in the
 session. The command line and the app build the same tool set.
 
 Most tools are tofu's own Go code: `read`, `write`, `edit`, `glob`,
-`search`, `symbols`, `project_report`, `fetch`, `web_search`, `plan`, `env`,
+`search`, `symbols`, `map`, `api`, `project_report`, `fetch`, `web_search`, `plan`, `env`,
 `http`, `record`, `shape`, `db`, `context`, `budget`, `forget`, `note`,
 `digest`, the browser tools and the sub-agent tools.
 `profile` runs the project's own profiler. A few wrap a program: `bash` wraps your
@@ -24,6 +24,7 @@ model would receive. See [One tool call by hand](/docs/cli/tool).
 | Group | Tools |
 |---|---|
 | [Files](/docs/tools/files) | read, write, edit, glob, search, symbols, project_report |
+| [Code intelligence](/docs/tools/code) | symbols, map, api |
 | [Shell](/docs/tools/shell) | bash, shell |
 | [Checks](/docs/tools/checks) | typecheck, test |
 | [Web](/docs/tools/web) | web_search, fetch, github_pr_diff |

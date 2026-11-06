@@ -122,7 +122,27 @@ FAIL TestDiscounted order_test.go:17: got 650, want 675
 
 `changed` runs the tests of every file the turn changed, instead of a path.
 A test file is matched to a changed file by its stem, such as
-`order_test.go` for `order.go`.
+`order_test.go` for `order.go`. Beyond those, `changed` follows the
+reference graph from each changed declaration, through
+[symbols impact](/docs/tools/code#impact), and runs every test that reaches
+it, in another file or package.
+
+Here the turn changed `Total` in `pricing/pricing.go`, which has no test of
+its own. Two tests in `order_test.go` reach it through `Order.Total`, and
+`changed` runs those two:
+
+```text
+symbols impact: beyond the stem tests, 2 more reach this turn's edits; 0 it found are stem tests already
+  pricing/pricing.go: impact of Total, resolved by go/types: 1 caller (1 call), 2 tests reaching it, 1 package
+
+test: no test for pricing.go: looked for func Test in pricing_test.go beside it
+
+test: go test -json -count=1 -run ^(TestDiscounted|TestTotal)$ . in C:\work\shop\go, 1962 ms
+go test: 1 passed, 1 failed
+FAIL TestDiscounted order_test.go:17: got 650, want 675
+```
+
+`changed` runs only inside a turn, so `tofu tool test` cannot show it.
 
 ## Parameters
 
@@ -136,7 +156,7 @@ The model calls both tools on its own. Neither has a command of its own;
 | `test` | `path` | a directory, a test file, or a source file whose tests then run |
 | `test` | `name` | one Go, Rust or Python test by name |
 | `test` | `repeat` | run it this many times and give a verdict |
-| `test` | `changed` | run the tests of every file this turn changed |
+| `test` | `changed` | run the tests of every file this turn changed, and every test that reaches what it changed |
 
 ## After write and edit
 

@@ -31,7 +31,7 @@ a number, so no bytes go to numbering. A path that doesn't exist is repaired
 when exactly one file has that name, and the repair is named first.
 
 `at` is a line number or a name the file declares, such as `Total` or
-`Order.Total`, in a `.go`, `.rs`, `.ts` or `.tsx` file. The header states
+`Order.Total`, in a `.go`, `.rs`, `.ts`, `.tsx` or `.py` file. The header states
 the range read and where the declaration sits:
 
 ```bash
@@ -96,8 +96,8 @@ errors end the result.
 
 ## edit
 
-`edit` replaces one exact stretch of a file, or one whole Go
-declaration by name, and answers with the diff.
+`edit` replaces one exact stretch of a file, or one whole declaration by
+name, and answers with the diff.
 
 `old_string` must appear exactly once. When it appears more often,
 the result lists each occurrence with its line, instead of changing the first.
@@ -126,6 +126,61 @@ typecheck: go vet ./. in 329 ms: 1 error
 ./order.go:15:9: invalid operation: o.Total() - "100" (mismatched types int and untyped string)
 ```
 
+`symbol` names a declaration in a `.go`, `.rs`, `.ts`, `.tsx` or `.py`
+file, such as `total` or `Order.total`. `new_string` replaces the whole
+declaration, and nothing else in the file moves:
+
+```bash
+tofu tool edit '{"path":"src/pricing.rs","symbol":"total","new_string":"pub fn total(quantity: u32, unit_cents: u32) -> u32 {\n    quantity.saturating_mul(unit_cents)\n}"}' --dir .
+```
+
+```text
+--- src/pricing.rs
++++ src/pricing.rs
+@@ -1,3 +1,3 @@
+ pub fn total(quantity: u32, unit_cents: u32) -> u32 {
+-    quantity * unit_cents
++    quantity.saturating_mul(unit_cents)
+ }
+
+
+typecheck: cargo check in 797 ms: 0 errors
+```
+
+With `insert` set to `before` or `after`, `new_string` goes beside the
+declaration instead, with one blank line between:
+
+```bash
+tofu tool edit '{"path":"order.py","symbol":"Order.total","insert":"after","new_string":"    def free(self) -> bool:\n        return self.total() == 0"}' --dir .
+```
+
+```text
+--- order.py
++++ order.py
+@@ -11,5 +11,8 @@
+     def total(self) -> int:
+         return pr.total(self.quantity, self.unit_cents)
+ 
++    def free(self) -> bool:
++        return self.total() == 0
++
+     def discounted(self) -> int:
+         return self.total() - 100
+
+
+typecheck: pyright --outputjson order.py in 1009 ms: 0 errors
+```
+
+A name the file doesn't declare is refused with the closest names it does,
+and nothing is written:
+
+```text
+error: edit: src/order.ts declares no discount: the closest names it declares are Order.discounted, Order.total, Order, Order.constructor. name a declaration it holds, or replace a stretch of text with old_string
+```
+
+To rename a declaration everywhere it is used, rather than change it in one
+file, use [symbols](/docs/tools/code#rename).
+
 One call can change several files with `edits`, a list of changes each with
 its own `path`, the way codex's patch and omp's edit do. They are all written
 or none is: every safety check reads every file in the call, and the result
@@ -135,7 +190,8 @@ names the file that failed and gives a diff and a check per file.
 |---|---|---|
 | `path` | string | the file |
 | `old_string` | string | the exact text to replace |
-| `symbol` | string | or a Go declaration, such as `Resolve` or `Root.Resolve` |
+| `symbol` | string | or a declaration by name, such as `Resolve` or `Root.Resolve` |
+| `insert` | string | `before` or `after` the `symbol`, rather than replacing it |
 | `new_string` | string | what it becomes; empty deletes |
 | `replace_all` | boolean | replace every occurrence of `old_string`, not one |
 | `edits` | list | changes for several files at once, each with `path`, `old_string`, `new_string` |
@@ -171,21 +227,47 @@ from 154k to 52k in TypeScript, and from 83k to 52k in Rust. A file in any
 other language comes back as the lines around the match. When nothing
 matches, a case-insensitive retry tells an absence from a wrong pattern.
 
+Files come back in the order [map](/docs/tools/code#map) ranks them, so the
+file the task is about comes first. The task is the turn's own unless the
+call passes `task` or `files`. When the budget cuts the answer, the result
+says how many matching lines and files are not on the page:
+
+```bash
+tofu tool search '{"pattern":"return","task":"fix Discounted returning 650","max_tokens":150}' --dir .
+```
+
+```text
+search return under .
+ranked by the map, seeded by 1 file, through the task's words Discounted
+4 text candidates, 4 units in 3 files, 1 returned, 0 fallbacks, about 122 tokens
+cut: 3 of 4 matching lines are not on this page; files with none shown: 2 of 3
+degraded truncated: a cap or a budget cut the answer short. 4 units on this page matched and 1 fit the 150 token budget: raise max_tokens or narrow the pattern to see the rest. this result is not a complete answer and must not be read as one
+each result is the whole declaration the match sits inside, not the matching line
+
+order.go:10-12 method Order.Total, matched on line 11 in code
+func (o Order) Total() int {
+	return pr.Total(o.Quantity, o.UnitCents)
+}
+```
+
 | Parameter | Type | What it does |
 |---|---|---|
 | `pattern` | string | a Go regular expression |
 | `path` | string | narrow the search |
 | `max_tokens` | integer | raise the budget |
+| `skip` | integer | files to pass over, to reach the next page |
+| `task` | string | rank for this work rather than the turn's own task |
+| `files` | list | rank around these paths |
+| `include_ignored` | boolean | search ignored paths too |
 
 ## symbols
 
-`symbols` answers where an identifier is declared, what it calls, and who
-calls it, in Go, Rust and TypeScript (`.go`, `.rs`, `.ts`, `.tsx`): Go
-through the Go parser, Rust and TypeScript by their braces. The owns check
-on `tofu boardy move <id> doing` reads the same three. It matches on the
-name rather than types, so
-a call through an interface isn't found, and the result says so. Parameters:
-`name`, `path`.
+`symbols` answers where a name is declared and who calls it, in Go, Rust,
+TypeScript and Python, through `go/types` and the project's language
+servers. Its `impact` mode says what a change reaches and its `rename` mode
+renames one declaration everywhere it is used. The owns check on
+`tofu boardy move <id> doing` reads the same answer. See
+[Code intelligence](/docs/tools/code#symbols).
 
 ## project_report
 

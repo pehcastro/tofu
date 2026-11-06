@@ -442,6 +442,26 @@
   do: tofu tool read '{"path":"order.go","at":"Total"}' --dir .
   check: tofu tool list --dir .
   topic: tools
+- ask: who calls this function, through every import alias
+  do: tofu tool symbols '{"name":"total"}' --dir .
+  check: tofu tool list --dir .
+  topic: tools
+- ask: what else must change if I change this type
+  do: tofu tool symbols '{"name":"Order","mode":"impact"}' --dir .
+  check: tofu tool list --dir .
+  topic: tools
+- ask: rename a function everywhere it is used
+  do: tofu tool symbols '{"name":"total","path":"src/pricing.rs","mode":"rename","to":"amount"}' --dir .
+  check: tofu tool list --dir .
+  topic: tools
+- ask: which files matter for this task
+  do: tofu tool map '{"task":"Discounted returns 650, want 675"}' --dir .
+  check: tofu tool list --dir .
+  topic: tools
+- ask: what does this dependency look like at the version we pinned
+  do: tofu tool api '{"package":"github.com/pelletier/go-toml/v2","name":"NewDecoder"}' --dir .
+  check: tofu tool list --dir .
+  topic: tools
 - ask: can this project build here, and which env keys are missing
   do: tofu tool env '{}' --dir .
   check: tofu tool list --dir .

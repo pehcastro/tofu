@@ -1,7 +1,7 @@
 ---
 topic: tools
 title: What the tools return
-summary: what read, edit, write, bash, shell, typecheck, test, plan, fetch, web_search, history, env, http, record, profile, shape, db, context, budget, forget, note, digest, spawn, race, ask_person and heads_up give the model, and how to see it for yourself
+summary: what read, edit, write, symbols, map, api, search, bash, shell, typecheck, test, plan, fetch, web_search, history, env, http, record, profile, shape, db, context, budget, forget, note, digest, spawn, race, ask_person and heads_up give the model, and how to see it for yourself
 verbs: tool
 ---
 
@@ -23,7 +23,9 @@ by hand and prints the exact text the model would read.
   with no tests says `0 tests found`.
 - `test` with `repeat` runs one test several times and says `real` when
   every run fails, `flaky` when some do, and `passes` when none do.
-  `changed` runs the tests of every file the turn changed.
+  `changed` runs the tests of every file the turn changed, and every test
+  that reaches a changed declaration through `symbols impact`, in another
+  file or package.
 - `typecheck` runs `go build` then `go vet` for Go, `cargo check` for Rust,
   `pyright` or `mypy` for Python, and `tsc`, `vue-tsc` or `svelte-check`
   for TypeScript, and returns the error count and each error as
@@ -40,12 +42,65 @@ FAIL TestDiscounted order_test.go:17: got 650, want 675
 skipped: TestShipping
 ```
 
+## Code intelligence
+
+- `symbols` says where a name is declared and every place that calls it,
+  in Go, Rust, TypeScript and Python. Go is resolved through `go/types`;
+  the rest through `rust-analyzer`, `typescript-language-server` and
+  `pyright-langserver`, which follow an import alias. tofu starts a server
+  when a call needs it and stops it after 5 minutes idle or when tofu
+  exits, and never installs one: a missing server is named with its
+  install command and the answer is matched on the name alone.
+- `symbols` with mode `impact` lists every caller of one declaration by
+  kind, `call`, `impl`, `embed`, `test` or `ref`, the tests that reach it
+  and the packages.
+- `symbols` with mode `rename` and `to` previews a diff per file and the
+  errors the rename would add, and writes only with `apply` true. A clash
+  with a name already declared in that scope is refused and nothing is
+  written.
+- `map` ranks the files that matter for a `task`, each with its top
+  declarations and their line numbers, in a token `budget`, 1,000 when
+  left out, and says what did not fit. `search` orders its files by the
+  same rank and says how many matching lines the page cut.
+- `api` reads a dependency's signature and doc at the pinned version, from
+  the module cache, `node_modules`, the cargo registry or `site-packages`,
+  never the network. A package the project does not hold is named with the
+  command that adds it.
+
+```text
+rename total to amount, resolved by rust-analyzer: 2 sites in 2 files
+--- src/lib.rs
++++ src/lib.rs
+@@ -9,7 +9,7 @@
+ 
+ impl Order {
+     pub fn total(&self) -> u32 {
+-        pr::total(self.quantity, self.unit_cents)
++        pr::amount(self.quantity, self.unit_cents)
+     }
+ 
+     pub fn discounted(&self) -> u32 {
+--- src/pricing.rs
++++ src/pricing.rs
+@@ -1,3 +1,3 @@
+-pub fn total(quantity: u32, unit_cents: u32) -> u32 {
++pub fn amount(quantity: u32, unit_cents: u32) -> u32 {
+     quantity * unit_cents
+ }
+new errors: none
+preview: nothing was written. call again with apply true to write it
+```
+
 ## Files
 
 - `write` and `edit` on a `.go`, `.rs`, `.py`, `.ts` or `.tsx` file end
   with the errors that file's checker finds, or `0 errors`.
 - An `edit` that would leave a Go file unable to parse is refused with the
   parser's line, and nothing is written.
+- `edit` with `symbol` replaces one whole declaration in a `.go`, `.rs`,
+  `.ts`, `.tsx` or `.py` file, or with `insert` `before` or `after` adds
+  code beside it. A name the file doesn't declare is refused with the
+  closest names it does.
 - `read` with `at`, a line number or a declared name such as
   `Order.Total`, reads about 100 lines around it and states the range. A
   name the file doesn't declare is refused with the closest names it does.
@@ -199,6 +254,16 @@ shown to the person; the turn goes on
 - `tofu tool typecheck '{"path":"broken"}' --dir .` checks one directory.
 - `tofu tool read '{"path":"order.go","at":"Total"}' --dir .` reads around
   a declaration.
+- `tofu tool symbols '{"name":"total"}' --dir .` says where `total` is
+  declared and who calls it.
+- `tofu tool symbols '{"name":"Order","mode":"impact"}' --dir .` says what
+  a change to `Order` reaches.
+- `tofu tool symbols '{"name":"total","path":"src/pricing.rs","mode":"rename","to":"amount"}' --dir .`
+  previews a rename and writes nothing.
+- `tofu tool map '{"task":"Discounted returns 650, want 675"}' --dir .`
+  ranks the files that matter for that task.
+- `tofu tool api '{"package":"github.com/pelletier/go-toml/v2","name":"NewDecoder"}' --dir .`
+  reads a dependency at the pinned version.
 - `tofu tool env '{}' --dir .` says what this project is missing here.
 - `tofu tool db '{"env":"ORDER_DB_PATH"}' --dir .` prints a database's
   schema.
