@@ -1,0 +1,83 @@
+name: claims
+domain: general
+questions_version: 2
+mode: enforced
+notes: >-
+  asked by the claims tool, internal/tools/agents/claims, when an agent checks a
+  report before it gives it. state.parts is the report cut at semicolons,
+  sentence ends and line breaks, and state.calls the session's latest tool
+  calls, each named call_1 on in the order they ran, with its tool, its
+  arguments, its exit code, its outcome and the tail of its output. the tool
+  asks claim, evidence and contradicts once for each part in one request,
+  naming it parts[i], and adds one option to evidence and to contradicts for
+  each call after none. a part below claim_at is not a claim. evidence names
+  the call that shows a claim true when it chose one at or above shown_at, and
+  contradicts names the call that shows it false when it chose one at or above
+  contradicted_at. when both name a call, the later call wins: the claim reads
+  contradicted when the contradicting call ran after the evidence call, and
+  shown when the evidence call ran after it. when only one names a call, that
+  one decides, and when neither does the claim reads not_shown. an error or a
+  timeout checks nothing and says so. every threshold sits at the middle, an
+  uncalibrated prior until a labelled sample of reports moves it. version 2
+  turned contradicts from a noul into a choice over the calls: as a noul it
+  could not say which call refuted a claim, so an earlier failing test held it
+  near the middle against a later passing one, and nothing could tell a claim
+  that broke after it passed from one that passed after it broke.
+
+thresholds:
+  claim_at: 0.5
+  shown_at: 0.5
+  contradicted_at: 0.5
+
+state:
+  - parts
+  - calls
+
+questions:
+  claim:
+    type: noul
+    instructions: >-
+      A coding agent wrote a report of its work, cut into `parts`, and `calls`
+      holds the tool calls it made. Decide whether the one part named at the
+      end states a fact about the work or the code that a tool call could show
+      or refute: tests pass, a build succeeds, a file was changed, a bug is
+      fixed, a command printed something.
+    criteria:
+      true: >-
+        the part asserts something about the work done or the state of the code
+        that a command, a test or a file read could check.
+      false: >-
+        the part is a plan, a question, an opinion, a greeting or a summary that
+        asserts nothing a tool call could check.
+
+  evidence:
+    type: choice
+    instructions: >-
+      `calls` holds the tool calls the agent made, and each option past none is
+      one of them, named as in `calls`. Choose the call whose arguments and
+      output show that the one part of `parts` named at the end is true. A call
+      that only touches the same file or runs a different command does not
+      show it.
+    escape: none
+    options:
+      - name: none
+        criteria: >-
+          No call in calls shows the part is true: the command it needs was
+          never run, or its output says nothing about it.
+
+  contradicts:
+    type: choice
+    instructions: >-
+      `calls` holds the tool calls the agent made, and each option past none is
+      one of them, named as in `calls`. Choose the call whose output, exit code
+      or error shows that the one part of `parts` named at the end is false: a
+      test that failed when the part says tests pass, a build error when it
+      says the build is clean, a nonzero exit code, an error, or output that
+      says the opposite of the part. A call that only touches the same file or
+      runs a different command does not show it false.
+    escape: none
+    options:
+      - name: none
+        criteria: >-
+          No call in calls shows the part is false, including when no call
+          checks it at all.

@@ -24,6 +24,7 @@ import (
 
 const (
 	Name         = "claims"
+	questionsRef = "claims@2"
 	stateBuilder = "claims_state@1"
 	noEvidence   = "none"
 )
@@ -164,14 +165,22 @@ func (c Claims) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 		if decision.Answers["claim_"+n].Noul < thresholds["claim_at"] {
 			continue
 		}
-		evidence, contradicts := decision.Answers["evidence_"+n], decision.Answers["contradicts_"+n].Noul
-		row.Reason.Value = max(row.Reason.Value, contradicts)
+		contradicts := decision.Answers["contradicts_"+n]
+		if contradicts.Choice != noEvidence {
+			row.Reason.Value = max(row.Reason.Value, contradicts.Probabilities[contradicts.Choice])
+		}
+		shownBy, contradictedBy := chosen(calls, decision.Answers["evidence_"+n], thresholds["shown_at"]), chosen(calls, contradicts, thresholds["contradicted_at"])
+		if contradictedBy >= 0 && slices.ContainsFunc(calls[contradictedBy+1:], func(later call) bool {
+			return later.Tool == calls[contradictedBy].Tool && later.Args == calls[contradictedBy].Args && later.Outcome == session.ToolOutcomeRan
+		}) {
+			contradictedBy = -1
+		}
 		claim := checked{text: part, evidence: noEvidence, verdict: NotShown}
 		switch {
-		case contradicts >= thresholds["contradicted_at"]:
-			claim.verdict, claim.evidence = Contradicted, idOf(calls, likeliestCall(evidence))
-		case evidence.Choice != noEvidence && evidence.Probabilities[evidence.Choice] >= thresholds["shown_at"]:
-			claim.verdict, claim.evidence = Shown, idOf(calls, evidence.Choice)
+		case contradictedBy > shownBy:
+			claim.verdict, claim.evidence = Contradicted, calls[contradictedBy].id
+		case shownBy > contradictedBy:
+			claim.verdict, claim.evidence = Shown, calls[shownBy].id
 		}
 		found = append(found, claim)
 	}
@@ -206,7 +215,7 @@ func (c Claims) questions() (question.Set, []question.Field, error) {
 	if err != nil {
 		return question.Set{}, nil, err
 	}
-	return question.Resolve(Name, layers)
+	return question.Resolve(questionsRef, layers)
 }
 
 func callsOf(events []session.Event, keep int) []call {
@@ -221,7 +230,10 @@ func callsOf(events []session.Event, keep int) []call {
 			calls = append(calls, call{Tool: body.Tool, Args: tail(string(body.Args), konst.ClaimsArgsBytes), id: event.Call})
 		case session.EventToolResult:
 			var body session.ResultBody
-			at := slices.IndexFunc(calls, func(c call) bool { return c.id == event.Call })
+			at := len(calls) - 1
+			for at >= 0 && calls[at].id != event.Call {
+				at--
+			}
 			if at < 0 || json.Unmarshal(event.Body, &body) != nil {
 				continue
 			}
@@ -239,20 +251,9 @@ func tail(text string, bytes int) string {
 	return strings.ToValidUTF8(text[max(0, len(text)-bytes):], "")
 }
 
-func likeliestCall(evidence jev.Answer) string {
-	best := noEvidence
-	for option, p := range evidence.Probabilities {
-		if option != noEvidence && (best == noEvidence || p > evidence.Probabilities[best]) {
-			best = option
-		}
+func chosen(calls []call, answer jev.Answer, at float64) int {
+	if answer.Probabilities[answer.Choice] < at {
+		return -1
 	}
-	return best
-}
-
-func idOf(calls []call, name string) string {
-	at := slices.IndexFunc(calls, func(c call) bool { return c.Name == name })
-	if at < 0 {
-		return noEvidence
-	}
-	return calls[at].id
+	return slices.IndexFunc(calls, func(c call) bool { return c.Name == answer.Choice })
 }
