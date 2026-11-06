@@ -636,3 +636,9 @@ const (
 	DebugOutputLines   = 8
 	DebugIdleMillis    = 300_000
 )
+
+const (
+	ShellDrainLinesFloor        = 50
+	ShellDrainSimilarityPercent = 40
+	ShellDrainTemplatesCap      = 30
+)

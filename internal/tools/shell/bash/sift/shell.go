@@ -7,6 +7,7 @@ import (
 
 type Shell struct {
 	Command  string
+	Note     string
 	Stdout   string
 	Stderr   string
 	ExitCode int
@@ -51,13 +52,15 @@ func SplitShell(result Shell) []Unit {
 		units = append(units, unit)
 	}
 	if result.ExitCode != 0 {
-		units = append(units, Unit{Text: fmt.Sprintf("the command exited %d\n", result.ExitCode), Stream: StandardError, Held: HeldExit, Lines: 1})
+		units = append(units, Unit{Text: exitLine(result.ExitCode), Stream: StandardError, Held: HeldExit, Lines: 1})
 	}
 	for i := range units {
 		units[i].Index = i
 	}
 	return units
 }
+
+func exitLine(code int) string { return fmt.Sprintf("the command exited %d\n", code) }
 
 func cut(text string, stream Stream) []Unit {
 	var units []Unit

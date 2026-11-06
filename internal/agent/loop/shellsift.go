@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"tofu/internal/judge/points"
+	"tofu/internal/konst"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/bash/sift"
 	shipped "tofu/library"
@@ -14,6 +15,8 @@ import (
 const shellSiftPoint = sift.ShellSchema
 
 const shellSiftRuleRef = shellSiftPoint + "@1"
+
+const timeoutNoteLead = "bash: timeout_ms "
 
 type ShellScores interface {
 	Score(ctx context.Context, shell sift.Shell, units []sift.Unit, task string) (map[int]float64, error)
@@ -90,7 +93,14 @@ func (g gatedCall) cutShellResult(ctx context.Context, tool string, result contr
 	if stdout != "" && !strings.HasSuffix(stdout, "\n") {
 		stdout += "\n"
 	}
-	shell := sift.Shell{Command: result.Command, Stdout: stdout, ExitCode: code}
+	note := ""
+	for _, line := range strings.SplitAfter(stdout, "\n") {
+		if !strings.HasPrefix(line, heldDropLead) && !strings.HasPrefix(line, timeoutNoteLead) {
+			break
+		}
+		note += line
+	}
+	shell := sift.Shell{Command: result.Command, Note: note, Stdout: stdout, ExitCode: code}
 	cut, err := g.sift.Cut(ctx, shell, g.task)
 	if err != nil {
 		return ShellCut{Text: result.Content}
@@ -101,6 +111,15 @@ func (g gatedCall) cutShellResult(ctx context.Context, tool string, result contr
 func (s ShellSift) Cut(ctx context.Context, shell sift.Shell, task string) (ShellCut, error) {
 	units := sift.SplitShell(shell)
 	whole := sift.JoinUnits(units)
+	original := len(whole)
+	if folded, known := sift.Fold(shell); known {
+		return ShellCut{Text: folded, Saved: max(0, original-len(folded)), Method: points.Cheap}, nil
+	}
+	if strings.Count(shell.Stdout, "\n") > konst.ShellDrainLinesFloor {
+		shell.Stdout = sift.Drain(shell.Stdout, konst.ShellDrainSimilarityPercent, konst.ShellDrainTemplatesCap)
+		units = sift.SplitShell(shell)
+		whole = sift.JoinUnits(units)
+	}
 	marks, chosen, err := points.Run(ctx, s.Methods, shellSiftPoint, points.Arms[[]sift.Mark]{
 		Cheap:  func(context.Context) ([]sift.Mark, error) { return cheapMarks(units), nil },
 		Judged: s.judged(shell, units, task),
@@ -115,14 +134,14 @@ func (s ShellSift) Cut(ctx context.Context, shell sift.Shell, task string) (Shel
 		}
 	}
 	if elided == 0 {
-		return ShellCut{Text: whole, Method: chosen}, nil
+		return ShellCut{Text: whole, Saved: original - len(whole), Method: chosen}, nil
 	}
 	cut := sift.Message(units, marks, s.Mode) +
 		fmt.Sprintf("[sift: %d of %d bytes of output removed, %s]\n", elided, len(whole), chosen)
 	if len(cut) >= len(whole) {
-		return ShellCut{Text: whole, Method: chosen}, nil
+		return ShellCut{Text: whole, Saved: original - len(whole), Method: chosen}, nil
 	}
-	return ShellCut{Text: cut, Saved: len(whole) - len(cut), Method: chosen}, nil
+	return ShellCut{Text: cut, Saved: original - len(cut), Method: chosen}, nil
 }
 
 func cheapMarks(units []sift.Unit) []sift.Mark {
