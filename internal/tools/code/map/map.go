@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"maps"
 	"math"
@@ -15,6 +16,7 @@ import (
 	"strings"
 	"unicode"
 
+	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
@@ -23,33 +25,23 @@ import (
 
 const Name = "map"
 
-type Limits struct {
-	Budget         int
-	BytesPerToken  int
-	Damping        float64
-	Iterations     int
-	MentionWeight  float64
-	SignatureBytes int
-}
-
 type Map struct {
-	root   contract.Root
-	limits Limits
+	root contract.Root
 }
 
-func New(dir string, limits Limits) (contract.Tool, error) {
+func New(dir string) (Map, error) {
 	root, err := contract.NewRoot(dir)
-	return Map{root: root, limits: limits}, err
+	return Map{root: root}, err
 }
 
 func (Map) Name() string { return Name }
 
-func (m Map) Definition() core.Tool {
+func (Map) Definition() core.Tool {
 	return core.Tool{
 		Name: Name,
 		Description: "answers what matters in this repo for a task, in a token budget, before reading files one by one: the files ranked by a personalized pagerank over the go, rust and typescript reference graph, each with its top declarations as one-line signatures and their line numbers, cut to fit the budget. " +
 			"task is the work in plain words; a word of it that is a declared identifier or a file or folder name seeds the rank, as fix Discounted returning 650, and files seeds it with paths. " +
-			"budget is in tokens, " + strconv.Itoa(m.limits.Budget) + " when absent, and the answer says how many it used and how many files and declarations did not fit. " +
+			"budget is in tokens, " + strconv.Itoa(konst.MapBudgetTokens) + " when absent, and the answer says how many it used and how many files and declarations did not fit. " +
 			"a reference is matched on the identifier, within one language and, for go, within the package or a package the file imports, so a name declared in several such files splits its weight between them. " +
 			glob.IgnoredWalkDescription,
 		Parameters: map[string]any{"type": "object", "properties": map[string]any{
@@ -83,14 +75,56 @@ type decl struct {
 }
 
 type graph struct {
-	files    []string
-	at       map[string]int
-	definers map[string][]int
-	imports  map[int][]string
-	words    map[string]bool
-	rank     []float64
-	decls    []decl
-	seeded   string
+	files        []string
+	at           map[string]int
+	definers     map[string][]int
+	dirs         []string
+	languages    []string
+	importedDirs map[int]map[string]bool
+	words        map[string]bool
+	rank         []float64
+	edges        []edge
+	out          []float64
+	decls        []decl
+	seeded       string
+}
+
+type Ranking struct {
+	ByPath map[string]float64
+	Seeded string
+}
+
+type undeclared int
+
+func (files undeclared) Error() string {
+	return fmt.Sprintf("no go, rust or typescript declarations in the %d files", int(files))
+}
+
+func (m Map) Rank(files []string, task string, named []string) (Ranking, error) {
+	g, _, err := m.ranked(files, task, named)
+	if err != nil {
+		return Ranking{}, err
+	}
+	ranking := Ranking{ByPath: make(map[string]float64, len(g.files)), Seeded: g.seeded}
+	for file, rel := range g.files {
+		ranking.ByPath[rel] = g.rank[file]
+	}
+	return ranking, nil
+}
+
+func (m Map) ranked(files []string, task string, named []string) (graph, engine.Graph, error) {
+	index := engine.Index(string(m.root), files, func(string) bool { return true })
+	g := newGraph(index, task)
+	if len(g.definers) == 0 {
+		return g, index, undeclared(len(files))
+	}
+	teleport, err := m.seed(&g, named)
+	if err != nil {
+		return g, index, err
+	}
+	g.edges, g.out = referenceEdges(g, index.Callers)
+	g.rank = pagerank(teleport, g.edges, g.out)
+	return g, index, nil
 }
 
 func (m Map) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
@@ -99,7 +133,7 @@ func (m Map) Run(_ context.Context, raw json.RawMessage) (contract.Result, error
 		return contract.Result{}, fmt.Errorf("map: arguments are not the expected shape: %w", err)
 	}
 	if req.Budget < 0 {
-		return contract.Failure("map: budget is a token count above zero, or absent for " + strconv.Itoa(m.limits.Budget)), nil
+		return contract.Failure("map: budget is a token count above zero, or absent for " + strconv.Itoa(konst.MapBudgetTokens)), nil
 	}
 	listed, err := glob.FilesUnder(m.root, cmp.Or(req.Path, "."), false)
 	if err != nil {
@@ -109,18 +143,15 @@ func (m Map) Run(_ context.Context, raw json.RawMessage) (contract.Result, error
 	if len(listed.Files) == 0 {
 		return contract.Result{Content: glob.WithNote("map: no files under "+listed.Under, listed.Note), Command: command}, nil
 	}
-	index := engine.Index(string(m.root), listed.Files, func(string) bool { return true })
-	g := newGraph(index, req.Task)
-	if len(g.definers) == 0 {
-		return contract.Result{Content: glob.WithNote(fmt.Sprintf("map: no go, rust or typescript declarations in the %d files under %s", len(listed.Files), listed.Under), listed.Note), Command: command}, nil
+	g, index, err := m.ranked(listed.Files, req.Task, req.Files)
+	var none undeclared
+	if errors.As(err, &none) {
+		return contract.Result{Content: glob.WithNote("map: "+err.Error()+" under "+listed.Under, listed.Note), Command: command}, nil
 	}
-	teleport, refusal := m.seed(&g, req.Files)
-	if refusal != "" {
-		return contract.Failure("map: " + refusal), nil
+	if err != nil {
+		return contract.Failure("map: " + err.Error()), nil
 	}
-	edges, out := m.edges(g, index.Callers)
-	g.rank = m.pagerank(teleport, edges, out)
-	g.rankDecls(index.Definitions, edges, out)
+	g.rankDecls(index.Definitions)
 	var notes []string
 	if listed.Note != "" {
 		notes = append(notes, strings.TrimSuffix(listed.Note, "\n"))
@@ -131,7 +162,7 @@ func (m Map) Run(_ context.Context, raw json.RawMessage) (contract.Result, error
 	if index.Unreadable > 0 {
 		notes = append(notes, fmt.Sprintf("%d files could not be read, the first %s", index.Unreadable, index.FirstFailed))
 	}
-	content, err := m.fit(g, listed.Under, cmp.Or(req.Budget, m.limits.Budget), notes)
+	content, err := m.fit(g, listed.Under, cmp.Or(req.Budget, konst.MapBudgetTokens), notes)
 	if err != nil {
 		return contract.Failure("map: " + err.Error()), nil
 	}
@@ -139,22 +170,31 @@ func (m Map) Run(_ context.Context, raw json.RawMessage) (contract.Result, error
 }
 
 func newGraph(index engine.Graph, task string) graph {
-	g := graph{at: map[string]int{}, definers: map[string][]int{}, imports: map[int][]string{}, words: map[string]bool{}}
-	var paths []string
+	g := graph{at: map[string]int{}, definers: map[string][]int{}, importedDirs: map[int]map[string]bool{}, words: map[string]bool{}}
+	paths := map[string]bool{}
 	for _, d := range index.Definitions {
-		paths = append(paths, d.Path)
+		paths[d.Path] = true
 	}
 	for _, site := range index.Callers {
-		paths = append(paths, site.Path)
+		paths[site.Path] = true
 	}
-	for _, rel := range slices.Compact(slices.Sorted(slices.Values(paths))) {
+	for _, rel := range slices.Sorted(maps.Keys(paths)) {
 		g.at[rel] = len(g.files)
 		g.files = append(g.files, rel)
+		g.dirs = append(g.dirs, path.Dir(rel))
+		g.languages = append(g.languages, language(rel))
 	}
 	for _, d := range index.Definitions {
 		file := g.at[d.Path]
 		if d.Kind == engine.KindImport {
-			g.imports[file] = append(g.imports[file], d.Symbol)
+			if g.importedDirs[file] == nil {
+				g.importedDirs[file] = map[string]bool{}
+			}
+			for at, r := range d.Symbol {
+				if r == '/' {
+					g.importedDirs[file][d.Symbol[at+1:]] = true
+				}
+			}
 		} else if name := bare(d.Symbol); !slices.Contains(g.definers[name], file) {
 			g.definers[name] = append(g.definers[name], file)
 		}
@@ -165,18 +205,18 @@ func newGraph(index engine.Graph, task string) graph {
 	return g
 }
 
-func (m Map) seed(g *graph, named []string) ([]float64, string) {
+func (m Map) seed(g *graph, named []string) ([]float64, error) {
 	teleport := make([]float64, len(g.files))
 	var listed, matched []string
 	for _, one := range named {
 		resolved, err := m.root.Resolve(one)
 		if err != nil {
-			return nil, err.Error()
+			return nil, err
 		}
 		rel, _ := filepath.Rel(string(m.root), resolved)
 		file, known := g.at[filepath.ToSlash(rel)]
 		if !known {
-			return nil, one + " is not a go, rust or typescript file that declares or calls anything under this path"
+			return nil, errors.New(one + " is not a go, rust or typescript file that declares or calls anything under this path")
 		}
 		teleport[file] = 1
 		listed = append(listed, g.files[file])
@@ -217,10 +257,10 @@ func (m Map) seed(g *graph, named []string) ([]float64, string) {
 	for file := range teleport {
 		teleport[file] /= seeds
 	}
-	return teleport, ""
+	return teleport, nil
 }
 
-func (m Map) edges(g graph, callers []engine.Site) ([]edge, []float64) {
+func referenceEdges(g graph, callers []engine.Site) ([]edge, []float64) {
 	out := make([]float64, len(g.files))
 	references := map[string]map[int]int{}
 	for _, site := range callers {
@@ -238,7 +278,7 @@ func (m Map) edges(g graph, callers []engine.Site) ([]edge, []float64) {
 			}
 			weight := math.Sqrt(float64(references[name][from])) / float64(len(reached))
 			if g.words[name] {
-				weight *= m.limits.MentionWeight
+				weight *= konst.MapMentionWeight
 			}
 			for _, to := range reached {
 				edges = append(edges, edge{from: from, to: to, name: name, weight: weight})
@@ -250,14 +290,10 @@ func (m Map) edges(g graph, callers []engine.Site) ([]edge, []float64) {
 }
 
 func (g graph) reaches(from, to int) bool {
-	caller, declarer := g.files[from], g.files[to]
-	if language(caller) != language(declarer) {
+	if g.languages[from] != g.languages[to] {
 		return false
 	}
-	if path.Ext(caller) != ".go" || path.Dir(caller) == path.Dir(declarer) {
-		return true
-	}
-	return slices.ContainsFunc(g.imports[from], func(imported string) bool { return strings.HasSuffix(imported, "/"+path.Dir(declarer)) })
+	return g.languages[from] != ".go" || g.dirs[from] == g.dirs[to] || g.importedDirs[from][g.dirs[to]]
 }
 
 func language(rel string) string {
@@ -267,9 +303,9 @@ func language(rel string) string {
 	return ".ts"
 }
 
-func (m Map) pagerank(teleport []float64, edges []edge, out []float64) []float64 {
+func pagerank(teleport []float64, edges []edge, out []float64) []float64 {
 	rank := slices.Clone(teleport)
-	for range m.limits.Iterations {
+	for range konst.MapRankIterations {
 		next, dangling := make([]float64, len(rank)), 0.0
 		for file, r := range rank {
 			if out[file] == 0 {
@@ -277,20 +313,20 @@ func (m Map) pagerank(teleport []float64, edges []edge, out []float64) []float64
 			}
 		}
 		for _, e := range edges {
-			next[e.to] += m.limits.Damping * rank[e.from] * e.weight / out[e.from]
+			next[e.to] += konst.MapRankDamping * rank[e.from] * e.weight / out[e.from]
 		}
 		for file := range next {
-			next[file] += (1 - m.limits.Damping + m.limits.Damping*dangling) * teleport[file]
+			next[file] += (1 - konst.MapRankDamping + konst.MapRankDamping*dangling) * teleport[file]
 		}
 		rank = next
 	}
 	return rank
 }
 
-func (g *graph) rankDecls(definitions []engine.Definition, edges []edge, out []float64) {
+func (g *graph) rankDecls(definitions []engine.Definition) {
 	flow := map[string]float64{}
-	for _, e := range edges {
-		flow[strconv.Itoa(e.to)+" "+e.name] += g.rank[e.from] * e.weight / out[e.from]
+	for _, e := range g.edges {
+		flow[strconv.Itoa(e.to)+" "+e.name] += g.rank[e.from] * e.weight / g.out[e.from]
 	}
 	for _, d := range definitions {
 		if file, name := g.at[d.Path], bare(d.Symbol); d.Kind != engine.KindImport {
@@ -330,9 +366,9 @@ func (m Map) fit(g graph, under string, budget int, notes []string) (string, err
 		return fmt.Sprintf("\nmore: %d of %d files and %d of %d declarations did not fit the budget\n", files, len(declaring), decls, len(g.decls))
 	}
 	frame := head(len(declaring), len(g.decls), budget) + foot(len(declaring), len(g.decls))
-	room := budget*m.limits.BytesPerToken - len(frame)
+	room := budget*konst.SearchBytesPerToken - len(frame)
 	if room < 0 {
-		return "", fmt.Errorf("a budget of %d tokens is below the %d the header alone needs", budget, tokens(frame, m.limits.BytesPerToken))
+		return "", fmt.Errorf("a budget of %d tokens is below the %d the header alone needs", budget, tokens(frame))
 	}
 	bodies := map[string][]string{}
 	chosen := map[int][]decl{}
@@ -367,7 +403,7 @@ func (m Map) fit(g graph, under string, budget int, notes []string) (string, err
 	tail := body.String() + foot(len(declaring)-len(chosen), len(g.decls)-shown)
 	used := 0
 	for {
-		measured := tokens(head(len(chosen), shown, used)+tail, m.limits.BytesPerToken)
+		measured := tokens(head(len(chosen), shown, used) + tail)
 		if measured == used {
 			return head(len(chosen), shown, used) + tail, nil
 		}
@@ -389,8 +425,8 @@ func (m Map) signature(bodies map[string][]string, d engine.Definition) (string,
 		return "", fmt.Errorf("line %d is outside %s", d.FirstLine, d.Path)
 	}
 	line := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(lines[d.FirstLine-1]), "{"))
-	if len(line) > m.limits.SignatureBytes {
-		line = strings.ToValidUTF8(line[:m.limits.SignatureBytes], "") + "..."
+	if len(line) > konst.MapSignatureBytes {
+		line = strings.ToValidUTF8(line[:konst.MapSignatureBytes], "") + "..."
 	}
 	return line, nil
 }
@@ -402,6 +438,6 @@ func counted(n int, noun string) string {
 	return strconv.Itoa(n) + " " + noun + "s"
 }
 
-func tokens(text string, bytesPerToken int) int {
-	return (len(text) + bytesPerToken - 1) / bytesPerToken
+func tokens(text string) int {
+	return (len(text) + konst.SearchBytesPerToken - 1) / konst.SearchBytesPerToken
 }

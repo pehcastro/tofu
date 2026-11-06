@@ -8,38 +8,24 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
-	"strconv"
 	"strings"
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
-	"tofu/internal/platform/fs"
 	repomap "tofu/internal/tools/code/map"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/glob"
 )
 
-var (
-	mappedRank   = fs.LazyRegexp(`(?m)^(\S.*) rank (\d+\.\d+)$`)
-	mappedSeeded = fs.LazyRegexp(`(?m)^seeded by (.+)$`)
-)
-
 type Search struct {
 	root   contract.Root
-	ranker contract.Tool
+	ranker repomap.Map
 }
 
 func NewSearch(dir string) (Search, error) {
 	root, err := contract.NewRoot(dir)
-	ranker, mapErr := repomap.New(dir, repomap.Limits{
-		Budget:         konst.MapBudgetTokens,
-		BytesPerToken:  konst.SearchBytesPerToken,
-		Damping:        konst.MapRankDamping,
-		Iterations:     konst.MapRankIterations,
-		MentionWeight:  konst.MapMentionWeight,
-		SignatureBytes: konst.MapSignatureBytes,
-	})
+	ranker, mapErr := repomap.New(dir)
 	return Search{root: root, ranker: ranker}, cmp.Or(err, mapErr)
 }
 
@@ -51,7 +37,7 @@ func (s Search) Definition() core.Tool {
 		Description: "the only content search: matches a go regexp against every text file under the working directory. " +
 			"a match in .go, .ts, .tsx, .js, .jsx, .py or .rs returns its whole declaration, marked code, comment or string; other files return the lines around it. " +
 			fmt.Sprintf("matches in more than %d files return each declaration's name and matching lines instead, %d files a page, and skip passes over that many files to reach the next page. ", engine.FilesPerPage, engine.FilesPerPage) +
-			"files are ordered by the map tool's rank, which task and files seed exactly as they seed map, so pass the work in plain words and the files it touches. " +
+			"files are ordered by the map tool's rank, which task and files seed exactly as they seed map; task defaults to the turn's own task, so pass it only to rank for different work, and files for the files it touches. " +
 			"spends max_tokens, not lines, and says how many matched and how many matching lines the page cut. " +
 			"skips what .gitignore skips unless include_ignored. " +
 			"when it returns less than you need, narrow path or raise max_tokens",
@@ -112,7 +98,7 @@ func (s Search) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 	if err != nil {
 		return contract.Result{}, err
 	}
-	ranking := s.rankByMap(ctx, args, result.Units)
+	ranking := s.rankByMap(ctx, args, listed.Files, result.Units)
 	budget := args.MaxTokens
 	if budget <= 0 {
 		budget = konst.SearchTokenBudget
@@ -132,7 +118,13 @@ func (s Search) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 	}, nil
 }
 
-func (s Search) rankByMap(ctx context.Context, args searchArgs, units []engine.Unit) string {
+type turnTaskKey struct{}
+
+func WithTurnTask(ctx context.Context, task string) context.Context {
+	return context.WithValue(ctx, turnTaskKey{}, task)
+}
+
+func (s Search) rankByMap(ctx context.Context, args searchArgs, listed []string, units []engine.Unit) string {
 	files := map[string]bool{}
 	for _, unit := range units {
 		files[unit.Path] = true
@@ -140,20 +132,14 @@ func (s Search) rankByMap(ctx context.Context, args searchArgs, units []engine.U
 	if len(files) < 2 {
 		return ""
 	}
-	request, _ := json.Marshal(map[string]any{"task": args.Task, "files": args.Files, "budget": engine.Unbudgeted, "path": cmp.Or(args.Path, ".")})
-	mapped, err := s.ranker.Run(ctx, request)
+	over := ""
+	if turned, _ := ctx.Value(turnTaskKey{}).(string); args.Task == "" && turned != "" {
+		args.Task, over = turned, " over the turn's task"
+	}
+	ranking, err := s.ranker.Rank(listed, args.Task, args.Files)
 	if err != nil {
-		mapped.Content = err.Error()
+		return "unranked, in score then path order: map: " + err.Error() + "\n"
 	}
-	rank := map[string]float64{}
-	for _, line := range mappedRank().FindAllStringSubmatch(mapped.Content, -1) {
-		rank[line[1]], _ = strconv.ParseFloat(line[2], 64)
-	}
-	seeded := mappedSeeded().FindStringSubmatch(mapped.Content)
-	if len(rank) == 0 || seeded == nil {
-		first, _, _ := strings.Cut(mapped.Content, "\n")
-		return "unranked, in score then path order: " + first + "\n"
-	}
-	slices.SortStableFunc(units, func(a, b engine.Unit) int { return cmp.Compare(rank[b.Path], rank[a.Path]) })
-	return "ranked by the map, seeded by " + seeded[1] + "\n"
+	slices.SortStableFunc(units, func(a, b engine.Unit) int { return cmp.Compare(ranking.ByPath[b.Path], ranking.ByPath[a.Path]) })
+	return "ranked by the map" + over + ", seeded by " + ranking.Seeded + "\n"
 }

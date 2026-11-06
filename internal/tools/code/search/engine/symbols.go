@@ -8,11 +8,15 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"unicode"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/safe"
 	"tofu/internal/platform/text"
 )
 
@@ -80,38 +84,65 @@ func Index(root string, files []string, wanted func(string) bool) Graph {
 }
 
 func symbolGraph(files []string, wanted func(string) bool, read func(rel string) ([]byte, error)) Graph {
+	each := make([]Graph, len(files))
+	panicked := make([]error, len(files))
+	var next atomic.Int64
+	var workers sync.WaitGroup
+	for range min(runtime.GOMAXPROCS(0), len(files)) {
+		workers.Go(func() {
+			for index := int(next.Add(1)) - 1; index < len(files); index = int(next.Add(1)) - 1 {
+				panicked[index] = safe.Call(nil, "symbol index of "+files[index], func() error {
+					each[index] = fileGraph(files[index], wanted, read)
+					return nil
+				})
+			}
+		})
+	}
+	workers.Wait()
+	if first := slices.IndexFunc(panicked, func(err error) bool { return err != nil }); first >= 0 {
+		panic(panicked[first])
+	}
 	var graph Graph
-	for _, rel := range files {
-		extension := filepath.Ext(rel)
-		if !slices.Contains([]string{".go", ".rs", ".ts", ".tsx", ".py"}, extension) {
-			continue
-		}
-		body, err := read(rel)
-		if err != nil {
-			graph.Unread = append(graph.Unread, failedRead(rel, err))
-			continue
-		}
-		var parsed bool
-		switch extension {
-		case ".go":
-			parsed = graph.readGo(rel, body, wanted)
-		case ".rs":
-			parsed = graph.readOutline(rel, string(body), dialectRust, wanted)
-		case ".py":
-			parsed = graph.readOutline(rel, string(body), dialectPython, wanted)
-		default:
-			parsed = graph.readOutline(rel, string(body), dialectScript, wanted)
-		}
-		if !parsed {
-			graph.Unparsed++
-			continue
-		}
-		graph.Parsed++
+	for _, one := range each {
+		graph.Definitions = append(graph.Definitions, one.Definitions...)
+		graph.Callers = append(graph.Callers, one.Callers...)
+		graph.Unread = append(graph.Unread, one.Unread...)
+		graph.Parsed += one.Parsed
+		graph.Unparsed += one.Unparsed
 	}
 	if graph.Unreadable = len(graph.Unread); graph.Unreadable > 0 {
 		graph.FirstFailed = graph.Unread[0]
 	}
 	slices.SortStableFunc(graph.Definitions, func(left, right Definition) int { return strings.Compare(left.Path, right.Path) })
+	return graph
+}
+
+func fileGraph(rel string, wanted func(string) bool, read func(rel string) ([]byte, error)) Graph {
+	extension := filepath.Ext(rel)
+	if !slices.Contains([]string{".go", ".rs", ".ts", ".tsx", ".py"}, extension) {
+		return Graph{}
+	}
+	body, err := read(rel)
+	if err != nil {
+		return Graph{Unread: []string{failedRead(rel, err)}}
+	}
+	var graph Graph
+	var parsed bool
+	switch extension {
+	case ".go":
+		parsed = graph.readGo(rel, body, wanted)
+	case ".rs":
+		parsed = graph.readOutline(rel, string(body), dialectRust, wanted)
+	case ".py":
+		parsed = graph.readOutline(rel, string(body), dialectPython, wanted)
+	default:
+		parsed = graph.readOutline(rel, string(body), dialectScript, wanted)
+	}
+	if parsed {
+		graph.Parsed++
+	} else {
+		graph.Unparsed++
+	}
 	return graph
 }
 
