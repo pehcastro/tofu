@@ -21,6 +21,28 @@ func SideEffectFree(name string) bool {
 	return false
 }
 
+func readOnlyCall(name string, raw json.RawMessage) bool {
+	var args struct {
+		Mode   string `json:"mode"`
+		Action string `json:"action"`
+	}
+	if SideEffectFree(name) {
+		return true
+	}
+	if json.Unmarshal(raw, &args) != nil {
+		return false
+	}
+	switch name {
+	case "deps":
+		return args.Mode == "why" || args.Mode == "outdated"
+	case "trail":
+		return args.Mode == "" || args.Mode == "find" || args.Mode == "owner_of"
+	case "checkpoint":
+		return args.Action == "diff"
+	}
+	return false
+}
+
 var pullRequestURL = regexp.MustCompile(`^https://github\.com/[^/]+/[^/]+/pull/(\d+)/?$`)
 
 func pullRequestKey(raw string) string {
@@ -119,7 +141,7 @@ func (t memoTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result
 	if t.tool.Name() == "read" {
 		return t.tool.Run(ctx, raw)
 	}
-	if !SideEffectFree(t.tool.Name()) {
+	if !readOnlyCall(t.tool.Name(), raw) {
 		result, err := t.tool.Run(ctx, raw)
 		t.memo.forget()
 		return result, err

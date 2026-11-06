@@ -903,6 +903,9 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 	if settingspkg.TextSaying(dir, settingspkg.BrowserDriver, run.notify) == settingspkg.DriverSubagent {
 		own = slices.DeleteFunc(own, func(tool contract.Tool) bool { return strings.HasPrefix(tool.Name(), "browser_") })
 	}
+	if !holdsKnownProject(dir) {
+		own = slices.DeleteFunc(own, func(tool contract.Tool) bool { return tool.Name() == "typecheck" || tool.Name() == "test" })
+	}
 	orchestrating := append(loop.WithSourceBudget(append(own, spawner), prompt.subAgents.Defined), asking...)
 	if run.gate != nil {
 		spawner.SettingsTool = true
@@ -955,6 +958,17 @@ func attachFailed(err error) string {
 		return ""
 	}
 	return "\n\na board hook on lead.attach failed: " + err.Error()
+}
+
+func holdsKnownProject(dir string) bool {
+	for _, manifest := range []string{"go.mod", "Cargo.toml", "package.json", "tsconfig.json", "pyproject.toml", "setup.py", "setup.cfg", "requirements*.txt"} {
+		for _, pattern := range []string{manifest, filepath.Join("*", manifest)} {
+			if found, _ := filepath.Glob(filepath.Join(dir, pattern)); len(found) > 0 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func leadNeverCalls() []string {
@@ -1224,6 +1238,7 @@ func leadToolConstructors() []func(dir string) (contract.Tool, error) {
 		debugTool,
 		formatTool,
 		depsTool,
+		newScaffoldTool,
 		newShapeTool,
 		newDBTool,
 		newWhatifTool,
