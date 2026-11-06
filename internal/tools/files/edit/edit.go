@@ -58,6 +58,7 @@ func (e Edit) Definition() core.Tool {
 		"old_string":  map[string]any{"type": "string"},
 		"new_string":  map[string]any{"type": "string"},
 		"symbol":      map[string]any{"type": "string"},
+		"insert":      map[string]any{"type": "string", "enum": []string{string(Before), string(After)}},
 		"replace_all": map[string]any{"type": "boolean"},
 	}
 	properties := map[string]any{"edits": map[string]any{"type": "array", "items": map[string]any{"type": "object", "properties": change, "required": []string{"path", "new_string"}}}}
@@ -71,7 +72,8 @@ func (e Edit) Definition() core.Tool {
 			"a small file needs no read first, so edit from what search showed you. " +
 			"replace_all true replaces every occurrence instead, which is how a name is renamed through a file. " +
 			"an empty new_string deletes. " +
-			"on a go file, symbol names one whole declaration instead, Resolve or Root.Resolve for a method, and new_string becomes all of it. " +
+			"on a .go, .rs, .ts, .tsx or .py file, symbol names one whole declaration instead, total or Order.total for a method, and new_string becomes all of it, its attributes and decorators included; " +
+			"with insert before or after, new_string goes on its own lines just above that declaration and its doc comment, or just below it, one blank line apart, and the declaration stays. " +
 			"give old_string or symbol, not both. " +
 			"edits lists more changes of the same shape, to this file or others, and the call writes all of them or none. " +
 			"returns a unified diff per file, ending on a .ts, .tsx, .go, .rs or .py file with the errors its checker finds: fix them before moving on. " +
@@ -142,9 +144,13 @@ func (e Edit) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 func refusedChange(change EditChange, onFile int) error {
 	switch {
 	case change.Old == "" && change.Symbol == "" && change.New == "":
-		return errors.New("edit: say what is replaced, either old_string for a stretch of text copied from the file or symbol for the whole of one go declaration; an empty old_string appends new_string to the end of the file, and write creates a file")
+		return errors.New("edit: say what is replaced, either old_string for a stretch of text copied from the file or symbol for the whole of one declaration; an empty old_string appends new_string to the end of the file, and write creates a file")
 	case change.Old != "" && change.Symbol != "":
-		return errors.New("edit: old_string and symbol are the two ways to say what is replaced and a call gives exactly one: symbol replaces a whole go declaration and old_string replaces a stretch of text")
+		return errors.New("edit: old_string and symbol are the two ways to say what is replaced and a call gives exactly one: symbol replaces a whole declaration and old_string replaces a stretch of text")
+	case change.Insert != InPlace && change.Symbol == "":
+		return errors.New("edit: insert puts new_string before or after the declaration symbol names, so a call gives insert with symbol only")
+	case change.Insert != InPlace && strings.Trim(change.New, "\n") == "":
+		return errors.New("edit: insert puts new_string beside a declaration and new_string is empty, so there is nothing to insert")
 	case change.All && change.Symbol != "":
 		return errors.New("edit: replace_all replaces every occurrence of old_string and symbol names one declaration, so a call gives replace_all with old_string only")
 	case change.Old != "" && change.Old == change.New:

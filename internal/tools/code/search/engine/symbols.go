@@ -11,7 +11,29 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+
+	"tofu/internal/konst"
+	"tofu/internal/platform/text"
 )
+
+func Closest(name string, declared []Definition) string {
+	var names []string
+	for _, definition := range declared {
+		if definition.Kind != KindImport && !slices.Contains(names, definition.Symbol) {
+			names = append(names, definition.Symbol)
+		}
+	}
+	if len(names) == 0 {
+		return "it declares no names at all"
+	}
+	asked := strings.ToLower(name)
+	distance := func(symbol string) int {
+		short := symbol[strings.LastIndex(symbol, ".")+1:]
+		return min(text.EditDistance(asked, strings.ToLower(symbol)), text.EditDistance(asked, strings.ToLower(short)))
+	}
+	slices.SortStableFunc(names, func(a, b string) int { return cmp.Compare(distance(a), distance(b)) })
+	return "the closest names it declares are " + strings.Join(names[:min(len(names), konst.ReadClosestSymbols)], ", ")
+}
 
 type Site struct {
 	Path   string
@@ -61,7 +83,7 @@ func symbolGraph(files []string, wanted func(string) bool, read func(rel string)
 	var graph Graph
 	for _, rel := range files {
 		extension := filepath.Ext(rel)
-		if !slices.Contains([]string{".go", ".rs", ".ts", ".tsx"}, extension) {
+		if !slices.Contains([]string{".go", ".rs", ".ts", ".tsx", ".py"}, extension) {
 			continue
 		}
 		body, err := read(rel)
@@ -74,9 +96,11 @@ func symbolGraph(files []string, wanted func(string) bool, read func(rel string)
 		case ".go":
 			parsed = graph.readGo(rel, body, wanted)
 		case ".rs":
-			parsed = graph.readBraces(rel, string(body), rustSyntax(), wanted)
+			parsed = graph.readOutline(rel, string(body), dialectRust, wanted)
+		case ".py":
+			parsed = graph.readOutline(rel, string(body), dialectPython, wanted)
 		default:
-			parsed = graph.readBraces(rel, string(body), scriptSyntax(), wanted)
+			parsed = graph.readOutline(rel, string(body), dialectScript, wanted)
 		}
 		if !parsed {
 			graph.Unparsed++
@@ -145,8 +169,25 @@ func (g *Graph) readDecl(rel string, parsed *token.File, decl ast.Decl, wanted f
 	})
 }
 
-func (g *Graph) readBraces(rel, body string, syntax braceSyntax, wanted func(string) bool) bool {
-	found, parsed := braceOutline(body, syntax)
+type dialect uint8
+
+const (
+	dialectScript dialect = iota
+	dialectRust
+	dialectPython
+)
+
+func (g *Graph) readOutline(rel, body string, language dialect, wanted func(string) bool) bool {
+	var found outline
+	var parsed bool
+	switch language {
+	case dialectScript:
+		found, parsed = braceOutline(body, scriptSyntax())
+	case dialectRust:
+		found, parsed = braceOutline(body, rustSyntax())
+	case dialectPython:
+		found, parsed = pythonOutline(body)
+	}
 	if !parsed {
 		return false
 	}
@@ -154,7 +195,7 @@ func (g *Graph) readBraces(rel, body string, syntax braceSyntax, wanted func(str
 		return cmp.Or(cmp.Compare(outer.first, inner.first), cmp.Compare(inner.last, outer.last))
 	})
 	for _, decl := range found.blocks {
-		if !wanted(decl.symbol) || syntax.rust && decl.container && implHead(body, found, decl) {
+		if !wanted(decl.symbol) || language == dialectRust && decl.container && implHead(body, found, decl) {
 			continue
 		}
 		kind, symbol := decl.kind, decl.symbol
@@ -174,7 +215,7 @@ func (g *Graph) readBraces(rel, body string, syntax braceSyntax, wanted func(str
 			at++
 			continue
 		}
-		if word := body[at:end]; !unicode.IsDigit(rune(word[0])) && wanted(word) && calledAt(body, found, at, end, syntax.rust) {
+		if word := body[at:end]; !unicode.IsDigit(rune(word[0])) && wanted(word) && calledAt(body, found, at, end, language) {
 			line := found.lineOf(at)
 			within := ""
 			if decl, inside := found.around(line); inside {
@@ -198,20 +239,20 @@ func implHead(body string, found outline, decl block) bool {
 	return false
 }
 
-func calledAt(body string, found outline, at, end int, rust bool) bool {
+func calledAt(body string, found outline, at, end int, language dialect) bool {
 	before := strings.TrimRight(body[:at], " \t\r\n*")
 	word := len(before)
 	for word > 0 && identByte(before[word-1]) {
 		word--
 	}
-	if previous := before[word:]; previous == "fn" || previous == "function" {
+	if slices.Contains([]string{"fn", "function", "def", "class"}, before[word:]) {
 		return false
 	}
 	next := skipSpace(body, end)
 	switch {
-	case rust && strings.HasPrefix(body[next:], "::<"):
+	case language == dialectRust && strings.HasPrefix(body[next:], "::<"):
 		next = skipSpace(body, angleEnd(body, next+2))
-	case !rust && byteAt(body, next) == '<':
+	case language == dialectScript && byteAt(body, next) == '<':
 		if closed := angleEnd(body, next); closed > 0 {
 			next = skipSpace(body, closed)
 		}
@@ -219,7 +260,7 @@ func calledAt(body string, found outline, at, end int, rust bool) bool {
 	if byteAt(body, next) != '(' {
 		return false
 	}
-	return rust || !memberHead(body, found, at, next)
+	return language != dialectScript || !memberHead(body, found, at, next)
 }
 
 func skipSpace(body string, at int) int {
@@ -297,7 +338,7 @@ func calledNames(function *ast.FuncDecl) []string {
 
 func (g *Graph) render() string {
 	var out strings.Builder
-	fmt.Fprintf(&out, "%s: %d definitions and %d call sites in %d parsed go, rust and typescript files\n", g.Name, len(g.Definitions), len(g.Callers), g.Parsed)
+	fmt.Fprintf(&out, "%s: %d definitions and %d call sites in %d parsed go, rust, typescript and python files\n", g.Name, len(g.Definitions), len(g.Callers), g.Parsed)
 	if g.Unparsed > 0 {
 		fmt.Fprintf(&out, "%s\n", Note(Fallback, fmt.Sprintf("%s did not parse and hold no definition and no call site here", plural(g.Unparsed, "file"))))
 	}
@@ -310,7 +351,7 @@ func (g *Graph) render() string {
 		if g.Unreadable > 0 {
 			parsed = "every readable source file was parsed, and the unreadable ones may declare or call " + g.Name
 		}
-		fmt.Fprintf(&out, "no go, rust or typescript source under this path declares or calls %s. %s: this is an answer, not a failure\n", g.Name, parsed)
+		fmt.Fprintf(&out, "no go, rust, typescript or python source under this path declares or calls %s. %s: this is an answer, not a failure\n", g.Name, parsed)
 		return out.String()
 	}
 	for _, definition := range g.Definitions {
