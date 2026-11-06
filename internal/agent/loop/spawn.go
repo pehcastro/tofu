@@ -696,11 +696,15 @@ func (t *SpawnTool) settle(ctx context.Context, held *heldSubAgent, report strin
 	return nil
 }
 
-func (t *SpawnTool) OfferedTo(definition subagents.Definition, ticket string) []core.Tool {
-	agent := subagents.SubAgent{ID: definition.Name, Ticket: ticket}
-	held := &heldSubAgent{agent: agent, definition: definition, boundary: subagents.NewBoundary(agent.ID, "", nil), inbox: NewInbox()}
-	offered, _ := t.offeredTools(held, spawnSite{}, SubAgentLimits{})
-	return NewRegistry(offered...).Definitions()
+func (t *SpawnTool) OfferedToRecordedSpawn(definition subagents.Definition, task string) ([]core.Tool, error) {
+	_, parts, _, err := t.SubAgents.prompt(t.base, definition, task, nil)
+	if err != nil {
+		return nil, err
+	}
+	held := &heldSubAgent{agent: subagents.SubAgent{ID: definition.Name}, definition: definition, parts: parts, boundary: subagents.NewBoundary(definition.Name, "", nil), inbox: NewInbox()}
+	recordedSpawn := t.subAgentConfig(held, spawnSite{}, nil, SubAgentLimits{})
+	recordedSpawn.Sessions = t.base.Sessions
+	return recordedSpawn.OfferedTools(), nil
 }
 
 func (t *SpawnTool) offeredTools(held *heldSubAgent, site spawnSite, limits SubAgentLimits) ([]contract.Tool, agentPlan) {

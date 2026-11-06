@@ -12,6 +12,8 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
+	platformproject "tofu/internal/platform/project"
+	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/tools/contract"
 )
@@ -30,7 +32,7 @@ func showPrompt(opts wiring.RunOpts, out, errOut io.Writer) int {
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	offered, board, err := offeredTools(opts, prompt, named)
+	offered, board, err := offeredTools(opts, prompt, named, writeNotice(errOut))
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -107,15 +109,31 @@ func showPrompt(opts wiring.RunOpts, out, errOut io.Writer) int {
 	return output.ExitOK
 }
 
-func offeredTools(opts wiring.RunOpts, prompt composedRun, named []contract.Tool) ([]core.Tool, leadForeseen, error) {
+func offeredTools(opts wiring.RunOpts, prompt composedRun, named []contract.Tool, notify func(string)) ([]core.Tool, leadForeseen, error) {
 	var board leadForeseen
-	config, spawner, err := runConfig(opts, named, runtime{open: wiring.OpenWire, composed: &prompt, foreseen: &board})
+	sessions, err := session.OpenIn(cmp.Or(opts.Dir, "."))
+	if err != nil {
+		return nil, board, err
+	}
+	places, err := platformproject.ResolvePlaces(".")
+	if err != nil {
+		return nil, board, err
+	}
+	keys := &storedKeys{}
+	var gate *toolGate
+	if opts.GateArm != gateOff {
+		if gate, err = toolGateOn(opts.Dir, places.Log, keys.keyring()); err != nil {
+			notify("a run would gate no tool call and send no settings tool: " + err.Error())
+		}
+	}
+	config, spawner, err := runConfig(opts, named, runtime{open: wiring.OpenWire, composed: &prompt, foreseen: &board, sessions: sessions, gate: gate, keys: keys, places: places})
 	if err != nil || opts.Agent == "" {
-		return config.Tools.Definitions(), board, err
+		return config.OfferedTools(), board, err
 	}
 	agent, err := prompt.subAgents.Named(opts.Agent)
 	if err != nil {
 		return nil, leadForeseen{}, err
 	}
-	return spawner.OfferedTo(agent, ""), leadForeseen{}, nil
+	offered, err := spawner.OfferedToRecordedSpawn(agent, opts.Task)
+	return offered, leadForeseen{}, err
 }

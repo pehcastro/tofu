@@ -191,8 +191,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		return Row{}, err
 	}
 	dir := cmp.Or(config.ArtifactDir, filepath.Join(config.Places.State, "artifacts"))
-	handles := !config.TruncateResults
-	artifacts, err := NewArtifacts(dir, handles)
+	artifacts, err := NewArtifacts(dir, !config.TruncateResults)
 	if err != nil {
 		return Row{}, err
 	}
@@ -211,51 +210,19 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		source = func() Registry { return config.Tools }
 	}
 	var recorded *record
-	personAnswers := config.Person != nil && config.SpawnedFrom == "" && config.TaskOrigin.Source != core.SourceCronFire
-	unoffered := func(name string) bool { return config.SpawnedFrom != "" && name == AskPersonToolName }
-	referencesOffered := slices.ContainsFunc(config.Parts, func(part PromptPart) bool {
-		return part.Concern == ConcernReferences && part.State == session.PartOffered
-	})
+	personAnswers := config.personAnswers()
 	references := &loadedReferences{held: map[string]string{}}
-	if referencesOffered {
+	if config.referencesOffered() {
 		maps.Copy(references.held, config.References)
 	}
-	withLoopTools := func(tools []contract.Tool) []contract.Tool {
-		added := slices.Clone(tools)
-		holdsSkill := false
-		for at, tool := range tools {
-			if spawner, spawning := tool.(*SpawnTool); spawning {
-				added = append(added, messageTool{orchestrator: spawner}, subAgentsTool{orchestrator: spawner})
-			}
-			if tool.Name() == SkillToolName {
-				added[at], holdsSkill = skillLoading{Tool: tool, references: references}, true
-			}
-		}
-		if handles {
-			added = append(added, artifacts.FetchTool())
-		}
-		if config.Sessions != nil {
-			added = append(added, lookupTool{sessions: config.Sessions, current: func() string { return recorded.session() }})
-		}
-		if referencesOffered || holdsSkill {
-			added = append(added, references)
-		}
-		return added
-	}
-	answerable := func(tools []contract.Tool) []contract.Tool {
-		tools = slices.DeleteFunc(tools, func(tool contract.Tool) bool { return unoffered(tool.Name()) })
-		for at, tool := range tools {
-			if !personAnswers && tool.Name() == AskPersonToolName {
-				tools[at] = ListedOnly{Tool: tool, Why: nobodyAnswersThisTurn}
-			}
-		}
-		return tools
+	running := func() runningTools {
+		return runningTools{fetch: artifacts.FetchTool(), lookup: lookupTool{sessions: config.Sessions, current: func() string { return recorded.session() }}, references: references}
 	}
 	currentTools := func() Registry {
-		return NewRegistry(answerable(withLoopTools(source().tools))...)
+		return NewRegistry(config.answerable(config.withLoopTools(source().tools, running()))...)
 	}
 	sending := func(definitions []core.Tool) []core.Tool {
-		return slices.DeleteFunc(slices.Clone(config.Prefix.toolsOr(definitions)), func(tool core.Tool) bool { return unoffered(tool.Name) })
+		return slices.DeleteFunc(slices.Clone(config.Prefix.toolsOr(definitions)), func(tool core.Tool) bool { return config.unoffered(tool.Name) })
 	}
 	now := config.Now
 	if now == nil {
@@ -291,7 +258,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 	}
 	origin := newID()
-	headTools := NewRegistry(withLoopTools(source().tools)...).Definitions()
+	headTools := NewRegistry(config.withLoopTools(source().tools, running())...).Definitions()
 	keptPrefix := config.Prefix
 	config.Prefix = keptPrefix.pending()
 	held := config.holdPrefix(headTools, artifacts.preview)
@@ -1660,6 +1627,63 @@ func (r *loadedReferences) Run(ctx context.Context, raw json.RawMessage) (contra
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	return referenceTool{held: r.held}.Run(ctx, raw)
+}
+
+type runningTools struct {
+	fetch      FetchTool
+	lookup     lookupTool
+	references *loadedReferences
+}
+
+func (c Config) OfferedTools() []core.Tool {
+	return NewRegistry(c.answerable(c.withLoopTools(c.Tools.tools, runningTools{references: &loadedReferences{}}))...).Definitions()
+}
+
+func (c Config) withLoopTools(tools []contract.Tool, running runningTools) []contract.Tool {
+	added := slices.Clone(tools)
+	holdsSkill := false
+	for at, tool := range tools {
+		if spawner, spawning := tool.(*SpawnTool); spawning {
+			added = append(added, messageTool{orchestrator: spawner}, subAgentsTool{orchestrator: spawner})
+		}
+		if tool.Name() == SkillToolName {
+			added[at], holdsSkill = skillLoading{Tool: tool, references: running.references}, true
+		}
+	}
+	if !c.TruncateResults {
+		added = append(added, running.fetch)
+	}
+	if c.Sessions != nil {
+		added = append(added, running.lookup)
+	}
+	if c.referencesOffered() || holdsSkill {
+		added = append(added, running.references)
+	}
+	return added
+}
+
+func (c Config) answerable(tools []contract.Tool) []contract.Tool {
+	tools = slices.DeleteFunc(tools, func(tool contract.Tool) bool { return c.unoffered(tool.Name()) })
+	for at, tool := range tools {
+		if !c.personAnswers() && tool.Name() == AskPersonToolName {
+			tools[at] = ListedOnly{Tool: tool, Why: nobodyAnswersThisTurn}
+		}
+	}
+	return tools
+}
+
+func (c Config) referencesOffered() bool {
+	return slices.ContainsFunc(c.Parts, func(part PromptPart) bool {
+		return part.Concern == ConcernReferences && part.State == session.PartOffered
+	})
+}
+
+func (c Config) personAnswers() bool {
+	return c.Person != nil && c.SpawnedFrom == "" && c.TaskOrigin.Source != core.SourceCronFire
+}
+
+func (c Config) unoffered(name string) bool {
+	return c.SpawnedFrom != "" && name == AskPersonToolName
 }
 
 type skillLoading struct {
