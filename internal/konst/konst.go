@@ -649,6 +649,8 @@ const (
 	ReadClosestSymbols = 5
 )
 
+const BashDiskWalkEntries = 20000
+
 const (
 	WhatifCheckMillis   = 180_000
 	OverlayStaleMinutes = 10

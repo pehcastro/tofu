@@ -19,8 +19,8 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/konst"
+	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
-	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/tools/code/search/engine"
@@ -342,7 +342,7 @@ func FilesUnder(root contract.Root, under string, includeIgnored bool) (Listing,
 
 func (w *walk) visit(full string, entry fs.DirEntry) error {
 	if entry.IsDir() {
-		if neverWalked(entry.Name()) {
+		if rules.NeverWalked(entry.Name()) {
 			return nil
 		}
 		if full == w.from {
@@ -398,7 +398,7 @@ func (w *walk) descend(dir, base string) error {
 		w.load(dir, base)
 	}
 	for _, entry := range entries {
-		if entry.IsDir() && !neverWalked(entry.Name()) {
+		if entry.IsDir() && !rules.NeverWalked(entry.Name()) {
 			w.readAhead(filepath.Join(dir, entry.Name()))
 		}
 	}
@@ -439,14 +439,6 @@ func (w *walk) list(dir string) ([]fs.DirEntry, error) {
 	delete(w.ahead, dir)
 	read := <-listed
 	return read.entries, read.err
-}
-
-func neverWalked(dir string) bool {
-	switch dir {
-	case "node_modules", ".git", platformfs.StateDirName, platformfs.LegacyStateDirName:
-		return true
-	}
-	return false
 }
 
 func projectInstructions(name string) bool {

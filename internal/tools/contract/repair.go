@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	platformfs "tofu/internal/platform/fs"
+	"tofu/internal/librarian/rules"
 )
 
 func RepairPath(requested, noun string, found []string) (string, string, error) {
@@ -77,7 +77,7 @@ func WalkListing(r Root) ([]string, error) {
 			return err
 		}
 		if entry.IsDir() {
-			if neverListed(entry.Name()) {
+			if rules.NeverWalked(entry.Name()) {
 				return fs.SkipDir
 			}
 			return nil
@@ -89,14 +89,6 @@ func WalkListing(r Root) ([]string, error) {
 	return listed, err
 }
 
-func neverListed(directory string) bool {
-	switch directory {
-	case "node_modules", ".git", platformfs.StateDirName, platformfs.LegacyStateDirName:
-		return true
-	}
-	return false
-}
-
 func namedLike(r Root, listed []string, requested string) []string {
 	wanted := strings.ToLower(path.Clean(filepath.ToSlash(requested)))
 	base := path.Base(wanted)
@@ -104,7 +96,7 @@ func namedLike(r Root, listed []string, requested string) []string {
 	for _, slash := range listed {
 		lower := strings.ToLower(slash)
 		named := lower == wanted || path.Base(lower) == base
-		if !named || slices.ContainsFunc(strings.Split(path.Dir(slash), "/"), neverListed) {
+		if !named || slices.ContainsFunc(strings.Split(path.Dir(slash), "/"), rules.NeverWalked) {
 			continue
 		}
 		if _, err := os.Lstat(filepath.Join(string(r), slash)); err == nil {

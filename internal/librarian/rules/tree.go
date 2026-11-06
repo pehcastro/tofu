@@ -55,8 +55,12 @@ func CheckTree(rules []Rule, checkers map[string]Checker, root string, now func(
 }
 
 func skipTreeDir(name string) bool {
-	switch name {
-	case ".git", platformfs.StateDirName, platformfs.LegacyStateDirName, "node_modules", "vendor":
+	return name == "vendor" || NeverWalked(name)
+}
+
+func NeverWalked(directory string) bool {
+	switch directory {
+	case ".git", platformfs.StateDirName, platformfs.LegacyStateDirName, "node_modules":
 		return true
 	}
 	return false

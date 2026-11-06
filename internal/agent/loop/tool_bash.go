@@ -19,6 +19,7 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
+	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/platform/fs"
 	"tofu/internal/platform/project"
@@ -35,6 +36,10 @@ type BashTool struct {
 	choice    process.Choice
 	probe     *toolchainProbe
 	softLimit time.Duration
+
+	prefixOnce sync.Once
+	prefix     string
+	prefixErr  error
 }
 
 type shellRegistryKey struct{}
@@ -616,7 +621,22 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 	if args.Background {
 		return t.runBackground(ctx, args)
 	}
+	before := t.onDisk()
+	result, err := t.runToEnd(ctx, args)
+	stillRunning := result.ExitCode == nil && result.Outcome == contract.ResultSucceeded
+	if err != nil || stillRunning {
+		return result, err
+	}
+	if changed := before.changedBy(t.onDisk()); changed != "" {
+		if result.Content != "" && !strings.HasSuffix(result.Content, "\n") {
+			result.Content += "\n"
+		}
+		result.Content += changed
+	}
+	return result, nil
+}
 
+func (t *BashTool) runToEnd(ctx context.Context, args bashArgs) (contract.Result, error) {
 	millis, corrected := bashDeadline(args.TimeoutMS)
 	deadline := time.Duration(millis) * time.Millisecond
 	if registry := ShellRegistryFrom(ctx); registry != nil {
@@ -652,6 +672,108 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 		return contract.Result{}, fmt.Errorf("bash: %w", runErr)
 	}
 	return exitedResult(args.Command, text, cmd.ProcessState.ExitCode(), note), nil
+}
+
+const diskCheckSkipped = "bash: the check for files this command changed on disk was skipped: "
+
+type diskStamp struct{ size, modified int64 }
+
+type diskState struct {
+	fromGit bool
+	stamps  map[string]diskStamp
+	skipped string
+}
+
+func (t *BashTool) gitPrefix() (string, error) {
+	t.prefixOnce.Do(func() {
+		out, err := exec.Command("git", "-C", string(t.root), "rev-parse", "--show-prefix").Output()
+		t.prefix, t.prefixErr = strings.TrimSpace(string(out)), err
+	})
+	return t.prefix, t.prefixErr
+}
+
+func (t *BashTool) onDisk() diskState {
+	prefix, err := t.gitPrefix()
+	if err != nil {
+		return walkDisk(t.root)
+	}
+	listed, err := exec.Command("git", "--no-optional-locks", "-C", string(t.root), "status", "--porcelain", "-z", "--untracked-files=all", "--no-renames", "--", ".").Output()
+	if err != nil {
+		return walkDisk(t.root)
+	}
+	state := diskState{fromGit: true, stamps: map[string]diskStamp{}}
+	for _, entry := range strings.FieldsFunc(string(listed), func(c rune) bool { return c == 0 }) {
+		slash, under := strings.CutPrefix(entry[min(3, len(entry)):], prefix)
+		if !under || skippedOnDisk(slash) {
+			continue
+		}
+		stamp := diskStamp{size: -1}
+		if info, err := os.Lstat(filepath.Join(string(t.root), filepath.FromSlash(slash))); err == nil {
+			stamp = diskStamp{size: info.Size(), modified: info.ModTime().UnixNano()}
+		}
+		state.stamps[slash] = stamp
+	}
+	return state
+}
+
+func walkDisk(root contract.Root) diskState {
+	state := diskState{stamps: map[string]diskStamp{}}
+	entries := 0
+	_ = filepath.WalkDir(string(root), func(full string, entry os.DirEntry, err error) error {
+		rel, relErr := filepath.Rel(string(root), full)
+		slash := filepath.ToSlash(rel)
+		switch {
+		case err != nil || relErr != nil:
+			return nil
+		case entries == konst.BashDiskWalkEntries:
+			state.skipped = fmt.Sprintf(diskCheckSkipped+"the project is not a git repository and holds over %d files and folders, the bound that keeps the walk cheap\n", konst.BashDiskWalkEntries)
+			return filepath.SkipAll
+		case slash != "." && skippedOnDisk(slash) && entry.IsDir():
+			return filepath.SkipDir
+		case slash != "." && skippedOnDisk(slash):
+			return nil
+		}
+		entries++
+		info, infoErr := entry.Info()
+		if entry.IsDir() || infoErr != nil {
+			return nil
+		}
+		state.stamps[slash] = diskStamp{size: info.Size(), modified: info.ModTime().UnixNano()}
+		return nil
+	})
+	return state
+}
+
+func skippedOnDisk(slash string) bool {
+	parts := strings.Split(slash, "/")
+	return parts[0] == proxyUseRTK || slices.ContainsFunc(parts, rules.NeverWalked)
+}
+
+func (before diskState) changedBy(after diskState) string {
+	switch {
+	case before.skipped != "":
+		return before.skipped
+	case after.skipped != "":
+		return after.skipped
+	case before.fromGit != after.fromGit:
+		return diskCheckSkipped + "the project became or stopped being a git repository while the command ran\n"
+	}
+	var changed []string
+	for path, stamp := range after.stamps {
+		if was, found := before.stamps[path]; !found || was != stamp {
+			changed = append(changed, path)
+		}
+	}
+	for path := range before.stamps {
+		if _, found := after.stamps[path]; !found {
+			changed = append(changed, path)
+		}
+	}
+	if len(changed) == 0 {
+		return ""
+	}
+	slices.Sort(changed)
+	return "bash: changed on disk under the project: " + strings.Join(changed, ", ") + "\n"
 }
 
 func codeFlags(code subagents.InlineCode) []string {
