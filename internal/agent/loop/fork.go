@@ -13,6 +13,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/memory/tree"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/agents/note"
 	"tofu/internal/tools/contract"
 )
 
@@ -62,11 +63,23 @@ func withEpisodes(messages []core.Message, view string) []core.Message {
 	if view == "" {
 		return messages
 	}
+	return afterTheHead(messages, core.Message{Role: core.RoleUser, Content: view, Origin: core.Origin{Source: core.SourceEpisodes}})
+}
+
+func withNotesKept(beforeFork, begun []core.Message) []core.Message {
+	latest, held := note.Latest(beforeFork)
+	if !held {
+		return begun
+	}
+	return afterTheHead(slices.DeleteFunc(begun, note.Kept), latest)
+}
+
+func afterTheHead(messages []core.Message, message core.Message) []core.Message {
 	at := slices.IndexFunc(messages, func(message core.Message) bool { return !standsAtTheHead(message) })
 	if at < 0 {
 		at = len(messages)
 	}
-	return slices.Insert(messages, at, core.Message{Role: core.RoleUser, Content: view, Origin: core.Origin{Source: core.SourceEpisodes}})
+	return slices.Insert(messages, at, message)
 }
 
 type quietAskKey struct{}

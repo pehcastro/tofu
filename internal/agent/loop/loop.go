@@ -30,6 +30,7 @@ import (
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/agents/forget"
+	"tofu/internal/tools/agents/note"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/history/shadow"
 	"tofu/internal/tools/shell/process"
@@ -869,6 +870,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			TokensBefore: tokensBefore, TokensAfter: sentTokens(after), Drops: drops}})
 	}
 	forkInto := func(fork *Fork, when string, beforeFork, begun []core.Message, moved *Account) {
+		begun = withNotesKept(beforeFork, begun)
 		ended := row
 		ended.Outcome, ended.ForkedInto, ended.EndedInFork, ended.Conversation = OutcomeForked, fork.Into, fork, messages[afterSystem:]
 		ended.WallClockMS = now().Sub(start).Milliseconds()
@@ -1305,7 +1307,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				continue
 			}
 			pending, batches := decision.ToolCalls, 0
-			forgetting := forget.Hold(messages, artifacts.preview)
+			forgetting, noting := forget.Hold(messages, artifacts.preview), note.Hold(messages)
 			codes := map[string]Registry{}
 			toolsFor := func(gated gatedCall) Registry {
 				if code, asked := codes[gated.id]; asked {
@@ -1407,7 +1409,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				rows := make([]ToolCallRow, len(wave))
 				answers := make([]core.Message, len(wave))
 				memoHits := make([]bool, len(wave))
-				waveCtx, waveEnded := config.Inbox.stoppableWave(contract.WithStep(contract.WithReadWindow(forget.With(ctx, forgetting), shownReads), step))
+				waveCtx, waveEnded := config.Inbox.stoppableWave(contract.WithStep(contract.WithReadWindow(note.With(forget.With(ctx, forgetting), noting), shownReads), step))
 				runAt := func(i, batch int) {
 					gated := wave[i]
 					if gated.call.Name == (askTool{}).Name() {
@@ -1475,6 +1477,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			if after := forgetting.Applied(messages); after != nil {
 				recorded.listChange("forget", "the model dropped tool results after the last cache breakpoint on step "+strconv.Itoa(step), messages, after)
 				messages = after
+			}
+			if notes, changed := noting.Changed(); changed {
+				messages = append(messages, inserted(note.Origin(), notes))
 			}
 			if config.Boundary != nil {
 				asked := config.Boundary.Asked()

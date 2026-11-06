@@ -622,6 +622,8 @@ const (
 	ContextStaleShown    = 20
 	ContextLabelChars    = 80
 	BudgetSubAgentsShown = 20
+	NotesMost            = 20
+	NoteBytes            = 500
 )
 
 const (
