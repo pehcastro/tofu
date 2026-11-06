@@ -18,7 +18,7 @@ import (
 	"tofu/internal/konst"
 )
 
-const turnRefs = "refs/tofu/turns"
+const TurnRefs = "refs/tofu/turns"
 
 const alwaysExcluded = "node_modules/\n.venv/\n__pycache__/\n"
 
@@ -35,6 +35,8 @@ func At(state, work string) Store {
 }
 
 func (s Store) Dir() string { return s.gitDir }
+
+func (s Store) Work() string { return s.work }
 
 type Turn struct {
 	ID        string
@@ -82,7 +84,7 @@ func StartedIn(ctx context.Context) (Started, bool) {
 }
 
 func (s Store) Begin(ctx context.Context, turn Turn, calls func() []Call) (Started, error) {
-	tree, err := s.snapshot(ctx)
+	tree, err := s.Snapshot(ctx)
 	if err != nil {
 		return Started{}, err
 	}
@@ -90,14 +92,14 @@ func (s Store) Begin(ctx context.Context, turn Turn, calls func() []Call) (Start
 	if err != nil {
 		return Started{}, err
 	}
-	if _, err := s.git(ctx, "", "update-ref", turnRefs+"/"+turn.ID, commit); err != nil {
+	if _, err := s.git(ctx, "", "update-ref", TurnRefs+"/"+turn.ID, commit); err != nil {
 		return Started{}, err
 	}
 	return Started{Store: s, Turn: turn, Calls: calls, commit: commit}, nil
 }
 
 func (s Started) End(ctx context.Context) ([]string, error) {
-	tree, err := s.Store.snapshot(ctx)
+	tree, err := s.Store.Snapshot(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -109,14 +111,14 @@ func (s Started) End(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.Store.git(ctx, "", "update-ref", turnRefs+"/"+s.Turn.ID, commit, s.commit); err != nil {
+	if _, err := s.Store.git(ctx, "", "update-ref", TurnRefs+"/"+s.Turn.ID, commit, s.commit); err != nil {
 		return nil, err
 	}
 	return s.Store.prune(ctx)
 }
 
 func (s Started) Live(ctx context.Context) (Changed, error) {
-	tree, err := s.Store.snapshot(ctx)
+	tree, err := s.Store.Snapshot(ctx)
 	if err != nil {
 		return Changed{}, err
 	}
@@ -128,7 +130,7 @@ func (s Store) Turns(ctx context.Context, count int) ([]Changed, error) {
 	if _, err := os.Stat(filepath.Join(s.gitDir, "HEAD")); errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
-	listed, err := s.git(ctx, "", "for-each-ref", "--sort=-refname", "--sort=-committerdate", "--count="+strconv.Itoa(count), "--format=%(objectname) %(parent)", turnRefs)
+	listed, err := s.git(ctx, "", "for-each-ref", "--sort=-refname", "--sort=-committerdate", "--count="+strconv.Itoa(count), "--format=%(objectname) %(parent)", TurnRefs)
 	if err != nil {
 		return nil, err
 	}
@@ -157,7 +159,7 @@ func (s Store) Turns(ctx context.Context, count int) ([]Changed, error) {
 	return turns, nil
 }
 
-func (s Store) snapshot(ctx context.Context) (string, error) {
+func (s Store) Snapshot(ctx context.Context) (string, error) {
 	if _, err := os.Stat(filepath.Join(s.gitDir, "HEAD")); errors.Is(err, os.ErrNotExist) {
 		if err := os.MkdirAll(s.gitDir, 0o700); err != nil {
 			return "", err
@@ -195,7 +197,7 @@ func (s Store) snapshot(ctx context.Context) (string, error) {
 		return "", err
 	}
 	_ = os.Rename(index, shared)
-	return tree, nil
+	return strings.TrimSpace(tree), nil
 }
 
 func (s Store) diff(ctx context.Context, from, to string, calls []Call) ([]File, error) {
@@ -275,7 +277,7 @@ func mentions(said, path string) bool {
 }
 
 func (s Store) prune(ctx context.Context) ([]string, error) {
-	listed, err := s.git(ctx, "", "for-each-ref", "--sort=refname", "--sort=committerdate", "--format=%(refname)", turnRefs)
+	listed, err := s.git(ctx, "", "for-each-ref", "--sort=refname", "--sort=committerdate", "--format=%(refname)", TurnRefs)
 	if err != nil {
 		return nil, err
 	}
@@ -317,6 +319,11 @@ func (s Store) prune(ctx context.Context) ([]string, error) {
 }
 
 func (s Store) git(ctx context.Context, stdin string, args ...string) (string, error) {
+	out, err := s.Git(ctx, stdin, args...)
+	return strings.TrimSpace(out), err
+}
+
+func (s Store) Git(ctx context.Context, stdin string, args ...string) (string, error) {
 	return s.gitIndexed(ctx, "", stdin, args...)
 }
 
@@ -340,7 +347,7 @@ func (s Store) gitIndexed(ctx context.Context, index, stdin string, args ...stri
 	if err != nil {
 		return "", fmt.Errorf("git %s in the shadow store %s: %w: %s", args[0], s.gitDir, err, strings.TrimSpace(stderr.String()))
 	}
-	return strings.TrimSpace(string(out)), nil
+	return string(out), nil
 }
 
 func message(turn Turn, files []File) string {
