@@ -23,6 +23,7 @@ type Page struct {
 	ContentType string
 	RawBytes    int
 	Units       []Unit
+	Dates       Dates
 }
 
 type NotTextError struct {
@@ -149,7 +150,11 @@ func (c *Client) fetch(ctx context.Context, target *url.URL) (Page, error) {
 		return Page{}, NotTextError{URL: target.String(), ContentType: kind, Bytes: len(body), Why: why}
 	}
 
-	return Page{URL: target.String(), ContentType: kind, RawBytes: len(body), Units: Units(kind, body, target)}, nil
+	page := Page{URL: target.String(), ContentType: kind, RawBytes: len(body), Units: Units(kind, body, target)}
+	if strings.Contains(kind, "html") {
+		page.Dates = datesOf(body)
+	}
+	return page, nil
 }
 
 func mimeOf(response *http.Response, body []byte) string {

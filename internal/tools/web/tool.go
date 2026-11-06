@@ -97,7 +97,7 @@ func (t webFetch) Run(ctx context.Context, raw json.RawMessage) (contract.Result
 			"and the page is read from what was already fetched rather than fetched again", first, last, len(lines), last+1)
 	}
 	return contract.Result{
-		Content: message + "\n" + Untrusted("the web page "+page.URL, strings.Join(lines[first-1:last], "\n")),
+		Content: message + "\n" + page.Dates.String() + "\n" + Untrusted("the web page "+page.URL, strings.Join(lines[first-1:last], "\n")),
 		Command: page.URL,
 	}, nil
 }

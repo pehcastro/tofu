@@ -7,3 +7,4 @@ results_path: results
 title_field: title
 url_field: url
 snippet_field: content
+date_field: publishedDate

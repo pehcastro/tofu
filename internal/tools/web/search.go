@@ -15,6 +15,7 @@ type Result struct {
 	Title   string
 	URL     string
 	Snippet string
+	Date    string
 }
 
 func (c *Client) Search(ctx context.Context, config Config, query string, count int) ([]Result, http.Header, error) {
@@ -77,6 +78,7 @@ func (c *Client) Search(ctx context.Context, config Config, query string, count 
 			Title:   plain(field(row, provider.TitleField)),
 			URL:     plain(field(row, provider.URLField)),
 			Snippet: plain(field(row, provider.SnippetField)),
+			Date:    day(plain(field(row, provider.DateField))),
 		}
 		if found.URL != "" {
 			results = append(results, found)
@@ -107,7 +109,11 @@ func plain(value any) string {
 func SearchUnits(results []Result) []Unit {
 	units := make([]Unit, len(results))
 	for i, result := range results {
-		units[i] = Unit{Kind: UnitItem, Text: fmt.Sprintf("%d. %s\n   %s\n   %s", i+1, result.Title, result.URL, result.Snippet)}
+		title := result.Title
+		if result.Date != "" {
+			title += " (" + result.Date + ")"
+		}
+		units[i] = Unit{Kind: UnitItem, Text: fmt.Sprintf("%d. %s\n   %s\n   %s", i+1, title, result.URL, result.Snippet)}
 	}
 	return units
 }

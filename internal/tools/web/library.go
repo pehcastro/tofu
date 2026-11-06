@@ -37,6 +37,7 @@ type Provider struct {
 	TitleField   string
 	URLField     string
 	SnippetField string
+	DateField    string
 }
 
 const (
@@ -64,7 +65,7 @@ var fetchFields = map[string]bool{"use": true, "max_bytes": true, "timeout_ms": 
 var providerFields = map[string]bool{
 	"use": true, "reason": true, "endpoint": true, "query_param": true, "count_param": true,
 	"max_results": true, "key_variable": true, "key_header": true, "key_param": true,
-	"results_path": true, "title_field": true, "url_field": true, "snippet_field": true,
+	"results_path": true, "title_field": true, "url_field": true, "snippet_field": true, "date_field": true,
 }
 
 func LoadKeyed(layers []Layer, keys core.Keyring) (Config, error) {
@@ -180,6 +181,7 @@ func (s *sheet) provider(name string) (Provider, error) {
 		TitleField:   s.values["title_field"],
 		URLField:     s.values["url_field"],
 		SnippetField: s.values["snippet_field"],
+		DateField:    s.values["date_field"],
 	}
 	required := map[string]string{
 		"endpoint": built.Endpoint, "query_param": built.QueryParam, "results_path": built.ResultsPath,

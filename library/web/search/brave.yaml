@@ -10,3 +10,4 @@ results_path: web.results
 title_field: title
 url_field: url
 snippet_field: description
+date_field: page_age
