@@ -42,6 +42,8 @@ const GAP: f32 = 6.0;
 const ABOUT_MIN: f32 = 72.0;
 const TITLE_LINES: usize = 3;
 const ABOUT_LINES: usize = 10;
+const SECTION_LINES: usize = 4;
+const FEASIBILITY: &str = "feasibility";
 const SCRIM: f32 = 0.35;
 const SHADOW_Y: f32 = 16.0;
 const SHADOW_BLUR: f32 = 24.0;
@@ -74,6 +76,49 @@ struct Pickers {
     labels: Entity<MenuButton>,
 }
 
+struct Sections {
+    before: Entity<TextArea>,
+    driven: Entity<TextArea>,
+    still_works: Entity<TextArea>,
+    error_case: Entity<TextArea>,
+    feasibility: Entity<TextArea>,
+}
+
+impl Sections {
+    fn new(window: &mut Window, cx: &mut Context<Boardy>) -> Sections {
+        let mut area = |placeholder: &'static str| {
+            cx.new(|cx| {
+                TextArea::new(placeholder.into(), window, cx)
+                    .bare()
+                    .max_lines(SECTION_LINES)
+            })
+        };
+        Sections {
+            before: area("Before: how it works now"),
+            driven: area("Driven path: the steps a person performs to see the change"),
+            still_works: area("Still works: each neighbour the change touches"),
+            error_case: area("Empty or error case: what an empty or failing input does"),
+            feasibility: area(
+                "Feasibility: what the platform gives, what it does not, and the source",
+            ),
+        }
+    }
+
+    fn all(&self) -> [&Entity<TextArea>; 5] {
+        [
+            &self.before,
+            &self.driven,
+            &self.still_works,
+            &self.error_case,
+            &self.feasibility,
+        ]
+    }
+}
+
+fn written(area: &Entity<TextArea>, cx: &App) -> Option<String> {
+    Some(area.read(cx).text().trim().to_owned()).filter(|text| !text.is_empty())
+}
+
 pub(super) struct Draft {
     board: String,
     epic_word: String,
@@ -85,6 +130,9 @@ pub(super) struct Draft {
     known: Known,
     title: Entity<TextArea>,
     about: Entity<TextArea>,
+    sections: Sections,
+    refused: Option<SharedString>,
+    asks_feasibility: bool,
     pickers: Pickers,
     more: bool,
     wide: bool,
@@ -202,6 +250,9 @@ impl Draft {
             known,
             title,
             about,
+            sections: Sections::new(window, cx),
+            refused: None,
+            asks_feasibility: false,
             pickers,
             more: false,
             wide: false,
@@ -280,12 +331,16 @@ impl Draft {
         Ticket {
             acceptance: Vec::new(),
             assignee: self.assignee.clone(),
+            before: written(&self.sections.before, cx),
             blocks: Vec::new(),
             component: None,
             created: now.clone(),
             depends: Vec::new(),
+            driven: written(&self.sections.driven, cx),
             duplicates: Vec::new(),
             epic: self.epic.clone(),
+            error_case: written(&self.sections.error_case, cx),
+            feasibility: written(&self.sections.feasibility, cx).filter(|_| self.asks_feasibility),
             id: String::new(),
             labels: self.labels.clone(),
             log: String::new(),
@@ -302,6 +357,7 @@ impl Draft {
             spec: None,
             sprint: None,
             status: self.status.clone(),
+            still_works: written(&self.sections.still_works, cx),
             title,
             r#type: BoardyType::Task,
             updated: now,
@@ -452,25 +508,54 @@ impl Boardy {
             board: Some(draft.board.clone()),
             ticket: draft.ticket(title, cx),
         };
-        match draft.more {
-            true => {
-                draft.title.update(cx, |area, cx| area.clear(cx));
-                draft.about.update(cx, |area, cx| area.clear(cx));
-                draft.title_focus(cx).focus(window, cx);
-            }
-            false => self.close_draft(window, cx),
-        }
+        let window_handle = window.window_handle();
         let sent = Instant::now();
         self.send::<BoardyCreate>(params, cx, move |boardy, reply, cx| {
-            if let Ok(answer) = &reply {
-                eprintln!(
+            match &reply {
+                Ok(answer) => eprintln!(
                     "desk: boardy: created {} in {:.1}ms",
                     answer.ticket.id,
                     sent.elapsed().as_secs_f64() * MS_PER_SECOND
-                );
+                ),
+                Err(said) => {
+                    eprintln!("desk: boardy: create refused: {said}");
+                    if let Some(draft) = boardy.draft.as_mut() {
+                        draft.asks_feasibility |= said.to_lowercase().contains(FEASIBILITY);
+                        draft.refused = Some(said.clone().into());
+                    }
+                    return;
+                }
             }
+            let more = boardy.draft.as_ref().is_some_and(|draft| draft.more);
+            let weak = cx.weak_entity();
+            cx.defer(move |cx| {
+                let reset = window_handle.update(cx, |_, window, cx| {
+                    weak.update(cx, |boardy, cx| match more {
+                        true => boardy.clear_draft(window, cx),
+                        false => boardy.close_draft(window, cx),
+                    })
+                });
+                if let Err(error) = reset.and_then(|landed| landed) {
+                    eprintln!("desk: boardy closed before a create landed: {error}");
+                }
+            });
             boardy.landed(reply, cx);
         });
+    }
+
+    fn clear_draft(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(draft) = self.draft.as_mut() else {
+            return;
+        };
+        draft.refused = None;
+        draft.asks_feasibility = false;
+        for area in [&draft.title, &draft.about]
+            .into_iter()
+            .chain(draft.sections.all())
+        {
+            area.update(cx, |area, cx| area.clear(cx));
+        }
+        draft.title_focus(cx).focus(window, cx);
     }
 
     fn reshape(&mut self, cx: &mut Context<Self>, change: fn(&mut Draft)) {
@@ -612,7 +697,21 @@ pub(super) fn modal(
                 .min_h(px(ABOUT_MIN))
                 .child(draft.about.clone()),
         )
+        .children(
+            draft
+                .sections
+                .all()
+                .into_iter()
+                .take(if draft.asks_feasibility { 5 } else { 4 })
+                .map(|area| div().px(px(PAD_X)).pt(px(ROW_Y)).child(area.clone())),
+        )
         .child(chips)
+        .children(draft.refused.clone().map(|said| {
+            div()
+                .px(px(PAD_X))
+                .pb(px(ROW_Y))
+                .child(crate::screens::frame::note(said, theme))
+        }))
         .child(footer);
     let scrim = div()
         .id("boardy-create-scrim")
