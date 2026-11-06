@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -50,7 +49,6 @@ type testCommand struct {
 	notInstalled     string
 	notInstalledSays string
 	parse            func(string) checkers.TestRun
-	skips            func(string) []string
 }
 
 func (r *TestRunners) Run(ctx context.Context, resolved, name string, repeat int) (contract.Result, error) {
@@ -171,16 +169,6 @@ func goTests(root, resolved string, isDir bool, name string) (testCommand, strin
 			}
 			return run
 		},
-		skips: func(output string) []string {
-			var skipped []string
-			for _, line := range strings.Split(output, "\n") {
-				var event struct{ Action, Test string }
-				if json.Unmarshal([]byte(line), &event) == nil && event.Action == "skip" && event.Test != "" {
-					skipped = append(skipped, event.Test)
-				}
-			}
-			return skipped
-		},
 	}, ""
 }
 
@@ -207,7 +195,6 @@ func rustTests(root, resolved string, isDir bool, name string) (testCommand, str
 		dir:     root,
 		install: "install Rust with rustup from https://rustup.rs and put its cargo bin directory on PATH",
 		parse:   checkers.CargoTest,
-		skips:   namesMatching(`(?m)^test (\S+) \.\.\. ignored`),
 	}, ""
 }
 
@@ -239,7 +226,6 @@ func pythonTests(root, resolved string, isDir bool, name string) (testCommand, s
 		command.argv = append(command.argv, relative)
 		command.runner, command.parse = "pytest", checkers.Pytest
 		command.notInstalled, command.notInstalledSays = "No module named pytest", root+" declares pytest and "+python+" cannot import it: run "+python+" -m pip install pytest"
-		command.skips = namesMatching(`(?m)^SKIPPED \[\d+\] (\S+?:\d+)`)
 		return command, ""
 	}
 	argv := []string{python, "-m", "unittest"}
@@ -254,7 +240,6 @@ func pythonTests(root, resolved string, isDir bool, name string) (testCommand, s
 		argv = append(argv, strings.ReplaceAll(strings.TrimSuffix(relative, ".py"), "/", "."))
 	}
 	command.runner, command.argv, command.parse = "unittest", argv, checkers.Unittest
-	command.skips = namesMatching(`(?m)^(\w+ \(\S+\)) \.\.\. skipped`)
 	return command, ""
 }
 
@@ -281,16 +266,6 @@ func pytestDeclared(root string) bool {
 		body, err := os.ReadFile(file)
 		return err == nil && bytes.Contains(body, []byte("pytest"))
 	})
-}
-
-func namesMatching(pattern string) func(string) []string {
-	return func(output string) []string {
-		var names []string
-		for _, match := range regexp.MustCompile(pattern).FindAllStringSubmatch(output, -1) {
-			names = append(names, match[1])
-		}
-		return names
-	}
 }
 
 func (c testCommand) run(ctx context.Context) (contract.Result, testOutcome) {
@@ -329,8 +304,8 @@ func (c testCommand) run(ctx context.Context) (contract.Result, testOutcome) {
 		return contract.Failure(fmt.Sprintf("%s: exited %d and printed no test run tofu reads. its last lines:\n%s", head, exit, strings.Join(lines[max(0, len(lines)-konst.TestLinesCap):], "\n"))), testsNotRun
 	}
 	report := head + "\n" + strings.TrimSuffix(run.Text(), "\n")
-	if skipped := c.skips(printed); len(skipped) > 0 {
-		report += "\nskipped: " + strings.Join(skipped, ", ")
+	if len(run.SkippedNames) > 0 {
+		report += "\nskipped: " + strings.Join(run.SkippedNames, ", ")
 	}
 	if exit != 0 {
 		return contract.Failure(report), testsFailed
