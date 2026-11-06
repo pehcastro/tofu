@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use crate::screens::work::split::timed;
 use desk_ui::components::media_view::{MediaControls, MediaView};
-use desk_ui::components::tree::OpenProject;
+use desk_ui::components::tree::project_folder;
 use gpui::{
     AnyElement, AnyView, App, AppContext, Entity, SharedString, StyleRefinement, prelude::*,
 };
@@ -70,8 +70,8 @@ pub fn resolve(path: &Path, cx: &App) -> Result<Arc<Path>, String> {
             path.display()
         ));
     }
-    let root = match cx.try_global::<OpenProject>() {
-        Some(OpenProject(root)) => root.clone(),
+    let root = match project_folder(cx) {
+        Some(root) => root.to_path_buf(),
         None => std::env::current_dir()
             .map_err(|error| format!("the viewer has no working folder: {error}"))?,
     };

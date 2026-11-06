@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::{fmt, fs, io};
 
+use desk_core::model::Projects;
 use desk_core::syntax::Language;
 use desk_motion::reduced_motion;
 use desk_motion::tokens::{EASE_OUT, HOVER_MS, TOGGLE_MS};
@@ -41,9 +42,14 @@ const FRAME_BUDGET_MS: f32 = 1000.0 / 60.0;
 
 const PICK_FILE: &str = "editor-icons";
 
-pub struct OpenProject(pub PathBuf);
+#[derive(Default)]
+pub struct ProjectTable(pub Projects);
 
-impl Global for OpenProject {}
+impl Global for ProjectTable {}
+
+pub fn project_folder(cx: &App) -> Option<&Path> {
+    cx.try_global::<ProjectTable>()?.0.folder()
+}
 
 pub struct EditedFile(pub PathBuf);
 

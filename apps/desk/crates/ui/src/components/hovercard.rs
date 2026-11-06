@@ -27,7 +27,7 @@ use crate::components::media_view::{self, OpenMedia};
 use crate::components::overlay::popover;
 use crate::components::paint::ink;
 use crate::components::size::{FONT_SMALL, T1, T2, T3};
-use crate::components::tree::OpenProject;
+use crate::components::tree::project_folder;
 use crate::live::ActiveTheme;
 use crate::theme::Theme;
 
@@ -76,8 +76,8 @@ struct Cited {
 impl Global for Cited {}
 
 fn project_root(cx: &App) -> Result<PathBuf, String> {
-    match cx.try_global::<OpenProject>() {
-        Some(OpenProject(root)) => Ok(root.clone()),
+    match project_folder(cx) {
+        Some(root) => Ok(root.to_path_buf()),
         None => {
             std::env::current_dir().map_err(|error| format!("no project folder to search: {error}"))
         }
@@ -719,14 +719,12 @@ pub fn link_card(key: u64) -> LinkCard {
 
 impl RenderOnce for LinkCard {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let unindexed = cx
-            .try_global::<OpenProject>()
-            .map(|OpenProject(root)| root)
+        let unindexed = project_folder(cx)
             .filter(|root| {
                 !cx.try_global::<Cited>()
                     .is_some_and(|cited| cited.indexes.contains_key(*root))
             })
-            .cloned();
+            .map(Path::to_path_buf);
         if let Some(root) = unindexed {
             warm(&root, cx);
         }

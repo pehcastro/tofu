@@ -19,7 +19,7 @@ use std::time::Instant;
 use desk_ui::components::card::inner_card;
 use desk_ui::components::empty::empty_state;
 use desk_ui::components::overlay::toast;
-use desk_ui::components::tree::OpenProject;
+use desk_ui::components::tree::project_folder;
 use desk_ui::live::ActiveTheme;
 use desk_ui::metrics::HAIRLINE;
 use desk_ui::theme::ColorToken;
@@ -37,8 +37,8 @@ const GRIP: f32 = 5.0;
 const TOAST_BOTTOM: f32 = 16.0;
 
 pub fn open(_: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
-    let root = match cx.try_global::<OpenProject>() {
-        Some(OpenProject(folder)) => folder.clone(),
+    let root = match project_folder(cx) {
+        Some(folder) => folder.to_path_buf(),
         None => std::env::current_dir()
             .map_err(|error| format!("the git screen has no working folder: {error}"))?,
     };

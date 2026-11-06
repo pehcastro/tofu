@@ -1,5 +1,8 @@
+use std::rc::Rc;
+use std::time::{Duration, SystemTime};
+
 use desk_ui::components::sidebar::{
-    Project, SIDEBAR_COLUMN, Session, SessionAt, Sidebar, SidebarPick,
+    Project, SIDEBAR_COLUMN, SessionAt, SessionColumns, SessionState, Sidebar, SidebarPick,
 };
 use desk_ui::theme::Theme;
 use gpui::{App, Context, Div, Window, div, prelude::*, px};
@@ -9,21 +12,28 @@ use super::kit::{label, named, spread};
 use super::palette::PalettePage;
 
 const SIDEBAR_HEIGHT: f32 = 794.0;
-const RUNNING: [(&str, &str, &str); 1] = [("clear-sable-eagle", "Running", "12m ago")];
-const INACTIVE: [(&str, &str, &str); 3] = [
-    ("fond-sandy-mink", "done", "2h ago"),
-    ("tidy-ochre-wren", "failed", "1d ago"),
-    ("crisp-azure-swift", "ended", "3d ago"),
+const MINUTE: u64 = 60;
+const ROWS: [(&str, SessionState, u64); 4] = [
+    ("clear-sable-eagle", SessionState::Running, 12 * MINUTE),
+    ("fond-sandy-mink", SessionState::Stopped, 2 * 60 * MINUTE),
+    ("tidy-ochre-wren", SessionState::Failed, 24 * 60 * MINUTE),
+    (
+        "crisp-azure-swift",
+        SessionState::Stopped,
+        3 * 24 * 60 * MINUTE,
+    ),
 ];
 
-fn sessions(rows: &[(&'static str, &'static str, &'static str)]) -> Vec<Session> {
-    rows.iter()
-        .map(|&(name, state, age)| Session {
-            name: name.into(),
-            state: state.into(),
-            age: age.into(),
-        })
-        .collect()
+fn sessions() -> SessionColumns {
+    let now = SystemTime::now();
+    let mut sessions = SessionColumns::default();
+    for (name, state, ago) in ROWS {
+        let last = now.checked_sub(Duration::from_secs(ago));
+        sessions.push(name.into(), name.into(), last, state);
+    }
+    sessions.active = vec![0];
+    sessions.inactive = vec![1, 2, 3];
+    sessions
 }
 
 fn told(
@@ -44,17 +54,15 @@ pub(super) fn sidebar_page(palette: &PalettePage, theme: &Theme, cx: &mut Contex
         name: "notes-app".into(),
         branch: "main".into(),
         changed: 3,
-        active: sessions(&RUNNING),
         shown: Some(SessionAt::Active(0)),
-        inactive: sessions(&INACTIVE),
+        sessions: Rc::new(sessions()),
     };
     let fresh = Project {
         name: "hono-starter".into(),
         branch: "".into(),
         changed: 0,
-        active: Vec::new(),
         shown: None,
-        inactive: Vec::new(),
+        sessions: Rc::default(),
     };
     let frame = |sidebar: Sidebar| {
         div()

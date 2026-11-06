@@ -6,7 +6,7 @@ pub enum Control {
     Palette,
     Notifications,
     Account,
-    OpenProject,
+    PickProject,
     Branch,
     Session,
     Context,
@@ -30,7 +30,7 @@ impl Control {
             Control::Palette => "Ctrl K",
             Control::Notifications => "Notifications",
             Control::Account => "Account",
-            Control::OpenProject => "Open a project",
+            Control::PickProject => "Open a project",
             Control::Branch => "no branch",
             Control::Session => "no session",
             Control::Context => "ctx",
@@ -54,7 +54,7 @@ impl Control {
             Control::Account => {
                 "Opens the account menu: subscriptions, keys, settings and what is new."
             }
-            Control::OpenProject => {
+            Control::PickProject => {
                 "Opens the project picker: pick a folder and tofu starts in it."
             }
             Control::Branch => "Opens Source control history and the branches of the project.",

@@ -36,8 +36,8 @@ use desk_ui::components::tabs::{Tab, TabEvent, TabMark, connected_tabs};
 use desk_ui::components::title_bar::Github;
 use desk_ui::components::tooltip::{Edge, tooltip};
 use desk_ui::components::tree::{
-    Draft, EditedFile, FileTree, IconPack, IconTheme, OpenProject, PickedPack, TreeEvent, TreeNode,
-    TreeSpot, picked_pack,
+    Draft, EditedFile, FileTree, IconPack, IconTheme, PickedPack, ProjectTable, TreeEvent,
+    TreeNode, TreeSpot, picked_pack, project_folder,
 };
 use desk_ui::components::vim::Vim;
 use desk_ui::icon::Icon;
@@ -85,8 +85,8 @@ const MB: f64 = 1024.0 * 1024.0;
 const CLOSED_PAGES: usize = 16;
 
 pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<AnyView, String> {
-    let root = match cx.try_global::<OpenProject>() {
-        Some(OpenProject(folder)) => folder.clone(),
+    let root = match project_folder(cx) {
+        Some(folder) => folder.to_path_buf(),
         None => std::env::current_dir()
             .map_err(|error| format!("the editor has no working folder: {error}"))?,
     };
@@ -421,7 +421,7 @@ impl Editor {
                 cx.observe_global::<PickedPack>(Self::repack),
                 cx.observe_global::<ActiveTheme>(Self::repack),
             ],
-            _project: cx.observe_global_in::<OpenProject>(window, Self::reroot),
+            _project: cx.observe_global_in::<ProjectTable>(window, Self::reroot),
             _edited: cx.observe_global::<EditedFile>(Self::edited),
             _watching: None,
             _refreshing: None,
@@ -460,8 +460,9 @@ impl Editor {
     }
 
     fn reroot(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let OpenProject(root) = cx.global::<OpenProject>();
-        let root = absolute(root);
+        let Some(root) = project_folder(cx).map(absolute) else {
+            return;
+        };
         if root == self.folder.listing.root {
             return;
         }

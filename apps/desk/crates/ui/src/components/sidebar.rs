@@ -2,7 +2,9 @@ use std::f32::consts::FRAC_PI_2;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::time::SystemTime;
 
+use desk_core::sessions::age;
 use gpui::{
     AnyElement, App, ClickEvent, Corners, Div, ElementId, FontWeight, ScrollHandle, SharedString,
     Stateful, Transformation, Window, div, prelude::*, px, radians,
@@ -107,11 +109,69 @@ impl From<&str> for SessionState {
     }
 }
 
-#[derive(Clone)]
-pub struct Session {
-    pub name: SharedString,
-    pub state: SessionState,
-    pub age: SharedString,
+#[derive(Clone, Default)]
+pub struct SessionColumns {
+    pub id: Vec<SharedString>,
+    pub name: Vec<SharedString>,
+    pub last_at: Vec<Option<SystemTime>>,
+    pub state: Vec<SessionState>,
+    pub active: Vec<u32>,
+    pub inactive: Vec<u32>,
+}
+
+impl SessionColumns {
+    pub fn push(
+        &mut self,
+        id: SharedString,
+        name: SharedString,
+        last_at: Option<SystemTime>,
+        state: SessionState,
+    ) -> u32 {
+        self.id.push(id);
+        self.name.push(name);
+        self.last_at.push(last_at);
+        self.state.push(state);
+        u32::try_from(self.id.len() - 1).unwrap_or(u32::MAX)
+    }
+
+    pub fn find(&self, id: &str) -> Option<u32> {
+        let at = self.id.iter().position(|known| known == id)?;
+        u32::try_from(at).ok()
+    }
+
+    pub fn column(&self, at: SessionAt) -> Option<usize> {
+        let column = match at {
+            SessionAt::Active(ix) => self.active.get(ix),
+            SessionAt::Inactive(ix) => self.inactive.get(ix),
+        }?;
+        usize::try_from(*column).ok()
+    }
+
+    fn drawn(&self, at: SessionAt, now: SystemTime) -> Option<Drawn> {
+        let column = self.column(at)?;
+        Some(Drawn {
+            name: self.name.get(column)?.clone(),
+            state: *self.state.get(column)?,
+            age: self
+                .last_at
+                .get(column)?
+                .and_then(|last| now.duration_since(last).ok())
+                .map(age),
+        })
+    }
+
+    pub fn at(&self, column: u32) -> Option<SessionAt> {
+        let find = |list: &[u32]| list.iter().position(|known| *known == column);
+        find(&self.active)
+            .map(SessionAt::Active)
+            .or_else(|| find(&self.inactive).map(SessionAt::Inactive))
+    }
+}
+
+struct Drawn {
+    name: SharedString,
+    state: SessionState,
+    age: Option<String>,
 }
 
 #[derive(Clone)]
@@ -119,9 +179,8 @@ pub struct Project {
     pub name: SharedString,
     pub branch: SharedString,
     pub changed: usize,
-    pub active: Vec<Session>,
     pub shown: Option<SessionAt>,
-    pub inactive: Vec<Session>,
+    pub sessions: Rc<SessionColumns>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -214,15 +273,16 @@ impl Sidebar {
     fn session(
         &mut self,
         at: SessionAt,
-        session: &Session,
+        drawn: Drawn,
         selected: bool,
         theme: &Theme,
         window: &mut Window,
         cx: &mut App,
     ) -> Stateful<Div> {
-        let tip: SharedString = match session.age.is_empty() {
-            true => session.state.word().into(),
-            false => format!("{} {}", session.state.word(), session.age).into(),
+        let Drawn { name, state, age } = drawn;
+        let tip: SharedString = match &age {
+            None => state.word().into(),
+            Some(age) => format!("{} {age}", state.word()).into(),
         };
         let mark = tooltip(
             at.key("tip"),
@@ -233,7 +293,7 @@ impl Sidebar {
                 .flex()
                 .items_center()
                 .justify_center()
-                .child(state_mark(at, session.state, cx.reduce_motion(), theme)),
+                .child(state_mark(at, state, cx.reduce_motion(), theme)),
             Edge::Frame,
             tip,
             theme,
@@ -285,19 +345,19 @@ impl Sidebar {
                                 name.text_color(theme.color(ColorToken::TextStrong))
                                     .font_weight(FontWeight::MEDIUM)
                             })
-                            .child(match unnamed(&session.name) {
+                            .child(match unnamed(&name) {
                                 true => div().text_color(ink(theme, T3)).child(NEW_SESSION_NAME),
-                                false => div().child(session.name.clone()),
+                                false => div().child(name),
                             }),
                     ),
             })
-            .when(!session.age.is_empty(), |row| {
+            .when_some(age, |row, age| {
                 row.child(
                     div()
                         .flex_none()
                         .text_size(px(FONT_CAP2))
                         .text_color(ink(theme, T3))
-                        .child(session.age.clone()),
+                        .child(age),
                 )
             })
             .on_click(self.picked(SidebarPick::Open(at)));
@@ -516,45 +576,36 @@ impl RenderOnce for Sidebar {
                         .child(icon(Icon::Plus, ICON_SMALL, ink(&theme, T3)))
                         .on_click(self.picked(SidebarPick::NewSession)),
                     );
-                let active: Vec<Stateful<Div>> = project
-                    .active
-                    .iter()
-                    .enumerate()
-                    .map(|(ix, session)| {
-                        let at = SessionAt::Active(ix);
+                let now = SystemTime::now();
+                let sessions = &project.sessions;
+                let total = match inactive_open {
+                    true => sessions.inactive.len(),
+                    false => 0,
+                };
+                let drawn = shown_rows(total, sessions.active.len(), &scroll, window);
+                let mut drawn_rows = |rows: Range<usize>, at: fn(usize) -> SessionAt| {
+                    rows.filter_map(|ix| {
+                        let at = at(ix);
+                        let drawn = sessions.drawn(at, now)?;
                         let shown = project.shown == Some(at);
-                        self.session(at, session, shown, &theme, window, cx)
+                        Some(self.session(at, drawn, shown, &theme, window, cx))
                     })
-                    .collect();
+                    .collect::<Vec<Stateful<Div>>>()
+                };
+                let active = drawn_rows(0..sessions.active.len(), SessionAt::Active);
                 let toggle = open.clone();
                 let header = row(("inactive", "inactive"), false, T3, &theme)
                     .mt(px(INACTIVE_GAP))
                     .child(chevron(inactive_open, &theme))
                     .child(div().flex_1().child("Inactive"))
-                    .child(word(project.inactive.len().to_string().into(), &theme))
+                    .child(word(sessions.inactive.len().to_string().into(), &theme))
                     .on_click(move |_, _, cx| {
                         toggle.update(cx, |open, cx| {
                             *open = !*open;
                             cx.notify();
                         })
                     });
-                let total = match inactive_open {
-                    true => project.inactive.len(),
-                    false => 0,
-                };
-                let drawn = shown_rows(total, project.active.len(), &scroll, window);
-                let inactive: Vec<Stateful<Div>> = project
-                    .inactive
-                    .get(drawn.clone())
-                    .unwrap_or_default()
-                    .iter()
-                    .zip(drawn.clone())
-                    .map(|(session, ix)| {
-                        let at = SessionAt::Inactive(ix);
-                        let shown = project.shown == Some(at);
-                        self.session(at, session, shown, &theme, window, cx)
-                    })
-                    .collect();
+                let inactive = drawn_rows(drawn.clone(), SessionAt::Inactive);
                 (
                     head,
                     rows.inert(caption)

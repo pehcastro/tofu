@@ -14,20 +14,36 @@ impl SessionRow {
             .unwrap_or(&self.id)
     }
 
+    pub fn last(&self) -> Option<SystemTime> {
+        instant(self.last_at.as_deref().unwrap_or(&self.at))
+    }
+
     pub fn since(&self, now: SystemTime) -> Option<Duration> {
-        now.duration_since(instant(self.last_at.as_deref().unwrap_or(&self.at))?)
-            .ok()
+        now.duration_since(self.last()?).ok()
     }
 
     pub fn age(&self, now: SystemTime) -> Option<String> {
-        let since = self.since(now)?.as_secs();
-        Some(match since {
-            0..MINUTE => "just now".to_owned(),
-            MINUTE..HOUR => format!("{}m ago", since / MINUTE),
-            HOUR..DAY => format!("{}h ago", since / HOUR),
-            _ => format!("{}d ago", since / DAY),
-        })
+        self.since(now).map(age)
     }
+}
+
+pub fn age(since: Duration) -> String {
+    let since = since.as_secs();
+    match since {
+        0..MINUTE => "just now".to_owned(),
+        MINUTE..HOUR => format!("{}m ago", since / MINUTE),
+        HOUR..DAY => format!("{}h ago", since / HOUR),
+        _ => format!("{}d ago", since / DAY),
+    }
+}
+
+pub fn age_changes_in(since: Duration) -> Duration {
+    let step = match since.as_secs() {
+        0..HOUR => MINUTE,
+        HOUR..DAY => HOUR,
+        _ => DAY,
+    };
+    Duration::from_secs(step - since.as_secs() % step)
 }
 
 fn number(text: &str, from: usize, to: usize) -> Option<i64> {

@@ -1,8 +1,11 @@
+use std::rc::Rc;
+use std::time::{Duration, SystemTime};
+
 use desk_ui::components::context_card::Bands;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::overlay::{MenuItem, menu};
 use desk_ui::components::sidebar::{
-    Project, SIDEBAR_COLUMN, Session, SessionAt, SessionState, Sidebar, SidebarPick,
+    Project, SIDEBAR_COLUMN, SessionAt, SessionColumns, SessionState, Sidebar, SidebarPick,
 };
 use desk_ui::components::status_bar::{
     Account, Accounts, Branch, ContextUse, Reset, Serving, SessionGroup, Standing, Status,
@@ -50,7 +53,7 @@ fn board_title(open: Option<TitlePop>) -> Title {
 }
 
 fn each_state() -> Project {
-    let ages = ["for 12m", "8m ago", "2m ago", "4h ago", "1d ago"];
+    let minutes_ago = [12, 8, 2, 4 * 60, 24 * 60];
     let names = [
         "clear-sable-eagle",
         "bold-teal-otter",
@@ -58,21 +61,23 @@ fn each_state() -> Project {
         "35672da8-faa2-4bbd-a7b9-6ec14c3a2e0f",
         "tidy-ochre-wren",
     ];
-    let mut sessions = SessionState::ALL
+    let now = SystemTime::now();
+    let mut sessions = SessionColumns::default();
+    for (state, (name, ago)) in SessionState::ALL
         .into_iter()
-        .zip(names.into_iter().zip(ages))
-        .map(|(state, (name, age))| Session {
-            name: name.into(),
-            state,
-            age: age.into(),
-        });
+        .zip(names.into_iter().zip(minutes_ago))
+    {
+        let last = now.checked_sub(Duration::from_secs(ago * 60));
+        sessions.push(name.into(), name.into(), last, state);
+    }
+    sessions.active = vec![0, 1, 2];
+    sessions.inactive = vec![3, 4];
     Project {
         name: "notes-app".into(),
         branch: "main".into(),
         changed: 3,
-        active: sessions.by_ref().take(3).collect(),
         shown: Some(SessionAt::Active(0)),
-        inactive: sessions.collect(),
+        sessions: Rc::new(sessions),
     }
 }
 

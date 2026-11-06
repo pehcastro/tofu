@@ -1,3 +1,4 @@
+mod project;
 mod session;
 mod status;
 
@@ -12,6 +13,7 @@ use crate::protocol::{
 };
 use crate::query::Answer;
 
+pub use project::{ProjectRow, Projects, project_name};
 pub use session::{Agent, Message, PersonAsk, PersonKind, Role, Session, Shell, Told, Tool, Turn};
 pub use status::{Change, Status, StatusState, Statuses};
 

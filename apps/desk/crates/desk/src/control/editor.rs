@@ -29,7 +29,7 @@ mod enabled {
     use desk_control::shapes::{self, Position, Range, Step};
     use desk_core::buffer::Buffer;
     use desk_ui::components::code_editor::CodeEditor;
-    use desk_ui::components::tree::OpenProject;
+    use desk_ui::components::tree::project_folder;
     use gpui::{Context, Entity, Window, WindowHandle};
 
     use super::{Answered, AnyWindowHandle, App, Call, ErrorCode};
@@ -572,8 +572,8 @@ mod enabled {
     }
 
     fn full_path(path: &str, cx: &App) -> Result<PathBuf, Refused> {
-        let root = match cx.try_global::<OpenProject>() {
-            Some(OpenProject(folder)) => folder.clone(),
+        let root = match project_folder(cx) {
+            Some(folder) => folder.to_path_buf(),
             None => std::env::current_dir().map_err(|error| {
                 (
                     ErrorCode::NotFound,

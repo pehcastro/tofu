@@ -10,7 +10,7 @@ use desk_ui::components::diff::{FileChange, FileDiff};
 use desk_ui::components::file_edits::{EditedFile, FileEdit, RowPick, file_edits, file_history};
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::sheet::Drawer;
-use desk_ui::components::tree::OpenProject;
+use desk_ui::components::tree::project_folder;
 use desk_ui::live::ActiveTheme;
 use gpui::{
     AnyView, App, AppContext, Context, Entity, IntoElement, Render, SharedString, Subscription,
@@ -198,8 +198,8 @@ fn on_disk(path: &str, cx: &App) -> Result<PathBuf, String> {
     {
         return Err(format!("{} leaves the project", path.display()));
     }
-    let root = match cx.try_global::<OpenProject>() {
-        Some(OpenProject(root)) => root.clone(),
+    let root = match project_folder(cx) {
+        Some(root) => root.to_path_buf(),
         None => std::env::current_dir()
             .map_err(|error| format!("no project folder for {}: {error}", path.display()))?,
     };

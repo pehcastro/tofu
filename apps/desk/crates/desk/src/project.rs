@@ -8,14 +8,15 @@ use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, SystemTime};
 
 use desk_core::git::{Git, GitBinary, State};
-use desk_core::model::{StatusState, Statuses};
-use desk_core::sessions::SessionRow;
+pub use desk_core::model::project_name as name;
+use desk_core::model::{ProjectRow, StatusState, Statuses};
+use desk_core::sessions::{SessionRow, age_changes_in};
 use desk_tiling::Store as Layouts;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::palette::{
     Palette, PaletteDetail, PaletteEntry, PaletteItem, PaletteMeta,
 };
-use desk_ui::components::sidebar::{Project, Session, SessionAt, SessionState};
+use desk_ui::components::sidebar::{SessionColumns, SessionState};
 use gpui::{App, Entity, Window};
 use serde_json::{Value, json};
 
@@ -31,23 +32,11 @@ const MISSING: &str = "missing";
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-#[derive(Clone)]
 pub struct Head {
     pub folder: PathBuf,
     pub branch: String,
     pub changed: usize,
     pub ahead: u32,
-}
-
-impl Head {
-    pub fn empty(folder: PathBuf) -> Self {
-        Head {
-            folder,
-            branch: String::new(),
-            changed: 0,
-            ahead: 0,
-        }
-    }
 }
 
 pub fn launch() -> Result<PathBuf, String> {
@@ -180,13 +169,6 @@ pub fn write_state(folder: &Path, state: &Remembered) -> Result<(), String> {
     fs::write(&path, text).map_err(failed)
 }
 
-pub fn name(folder: &Path) -> String {
-    folder.file_name().map_or_else(
-        || folder.display().to_string(),
-        |name| name.to_string_lossy().into_owned(),
-    )
-}
-
 fn recents_file() -> Result<PathBuf, String> {
     Layouts::home()
         .map(|home| home.join(RECENTS))
@@ -239,17 +221,18 @@ pub fn head(folder: PathBuf) -> Head {
             .filter(|entry| entry.state != State::Ignored)
             .count();
         let ahead = git.drift()?.map_or(0, |drift| drift.ahead);
-        Ok(Head {
-            folder: folder.clone(),
-            branch,
-            changed,
-            ahead,
-        })
+        Ok((branch, changed, ahead))
     });
-    read.unwrap_or_else(|error| {
+    let (branch, changed, ahead) = read.unwrap_or_else(|error| {
         eprintln!("desk: {} has no git state: {error}", folder.display());
-        Head::empty(folder)
-    })
+        (String::new(), 0, 0)
+    });
+    Head {
+        folder,
+        branch,
+        changed,
+        ahead,
+    }
 }
 
 #[cfg(feature = "screen-intro")]
@@ -268,114 +251,106 @@ pub fn switch(folder: &Path, branch: &str) -> Result<(), String> {
 
 pub const ACTIVE_FOR: Duration = Duration::from_secs(3600);
 
-pub struct Opened<'a> {
-    pub active: &'a [String],
-    pub open: Option<&'a str>,
+pub fn columns(rows: &[SessionRow], was: &SessionColumns) -> SessionColumns {
+    let mut sessions = SessionColumns::default();
+    for row in rows {
+        sessions.push(
+            row.id.clone().into(),
+            row.title().to_owned().into(),
+            row.last(),
+            SessionState::Stopped,
+        );
+    }
+    for column in &was.active {
+        let Some(id) = usize::try_from(*column).ok().and_then(|at| was.id.get(at)) else {
+            continue;
+        };
+        let at = match sessions.find(id) {
+            Some(at) => at,
+            None => sessions.push(id.clone(), id.clone(), None, SessionState::Unreported),
+        };
+        sessions.active.push(at);
+    }
+    sessions
+}
+
+pub struct Live<'a> {
+    pub listed: usize,
+    pub busy: Option<&'a str>,
+    pub running: &'a [&'a str],
     pub statuses: &'a Statuses,
 }
 
-#[derive(Default)]
-pub struct InactiveRows {
-    rows: Vec<SessionRow>,
-    active: Vec<String>,
-    sessions: Vec<Session>,
-}
-
-impl InactiveRows {
-    pub fn sessions(&mut self, rows: &[SessionRow], active: &[String]) -> Vec<Session> {
-        if self.rows != rows || self.active != active {
-            let now = SystemTime::now();
-            self.sessions = inactive(rows, active)
-                .map(|row| Session {
-                    name: row.title().to_owned().into(),
-                    state: SessionState::Stopped,
-                    age: row.age(now).unwrap_or_default().into(),
-                })
-                .collect();
-            self.rows = rows.to_vec();
-            self.active = active.to_vec();
-        }
-        self.sessions.clone()
-    }
-}
-
-pub fn sidebar(
-    head: &Head,
-    rows: &[SessionRow],
-    opened: &Opened,
-    inactive_rows: &mut InactiveRows,
-) -> Project {
+pub fn keep_active(sessions: &mut SessionColumns, live: &Live) -> bool {
     let now = SystemTime::now();
-    let active = opened.active.iter().map(|id| {
-        let row = rows.iter().find(|row| row.id == *id);
-        Session {
-            name: row.map_or(id.as_str(), SessionRow::title).to_owned().into(),
-            state: match opened.statuses.activity(id) {
-                Some(StatusState::Blocked) => SessionState::Waiting,
-                Some(StatusState::Working) => SessionState::Running,
-                Some(
-                    StatusState::Idle | StatusState::Done | StatusState::Error | StatusState::Clear,
-                ) => SessionState::Idle,
-                None => SessionState::Unreported,
-            },
-            age: row.and_then(|row| row.age(now)).unwrap_or_default().into(),
-        }
-    });
-    let shown = opened.open.and_then(|open| {
-        opened
-            .active
-            .iter()
-            .position(|id| id == open)
-            .map(SessionAt::Active)
-            .or_else(|| {
-                inactive(rows, opened.active)
-                    .position(|row| row.id == open)
-                    .map(SessionAt::Inactive)
-            })
-    });
-    Project {
-        name: name(&head.folder).into(),
-        branch: head.branch.clone().into(),
-        changed: head.changed,
-        shown,
-        active: active.collect(),
-        inactive: inactive_rows.sessions(rows, opened.active),
-    }
-}
-
-pub fn keep_active(active: &mut Vec<String>, rows: &[SessionRow], busy: Option<&str>) -> bool {
-    let now = SystemTime::now();
-    let idle = |id: &str| {
-        if busy == Some(id) {
-            return Some(Duration::ZERO);
-        }
-        rows.iter()
-            .find(|row| row.id == id)
-            .and_then(|row| row.since(now))
+    let mut column_of = |id: &str| match sessions.find(id) {
+        Some(at) => at,
+        None => sessions.push(id.into(), id.into(), None, SessionState::Unreported),
     };
-    let recent = |id: &str| idle(id).is_some_and(|since| since < ACTIVE_FOR);
+    let busy = live.busy.map(&mut column_of);
+    let running: Vec<u32> = live.running.iter().map(|id| column_of(id)).collect();
+    let idle = |column: u32| match Some(column) == busy {
+        true => Some(Duration::ZERO),
+        false => usize::try_from(column)
+            .ok()
+            .and_then(|at| *sessions.last_at.get(at)?)
+            .and_then(|last| now.duration_since(last).ok()),
+    };
+    let recent = |column: u32| idle(column).is_some_and(|since| since < ACTIVE_FOR);
+    let mut active = std::mem::take(&mut sessions.active);
     let before = active.clone();
-    active.retain(|id| recent(id));
-    let mut fresh: Vec<&str> = rows
-        .iter()
-        .map(|row| row.id.as_str())
+    active.retain(|column| recent(*column));
+    let mut fresh: Vec<u32> = (0..u32::try_from(live.listed).unwrap_or(u32::MAX))
         .chain(busy)
-        .filter(|id| recent(id) && !active.iter().any(|known| known == id))
+        .filter(|column| recent(*column) && !active.contains(column))
         .collect();
-    fresh.sort_by_key(|id| Reverse(idle(id)));
-    for id in fresh {
-        if !active.iter().any(|known| known == id) {
-            active.push(id.to_owned());
+    fresh.sort_by_key(|column| Reverse(idle(*column)));
+    for column in fresh.into_iter().chain(running.iter().copied()) {
+        if !active.contains(&column) {
+            active.push(column);
         }
     }
-    *active != before
+    for (column, state) in sessions.state.iter_mut().enumerate() {
+        let id = u32::try_from(column).unwrap_or(u32::MAX);
+        *state = match active.contains(&id) {
+            false => SessionState::Stopped,
+            true => {
+                let reported = sessions
+                    .id
+                    .get(column)
+                    .and_then(|id| live.statuses.activity(id));
+                match reported {
+                    Some(StatusState::Blocked) => SessionState::Waiting,
+                    _ if running.contains(&id) => SessionState::Running,
+                    Some(StatusState::Working) => SessionState::Running,
+                    Some(
+                        StatusState::Idle
+                        | StatusState::Done
+                        | StatusState::Error
+                        | StatusState::Clear,
+                    ) => SessionState::Idle,
+                    None => SessionState::Unreported,
+                }
+            }
+        };
+    }
+    let listed = u32::try_from(live.listed).unwrap_or(u32::MAX);
+    sessions.inactive = (0..listed)
+        .filter(|column| !active.contains(column))
+        .collect();
+    let moved = active != before;
+    sessions.active = active;
+    moved
 }
 
-pub fn inactive<'a>(
-    rows: &'a [SessionRow],
-    active: &'a [String],
-) -> impl Iterator<Item = &'a SessionRow> {
-    rows.iter().filter(move |row| !active.contains(&row.id))
+pub fn next_age(sessions: &SessionColumns, now: SystemTime) -> Option<Duration> {
+    sessions
+        .last_at
+        .iter()
+        .flatten()
+        .filter_map(|last| now.duration_since(*last).ok())
+        .map(age_changes_in)
+        .min()
 }
 
 pub enum Picked {
@@ -385,14 +360,15 @@ pub enum Picked {
     Unknown,
 }
 
-pub fn picked(id: &str, recents: &[PathBuf]) -> Picked {
+pub fn picked(id: &str, projects: &[ProjectRow]) -> Picked {
     if id == OPEN_FOLDER_ID {
         return Picked::OpenFolder;
     }
     let folder = id
         .strip_prefix(RECENT_ID)
         .and_then(|at| at.parse::<usize>().ok())
-        .and_then(|at| recents.get(at));
+        .and_then(|at| projects.get(at))
+        .map(|row| &row.folder);
     match folder {
         Some(folder) if folder.is_dir() => Picked::Switch(folder.clone()),
         Some(folder) => Picked::Forget(folder.clone()),
