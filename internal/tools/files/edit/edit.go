@@ -195,19 +195,8 @@ func (e Edit) plan(ctx context.Context, changes []EditChange, several bool) (pla
 	after, quotedOnce := text, true
 	for _, change := range changes {
 		var note string
-		count := strings.Count(after, change.Old)
-		quotedOnce = quotedOnce && change.Symbol == "" && change.Old != "" && count == 1
-		switch {
-		case change.Symbol != "":
-			after, err = symbols.ReplaceDeclaration(e.root, target, change.Symbol, after, change.New)
-		case change.Old == "":
-			after, note = after+change.New, "appended new_string to the end of "+target+", since old_string is empty"
-		case change.All && count > 1:
-			after, note = strings.ReplaceAll(after, change.Old, change.New), fmt.Sprintf("replaced %d occurrences of old_string in %s", count, target)
-		default:
-			after, note, err = glob.ReplaceOnce(after, target, change.Old, change.New)
-		}
-		if err != nil {
+		quotedOnce = quotedOnce && change.Symbol == "" && change.Old != "" && strings.Count(after, change.Old) == 1
+		if after, note, err = Apply(e.root, target, after, change); err != nil {
 			break
 		}
 		if note != "" {

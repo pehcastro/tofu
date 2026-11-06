@@ -650,6 +650,11 @@ const (
 )
 
 const (
+	WhatifCheckMillis   = 180_000
+	OverlayStaleMinutes = 10
+)
+
+const (
 	TypecheckExplainWindowLines  = 5
 	TypecheckExplainErrors       = 10
 	TypecheckExplainPlaces       = 5
