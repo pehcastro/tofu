@@ -601,3 +601,10 @@ const (
 	LspStderrLines         = 5
 	LspStderrBytes         = 4096
 )
+
+const (
+	ShadowSnapshotTimeoutMillis = 20000
+	ShadowTurnsKept             = 1000
+	ShadowStoreKeptBytes        = 536870912
+	ChangesTurnsShown           = 20
+)

@@ -30,6 +30,7 @@ import (
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/history/shadow"
 	"tofu/internal/tools/shell/process"
 	shipped "tofu/library"
 )
@@ -300,6 +301,34 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	recorded.begin(row, taskOrigin)
 	if len(config.History) > 0 {
 		recorded.listChange("carried", "the turn starts on the conversation the last turn or the resume left", nil, config.History)
+	}
+	var turnFiles *shadow.Started
+	if config.Project != "" {
+		turn := shadow.Turn{ID: row.ID, Session: row.Session, Agent: "lead", SpawnedBy: config.SpawnedBy}
+		if config.SpawnedFrom != "" {
+			turn.Agent = cmp.Or(config.AgentType, "sub-agent")
+		}
+		if config.Boundary != nil {
+			turn.Agent, turn.Owns = strings.TrimSpace(turn.Agent+" "+config.Boundary.Ticket), config.Boundary.Owns()
+		}
+		calls := func() []shadow.Call {
+			var calls []shadow.Call
+			for _, step := range row.Steps {
+				for _, call := range step.ToolCalls {
+					calls = append(calls, shadow.Call{ID: cmp.Or(call.Call, call.ID), Args: call.Args})
+				}
+			}
+			return calls
+		}
+		timed, cancel := context.WithTimeout(ctx, konst.ShadowSnapshotTimeoutMillis*time.Millisecond)
+		begun, err := shadow.At(config.Places.State, config.Project).Begin(timed, turn, calls)
+		cancel()
+		if err != nil {
+			row.Warnings = append(row.Warnings, "the shadow store did not record where this turn started, so changes cannot list what it edits: "+err.Error())
+		} else {
+			turnFiles = &begun
+			ctx = begun.Into(ctx)
+		}
 	}
 
 	hooks, untrustedHooks := hookEngine(ctx, config, origin)
@@ -697,6 +726,18 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				ended, spent := spawner.tree.bill()
 				row.SubAgentIDs = append(row.SubAgentIDs, ended...)
 				row.TotalCostUSD += spent
+			}
+		}
+		if turnFiles != nil {
+			if config.Boundary != nil {
+				turnFiles.Turn.Owns = config.Boundary.Owns()
+			}
+			timed, cancel := context.WithTimeout(context.WithoutCancel(ctx), konst.ShadowSnapshotTimeoutMillis*time.Millisecond)
+			notes, err := turnFiles.End(timed)
+			cancel()
+			row.Warnings = append(row.Warnings, notes...)
+			if err != nil {
+				row.Warnings = append(row.Warnings, "the shadow store did not commit this turn's edits, so changes cannot list them: "+err.Error())
 			}
 		}
 		row.WallClockMS = now().Sub(start).Milliseconds()

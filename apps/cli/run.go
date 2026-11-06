@@ -1222,6 +1222,7 @@ func assembleRunTools(dir, set string, ledger *contract.ReadLedger, warm *warmPr
 func leadToolConstructors() []func(dir string) (contract.Tool, error) {
 	return []func(dir string) (contract.Tool, error){
 		envTool,
+		newChangesTool,
 	}
 }
 
