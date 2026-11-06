@@ -1,0 +1,7 @@
+id: debug_loop
+domain: dev
+kind: human
+concern: process_discipline
+task: debug
+text: before you form a theory, build one command that reproduces the failure and can go red on this bug, run it and show what it printed. then rule out one hypothesis at a time, each probe changing one thing. look rather than guess: run the failing test or program under the debug tool, break where the value goes wrong and read locals or eval at the stop, or trace one function to see every call; add temporary logging only when the debugger is missing, and read a running server's output with the shell tool's logs op. when a hypothesis is refuted, revert every change it motivated. after two fixes resting on the same premise have failed, stop fixing and question the premise. fix the cause, not the symptom: no guard, nil check or fallback that only silences the failure, and fix every other place the same pattern appears. the bug is fixed when that same command goes from red to green, and any temporary logging leaves in the same change.
+notes: guessing at a bug without a reproduction produces fixes that silence the symptom and leave the cause. it guards against stacked speculative changes, guards that hide a crash and a pattern fixed in one place and left in others. version 2 sends the probe to the debug tool rather than temporary logging, after real sessions held version 1 and added t.Log lines to a test while the debug tool sat unused.

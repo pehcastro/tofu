@@ -19,7 +19,7 @@ Read the whole error, the stack and the log. Read what changed recently near the
 ## 3. Narrow, one hypothesis at a time
 
 - State one hypothesis and the observation that would refute it.
-- Add temporary logging at the boundary where the value goes wrong, between components rather than inside one, and run the reproduction again.
+- Look at the value where it goes wrong with the `debug` tool, not with logging: `start test <name>`, `break <path:line>`, `run`, then `locals` or `eval <expression>` at the stop. `trace <package.Function>` lists every call of one function with its arguments and result, which finds the one call of many that goes wrong. Use it before `eval` whenever the value lives inside a running test or program a snippet would have to rebuild. Add temporary logging only when the debugger is missing.
 - Change one thing per probe. When a hypothesis is refuted, revert everything it motivated.
 - After two failed fixes that rest on the same premise, stop fixing and question the premise.
 
@@ -29,7 +29,7 @@ Fix where the wrong value is made, not where it is noticed. No guard, nil check 
 
 ## 5. Prove it
 
-Run the reproduction from step 1: it goes from red to green. Run the covering tests. Remove the temporary logging in the same change.
+Run the reproduction from step 1: it goes from red to green. Run the covering tests. Remove any temporary logging in the same change.
 
 ## Report
 

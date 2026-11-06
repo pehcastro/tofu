@@ -81,8 +81,9 @@ func (*Debug) Definition() core.Tool {
 	return core.Tool{
 		Name: "debug",
 		Description: "runs a go or python program or test under a real debugger and answers what the values are at a line, instead of adding print lines you then have to remove. " +
+			"use it over eval when the wrong value sits in the middle of a function inside a running test or program, or only on one call of many, or behind setup a snippet would have to rebuild such as testdata files and several steps. " +
 			"steps run in order, and the session stays open between calls until stop. each step is one of: " +
-			"start test [names...] debugs the tests of the working directory, all of them or the ones named (go test names, or python unittest ids such as test_order.OrderTest.test_discounted); " +
+			"start test [names...] debugs the tests of the working directory, all of them or the ones named, with the word test and no file, as start test TestQuarterTotal (go test names, or python unittest ids such as test_order.OrderTest.test_discounted); " +
 			"start <path> [args...] debugs a program, a go package directory or a python file; " +
 			"break <path:line> [--if <expression>] stops there, only when the expression is true; " +
 			"run starts or continues until a break or the end; step, step in and step out move one line; " +
