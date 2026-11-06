@@ -87,6 +87,7 @@ func (*Debug) Definition() core.Tool {
 			"break <path:line> [--if <expression>] stops there, only when the expression is true; " +
 			"run starts or continues until a break or the end; step, step in and step out move one line; " +
 			"locals prints the values at the stop; eval <expression> prints one value; stop ends the program and the debugger. " +
+			"trace <package.Function> instead of break and run runs a go program to its end and lists each call of that function, such as orders.Order.Total, with its arguments, result, milliseconds and caller, the first " + strconv.Itoa(traceCalls) + " in full and the count of all of them. " +
 			"every stop prints where it is, the locals one line each and the top of the stack. " +
 			"go needs dlv and python needs debugpy; tofu never installs either and names the install command when one is missing",
 		Parameters: map[string]any{
@@ -169,11 +170,13 @@ func (d *Debug) step(ctx context.Context, step string) (string, error) {
 		return s.locals(ctx)
 	case "eval":
 		return s.eval(ctx, rest)
+	case "trace":
+		return s.trace(ctx, rest)
 	case "stop":
 		d.session = nil
 		return s.stop(), nil
 	}
-	return "", errors.New("unknown step " + strconv.Quote(verb) + ": the steps are start, break, run, step, locals, eval and stop")
+	return "", errors.New("unknown step " + strconv.Quote(verb) + ": the steps are start, break, run, step, locals, eval, trace and stop")
 }
 
 func (d *Debug) start(ctx context.Context, target string) (string, error) {

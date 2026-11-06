@@ -45,6 +45,7 @@ type frame struct {
 	ID     int    `json:"id"`
 	Name   string `json:"name"`
 	Line   int    `json:"line"`
+	IP     string `json:"instructionPointerReference"`
 	Source struct {
 		Path string `json:"path"`
 	} `json:"source"`
@@ -205,21 +206,28 @@ func (s *session) run(ctx context.Context) (string, error) {
 	if s.configured {
 		return s.move(ctx, "continue")
 	}
+	if err := s.configure(ctx); err != nil {
+		return "", err
+	}
+	return s.resume(ctx)
+}
+
+func (s *session) configure(ctx context.Context) error {
 	requesting, cancel := context.WithTimeout(ctx, s.limits.Request)
 	defer cancel()
 	s.configured = true
 	if err := s.client.Call(requesting, "configurationDone", nil, nil); err != nil {
-		return "", err
+		return err
 	}
 	select {
 	case err := <-s.launched:
 		if err != nil {
-			return "", s.explained(nil, err)
+			return s.explained(nil, err)
 		}
 	case <-requesting.Done():
-		return "", errors.New(s.program + " did not finish launching after " + s.limits.Request.String())
+		return errors.New(s.program + " did not finish launching after " + s.limits.Request.String())
 	}
-	return s.resume(ctx)
+	return nil
 }
 
 func (s *session) move(ctx context.Context, command string) (string, error) {
@@ -261,16 +269,23 @@ func (s *session) resume(ctx context.Context) (string, error) {
 		case "terminated":
 			return s.end(), nil
 		case "stopped":
-			var stop struct {
-				Reason           string `json:"reason"`
-				ThreadID         int    `json:"threadId"`
-				HitBreakpointIDs []int  `json:"hitBreakpointIds"`
-			}
-			_ = json.Unmarshal(event.Body, &stop)
-			s.thread = stop.ThreadID
+			stop := s.stoppedBy(event)
 			return s.at(ctx, stop.Reason, stop.HitBreakpointIDs)
 		}
 	}
+}
+
+type stop struct {
+	Reason           string `json:"reason"`
+	ThreadID         int    `json:"threadId"`
+	HitBreakpointIDs []int  `json:"hitBreakpointIds"`
+}
+
+func (s *session) stoppedBy(event dap.Event) stop {
+	var stopped stop
+	_ = json.Unmarshal(event.Body, &stopped)
+	s.thread = stopped.ThreadID
+	return stopped
 }
 
 func (s *session) end() string {
@@ -299,16 +314,11 @@ func (s *session) end() string {
 func (s *session) at(ctx context.Context, reason string, hit []int) (string, error) {
 	requesting, cancel := context.WithTimeout(ctx, s.limits.Request)
 	defer cancel()
-	var trace struct {
-		StackFrames []frame `json:"stackFrames"`
-	}
-	if err := s.client.Call(requesting, "stackTrace", map[string]any{"threadId": s.thread, "startFrame": 0, "levels": s.limits.Frames}, &trace); err != nil {
+	stack, err := s.stack(requesting, s.limits.Frames, reason)
+	if err != nil {
 		return "", err
 	}
-	if len(trace.StackFrames) == 0 {
-		return "", errors.New(s.program + " stopped on " + reason + " with no stack")
-	}
-	top := trace.StackFrames[0]
+	top := stack[0]
 	s.frame, s.paused = top.ID, true
 	for path, breaks := range s.breaks {
 		for i, held := range breaks {
@@ -322,10 +332,23 @@ func (s *session) at(ctx context.Context, reason string, hit []int) (string, err
 		return "", err
 	}
 	said := "stopped at " + s.place(top) + ", on " + reason + "\n" + locals + "stack:\n"
-	for _, held := range trace.StackFrames {
+	for _, held := range stack {
 		said += "  " + s.place(held) + "\n"
 	}
 	return said, nil
+}
+
+func (s *session) stack(ctx context.Context, levels int, reason string) ([]frame, error) {
+	var trace struct {
+		StackFrames []frame `json:"stackFrames"`
+	}
+	if err := s.client.Call(ctx, "stackTrace", map[string]any{"threadId": s.thread, "startFrame": 0, "levels": levels}, &trace); err != nil {
+		return nil, err
+	}
+	if len(trace.StackFrames) == 0 {
+		return nil, errors.New(s.program + " stopped on " + reason + " with no stack")
+	}
+	return trace.StackFrames, nil
 }
 
 func (s *session) place(at frame) string {
@@ -338,35 +361,13 @@ func (s *session) locals(ctx context.Context) (string, error) {
 	}
 	requesting, cancel := context.WithTimeout(ctx, s.limits.Request)
 	defer cancel()
-	var scopes struct {
-		Scopes []struct {
-			Name               string `json:"name"`
-			PresentationHint   string `json:"presentationHint"`
-			VariablesReference int    `json:"variablesReference"`
-			Expensive          bool   `json:"expensive"`
-		} `json:"scopes"`
-	}
-	if err := s.client.Call(requesting, "scopes", map[string]any{"frameId": s.frame}, &scopes); err != nil {
+	held, err := s.variables(requesting, s.frame)
+	if err != nil {
 		return "", err
 	}
 	var lines []string
-	for _, scope := range scopes.Scopes {
-		if scope.Expensive || !slices.Contains([]string{"locals", "arguments", "Locals", "Arguments"}, cmp.Or(scope.PresentationHint, scope.Name)) {
-			continue
-		}
-		var held struct {
-			Variables []struct {
-				Name  string `json:"name"`
-				Value string `json:"value"`
-				Type  string `json:"type"`
-			} `json:"variables"`
-		}
-		if err := s.client.Call(requesting, "variables", map[string]any{"variablesReference": scope.VariablesReference}, &held); err != nil {
-			return "", err
-		}
-		for _, variable := range held.Variables {
-			lines = append(lines, "  "+s.valued(variable.Name, variable.Value, variable.Type))
-		}
+	for _, variable := range held {
+		lines = append(lines, "  "+s.valued(variable.Name, variable.Value, variable.Type))
 	}
 	if len(lines) == 0 {
 		return "locals: none\n", nil
@@ -377,15 +378,53 @@ func (s *session) locals(ctx context.Context) (string, error) {
 	return "locals:\n" + strings.Join(lines, "\n") + "\n", nil
 }
 
+type variable struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+	Type  string `json:"type"`
+}
+
+func (s *session) variables(ctx context.Context, frameID int) ([]variable, error) {
+	var scopes struct {
+		Scopes []struct {
+			Name               string `json:"name"`
+			PresentationHint   string `json:"presentationHint"`
+			VariablesReference int    `json:"variablesReference"`
+			Expensive          bool   `json:"expensive"`
+		} `json:"scopes"`
+	}
+	if err := s.client.Call(ctx, "scopes", map[string]any{"frameId": frameID}, &scopes); err != nil {
+		return nil, err
+	}
+	var all []variable
+	for _, scope := range scopes.Scopes {
+		if scope.Expensive || !slices.Contains([]string{"locals", "arguments", "Locals", "Arguments"}, cmp.Or(scope.PresentationHint, scope.Name)) {
+			continue
+		}
+		var held struct {
+			Variables []variable `json:"variables"`
+		}
+		if err := s.client.Call(ctx, "variables", map[string]any{"variablesReference": scope.VariablesReference}, &held); err != nil {
+			return nil, err
+		}
+		all = append(all, held.Variables...)
+	}
+	return all, nil
+}
+
 func (s *session) valued(name, value, kind string) string {
+	return name + " = " + s.shortened(value, kind)
+}
+
+func (s *session) shortened(value, kind string) string {
 	flat := []rune(strings.Join(strings.Fields(value), " "))
 	if len(flat) > s.limits.ValueRunes {
 		flat = append(flat[:s.limits.ValueRunes], []rune("...")...)
 	}
 	if kind == "" {
-		return name + " = " + string(flat)
+		return string(flat)
 	}
-	return name + " = " + string(flat) + " (" + kind + ")"
+	return string(flat) + " (" + kind + ")"
 }
 
 func (s *session) eval(ctx context.Context, expression string) (string, error) {
