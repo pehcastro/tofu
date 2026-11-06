@@ -194,6 +194,10 @@ func typescriptFiles(dir string) int {
 }
 
 func EachSourceFile(dir string, visit func(name string) bool) {
+	eachSourcePath(dir, func(path string) bool { return visit(filepath.Base(path)) })
+}
+
+func eachSourcePath(dir string, visit func(path string) bool) {
 	_ = filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -202,7 +206,7 @@ func EachSourceFile(dir string, visit func(name string) bool) {
 		switch {
 		case entry.IsDir() && path != dir && (name == "node_modules" || name == "dist" || strings.HasPrefix(name, ".")):
 			return filepath.SkipDir
-		case !entry.IsDir() && !visit(name):
+		case !entry.IsDir() && !visit(path):
 			return filepath.SkipAll
 		}
 		return nil
@@ -214,26 +218,17 @@ func (c *Typecheckers) Typecheck(ctx context.Context, resolved string) (string, 
 	return result.Content, err
 }
 
-func (c *Typecheckers) Check(ctx context.Context, resolved string) (contract.Result, error) {
-	since := time.Now()
-	info, err := os.Stat(resolved)
-	if err != nil {
-		return contract.Result{}, err
-	}
-	from := resolved
-	if !info.IsDir() {
-		from = filepath.Dir(resolved)
-	}
+func (c *Typecheckers) checkTypescript(ctx context.Context, from, resolved string, since time.Time) contract.Result {
 	checker, skipped := typecheckerFor(from)
 	if skipped != "" {
-		return contract.Failure("typecheck skipped: " + skipped), nil
+		return contract.Failure("typecheck skipped: " + skipped)
 	}
 	scope, _ := filepath.Rel(checker.dir, resolved)
-	return c.check(ctx, checker, filepath.ToSlash(scope), since, waitForAnswer), nil
+	return c.check(ctx, checker, filepath.ToSlash(scope), since, waitForAnswer)
 }
 
 func (c *Typecheckers) Typechecked(ctx context.Context, resolved, result string) string {
-	if !slices.Contains([]string{".ts", ".tsx", ".vue", ".svelte"}, filepath.Ext(resolved)) {
+	if !slices.Contains(typescriptExtensions(), filepath.Ext(resolved)) {
 		return result
 	}
 	since := time.Now()

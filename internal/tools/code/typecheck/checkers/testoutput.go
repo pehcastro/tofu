@@ -22,6 +22,7 @@ type TestRun struct {
 	Skipped         int
 	PackagesOK      int
 	PackagesNoTests int
+	SkippedNames    []string
 	Failures        []TestFailure
 	Problems        []Problem
 }
@@ -46,6 +47,9 @@ var (
 	goFrame        = fs.LazyRegexp(`^\t(\S+\.go:\d+)`)
 	rustResult     = fs.LazyRegexp(`^test result: \w+\. (\d+) passed; (\d+) failed; (\d+) ignored`)
 	rustFailed     = fs.LazyRegexp(`^test (\S+) \.\.\. FAILED$`)
+	rustIgnored    = fs.LazyRegexp(`^test (\S+) \.\.\. ignored`)
+	pytestSkipped  = fs.LazyRegexp(`^SKIPPED \[\d+\] (\S+?:\d+)`)
+	unittestSkip   = fs.LazyRegexp(`^(\w+ \(\S+\)) \.\.\. skipped`)
 	rustCaptured   = fs.LazyRegexp(`^---- (\S+) std(?:out|err) ----$`)
 	rustPanicked   = fs.LazyRegexp(`^thread '[^']*'(?: \(\d+\))? panicked at (.+:\d+:\d+):$`)
 	rustDiagnostic = fs.LazyRegexp(`^(error|warning)(\[\w+\])?: (.+)$`)
@@ -97,6 +101,7 @@ func GoTest(output string) TestRun {
 				failed = append(failed, current)
 			case "SKIP":
 				run.Skipped++
+				run.SkippedNames = append(run.SkippedNames, current)
 			}
 			continue
 		}
@@ -176,6 +181,10 @@ func CargoTest(output string) TestRun {
 			run.failure(match[1])
 			continue
 		}
+		if match := rustIgnored().FindStringSubmatch(line); match != nil {
+			run.SkippedNames = append(run.SkippedNames, match[1])
+			continue
+		}
 		if match := rustCaptured().FindStringSubmatch(line); match != nil {
 			current = run.failure(match[1])
 			continue
@@ -248,6 +257,8 @@ func Pytest(output string) TestRun {
 					run.Skipped += atoi(count[1])
 				}
 			}
+		case pytestSkipped().MatchString(line):
+			run.SkippedNames = append(run.SkippedNames, pytestSkipped().FindStringSubmatch(line)[1])
 		case pytestBlock().MatchString(line):
 			name := pytestBlock().FindStringSubmatch(line)[1]
 			run.Failures, current = append(run.Failures, TestFailure{Name: name}), len(run.Failures)
@@ -282,6 +293,10 @@ func Pytest(output string) TestRun {
 func Unittest(output string) TestRun {
 	run, ran, current, framed := TestRun{}, -1, -1, false
 	for _, line := range outputLines(output) {
+		if match := unittestSkip().FindStringSubmatch(line); match != nil {
+			run.SkippedNames = append(run.SkippedNames, match[1])
+			continue
+		}
 		if match := unittestRan().FindStringSubmatch(line); match != nil {
 			ran, current = atoi(match[1]), -1
 			continue

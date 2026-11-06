@@ -638,6 +638,13 @@ const TestCPUs = 4
 const FormatRunMillis = 60_000
 
 const (
+	TypecheckExplainWindowLines  = 5
+	TypecheckExplainErrors       = 10
+	TypecheckExplainPlaces       = 5
+	TypecheckExplainDeclarations = 3
+)
+
+const (
 	DebugRequestMillis = 10_000
 	DebugRunMillis     = 120_000
 	DebugStopMillis    = 3_000
