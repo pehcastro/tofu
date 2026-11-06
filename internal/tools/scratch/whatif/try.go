@@ -122,14 +122,19 @@ func planOf(made overlay.Overlay, root, from string, check Check) (plan, error) 
 	case goModule:
 		rel, _ := filepath.Rel(at, from)
 		pkg := "./" + filepath.ToSlash(rel)
-		if check.Kind == Build {
-			return plan{steps: [][]string{{"go", "build", made.GoFlag(), "-o", os.DevNull, pkg}, {"go", "vet", made.GoFlag(), pkg}}, dir: at, parse: checkers.GoTest}, nil
+		dir, overlaid, err := at, []string{made.GoFlag()}, error(nil)
+		if _, absent := os.Stat(from); absent != nil {
+			dir, err = inTree(at)
+			overlaid = nil
 		}
-		argv := []string{"go", "test", made.GoFlag(), "-json", "-count=1"}
+		if check.Kind == Build {
+			return plan{steps: [][]string{slices.Concat([]string{"go", "build"}, overlaid, []string{"-o", os.DevNull, pkg}), slices.Concat([]string{"go", "vet"}, overlaid, []string{pkg})}, dir: dir, parse: checkers.GoTest}, err
+		}
+		argv := slices.Concat([]string{"go", "test"}, overlaid, []string{"-json", "-count=1"})
 		if check.Name != "" {
 			argv = append(argv, "-run", check.Name)
 		}
-		return plan{steps: [][]string{append(argv, pkg)}, dir: at, parse: checkers.GoTest, tests: true}, nil
+		return plan{steps: [][]string{append(argv, pkg)}, dir: dir, parse: checkers.GoTest, tests: true}, err
 	case rustCrate:
 		dir, err := inTree(at)
 		if check.Kind == Build {
