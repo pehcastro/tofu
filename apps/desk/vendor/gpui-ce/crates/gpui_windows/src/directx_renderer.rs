@@ -172,23 +172,7 @@ struct BlurResources {
     groups: Vec<ID3D11Texture2D>,
     group_rtvs: Vec<Option<ID3D11RenderTargetView>>,
     group_srvs: Vec<Option<ID3D11ShaderResourceView>>,
-    // Full-resolution copy of the region an unfrosted lens samples; absent until one is drawn.
-    lens: Option<LensTarget>,
 }
-
-struct LensTarget {
-    texture: ID3D11Texture2D,
-    srv: Option<ID3D11ShaderResourceView>,
-}
-
-/// The blurred backdrop held in ping during one backdrop batch, and the area composited into
-/// the target since it was taken.
-struct LensCapture {
-    blur_radius: f32,
-    written: Option<Bounds<ScaledPixels>>,
-}
-
-const LENS_SAMPLE_MARGIN: f32 = 2.0;
 
 impl BlurResources {
     fn new(
@@ -225,7 +209,6 @@ impl BlurResources {
             groups,
             group_rtvs,
             group_srvs,
-            lens: None,
         })
     }
 
@@ -266,8 +249,6 @@ struct DirectXRenderPipelines {
     blur_composite_fragment: ID3D11PixelShader,
     smoothed_blur_composite_vertex: ID3D11VertexShader,
     smoothed_blur_composite_fragment: ID3D11PixelShader,
-    refract_composite_vertex: ID3D11VertexShader,
-    refract_composite_fragment: ID3D11PixelShader,
     blur_params_buffer: ID3D11Buffer,
     blur_blend_replace: ID3D11BlendState,
     blur_blend_composite: ID3D11BlendState,
@@ -583,13 +564,6 @@ impl DirectXRenderer {
         if use_offscreen {
             resources.ensure_blur_resources(device, requirements.isolated_target_count)?;
         }
-        if scene
-            .backdrop_filters
-            .iter()
-            .any(|filter| filter.refraction().is_some())
-        {
-            resources.ensure_lens_target(device)?;
-        }
 
         // Clone the views we need (AddRef) so the loop can rebind render targets without holding a
         // borrow of `self` across the `&mut self` draw_* calls.
@@ -709,31 +683,18 @@ impl DirectXRenderer {
                 }
                 RenderCommand::Batch(PrimitiveBatch::BackdropFilters(range)) => {
                     let result = (|| {
-                        let mut capture = None;
                         for filter in &scene.backdrop_filters[range.clone()] {
-                            match filter.refraction() {
-                                Some(lens) => self.dx_refract(
-                                    &current_srv,
-                                    &current_rtv,
-                                    filter,
-                                    lens,
-                                    &mut capture,
-                                )?,
-                                None => {
-                                    capture = None;
-                                    self.dx_blur_and_composite(
-                                        &current_srv,
-                                        &current_rtv,
-                                        filter.bounds,
-                                        filter.content_mask.bounds,
-                                        filter.corner_radii,
-                                        filter.corner_smoothing,
-                                        filter.max_blur_radius(),
-                                        filter.opacity,
-                                        true,
-                                    )?
-                                }
-                            }
+                            self.dx_blur_and_composite(
+                                &current_srv,
+                                &current_rtv,
+                                filter.bounds,
+                                filter.content_mask.bounds,
+                                filter.corner_radii,
+                                filter.corner_smoothing,
+                                filter.max_blur_radius(),
+                                filter.opacity,
+                                true,
+                            )?;
                         }
                         Ok::<(), anyhow::Error>(())
                     })();
@@ -1354,24 +1315,78 @@ impl DirectXRenderer {
     ) -> Result<()> {
         let full_width = self.width;
         let full_height = self.height;
-        let blur_size = self.blur_size();
+        let blur_size = [
+            downsampled_dimension(full_width) as f32,
+            downsampled_dimension(full_height) as f32,
+        ];
         let clip = if clip_rounded {
             FilterCompositeClip::RoundedBounds
         } else {
             FilterCompositeClip::ContentShape
         };
-        let (full_vp, ping_srv) = {
+        let half_vp = D3D11_VIEWPORT {
+            TopLeftX: 0.0,
+            TopLeftY: 0.0,
+            Width: blur_size[0],
+            Height: blur_size[1],
+            MinDepth: 0.0,
+            MaxDepth: 1.0,
+        };
+        let (full_vp, ping_rtv, ping_srv, pong_rtv, pong_srv) = {
             let r = self.resources.as_ref().context("resources missing")?;
             let blur = r
                 .blur
                 .as_ref()
                 .context("blur resources were not prepared")?;
-            (r.viewport, blur.ping_srv.clone())
+            (
+                r.viewport,
+                blur.ping_rtv.clone(),
+                blur.ping_srv.clone(),
+                blur.pong_rtv.clone(),
+                blur.pong_srv.clone(),
+            )
         };
         let Some(kernel) = BlurKernel::for_radius(blur_radius) else {
             return Ok(());
         };
-        self.dx_blur_capture(source_srv, kernel)?;
+
+        // Downsample source -> ping, then separable gaussian ping -> pong -> ping.
+        self.dx_blur_pass(
+            &self.pipelines.blur_downsample_vertex,
+            &self.pipelines.blur_downsample_fragment,
+            &self.pipelines.blur_blend_replace,
+            &ping_rtv,
+            source_srv,
+            BlurUniforms::downsample([full_width as f32, full_height as f32], blur_size),
+            &half_vp,
+            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+            3,
+            true,
+        )?;
+        self.dx_blur_pass(
+            &self.pipelines.blur_vertex,
+            &self.pipelines.blur_fragment,
+            &self.pipelines.blur_blend_replace,
+            &pong_rtv,
+            &ping_srv,
+            BlurUniforms::gaussian(BlurAxis::Horizontal, blur_size, kernel),
+            &half_vp,
+            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+            3,
+            true,
+        )?;
+        self.dx_blur_pass(
+            &self.pipelines.blur_vertex,
+            &self.pipelines.blur_fragment,
+            &self.pipelines.blur_blend_replace,
+            &ping_rtv,
+            &pong_srv,
+            BlurUniforms::gaussian(BlurAxis::Vertical, blur_size, kernel),
+            &half_vp,
+            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+            3,
+            true,
+        )?;
 
         // Content blur bleeds ~3·radius past the box; composite over a dilated rect.
         let composite_bounds = if clip_rounded {
@@ -1415,216 +1430,6 @@ impl DirectXRenderer {
             4,
             false,
         )?;
-        Ok(())
-    }
-
-    fn blur_size(&self) -> [f32; 2] {
-        [
-            downsampled_dimension(self.width) as f32,
-            downsampled_dimension(self.height) as f32,
-        ]
-    }
-
-    /// Downsample `source_srv` into ping, then blur it ping -> pong -> ping.
-    fn dx_blur_capture(
-        &self,
-        source_srv: &Option<ID3D11ShaderResourceView>,
-        kernel: BlurKernel,
-    ) -> Result<()> {
-        let blur_size = self.blur_size();
-        let half_vp = D3D11_VIEWPORT {
-            TopLeftX: 0.0,
-            TopLeftY: 0.0,
-            Width: blur_size[0],
-            Height: blur_size[1],
-            MinDepth: 0.0,
-            MaxDepth: 1.0,
-        };
-        let (ping_rtv, ping_srv, pong_rtv, pong_srv) = {
-            let r = self.resources.as_ref().context("resources missing")?;
-            let blur = r
-                .blur
-                .as_ref()
-                .context("blur resources were not prepared")?;
-            (
-                blur.ping_rtv.clone(),
-                blur.ping_srv.clone(),
-                blur.pong_rtv.clone(),
-                blur.pong_srv.clone(),
-            )
-        };
-        self.dx_blur_pass(
-            &self.pipelines.blur_downsample_vertex,
-            &self.pipelines.blur_downsample_fragment,
-            &self.pipelines.blur_blend_replace,
-            &ping_rtv,
-            source_srv,
-            BlurUniforms::downsample([self.width as f32, self.height as f32], blur_size),
-            &half_vp,
-            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-            3,
-            true,
-        )?;
-        self.dx_blur_pass(
-            &self.pipelines.blur_vertex,
-            &self.pipelines.blur_fragment,
-            &self.pipelines.blur_blend_replace,
-            &pong_rtv,
-            &ping_srv,
-            BlurUniforms::gaussian(BlurAxis::Horizontal, blur_size, kernel),
-            &half_vp,
-            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-            3,
-            true,
-        )?;
-        self.dx_blur_pass(
-            &self.pipelines.blur_vertex,
-            &self.pipelines.blur_fragment,
-            &self.pipelines.blur_blend_replace,
-            &ping_rtv,
-            &pong_srv,
-            BlurUniforms::gaussian(BlurAxis::Vertical, blur_size, kernel),
-            &half_vp,
-            D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-            3,
-            true,
-        )
-    }
-
-    /// Draw one liquid-glass backdrop. A frosted lens reuses the blurred capture already in ping
-    /// while nothing composited since that capture lands inside this lens or its refraction
-    /// reach, so sibling panels in one batch share one capture; an unfrosted lens copies only
-    /// the region it samples and leaves its interior untouched.
-    fn dx_refract(
-        &self,
-        source_srv: &Option<ID3D11ShaderResourceView>,
-        target_rtv: &Option<ID3D11RenderTargetView>,
-        filter: &BackdropFilter,
-        lens: ScaledRefraction,
-        capture: &mut Option<LensCapture>,
-    ) -> Result<()> {
-        let full_size = [self.width as f32, self.height as f32];
-        let blur_radius = filter.max_blur_radius();
-        let sampled = filter.bounds.dilate(ScaledPixels(
-            lens.offset.0.abs() + lens.spread.0 + LENS_SAMPLE_MARGIN,
-        ));
-        let (full_vp, ping_srv, lens_srv) = {
-            let r = self.resources.as_ref().context("resources missing")?;
-            let blur = r
-                .blur
-                .as_ref()
-                .context("blur resources were not prepared")?;
-            (
-                r.viewport,
-                blur.ping_srv.clone(),
-                blur.lens.as_ref().and_then(|target| target.srv.clone()),
-            )
-        };
-        self.dx_copy_lens_region(source_srv, sampled)?;
-        let lens_pass = |texture_srv: &Option<ID3D11ShaderResourceView>,
-                         texture_size: [f32; 2],
-                         frosted: bool| {
-            self.dx_blur_pass(
-                &self.pipelines.refract_composite_vertex,
-                &self.pipelines.refract_composite_fragment,
-                &self.pipelines.blur_blend_composite,
-                target_rtv,
-                texture_srv,
-                BlurUniforms::composite(
-                    filter.bounds,
-                    filter.content_mask.bounds,
-                    filter.corner_radii,
-                    0.0,
-                    filter.opacity,
-                    FilterCompositeClip::RoundedBounds,
-                    texture_size,
-                    full_size,
-                )
-                .refracted(lens, frosted),
-                &full_vp,
-                D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
-                4,
-                false,
-            )
-        };
-        if let Some(kernel) = BlurKernel::for_radius(blur_radius) {
-            let reusable = capture.as_ref().is_some_and(|held| {
-                held.blur_radius == blur_radius
-                    && !held
-                        .written
-                        .is_some_and(|written| written.intersects(&sampled))
-            });
-            if !reusable {
-                self.dx_blur_capture(source_srv, kernel)?;
-                *capture = Some(LensCapture {
-                    blur_radius,
-                    written: None,
-                });
-            }
-            lens_pass(&ping_srv, self.blur_size(), true)?;
-        }
-        lens_pass(&lens_srv, full_size, false)?;
-        if let Some(held) = capture.as_mut() {
-            held.written = Some(match held.written {
-                Some(written) => written.union(&filter.bounds),
-                None => filter.bounds,
-            });
-        }
-        Ok(())
-    }
-
-    fn dx_copy_lens_region(
-        &self,
-        source_srv: &Option<ID3D11ShaderResourceView>,
-        region: Bounds<ScaledPixels>,
-    ) -> Result<()> {
-        let r = self.resources.as_ref().context("resources missing")?;
-        let target = r
-            .blur
-            .as_ref()
-            .and_then(|blur| blur.lens.as_ref())
-            .context("lens target was not prepared")?;
-        let source = source_srv.as_ref().context("lens source view missing")?;
-        let ctx = &self
-            .devices
-            .as_ref()
-            .context("devices missing")?
-            .device_context;
-        let (width, height) = (self.width as f32, self.height as f32);
-        let left = region.origin.x.0.floor().clamp(0.0, width) as u32;
-        let top = region.origin.y.0.floor().clamp(0.0, height) as u32;
-        let right = (region.origin.x.0 + region.size.width.0)
-            .ceil()
-            .clamp(0.0, width) as u32;
-        let bottom = (region.origin.y.0 + region.size.height.0)
-            .ceil()
-            .clamp(0.0, height) as u32;
-        if right <= left || bottom <= top {
-            return Ok(());
-        }
-        let copy_box = D3D11_BOX {
-            left,
-            top,
-            front: 0,
-            right,
-            bottom,
-            back: 1,
-        };
-        // SAFETY: both textures are single-mip BGRA targets of the window size, the box was
-        // clamped to that size above, and the lens target is never the source being copied.
-        unsafe {
-            let resource = source.GetResource()?;
-            ctx.CopySubresourceRegion(
-                &target.texture,
-                0,
-                left,
-                top,
-                0,
-                &resource,
-                0,
-                Some(&copy_box),
-            );
-        }
         Ok(())
     }
 
@@ -1780,19 +1585,6 @@ impl DirectXResources {
         )
     }
 
-    fn ensure_lens_target(&mut self, device: &ID3D11Device) -> Result<()> {
-        let (width, height) = (self.viewport.Width as u32, self.viewport.Height as u32);
-        let blur = self
-            .blur
-            .as_mut()
-            .context("blur resources were not prepared")?;
-        if blur.lens.is_none() {
-            let (texture, _, srv) = create_color_target(device, width, height)?;
-            blur.lens = Some(LensTarget { texture, srv });
-        }
-        Ok(())
-    }
-
     fn ensure_path_resources(&mut self, device: &ID3D11Device) -> Result<()> {
         if self.path.is_none() {
             self.path = Some(PathResources::new(
@@ -1895,10 +1687,6 @@ impl DirectXRenderPipelines {
             create_vertex_shader(device, smoothed_blur_composite.vertex)?;
         let smoothed_blur_composite_fragment =
             create_fragment_shader(device, smoothed_blur_composite.fragment)?;
-        let refract_composite = ShaderModule::RefractComposite.bytecode()?;
-        let refract_composite_vertex = create_vertex_shader(device, refract_composite.vertex)?;
-        let refract_composite_fragment =
-            create_fragment_shader(device, refract_composite.fragment)?;
         let blur_params_buffer =
             create_constant_buffer(device, std::mem::size_of::<BlurUniforms>())?;
         let blur_blend_replace = create_blend_state_no_blend(device)?;
@@ -1932,8 +1720,6 @@ impl DirectXRenderPipelines {
             blur_composite_fragment,
             smoothed_blur_composite_vertex,
             smoothed_blur_composite_fragment,
-            refract_composite_vertex,
-            refract_composite_fragment,
             blur_params_buffer,
             blur_blend_replace,
             blur_blend_composite,
@@ -2747,12 +2533,11 @@ pub(crate) mod shader_resources {
         Blur,
         BlurComposite,
         SmoothedBlurComposite,
-        RefractComposite,
     }
 
     impl ShaderModule {
         #[cfg(test)]
-        const ALL: [Self; 18] = [
+        const ALL: [Self; 17] = [
             Self::Quad,
             Self::SmoothedQuad,
             Self::Shadow,
@@ -2770,7 +2555,6 @@ pub(crate) mod shader_resources {
             Self::Blur,
             Self::BlurComposite,
             Self::SmoothedBlurComposite,
-            Self::RefractComposite,
         ];
 
         pub(crate) fn shader(self) -> &'static NativeShader {
@@ -2792,7 +2576,6 @@ pub(crate) mod shader_resources {
                 Self::Blur => "blur",
                 Self::BlurComposite => "blur_composite",
                 Self::SmoothedBlurComposite => "smoothed_blur_composite",
-                Self::RefractComposite => "refract_composite",
             };
             NATIVE_SHADERS
                 .iter()

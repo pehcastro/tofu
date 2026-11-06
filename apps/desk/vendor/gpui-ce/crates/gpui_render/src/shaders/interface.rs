@@ -112,7 +112,6 @@ define_pipelines! {
     BLUR: "blur", vertex_blur_fullscreen, fragment_blur, TriangleList, Blur, FullscreenTriangle;
     BLUR_COMPOSITE: "blur_composite", vertex_blur_composite, fragment_blur_composite, TriangleStrip, Blur, Rectangle;
     SMOOTHED_BLUR_COMPOSITE: "smoothed_blur_composite", vertex_smoothed_blur_composite, fragment_smoothed_blur_composite, TriangleStrip, Blur, Rectangle;
-    REFRACT_COMPOSITE: "refract_composite", vertex_blur_composite, fragment_refract_composite, TriangleStrip, Blur, Rectangle;
 }
 
 pub const EMOJI_RASTERIZATION: Pipeline = Pipeline {
@@ -229,10 +228,9 @@ pub const RENDER_BUFFER_LAYOUTS: &[gpui::SceneBufferLayout] = &[
         source_size,
         target_size,
         corner_smoothing,
-        frosted,
+        padding0,
         padding1,
-        padding2,
-        lens
+        padding2
     ),
     render_layout!(crate::path_types::PathSprite, "PathSprite", bounds),
     render_layout!(

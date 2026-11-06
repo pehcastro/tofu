@@ -14,7 +14,7 @@ use gpui::{
 
 use crate::components::paint::{drop, ink, tint};
 use crate::components::size::{FONT_BODY, LINE_BODY, T1};
-use crate::glass::Glass;
+use crate::glass::FROST_BLUR;
 use crate::theme::{ColorToken, NumberToken, Theme};
 
 const TIP_OPEN: Duration = Duration::from_millis(300);
@@ -526,7 +526,11 @@ fn overlay_rim(theme: &Theme) -> Rgba {
 
 pub fn overlay_surface(theme: &Theme) -> Div {
     let shadow = tint(theme.color(ColorToken::Shadow), SHADOW_INK);
-    let base = Glass::themed(theme).apply(div().bg(overlay_fill(theme)));
+    let base = div().bg(overlay_fill(theme));
+    let base = match theme.number(NumberToken::ShapeBlur) > 0.0 {
+        true => base.backdrop_blur(px(FROST_BLUR)),
+        false => base,
+    };
     base.rounded(px(RADIUS))
         .border(px(RIM_WIDTH))
         .border_color(overlay_rim(theme))

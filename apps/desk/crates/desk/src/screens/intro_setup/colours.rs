@@ -139,15 +139,15 @@ fn save(token: ColorToken, color: Rgba, cx: &mut App) -> Result<(), String> {
         .iter()
         .find(|entry| entry.file == active)
         .ok_or_else(|| format!("{active} is not a listed theme"))?;
-    let copied = catalog::edited(&dir, entry)?;
-    write(&dir, &copied, token, mode, color)?;
+    catalog::adopt(&dir, entry)?;
+    write(&dir, &active, token, mode, color)?;
     eprintln!(
-        "desk: intro setup saved {} into {copied}.json",
+        "desk: intro setup saved {} into {active}.json",
         token.path()
     );
-    pick::start(&copied, cx)?;
-    pick::set_mode(&copied, Some(mode), cx)?;
-    pick::save(&copied, mode)
+    pick::start(&active, cx)?;
+    pick::set_mode(&active, Some(mode), cx)?;
+    pick::save(&active, mode)
 }
 
 fn write(dir: &Path, file: &str, token: ColorToken, mode: Mode, color: Rgba) -> Result<(), String> {

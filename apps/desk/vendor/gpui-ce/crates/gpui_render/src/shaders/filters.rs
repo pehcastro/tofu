@@ -106,10 +106,9 @@ pub mod blur {
         pub source_size: Vec2f,
         pub target_size: Vec2f,
         pub corner_smoothing: f32,
-        pub frosted: ShaderBool,
+        pub padding0: u32,
         pub padding1: u32,
         pub padding2: u32,
-        pub lens: Vec4f,
     }
     uniform!(group(1), binding(0), BLUR_LOCALS: BlurUniforms);
     texture!(group(1), binding(1), BLUR_TEXTURE: Texture2D<f32>);
@@ -237,108 +236,6 @@ pub mod blur {
             get!(BLUR_LOCALS).composite_clip == BlurCompositeClip::RoundedBounds,
         );
         blur_composite_color(input.position.xy(), coverage)
-    }
-
-    pub const LENS_LIGHT: Vec2f = vec2f(-0.371, -0.928);
-    pub const LENS_BACK_LIGHT: f32 = 0.35;
-    pub const LENS_RIM_SHARE: f32 = 0.2;
-    pub const LENS_RIM_MIN_WIDTH: f32 = 1.0;
-    pub const LENS_RIM_STRENGTH: f32 = 0.32;
-    pub const LENS_MIN_EDGE: f32 = 0.5;
-    pub const LENS_MIN_GRADIENT: f32 = 0.0001;
-    pub const LENS_MIN_PROFILE: f32 = 0.001;
-    pub const LENS_CLEAR_SHARE: f32 = 0.6;
-    pub const LENS_RED_WEIGHTS: Vec4f = vec4f(0.22, 0.04, 0.01, 0.2);
-    pub const LENS_ORANGE_WEIGHTS: Vec4f = vec4f(0.40, 0.22, 0.10, 0.2);
-    pub const LENS_GREEN_WEIGHTS: Vec4f = vec4f(0.27, 0.48, 0.27, 0.2);
-    pub const LENS_CYAN_WEIGHTS: Vec4f = vec4f(0.10, 0.22, 0.40, 0.2);
-    pub const LENS_BLUE_WEIGHTS: Vec4f = vec4f(0.01, 0.04, 0.22, 0.2);
-
-    pub fn lens_distance(position: Vec2f) -> f32 {
-        rounded_rectangle_signed_distance(
-            position,
-            get!(BLUR_LOCALS).bounds,
-            get!(BLUR_LOCALS).corner_radii,
-        )
-    }
-
-    pub fn lens_sample(position: Vec2f) -> Vec4f {
-        texture_sample_level(
-            BLUR_TEXTURE,
-            BLUR_SAMPLER,
-            position / get!(BLUR_LOCALS).target_size,
-            0.0,
-        )
-    }
-
-    pub fn lens_profile(depth: f32, edge: f32, shape: f32) -> f32 {
-        let rise = saturate(1.0 - depth / edge);
-        let circular = 1.0 - sqrt(max(1.0 - rise * rise, 0.0));
-        let blended = mix(rise, circular, saturate(shape));
-        let squared = rise * rise;
-        let superellipse = 1.0 - sqrt(sqrt(max(1.0 - squared * squared, 0.0)));
-        let profile = mix(blended, superellipse, saturate(shape - 1.0));
-        select(0.0, profile, depth < edge)
-    }
-
-    pub fn lens_normal(position: Vec2f) -> Vec2f {
-        let gradient = vec2f(
-            lens_distance(position + vec2f(1.0, 0.0)) - lens_distance(position - vec2f(1.0, 0.0)),
-            lens_distance(position + vec2f(0.0, 1.0)) - lens_distance(position - vec2f(0.0, 1.0)),
-        );
-        gradient / max(length(gradient), LENS_MIN_GRADIENT)
-    }
-
-    pub fn lens_color(center: Vec2f, split: Vec2f, dispersed: bool) -> Vec4f {
-        if dispersed {
-            return lens_sample(center - split) * LENS_RED_WEIGHTS
-                + lens_sample(center - split * 0.5) * LENS_ORANGE_WEIGHTS
-                + lens_sample(center) * LENS_GREEN_WEIGHTS
-                + lens_sample(center + split * 0.5) * LENS_CYAN_WEIGHTS
-                + lens_sample(center + split) * LENS_BLUE_WEIGHTS;
-        }
-        lens_sample(center)
-    }
-
-    #[fragment]
-    pub fn fragment_refract_composite(input: BlurVarying) -> Vec4f {
-        if is_clipped(input.clip_distances) {
-            return transparent();
-        }
-        let locals = get!(BLUR_LOCALS);
-        let position = input.position.xy();
-        let distance = lens_distance(position);
-        let depth = max(-distance, 0.0);
-        let edge = max(locals.lens.y, LENS_MIN_EDGE);
-        if depth >= edge && locals.frosted == ShaderBool::Disabled {
-            return transparent();
-        }
-        let normal = lens_normal(position);
-        let profile = lens_profile(depth, edge, locals.lens.z);
-        let center = position - normal * (locals.lens.x * profile);
-        let split = normal * (locals.lens.w * profile);
-        let color = lens_color(
-            center,
-            split,
-            locals.lens.w > 0.0 && profile > LENS_MIN_PROFILE,
-        );
-        let rim = saturate(1.0 - depth / max(edge * LENS_RIM_SHARE, LENS_RIM_MIN_WIDTH));
-        let facing = saturate(dot(normal, LENS_LIGHT))
-            + LENS_BACK_LIGHT * saturate(-dot(normal, LENS_LIGHT));
-        let glint = saturate(LENS_RIM_STRENGTH * rim * facing);
-        let lit = vec4f(
-            color.x + (color.w - color.x) * glint,
-            color.y + (color.w - color.y) * glint,
-            color.z + (color.w - color.z) * glint,
-            color.w,
-        );
-        let reach = saturate(saturate(1.0 - depth / edge) / LENS_CLEAR_SHARE);
-        let clear = select(
-            1.0,
-            reach * reach * (3.0 - 2.0 * reach),
-            locals.frosted == ShaderBool::Disabled,
-        );
-        lit * (antialiased_coverage(distance) * locals.opacity * clear)
     }
 
     #[derive(Wgsl)]

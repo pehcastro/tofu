@@ -173,9 +173,7 @@ tokens!(NumberToken {
     CardsOuterGap => "cards.outer.gap",
     CardsInnerRadius => "cards.inner.radius",
     ShapeBlur => "shape.blur",
-    GlassRefraction => "glass.refraction",
-    GlassEdge => "glass.edge",
-    GlassDispersion => "glass.dispersion",
+    GlassTint => "glass.tint",
     MotionFast => "motion.fast",
     MotionBase => "motion.base",
     MotionEnter => "motion.enter",
@@ -197,19 +195,7 @@ tokens!(ChoiceToken {
     Mode => "mode",
     ShapeDensity => "shape.density",
     TabsActive => "tabs.active",
-    GlassMode => "glass.mode",
 });
-
-impl NumberToken {
-    fn unset(self) -> Option<f32> {
-        match self {
-            NumberToken::GlassRefraction => Some(40.0),
-            NumberToken::GlassEdge => Some(32.0),
-            NumberToken::GlassDispersion => Some(2.0),
-            _ => None,
-        }
-    }
-}
 
 impl ColorToken {
     fn unset(self) -> Option<Rgba> {
@@ -263,14 +249,6 @@ impl ChoiceToken {
             ChoiceToken::Mode => &["dark", "light"],
             ChoiceToken::ShapeDensity => &["compact", "comfortable"],
             ChoiceToken::TabsActive => &["inner", "outer"],
-            ChoiceToken::GlassMode => &["frosted", "liquid"],
-        }
-    }
-
-    fn unset(self) -> Option<&'static str> {
-        match self {
-            ChoiceToken::GlassMode => Some("frosted"),
-            _ => None,
         }
     }
 }
@@ -306,6 +284,15 @@ impl Mode {
 fn paints(path: &str) -> bool {
     ColorToken::ALL.iter().any(|token| token.path() == path)
         || BorderToken::ALL.iter().any(|token| token.path() == path)
+}
+
+fn retired(path: &str) -> bool {
+    Mode::ALL
+        .iter()
+        .find_map(|mode| mode.strip(path))
+        .unwrap_or(path)
+        .starts_with("glass.")
+        && !known(path)
 }
 
 fn known(path: &str) -> bool {
@@ -490,6 +477,7 @@ pub fn parse_layer(
             let path = format!("{prefix}{key}");
             match value {
                 Value::Object(inner) => pending.push((format!("{path}."), inner)),
+                _ if retired(&path) => {}
                 _ if !known(&path) => problems.push(fail(&path, Problem::UnknownToken)),
                 leaf => {
                     if tokens.insert(path.clone(), leaf).is_some() {
@@ -546,12 +534,7 @@ pub fn build_mode(
     let chain = Chain { layers, mode };
     let mut choices: Vec<&'static str> = ChoiceToken::ALL
         .iter()
-        .map(
-            |token| match token.unset().filter(|_| !chain.sets(token.path())) {
-                Some(default) => Ok(default),
-                None => chain.resolve(token.path(), |value| choice(*token, value), problems),
-            },
-        )
+        .map(|token| chain.resolve(token.path(), |value| choice(*token, value), problems))
         .collect::<Result<_, _>>()?;
     choices[ChoiceToken::Mode as usize] = mode.label();
     let mut colors: Vec<Rgba> = Vec::with_capacity(ColorToken::ALL.len());
@@ -578,12 +561,7 @@ pub fn build_mode(
             .collect::<Result<_, _>>()?,
         numbers: NumberToken::ALL
             .iter()
-            .map(
-                |token| match token.unset().filter(|_| !chain.sets(token.path())) {
-                    Some(default) => Ok(default),
-                    None => chain.resolve(token.path(), number, problems),
-                },
-            )
+            .map(|token| chain.resolve(token.path(), number, problems))
             .collect::<Result<_, _>>()?,
         flags: FlagToken::ALL
             .iter()

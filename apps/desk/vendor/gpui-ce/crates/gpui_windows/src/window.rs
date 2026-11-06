@@ -912,8 +912,17 @@ impl PlatformWindow for WindowsWindow {
     }
 
     fn set_background_appearance(&self, background_appearance: WindowBackgroundAppearance) {
-        self.state.background_appearance.set(background_appearance);
+        let previous = self
+            .state
+            .background_appearance
+            .replace(background_appearance);
         let hwnd = self.0.hwnd;
+        let accent = |color: Option<Color>, state: u32| {
+            if previous != background_appearance && previous.is_transparent() {
+                set_window_composition_attribute(hwnd, None, 0);
+            }
+            set_window_composition_attribute(hwnd, color, state);
+        };
 
         // using Dwm APIs for Mica and MicaAlt backdrops.
         // others follow the set_window_composition_attribute approach
@@ -921,11 +930,10 @@ impl PlatformWindow for WindowsWindow {
             WindowBackgroundAppearance::Opaque => {
                 set_window_composition_attribute(hwnd, None, 0);
             }
-            WindowBackgroundAppearance::Transparent => {
-                set_window_composition_attribute(hwnd, None, 2);
-            }
-            WindowBackgroundAppearance::Blurred => {
-                set_window_composition_attribute(hwnd, Some((0, 0, 0, 0)), 4);
+            WindowBackgroundAppearance::Transparent | WindowBackgroundAppearance::Blurred => {
+                if let Some((color, state)) = composition_accent(background_appearance) {
+                    accent(color, state);
+                }
             }
             WindowBackgroundAppearance::MicaBackdrop => {
                 // DWMSBT_MAINWINDOW => MicaBase
@@ -1424,6 +1432,16 @@ struct WINDOWCOMPOSITIONATTRIBDATA {
     cb_data: usize,
 }
 
+pub(crate) fn composition_accent(
+    appearance: WindowBackgroundAppearance,
+) -> Option<(Option<Color>, u32)> {
+    match appearance {
+        WindowBackgroundAppearance::Transparent => Some((None, 2)),
+        WindowBackgroundAppearance::Blurred => Some((Some((0, 0, 0, 0)), 4)),
+        _ => None,
+    }
+}
+
 #[repr(C)]
 struct AccentPolicy {
     accent_state: u32,
@@ -1717,7 +1735,14 @@ fn set_window_composition_attribute(hwnd: HWND, color: Option<Color>, state: u32
                 pv_data: &accent as *const _ as *mut _,
                 cb_data: std::mem::size_of::<AccentPolicy>(),
             };
-            let _ = set_window_composition_attribute(hwnd, &mut data as *mut _ as _);
+            let applied = set_window_composition_attribute(hwnd, &mut data as *mut _ as _);
+            eprintln!(
+                "gpui: SetWindowCompositionAttribute accent state {} flags {} gradient {:#010x} -> {}",
+                accent.accent_state,
+                accent.accent_flags,
+                accent.gradient_color,
+                applied.as_bool()
+            );
         }
     }
 }

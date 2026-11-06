@@ -341,6 +341,7 @@ struct ViewElementState {
     paint_range: Range<PaintIndex>,
     cache_key: ViewElementCacheKey,
     accessed_entities: FxHashSet<EntityId>,
+    recorded_in_frame: u64,
 }
 
 struct ViewElementCacheKey {
@@ -431,6 +432,8 @@ impl<V: View> Element for ViewElement<V> {
                             && element_state.cache_key.bounds == bounds
                             && element_state.cache_key.content_mask == content_mask
                             && element_state.cache_key.text_style == text_style
+                            && element_state.recorded_in_frame.wrapping_add(1)
+                                == window.frames_drawn
                             && !window.dirty_views.contains(&entity_id)
                             && !window.refreshing
                         {
@@ -440,6 +443,7 @@ impl<V: View> Element for ViewElement<V> {
                                 .extend_accessed(&element_state.accessed_entities);
                             let prepaint_end = window.prepaint_index();
                             element_state.prepaint_range = prepaint_start..prepaint_end;
+                            element_state.recorded_in_frame = window.frames_drawn;
 
                             return (None, element_state);
                         }
@@ -467,6 +471,7 @@ impl<V: View> Element for ViewElement<V> {
                                     content_mask,
                                     text_style,
                                 },
+                                recorded_in_frame: window.frames_drawn,
                             },
                         )
                     },

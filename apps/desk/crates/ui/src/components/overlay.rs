@@ -30,7 +30,7 @@ use crate::components::size::{
     T1, TOAST_BOTTOM, TOAST_RIGHT, TOAST_WIDTH,
 };
 use crate::components::tooltip::overlay_shown;
-use crate::glass::Glass;
+use crate::glass::FROST_BLUR;
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{ICON_SMALL, ICON_TINY, RADIUS_CONTROL, TOAST_DISMISS};
@@ -78,16 +78,17 @@ fn floating(ring_alpha: f32, shadow_y: f32, theme: &Theme) -> Div {
 
 pub fn menu_surface(theme: &Theme) -> Div {
     let shadow = theme.color(ColorToken::Shadow);
-    let base = floating(POP_RING, POP_SHADOW_Y, theme)
-        .bg(tint(theme.color(ColorToken::ToastFill), GLASS_FILL));
-    Glass::themed(theme).apply(base).shadow(vec![
-        ring(ink(theme, POP_RING)),
-        drop(
-            tint(shadow, shadow.alpha * MENU_SHADOW_SHARE),
-            MENU_SHADOW_Y,
-            MENU_SHADOW_BLUR,
-        ),
-    ])
+    floating(POP_RING, POP_SHADOW_Y, theme)
+        .bg(tint(theme.color(ColorToken::ToastFill), GLASS_FILL))
+        .backdrop_blur(px(FROST_BLUR))
+        .shadow(vec![
+            ring(ink(theme, POP_RING)),
+            drop(
+                tint(shadow, shadow.alpha * MENU_SHADOW_SHARE),
+                MENU_SHADOW_Y,
+                MENU_SHADOW_BLUR,
+            ),
+        ])
 }
 
 pub fn sheet(title: SharedString, actions: impl IntoElement, theme: &Theme) -> Div {

@@ -19,9 +19,7 @@ use desk_ui::components::scroll::{ScrollArea, Scrollbar, list_scrollbar, scrollb
 use desk_ui::components::size::T3;
 use desk_ui::effects::controls::{self, Dial, Settle, Unit};
 use desk_ui::live::ActiveTheme;
-use desk_ui::theme::{
-    BorderToken, ChoiceToken, ColorToken, FlagToken, NumberToken, Theme, WordToken,
-};
+use desk_ui::theme::{BorderToken, ColorToken, FlagToken, NumberToken, Theme, WordToken};
 use gpui::{
     AnyElement, AnyView, App, AppContext, Bounds, ClickEvent, Context, Div, Entity, Focusable,
     ListAlignment, ListOffset, ListState, MouseButton, PathPromptOptions, Pixels, Render, Rgba,
@@ -46,71 +44,28 @@ const TOKEN_ROW: f32 = 24.0;
 const PREVIEW_OVERDRAW: f32 = 0.0;
 pub(super) const CARD_PAD: f32 = 12.0;
 const CARD_GAP: f32 = 8.0;
-const GLASS_ON_BLUR: u32 = 44;
-const BLUR_PATH: [&str; 2] = ["shape", "blur"];
-const GLASS_MODE_PATH: [&str; 2] = ["glass", "mode"];
-const GLASS_MODES: [(&str, &str); 2] = [("Frosted", "frosted"), ("Liquid", "liquid")];
-
-#[derive(Clone, Copy, PartialEq)]
-enum Knob {
-    Blur,
-    Refraction,
-    Edge,
-    Dispersion,
-}
-
-impl Knob {
-    const ALL: [Knob; 4] = [Knob::Blur, Knob::Refraction, Knob::Edge, Knob::Dispersion];
-
-    fn token(self) -> NumberToken {
-        match self {
-            Knob::Blur => NumberToken::ShapeBlur,
-            Knob::Refraction => NumberToken::GlassRefraction,
-            Knob::Edge => NumberToken::GlassEdge,
-            Knob::Dispersion => NumberToken::GlassDispersion,
-        }
-    }
-
-    fn name(self) -> &'static str {
-        match self {
-            Knob::Blur => "blur",
-            Knob::Refraction => "refraction",
-            Knob::Edge => "edge",
-            Knob::Dispersion => "dispersion",
-        }
-    }
-
-    fn max(self) -> f32 {
-        match self {
-            Knob::Blur | Knob::Refraction => 80.0,
-            Knob::Edge => 64.0,
-            Knob::Dispersion => 4.0,
-        }
-    }
-
-    fn json(self, value: f32) -> Value {
-        match self {
-            Knob::Dispersion => Value::from(f64::from((value * 10.0).round() / 10.0)),
-            _ => Value::from(value.round() as u32),
-        }
-    }
-
-    fn dial(self, value: f32) -> Dial {
-        let (step, unit) = match self {
-            Knob::Dispersion => (0.1, Unit::Times),
-            _ => (1.0, Unit::Px),
-        };
-        Dial {
-            label: self.name(),
-            value,
-            least: 0.0,
-            most: self.max(),
-            step,
-            unit,
-        }
-    }
-}
 const HIGHLIGHT_PATH: [&str; 3] = ["cards", "inner", "highlight"];
+
+#[derive(Clone, Copy)]
+struct Knob {
+    id: &'static str,
+    label: &'static str,
+    path: [&'static str; 2],
+    most: f32,
+    step: f32,
+    unit: Unit,
+    json: fn(f32) -> Value,
+}
+
+const TINT: Knob = Knob {
+    id: "theme-knob-tint",
+    label: "tint",
+    path: ["glass", "tint"],
+    most: 1.0,
+    step: 0.01,
+    unit: Unit::Percent,
+    json: |value| Value::from((f64::from(value) * 100.0).round() / 100.0),
+};
 const NUMBERS: [(&str, &str, NumberToken, &[u8]); 3] = [
     (
         "radius",
@@ -277,7 +232,6 @@ struct ThemeScreen {
     active: String,
     pane: Pane,
     numbers: Vec<Entity<MenuButton>>,
-    glass_mode: Entity<MenuButton>,
     editing: Option<Editing>,
     row_edit: Option<RowEdit>,
     draft: Option<Draft>,
@@ -337,40 +291,6 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
                     menu
                 })
                 .collect();
-            let glass_mode = MenuButton::new(
-                "theme-glass-mode".into(),
-                GLASS_MODES
-                    .iter()
-                    .map(|(label, _)| MenuItem::Action {
-                        label: (*label).into(),
-                        keys: None,
-                        icon: None,
-                    })
-                    .collect(),
-                cx,
-            );
-            let picked = screen.clone();
-            glass_mode.update(cx, |menu, _| {
-                menu.trigger(|_, theme| {
-                    let now = theme.choice(ChoiceToken::GlassMode);
-                    let label = GLASS_MODES
-                        .iter()
-                        .find(|(_, value)| *value == now)
-                        .map_or(now, |(label, _)| *label);
-                    flat_chip("theme-glass-mode", label, theme)
-                });
-                menu.on_pick(move |at, _, cx| {
-                    let Some((_, value)) = GLASS_MODES.get(*at).copied() else {
-                        return;
-                    };
-                    let landed = picked.update(cx, |screen: &mut ThemeScreen, cx| {
-                        screen.commit(&GLASS_MODE_PATH, Value::from(value), cx);
-                    });
-                    if landed.is_err() {
-                        eprintln!("desk: theme: the screen closed before the pick landed");
-                    }
-                });
-            });
             let redrawn = cx.observe_global::<ActiveTheme>(|screen, cx| {
                 if !screen.unsaved {
                     screen.draft = None;
@@ -391,7 +311,6 @@ pub fn open(board: Option<&str>, _: &mut Window, cx: &mut App) -> Result<AnyView
                 active,
                 pane: Pane::Tokens,
                 numbers,
-                glass_mode,
                 editing: None,
                 row_edit: None,
                 draft: None,
@@ -703,9 +622,9 @@ impl ThemeScreen {
     fn write(&mut self, path: &[&str], value: Value, cx: &mut App) -> Result<(), String> {
         let dir = pick::person()?;
         if !dir.join(format!("{}.json", self.active)).is_file() {
-            let copied = catalog::edited(&dir, self.entry(&self.active)?)?;
-            catalog::set(&dir, &copied, path, value)?;
-            return self.switch(copied, cx);
+            catalog::adopt(&dir, self.entry(&self.active)?)?;
+            catalog::set(&dir, &self.active, path, value)?;
+            return self.switch(self.active.clone(), cx);
         }
         let text = catalog::set(&dir, &self.active, path, value)?;
         if let Some(entry) = self
@@ -758,17 +677,11 @@ impl ThemeScreen {
         }
     }
 
-    fn glassed(&mut self, on: bool, cx: &mut Context<Self>) {
-        let blur = if on { GLASS_ON_BLUR } else { 0 };
-        self.commit(&BLUR_PATH, Value::from(blur), cx);
-        self.commit(&HIGHLIGHT_PATH, Value::Bool(on), cx);
-    }
-
     fn slid(&mut self, knob: Knob, value: f32, settle: Settle, cx: &mut Context<Self>) {
-        let path: Vec<&str> = knob.token().path().split('.').collect();
+        let json = (knob.json)(value);
         match settle {
-            Settle::Moving => self.moved(&path, knob.json(value), cx),
-            Settle::Settled => self.commit(&path, knob.json(value), cx),
+            Settle::Moving => self.moved(&knob.path, json, cx),
+            Settle::Settled => self.commit(&knob.path, json, cx),
         }
         Self::redraw(&self.areas.shape, cx);
     }
@@ -875,17 +788,20 @@ impl ThemeScreen {
 
     fn slider(&self, knob: Knob, now: f32, theme: &Theme, cx: &mut Context<Self>) -> Div {
         let weak = cx.weak_entity();
-        controls::slider_tile(
-            ("theme-knob", knob as usize),
-            knob.dial(now),
-            theme,
-            move |value, settle, _, cx| {
-                let landed = weak.update(cx, |screen, cx| screen.slid(knob, value, settle, cx));
-                if let Err(error) = landed {
-                    eprintln!("desk: theme: the screen closed under a slider: {error}");
-                }
-            },
-        )
+        let dial = Dial {
+            label: knob.label,
+            value: now,
+            least: 0.0,
+            most: knob.most,
+            step: knob.step,
+            unit: knob.unit,
+        };
+        controls::slider_tile(knob.id, dial, theme, move |value, settle, _, cx| {
+            let landed = weak.update(cx, |screen, cx| screen.slid(knob, value, settle, cx));
+            if let Err(error) = landed {
+                eprintln!("desk: theme: the screen closed under a slider: {error}");
+            }
+        })
     }
 
     fn themes(&self, theme: &Theme, cx: &mut Context<Self>) -> Div {
@@ -1024,9 +940,7 @@ impl ThemeScreen {
             self.swatch(Part::Shape, token.path(), theme.border(token), theme, cx)
         };
         let shown = self.shown(cx);
-        let blur = shown.number(NumberToken::ShapeBlur);
         let lit = theme.flag(FlagToken::CardsInnerHighlight);
-        let glass = blur > 0.0 || lit;
         let number = |at: usize| {
             let name = NUMBERS.get(at).map_or("", |(name, ..)| *name);
             shape(
@@ -1047,18 +961,12 @@ impl ThemeScreen {
                 theme,
             ))
             .child(caption("Glass", theme).pt_2())
-            .child(shape(
-                "glass",
-                switch_bare("theme-glass", "Glass", glass, theme)
-                    .on_click(
-                        cx.listener(move |this, _: &ClickEvent, _, cx| this.glassed(!glass, cx)),
-                    )
-                    .into_any_element(),
-            ))
-            .child(shape("mode", self.glass_mode.clone().into_any_element()))
-            .child(controls::grid().children(
-                Knob::ALL.map(|knob| self.slider(knob, shown.number(knob.token()), theme, cx)),
-            ))
+            .child(controls::grid().child(self.slider(
+                TINT,
+                shown.number(NumberToken::GlassTint),
+                theme,
+                cx,
+            )))
             .child(shape(
                 "top light",
                 switch_bare("theme-highlight", "Top light", lit, theme)

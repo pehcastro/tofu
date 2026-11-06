@@ -1896,7 +1896,7 @@ impl PlatformWindow for MacWindow {
             };
             this.native_window.setBackgroundColor_(background_color);
 
-            if background_appearance != WindowBackgroundAppearance::Blurred {
+            if !matches!(background_appearance, WindowBackgroundAppearance::Blurred) {
                 if let Some(blur_view) = this.blurred_view {
                     let _: () = msg_send![blur_view, removeFromSuperview];
                     this.blurred_view = None;

@@ -169,16 +169,17 @@ pub fn duplicate(dir: &Path, entry: &Entry) -> Result<String, String> {
     })
 }
 
-pub fn edited(dir: &Path, entry: &Entry) -> Result<String, String> {
-    copy(dir, entry, |at| match at {
-        1 => (
-            format!("{}-edited", entry.file),
-            format!("{} edited", entry.label),
-        ),
-        _ => (
-            format!("{}-edited-{at}", entry.file),
-            format!("{} edited {at}", entry.label),
-        ),
+pub fn adopt(dir: &Path, entry: &Entry) -> Result<(), String> {
+    match write_new(dir, &entry.file, &entry.json) {
+        Err(error) if error.kind() == ErrorKind::AlreadyExists => Ok(()),
+        written => written,
+    }
+    .map_err(|error| {
+        format!(
+            "{} cannot be saved to {}: {error}",
+            entry.file,
+            dir.display()
+        )
     })
 }
 

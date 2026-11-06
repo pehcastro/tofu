@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, Bounds, ClickEvent, CursorStyle, Div, ElementId, Entity, FontWeight,
+    AnyElement, App, Bounds, ClickEvent, Corners, CursorStyle, Div, ElementId, Entity, FontWeight,
     HitboxBehavior, Hsla, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Rgba,
     SharedString, Stateful, Window, canvas, div, fill, hsla_to_rgba, point, prelude::*, px,
     relative, size,
@@ -162,10 +162,19 @@ pub fn slider_tile(
             window.set_cursor_style(CursorStyle::PointingHand, &hitbox);
             let tall = f32::from(bounds.size.height);
             let width = f32::from(bounds.size.width);
-            window.paint_quad(fill(
-                Bounds::new(bounds.origin, size(px(width * share), bounds.size.height)),
-                band,
-            ));
+            let end = if share >= 1.0 { px(RADIUS_ROW) } else { px(0.0) };
+            window.paint_quad(
+                fill(
+                    Bounds::new(bounds.origin, size(px(width * share), bounds.size.height)),
+                    band,
+                )
+                .corner_radii(Corners {
+                    top_left: px(RADIUS_ROW),
+                    bottom_left: px(RADIUS_ROW),
+                    top_right: end,
+                    bottom_right: end,
+                }),
+            );
             for at in 1..TICKS {
                 let x = width * at as f32 / TICKS as f32;
                 if x <= width * share {

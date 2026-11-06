@@ -1283,6 +1283,7 @@ pub struct Window {
     long_press_timer: Option<Task<()>>,
     long_press_capture: Option<EntityId>,
     pub(crate) refreshing: bool,
+    pub(crate) frames_drawn: u64,
     pub(crate) activation_observers: SubscriberSet<(), AnyObserver>,
     pub(crate) focus: Option<FocusId>,
     focus_enabled: bool,
@@ -2031,6 +2032,7 @@ impl Window {
             long_press_timer: None,
             long_press_capture: None,
             refreshing: false,
+            frames_drawn: 0,
             activation_observers: SubscriberSet::new(),
             focus: None,
             focus_enabled: true,
@@ -3186,6 +3188,7 @@ impl Window {
         let previous_window_active = self.rendered_frame.window_active;
         mem::swap(&mut self.rendered_frame, &mut self.next_frame);
         self.next_frame.clear();
+        self.frames_drawn = self.frames_drawn.wrapping_add(1);
         let current_focus_path = self.rendered_frame.focus_path();
         let current_window_active = self.rendered_frame.window_active;
         let mut focus_before_listeners = self.focus;
@@ -4505,7 +4508,7 @@ impl Window {
         let scale_factor = self.scale_factor();
         let filters: SmallVec<[ScaledFilter; 4]> = filters
             .iter()
-            .filter(|filter| !filter.is_identity() && !matches!(filter, Filter::Refract(_)))
+            .filter(|filter| !filter.is_identity())
             .map(|filter| filter.scale(scale_factor))
             .collect();
         if filters.is_empty() {

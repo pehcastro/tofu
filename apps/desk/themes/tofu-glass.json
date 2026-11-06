@@ -6,6 +6,7 @@
     "inner": { "radius": 11, "highlight": true }
   },
   "shape": { "density": "comfortable", "blur": 44, "font": "Geist", "mono": "Geist Mono" },
+  "glass": { "tint": 0.8 },
   "tabs": { "active": "inner" },
   "motion": { "fast": 100, "base": 150, "enter": 200, "exit": 140, "tile": 180, "spin": 1000 },
   "dark": {

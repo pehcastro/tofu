@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     AtlasTextureId, AtlasTile, Background, Bounds, ContentMask, Corners, Edges, Pixels, Point,
-    Radians, ScaledFilter, ScaledPixels, ScaledRefraction, Size, bounds_tree::BoundsTree, point,
+    Radians, ScaledFilter, ScaledPixels, Size, bounds_tree::BoundsTree, point,
 };
 use smallvec::SmallVec;
 use std::{
@@ -897,14 +897,6 @@ impl BackdropFilter {
     pub fn max_blur_radius(&self) -> f32 {
         max_blur_radius(&self.filters)
     }
-
-    /// The liquid-glass lens in this filter chain, when it carries one.
-    pub fn refraction(&self) -> Option<ScaledRefraction> {
-        self.filters.iter().find_map(|filter| match filter {
-            ScaledFilter::Blur(_) => None,
-            ScaledFilter::Refract(lens) => Some(*lens),
-        })
-    }
 }
 
 impl From<BackdropFilter> for Primitive {
@@ -948,7 +940,6 @@ impl FilterBoundary {
 fn max_blur_radius(filters: &[ScaledFilter]) -> f32 {
     filters.iter().fold(0.0, |radius, filter| match filter {
         ScaledFilter::Blur(filter_radius) => radius.max(filter_radius.0),
-        ScaledFilter::Refract(_) => radius,
     })
 }
 
