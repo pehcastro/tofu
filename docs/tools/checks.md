@@ -96,7 +96,7 @@ tofu tool test '{"path":"."}' --dir .
 ```
 
 ```text
-test: go test -json -count=1 . in E:\tofu-scratchpad\t\d2361-162046\go, 1629 ms
+test: go test -json -count=1 . in C:\work\shop\go, 1629 ms
 go test: 1 passed, 1 failed, 1 skipped
 FAIL TestDiscounted order_test.go:17: got 650, want 675
 skipped: TestShipping
@@ -115,7 +115,7 @@ tofu tool test '{"path":".","name":"TestDiscounted","repeat":3}' --dir .
 ```text
 test: repeated go test -json -count=1 -run ^TestDiscounted$ . 3 of 3 times: 0 passed, 3 failed, verdict real
 the first failing run:
-test: go test -json -count=1 -run ^TestDiscounted$ . in E:\tofu-scratchpad\t\d2361-162151\go, 1081 ms
+test: go test -json -count=1 -run ^TestDiscounted$ . in C:\work\shop\go, 1081 ms
 go test: 0 passed, 1 failed
 FAIL TestDiscounted order_test.go:17: got 650, want 675
 ```
