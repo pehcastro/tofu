@@ -597,6 +597,8 @@ type PlanStep struct {
 	Phase string    `json:"phase"`
 	Text  string    `json:"text"`
 	State StepState `json:"state"`
+	Check string    `json:"check,omitempty"`
+	Call  string    `json:"call,omitempty"`
 }
 
 type ContextUpdated struct {

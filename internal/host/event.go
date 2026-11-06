@@ -253,6 +253,8 @@ type PlanItem struct {
 	Phase string
 	Text  string
 	State PlanState
+	Check string `json:",omitempty"`
+	Call  string `json:",omitempty"`
 }
 
 type Call struct {

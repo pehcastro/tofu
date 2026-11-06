@@ -33,6 +33,7 @@ import (
 	"tofu/internal/tools/agents/note"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/history/shadow"
+	"tofu/internal/tools/human/plan"
 	"tofu/internal/tools/shell/process"
 	shipped "tofu/library"
 )
@@ -1409,7 +1410,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				rows := make([]ToolCallRow, len(wave))
 				answers := make([]core.Message, len(wave))
 				memoHits := make([]bool, len(wave))
-				waveCtx, waveEnded := config.Inbox.stoppableWave(contract.WithStep(contract.WithReadWindow(note.With(forget.With(ctx, forgetting), noting), shownReads), step))
+				waveCtx, waveEnded := config.Inbox.stoppableWave(contract.WithStep(contract.WithReadWindow(note.With(forget.With(plan.WithEarlierCalls(ctx, messages), forgetting), noting), shownReads), step))
 				runAt := func(i, batch int) {
 					gated := wave[i]
 					if gated.call.Name == (askTool{}).Name() {

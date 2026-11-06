@@ -97,6 +97,12 @@ type planArgs struct {
 	Call  string      `json:"call"`
 }
 
+type earlierCallsKey struct{}
+
+func WithEarlierCalls(ctx context.Context, messages []core.Message) context.Context {
+	return context.WithValue(ctx, earlierCallsKey{}, messages)
+}
+
 func (p *Plan) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	args, err := parsePlanArgs(raw)
 	if err != nil {
@@ -104,7 +110,8 @@ func (p *Plan) Run(ctx context.Context, raw json.RawMessage) (contract.Result, e
 	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	next, err := applyPlan(p.items, args)
+	earlier, _ := ctx.Value(earlierCallsKey{}).([]core.Message)
+	next, err := applyPlan(p.items, args, earlier)
 	if err != nil {
 		return contract.Result{}, err
 	}
@@ -138,7 +145,7 @@ func parsePlanArgs(raw json.RawMessage) (planArgs, error) {
 	return args, nil
 }
 
-func applyPlan(items []PlanItem, args planArgs) ([]PlanItem, error) {
+func applyPlan(items []PlanItem, args planArgs, earlier []core.Message) ([]PlanItem, error) {
 	if args.Op == "set" {
 		set, err := planSet(args.Items)
 		if err == nil {
@@ -159,10 +166,14 @@ func applyPlan(items []PlanItem, args planArgs) ([]PlanItem, error) {
 		return nil, errors.New("plan: " + strconv.Quote(items[running].Text) + " is already running, and one item runs at a time. " +
 			"finish it with done, or abandon it with drop, before starting another")
 	}
-	call := strings.TrimSpace(args.Call)
-	if state == PlanDone && items[at].Check != "" && call == "" {
+	call, checking := strings.TrimSpace(args.Call), state == PlanDone && items[at].Check != ""
+	switch {
+	case checking && call == "":
 		return nil, errors.New("plan: " + strconv.Quote(items[at].Text) + " carries the check " + strconv.Quote(items[at].Check) +
 			", so done needs call, the id of the tool call that ran it. run the check, then send done again with call set to that id")
+	case checking && !slices.ContainsFunc(earlier, func(message core.Message) bool { return message.Role == core.RoleTool && message.ToolCallID == call }):
+		return nil, errors.New("plan: no earlier call in this session has the id " + strconv.Quote(call) + ", so it did not run the check " + strconv.Quote(items[at].Check) +
+			". run the check, then send done with call set to the id that call was given")
 	}
 	moved := slices.Clone(items)
 	moved[at].State = state

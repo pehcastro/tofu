@@ -206,7 +206,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		id.Item = session.EventIDFor(s.turn, "plan")
 		steps := make([]PlanStep, 0, len(event.Plan))
 		for _, item := range event.Plan {
-			steps = append(steps, PlanStep{Phase: item.Phase, Text: item.Text, State: stepState(item.State)})
+			steps = append(steps, PlanStep{Phase: item.Phase, Text: item.Text, State: stepState(item.State), Check: item.Check, Call: item.Call})
 		}
 		return append(out, merged("plan.updated", "", &PlanUpdated{Identity: id, Items: steps}))
 	case EventSession:

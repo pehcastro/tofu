@@ -926,7 +926,7 @@ func loopGuardWords(guard *loop.LoopGuardStop) string {
 func statedPlan(items []plan.PlanItem) []PlanItem {
 	drawn := make([]PlanItem, 0, len(items))
 	for _, item := range items {
-		drawn = append(drawn, PlanItem{Phase: item.Phase, Text: item.Text, State: drawnPlanState(item.State)})
+		drawn = append(drawn, PlanItem{Phase: item.Phase, Text: item.Text, State: drawnPlanState(item.State), Check: item.Check, Call: item.Call})
 	}
 	return drawn
 }

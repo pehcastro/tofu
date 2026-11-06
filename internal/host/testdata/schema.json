@@ -4317,6 +4317,12 @@
     "PlanStep": {
       "additionalProperties": false,
       "properties": {
+        "call": {
+          "type": "string"
+        },
+        "check": {
+          "type": "string"
+        },
         "phase": {
           "type": "string"
         },
