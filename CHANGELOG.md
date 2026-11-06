@@ -10,6 +10,65 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.22 - unreleased
+
+Tools that hand the model the answer rather than the log, in Go, Rust, Python and TypeScript, and `tofu tool` to run any of them by hand.
+
+### Added
+
+- `tofu tool <name> '<json>' --dir .` runs one tool call outside a turn and prints the exact text the model would read; `tofu tool list` names the tools a run offers, `--agent <name>` runs the call as that sub-agent, and `--session <name|id|head>` binds it to a recorded session.
+- `env` says whether the project is ready here: each toolchain it declares, wanted against found, and each key `.env.example` names, set or missing, never its value.
+- `changes` lists what a turn changed, each file with lines added and removed and the calls that named it, read from a shadow store tofu commits at every turn's start and end, never from the project's git; `turns` lists the last ended turns.
+- `checkpoint` saves the project under a label, `diff` shows what going back would do, and `back` restores only the files this session changed since, keeping what somebody else changed.
+- `trail` finds the turns an anchor names, a quote, a message, a time, a ticket, a commit or a path, with who changed each file and how to put it back; `owner_of` names who wrote a line, and `restore` writes a turn's files back.
+- `bisect` finds the turn whose edits broke a check by replaying the project as each turn left it, and the working tree never changes.
+- `whatif` applies edits to copies of the files and runs a build, a test or a command on them, and the working tree never changes.
+- `race` runs rival briefs as sub-agents, each in its own copy of the project, and applies the first whose check passes.
+- `codemod` rewrites one code shape everywhere on the syntax tree, through ast-grep or Go's own parser, and previews every site and the diff before `apply` writes them.
+- `scaffold` writes a new file shaped like a named sibling, with the sibling's name replaced in every case form, in the contents and the file name.
+- `format` runs the project's own formatter, gofmt, rustfmt, prettier or ruff, over the files named or the files this turn changed, and nothing else.
+- `deps` adds and upgrades Go, npm, cargo and uv dependencies after reading the license, size and known advisories, refuses a version with an advisory, and answers `why` and `outdated`.
+- `eval` returns what an expression evaluates to in Go, TypeScript or Python: its value, its type and what it printed, with the working tree untouched.
+- `debug` runs a Go or Python test or program under dlv or debugpy and answers with the values at a line: break, step, locals and eval, and `trace` lists each call of a function with its arguments and result. A missing debugger is named with its install command.
+- `profile` runs one Go test package, a Node or a Python command under a profiler and returns the costliest functions with flat, cum and `path:line`, then the hottest call path.
+- `http` calls the project's server on this machine, found from the kept shell that listens or from `port`, and returns the status, the time, the headers worth reading and the body, with a JSON body typed.
+- `record` saves the plain http a command makes, and `replay` answers the same command from the recording with the server down.
+- `db` reads SQLite or Postgres read only: the schema, or the first rows and the count of one statement, connecting through a `.env` key it never prints.
+- `shape` types a JSON sample in the project's language, marking every optional field and union.
+- `mutate` answers whether a test would catch a bug in a file: it plants small bugs one at a time, runs the named test against each in an overlay, and returns every survivor as `path:line` with the change the test missed; `test_path` names the package for a file in another one.
+- `map` ranks the files that matter for a task over the Go, Rust and TypeScript reference graph, each with its top declarations as one-line signatures, cut to a token budget.
+- `context` reports what fills the agent's own window, by kind, with its biggest results; `budget` reports calls, tokens, USD and time for the turn, the session and each agent, counted as `tofu session drain` counts them.
+- `forget` drops tool results the agent no longer needs from its window, only those after the last cache breakpoint, and refuses an older one.
+- `note` keeps a short fact word for word through every fork and compaction of the session.
+- `claims` checks each sentence of a report against the session's tool calls and reads it shown, not shown or contradicted, naming the call; it needs Jev bound.
+- `digest` answers one question about one recorded result with the cheap model `modelTier.dumb` names, quoting the lines it rests on.
+- `done` reads each acceptance line against the call that checked it, and the turn does not end while one reads no.
+- `heads_up` puts one line on the person's screen and the turn goes on.
+- The `review` sub-agent reads the changes a turn made, read only, in a fresh context, and reports findings.
+
+### Changed
+
+- `test` runs Go, Rust and Python as well as Vitest, picked from `go.mod`, `Cargo.toml` or the Python project, and returns pass, fail and skip counts, each failure with its `path:line`, got and want, and the skipped tests by name; `repeat` says real, flaky or passes, and `changed` runs the tests of the files the turn changed.
+- `typecheck` runs `cargo check` for Rust and `pyright` or `mypy` for Python beside Go and TypeScript, and names a missing checker with its install command; `explain` runs nothing and returns each error of a failure with the code around it.
+- `edit` and `write` on a Go, Rust, Python or TypeScript file end with that file's checker errors, and an edit that would leave a Go file unable to parse is refused with nothing written.
+- `read` with `at` reads around a line or a declared name, refusing a name the file does not declare with the closest ones, and a second read of an unchanged file answers with one line naming the earlier read, whatever ran between.
+- `bash` folds the output of go test, go build, go vet, cargo, pytest, unittest and pyright down to the failures, and names the files a command changed on disk under the project.
+- `shell wait` with `for` returns once a line, a port, a file, or an http address answering OK; `shell logs` folds output into templates and prints only what is new; `shell ports` says who holds each port, this session, another or outside.
+- A `plan` item may carry a `check`, and `done` on it needs the id of the call that ran the check.
+- `quote`, `recall`, `zoom` and `lookup` are the modes of one `history` tool, and an old name is refused with the call to make instead.
+- `ask_person` shows the options that carry a preview side by side, and a note typed in the chat goes with the option chosen.
+- `spawn` with `estimate` returns the median cost, calls and minutes of that agent's finished runs in the project and starts nothing, and every spawn names them.
+- `fetch` and `web_search` show the date a page states, or say it states none.
+- `symbols` lists the callers in TypeScript, Rust and Python through the language server, when one is on PATH; mode `impact` lists every caller by kind, the tests that reach a declaration and its packages, and mode `rename` previews renaming one declaration at every site that resolves to it, refuses a rename that clashes or adds an error, and writes it with `apply`.
+- `typecheck` and `test` are offered only in a directory that holds a project manifest, and the `go-dev`, `py-dev` and `rust-dev` sub-agents are offered both.
+
+### Fixed
+
+- `tofu library reach` counts an agent from each spawn that names it, and a spawn that names none as `unnamed`.
+- `tofu run --show-prompt` lists the tools the loop actually sends.
+- `tofu session trace --kind call` lists shell calls, and shows the range of a read.
+- `glob` on a root that does not exist says so instead of crashing.
+
 ## 0.5.21 - 2026-11-05
 
 A board that closes an ask only against the person's own words, and sessions you can fork by hand, read back as people read them and continue from the command line.
