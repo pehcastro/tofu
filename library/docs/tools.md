@@ -1,7 +1,7 @@
 ---
 topic: tools
 title: What the tools return
-summary: what read, edit, write, bash, shell, typecheck, test, plan, fetch, web_search, history, env, http, record, profile, shape, db, spawn, race, ask_person and heads_up give the model, and how to see it for yourself
+summary: what read, edit, write, bash, shell, typecheck, test, plan, fetch, web_search, history, env, http, record, profile, shape, db, context, budget, forget, note, digest, spawn, race, ask_person and heads_up give the model, and how to see it for yourself
 verbs: tool
 ---
 
@@ -117,6 +117,40 @@ ORDER_API_URL: set in .env
 ORDER_DB_PATH: missing from .env
 ```
 
+## The agent's own context
+
+- `context` reports what fills the model's own window: tokens used
+  against the ceiling as the last request measured them, the window by
+  kind, the biggest results with their call ids, and every file read that
+  changed on disk since.
+- `budget` reports calls, weighted tokens, USD and model and wall time for
+  the turn, the session, the lead and each sub-agent, counted as `tofu
+  session drain` counts them.
+- `forget` drops results the model names by call id, each left as one
+  line, and says the tokens freed and the cache cost. Only a result after
+  the last cache breakpoint can go; an older one is refused and nothing is
+  dropped. A dropped `read` makes the next read of that file whole.
+- When a request passes 70% of the context ceiling, the lead is told the
+  largest result `forget` can still drop and that its next reply is the
+  only one that can drop it, once each time the line is crossed.
+- `note` keeps one line of at most 500 bytes word for word through every
+  fork and compaction, up to 20 notes; `done` drops one by id. Every later
+  request carries the list.
+- `digest` answers one question about one recorded result with the model
+  `modelTier.dumb` names, quoting each line it cites, with the cost last.
+  With `modelTier.dumb` unset it is refused and names the setting.
+- `forget` and `note` run only inside a turn. `history` in mode `lookup`
+  brings back whole a result `forget` dropped, and an old name such as
+  `quote` is refused with the `history` call to make instead.
+
+```text
+dropped: 1 results after the last cache breakpoint, at message 2, the end of what the request before your last one sent
+  toolu_016dDgYohpxMbAqVVCcTEKjJ read build.log: 11192 tokens
+tokens_freed: 11156
+cache_cost: about 458 tokens from message 3 on are written to the cache again on your next request rather than read
+kept_summary: each dropped result is one line naming its call; the next request reads about 11313 tokens of messages from the cache, the prefix up to the breakpoint, plus the tool definitions
+```
+
 ## Delegation and the person
 
 - `spawn` with `estimate` set to `true` returns the median USD, model calls
@@ -151,6 +185,11 @@ shown to the person; the turn goes on
 
 ## How to
 
+- `tofu tool context '{}' --dir . --session head` shows what fills the
+  newest session's window, as the model sees it.
+- `tofu tool budget '{}' --dir . --session head` shows what that session
+  cost.
+- `tofu settings set modelTier.dumb <source/model>` lets `digest` run.
 - `tofu tool spawn '{"estimate":true,"agent":"go-dev"}' --dir .` says what
   a go-dev run usually costs here, and starts nothing.
 - `tofu tool heads_up '{"level":"info","line":"the full test run takes about two minutes"}' --dir .`

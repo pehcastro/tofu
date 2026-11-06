@@ -87,6 +87,16 @@ the part it needs whole before it acts on it. `zoom` and `recall` are
 offered while `episodes` is on. See [Memory](/docs/features/memory).
 Parameters: `mode`, `anchor`, `store`.
 
+A call by an old name, `quote`, `recall`, `zoom` or `lookup`, is refused
+with the call to make instead:
+
+```text
+tofu tool: quote is a mode of history now: call history with mode quote and what you asked for as its anchor
+```
+
+`history` in mode `lookup` also brings back whole a result the model
+dropped with `forget`. See [The agent's own context](/docs/tools/own-context).
+
 ## ask_person
 
 `ask_person` puts one to four questions to you, each with up to four

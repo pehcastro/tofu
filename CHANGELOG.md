@@ -52,7 +52,7 @@ Tools that hand the model the answer rather than the log, in Go, Rust, Python an
 
 - `search` ranks its hits through `map`, seeded by the files named, the task's words or the turn's task, and says how many it cut.
 - `db` opens the project's SQLite file when no `.env` key is set, and refuses a file outside the project.
-- When tool results fill 0.7 of the window, the lead is told which result `forget` can still drop.
+- When the context passes 0.7 of its token ceiling, the lead is told which result `forget` can still drop.
 - `done` accepts the `[tool#abc12]` reference a result starts with, and reads a `test` call by whether its tests passed.
 - `race` says when to race: two or more whole approaches to one job, built at once and compared.
 - `test` runs Go, Rust and Python as well as Vitest, picked from `go.mod`, `Cargo.toml` or the Python project, and returns pass, fail and skip counts, each failure with its `path:line`, got and want, and the skipped tests by name; `repeat` says real, flaky or passes, and `changed` runs the tests of the files the turn changed.

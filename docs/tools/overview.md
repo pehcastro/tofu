@@ -11,7 +11,8 @@ session. The command line and the app build the same tool set.
 
 Most tools are tofu's own Go code: `read`, `write`, `edit`, `glob`,
 `search`, `symbols`, `project_report`, `fetch`, `web_search`, `plan`, `env`,
-`http`, `record`, `shape`, `db`, the browser tools and the sub-agent tools.
+`http`, `record`, `shape`, `db`, `context`, `budget`, `forget`, `note`,
+`digest`, the browser tools and the sub-agent tools.
 `profile` runs the project's own profiler. A few wrap a program: `bash` wraps your
 shell, `typecheck` and `test` wrap the project's own checkers and test
 runners for Go, Rust, Python and TypeScript, `github_pr_diff` wraps `gh`, and
@@ -31,6 +32,7 @@ model would receive. See [One tool call by hand](/docs/cli/tool).
 | [Environment](/docs/tools/environment) | env, shell ports |
 | [Observe](/docs/tools/observe) | http, record, profile |
 | [Data](/docs/tools/data) | shape, db |
+| [The agent's own context](/docs/tools/own-context) | context, budget, forget, note, digest |
 | [Browser](/docs/automation/browser-tools) | browser_tabs, browser_observe, browser_act, browser_read, browser_do, browser_motion |
 
 Each tool's description says only what the model needs before it calls the

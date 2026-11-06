@@ -466,3 +466,15 @@
   do: tofu tool heads_up '{"level":"info","line":"the full test run takes about two minutes"}' --dir .
   check: tofu tool list --dir .
   topic: tools
+- ask: what does the model see filling its own window
+  do: tofu tool context '{}' --dir . --session head
+  check: tofu tool list --dir .
+  topic: tools
+- ask: what has this session cost, by turn and by agent
+  do: tofu tool budget '{}' --dir . --session head
+  check: tofu tool list --dir .
+  topic: tools
+- ask: let the model ask a cheap model about one long result
+  do: tofu settings set modelTier.dumb <source/model>
+  check: tofu settings
+  topic: tools
