@@ -62,7 +62,7 @@ A call carries one to four questions, each `choice`, `multi`, `text` or
 - On **other**, type the answer in the chat and press `Enter`.
 - `Esc` dismisses the form, and the recommended options stand.
 
-The focused option's preview, when it has one, shows under it.
+Options that carry a preview show side by side with the focused option's preview, and stack one under another when the screen is too narrow. A note typed in the chat goes with the option chosen.
 
 To make the lead wait for every answer, with no timeout:
 
