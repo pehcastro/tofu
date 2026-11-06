@@ -1,0 +1,40 @@
+name: done_line
+domain: general
+questions_version: 1
+mode: enforced
+notes: >-
+  asked by the done tool, internal/tools/agents/done, for every acceptance line
+  whose cited call ran and exited 0. state.lines holds those lines in order,
+  each with its text and the call it cites: the tool, its arguments, its exit
+  code, empty for a test call that passed, and the tail of its output. the tool asks checks once for
+  each line in one request, naming it lines[i]. a line reads yes only when
+  checks is at or above checks_at; below it, on an error, a timeout or with no
+  classifier bound, the line reads not_checked, never yes. a line whose call
+  failed reads no without asking, since a failing check is read off its exit
+  code. checks_at sits at the middle, an uncalibrated prior until a labelled
+  sample of done calls moves it.
+
+thresholds:
+  checks_at: 0.5
+
+state:
+  - lines
+
+questions:
+  checks:
+    type: noul
+    instructions: >-
+      A coding agent says an acceptance line of its task is met, and cites one
+      tool call as the check. `lines` holds each line with the call it cites.
+      Decide whether the cited call, by what it ran and what it printed, shows
+      the one line named at the end is true. A call that only runs in the same
+      directory, touches the same files, or runs a command that would pass
+      either way does not show it: a test run does not show that no file was
+      edited, and a build does not show that a test passes.
+    criteria:
+      true: >-
+        the call's command is the check the line names or implies, and its exit
+        code and output show the line holds.
+      false: >-
+        the call runs a different check, or its output says nothing about what
+        the line asserts, so the line could be false while the call passed.
