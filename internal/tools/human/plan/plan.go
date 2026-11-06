@@ -29,6 +29,8 @@ type PlanItem struct {
 	Phase string    `json:"phase,omitempty"`
 	Text  string    `json:"text"`
 	State PlanState `json:"state"`
+	Check string    `json:"check,omitempty"`
+	Call  string    `json:"call,omitempty"`
 }
 
 type Plan struct {
@@ -56,7 +58,8 @@ func (p *Plan) Definition() core.Tool {
 			"every reply costs a request, so never send plan in a reply of its own and never only to move an item: " +
 			"send it in the same reply as the next real tool call, and when no real call is left, leave the item as it stands. " +
 			"call set again only when the plan itself changes. " +
-			"an item is named by its own words, never by a number, so pass the text back as it was written",
+			"an item is named by its own words, never by a number, so pass the text back as it was written. " +
+			"an item may carry a check, a command or an acceptance line that proves it, and done on such an item needs call, the id of the tool call that ran the check",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -68,11 +71,13 @@ func (p *Plan) Definition() core.Tool {
 						"properties": map[string]any{
 							"phase": map[string]any{"type": "string"},
 							"text":  map[string]any{"type": "string"},
+							"check": map[string]any{"type": "string"},
 						},
 						"required": []string{"text"},
 					},
 				},
 				"item": map[string]any{"type": "string"},
+				"call": map[string]any{"type": "string"},
 			},
 			"required": []string{"op"},
 		},
@@ -82,12 +87,14 @@ func (p *Plan) Definition() core.Tool {
 type planEntry struct {
 	Phase string `json:"phase"`
 	Text  string `json:"text"`
+	Check string `json:"check"`
 }
 
 type planArgs struct {
 	Op    string      `json:"op"`
 	Items []planEntry `json:"items"`
 	Item  string      `json:"item"`
+	Call  string      `json:"call"`
 }
 
 func (p *Plan) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
@@ -152,8 +159,16 @@ func applyPlan(items []PlanItem, args planArgs) ([]PlanItem, error) {
 		return nil, errors.New("plan: " + strconv.Quote(items[running].Text) + " is already running, and one item runs at a time. " +
 			"finish it with done, or abandon it with drop, before starting another")
 	}
+	call := strings.TrimSpace(args.Call)
+	if state == PlanDone && items[at].Check != "" && call == "" {
+		return nil, errors.New("plan: " + strconv.Quote(items[at].Text) + " carries the check " + strconv.Quote(items[at].Check) +
+			", so done needs call, the id of the tool call that ran it. run the check, then send done again with call set to that id")
+	}
 	moved := slices.Clone(items)
 	moved[at].State = state
+	if state == PlanDone {
+		moved[at].Call = call
+	}
 	if next := slices.IndexFunc(moved, func(item PlanItem) bool { return item.State == PlanPending }); state == PlanDone && running == at && next >= 0 {
 		moved[next].State = PlanRunning
 	}
@@ -185,7 +200,7 @@ func planSet(entries []planEntry) ([]PlanItem, error) {
 		if slices.ContainsFunc(items, func(held PlanItem) bool { return strings.EqualFold(held.Text, text) }) {
 			return nil, errors.New("plan: two items read " + strconv.Quote(text) + ", and an item is named by its words, so neither could be started")
 		}
-		items = append(items, PlanItem{Phase: strings.TrimSpace(entry.Phase), Text: text, State: PlanPending})
+		items = append(items, PlanItem{Phase: strings.TrimSpace(entry.Phase), Text: text, State: PlanPending, Check: strings.TrimSpace(entry.Check)})
 	}
 	return items, nil
 }
@@ -237,6 +252,14 @@ func planText(items []PlanItem) string {
 		}
 		phase = item.Phase
 		lines = append(lines, "  "+string(item.State)+"  "+item.Text)
+		if item.Check == "" {
+			continue
+		}
+		check := "    check  " + item.Check
+		if item.Call != "" {
+			check += ", ran in " + item.Call
+		}
+		lines = append(lines, check)
 	}
 	return strings.Join(lines, "\n")
 }
