@@ -18,6 +18,7 @@ import (
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/librarian/skills"
+	"tofu/internal/platform/text"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/library/docs"
 )
@@ -63,7 +64,7 @@ func DocsVerb(args []string, out, errOut io.Writer) int {
 	if at < 0 {
 		closest := topics(corpus)
 		slices.SortStableFunc(closest, func(a, b string) int {
-			return cmp.Compare(output.EditDistance(query, a), output.EditDistance(query, b))
+			return cmp.Compare(text.EditDistance(query, a), text.EditDistance(query, b))
 		})
 		return o.Fail(output.ProblemError{What: fmt.Sprintf("no topic %q", query), Hint: "tofu docs " + closest[0]})
 	}

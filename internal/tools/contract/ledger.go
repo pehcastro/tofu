@@ -37,6 +37,67 @@ func (l *ReadLedger) seen(ctx context.Context) map[string]readMark {
 	return l.byAgent[agent]
 }
 
+type stepKey struct{}
+
+func WithStep(ctx context.Context, step int) context.Context {
+	return context.WithValue(ctx, stepKey{}, step)
+}
+
+func StepOf(ctx context.Context) int {
+	step, _ := ctx.Value(stepKey{}).(int)
+	return step
+}
+
+type shownRead struct {
+	hash [sha256.Size]byte
+	step int
+}
+
+type ReadWindow struct {
+	mutex sync.Mutex
+	shown map[string]shownRead
+}
+
+type readWindowKey struct{}
+
+func WithReadWindow(ctx context.Context, window *ReadWindow) context.Context {
+	return context.WithValue(ctx, readWindowKey{}, window)
+}
+
+func ReadWindowOf(ctx context.Context) *ReadWindow {
+	window, _ := ctx.Value(readWindowKey{}).(*ReadWindow)
+	return window
+}
+
+func (w *ReadWindow) ShownBefore(path string, hash [sha256.Size]byte, step int) (int, bool) {
+	if w == nil {
+		return 0, false
+	}
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	key := LedgerKey(path)
+	if earlier, shown := w.shown[key]; shown && earlier.hash == hash {
+		return earlier.step, true
+	}
+	if w.shown == nil {
+		w.shown = map[string]shownRead{}
+	}
+	w.shown[key] = shownRead{hash: hash, step: step}
+	return 0, false
+}
+
+func (w *ReadWindow) Dropped(path string) {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	delete(w.shown, LedgerKey(path))
+}
+
+func (w *ReadWindow) Rebuilt() {
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	clear(w.shown)
+}
+
 func LedgerKey(path string) string {
 	return filepath.ToSlash(filepath.Clean(path))
 }

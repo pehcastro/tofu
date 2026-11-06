@@ -37,6 +37,7 @@ import (
 	"tofu/internal/platform/profile"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
+	"tofu/internal/platform/text"
 	"tofu/library/changelog"
 )
 
@@ -259,7 +260,7 @@ func nearestCommand(args []string) (string, bool) {
 func nearestWord(word string, candidates []string) (string, bool) {
 	best, distance := "", len(word)/konst.NearestWordBytesPerEdit+1
 	for _, candidate := range candidates {
-		if d := output.EditDistance(word, candidate); d < distance {
+		if d := text.EditDistance(word, candidate); d < distance {
 			best, distance = candidate, d
 		}
 	}

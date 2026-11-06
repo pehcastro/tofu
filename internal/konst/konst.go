@@ -645,6 +645,11 @@ const (
 )
 
 const (
+	ReadWindowLines    = 100
+	ReadClosestSymbols = 5
+)
+
+const (
 	TypecheckExplainWindowLines  = 5
 	TypecheckExplainErrors       = 10
 	TypecheckExplainPlaces       = 5

@@ -15,6 +15,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/read"
 )
 
 const Name = "forget"
@@ -77,22 +78,21 @@ func (Forget) Definition() core.Tool {
 	}
 }
 
-func (w *Window) label(call string) string {
+type calledWith struct {
+	Path    string `json:"path"`
+	Command string `json:"command"`
+	Pattern string `json:"pattern"`
+}
+
+func (w *Window) called(call string) (string, calledWith) {
+	var args calledWith
 	for _, message := range w.held {
-		at := slices.IndexFunc(message.ToolCalls, func(asked core.ToolCall) bool { return asked.ID == call })
-		if at < 0 {
-			continue
+		if at := slices.IndexFunc(message.ToolCalls, func(asked core.ToolCall) bool { return asked.ID == call }); at >= 0 {
+			_ = json.Unmarshal(message.ToolCalls[at].Arguments, &args)
+			return message.ToolCalls[at].Name, args
 		}
-		var args struct {
-			Path    string `json:"path"`
-			Command string `json:"command"`
-			Pattern string `json:"pattern"`
-		}
-		_ = json.Unmarshal(message.ToolCalls[at].Arguments, &args)
-		said, _, _ := strings.Cut(strings.TrimSpace(cmp.Or(args.Path, args.Command, args.Pattern)), "\n")
-		return strings.TrimSpace(message.ToolCalls[at].Name + " " + said[:min(len(said), konst.ContextLabelChars)])
 	}
-	return call
+	return "", args
 }
 
 func (w *Window) tokens(messages []core.Message) int {
@@ -122,6 +122,7 @@ func (Forget) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 	defer w.mutex.Unlock()
 	lines := map[string]string{}
 	var said strings.Builder
+	var reads []string
 	freed := 0
 	for _, call := range args.Calls {
 		at := slices.IndexFunc(w.held, func(message core.Message) bool { return message.Role == core.RoleTool && message.ToolCallID == call })
@@ -134,13 +135,21 @@ func (Forget) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 		if w.lines[call] != "" || lines[call] != "" {
 			continue
 		}
-		label := w.label(call)
+		name, with := w.called(call)
+		shown, _, _ := strings.Cut(strings.TrimSpace(cmp.Or(with.Path, with.Command, with.Pattern)), "\n")
+		label := cmp.Or(strings.TrimSpace(name+" "+shown[:min(len(shown), konst.ContextLabelChars)]), call)
+		if name == read.Name {
+			reads = append(reads, with.Path)
+		}
 		size := w.estimate.Tokens(w.held[at].Content)
 		lines[call] = fmt.Sprintf("forgotten at your request: %s, %d bytes, about %d tokens; run it again if you need it", label, len(w.held[at].Content), size)
 		freed += size - w.estimate.Tokens(lines[call])
 		fmt.Fprintf(&said, "  %s %s: %d tokens\n", call, label, size)
 	}
 	maps.Copy(w.lines, lines)
+	for _, path := range reads {
+		contract.ReadWindowOf(ctx).Dropped(path)
+	}
 	summary := fmt.Sprintf("dropped: %d results after %s\n%stokens_freed: %d\n"+
 		"cache_cost: about %d tokens from message %d on are written to the cache again on your next request rather than read\n"+
 		"kept_summary: each dropped result is one line naming its call; the next request reads about %d tokens of messages from the cache, the prefix up to the breakpoint, plus the tool definitions\n",

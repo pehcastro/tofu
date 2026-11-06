@@ -587,11 +587,12 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		return sessionStartMessages(hook.SessionCompact, fire(ctx, hook.Input{Event: hook.SessionStart, Source: hook.SessionCompact}).Context, now())
 	}
-	trims := !config.NoCompaction && budget.Automatic
+	trims, shownReads := !config.NoCompaction && budget.Automatic, &contract.ReadWindow{}
 	trimFrom := func(step int, when string, from int) (*Compaction, error) {
 		before := slices.Clone(messages)
 		compaction, shrink, err := trimRead(artifacts, budget, step, messages, from)
 		if compaction != nil {
+			shownReads.Rebuilt()
 			flush()
 			added := compactContext()
 			messages = withoutOlderCompactContext(messages, added)
@@ -923,6 +924,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			strconv.Itoa(fork.TokensBefore)+" to "+strconv.Itoa(fork.TokensAfter)+" tokens, "+strconv.Itoa(fork.TailMessages)+" tail messages"+held, beforeFork, begun)
 		messages, sent, answering, budget = begun, 0, "", budget.Reported(0, recall.Occupancy{})
 		messages = append(messages, added...)
+		shownReads.Rebuilt()
 		flush()
 		if drops := picturesLeftOut(beforeFork, messages); len(drops) > 0 {
 			recordPictureDrops(fork.Step, sentTokens(beforeFork), messages, drops)
@@ -1082,6 +1084,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if overflowed(err) {
 			before := slices.Clone(messages)
 			shrink, shrinkErr := shrinkOverflow(artifacts, messages, asSent.Total(), budget.WindowTokens)
+			shownReads.Rebuilt()
 			flush()
 			recorded.listChange("overflow shrink", "the context window overflowed on step "+strconv.Itoa(step), before, messages)
 			switch {
@@ -1404,7 +1407,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				rows := make([]ToolCallRow, len(wave))
 				answers := make([]core.Message, len(wave))
 				memoHits := make([]bool, len(wave))
-				waveCtx, waveEnded := config.Inbox.stoppableWave(forget.With(ctx, forgetting))
+				waveCtx, waveEnded := config.Inbox.stoppableWave(contract.WithStep(contract.WithReadWindow(forget.With(ctx, forgetting), shownReads), step))
 				runAt := func(i, batch int) {
 					gated := wave[i]
 					if gated.call.Name == (askTool{}).Name() {
