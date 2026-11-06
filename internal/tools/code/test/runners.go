@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -48,6 +49,7 @@ type testCommand struct {
 	install          string
 	notInstalled     string
 	notInstalledSays string
+	buildFailed      string
 	parse            func(string) checkers.TestRun
 }
 
@@ -68,6 +70,10 @@ func (r *TestRunners) Run(ctx context.Context, resolved, name string, repeat int
 	var none string
 	switch found {
 	case nodePackage:
+		var usesNode bool
+		if command, none, usesNode = nodeTests(root, resolved, info.IsDir(), name); usesNode {
+			break
+		}
 		if name != "" || repeat > 1 {
 			return contract.Failure("test: name and repeat run go, rust and python tests; vitest runs whole files, so name the test file as path and call again to repeat it"), nil
 		}
@@ -155,11 +161,12 @@ func goTests(root, resolved string, isDir bool, name string) (testCommand, strin
 		target = pkg
 	}
 	return testCommand{
-		runner:  "go test",
-		argv:    append(argv, target),
-		dir:     root,
-		env:     []string{"GOMAXPROCS=" + strconv.Itoa(konst.TestCPUs)},
-		install: "install Go from https://go.dev/dl and put its bin directory on PATH",
+		runner:      "go test",
+		argv:        append(argv, target),
+		dir:         root,
+		env:         []string{"GOMAXPROCS=" + strconv.Itoa(konst.TestCPUs)},
+		install:     "install Go from https://go.dev/dl and put its bin directory on PATH",
+		buildFailed: "[build failed]",
 		parse: func(output string) checkers.TestRun {
 			run := checkers.GoTest(output)
 			for i, failure := range run.Failures {
@@ -190,11 +197,12 @@ func rustTests(root, resolved string, isDir bool, name string) (testCommand, str
 		argv = append(argv, strings.ReplaceAll(module, "/", "::")+"::")
 	}
 	return testCommand{
-		runner:  "cargo test",
-		argv:    append(argv, "--", "--test-threads", jobs),
-		dir:     root,
-		install: "install Rust with rustup from https://rustup.rs and put its cargo bin directory on PATH",
-		parse:   checkers.CargoTest,
+		runner:      "cargo test",
+		argv:        append(argv, "--", "--test-threads", jobs),
+		dir:         root,
+		install:     "install Rust with rustup from https://rustup.rs and put its cargo bin directory on PATH",
+		buildFailed: "error: could not compile",
+		parse:       checkers.CargoTest,
 	}, ""
 }
 
@@ -297,6 +305,18 @@ func (c testCommand) run(ctx context.Context) (contract.Result, testOutcome) {
 		return contract.Failure("test skipped: the turn was cancelled while " + command + " ran"), testsNotRun
 	case c.notInstalled != "" && strings.Contains(printed, c.notInstalled):
 		return contract.Failure("test skipped: " + c.notInstalledSays), testsNotRun
+	case run.Passed+run.Failed+run.Skipped == 0 && len(run.Problems) == 0 && c.buildFailed != "" && strings.Contains(printed, c.buildFailed):
+		var said []string
+		for _, line := range strings.Split(strings.TrimSpace(printed), "\n") {
+			var event struct{ Action, Output string }
+			switch {
+			case json.Unmarshal([]byte(line), &event) != nil:
+				said = append(said, line)
+			case event.Action == "build-output":
+				said = append(said, strings.TrimRight(event.Output, "\n"))
+			}
+		}
+		return contract.Failure(fmt.Sprintf("%s: the tests did not build, so none ran. the build said:\n%s", head, strings.Join(said[max(0, len(said)-konst.TestLinesCap):], "\n"))), testsNotRun
 	case run.Passed+run.Failed+run.Skipped == 0 && len(run.Failures) == 0 && len(run.Problems) == 0 && (exit == 0 || run.Listed):
 		return contract.Result{Content: head + ": 0 tests found"}, testsNotRun
 	case !run.Explains(exit):
