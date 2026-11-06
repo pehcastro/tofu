@@ -9,13 +9,15 @@ import (
 	"strings"
 
 	"tofu/internal/models/llm/core"
+	"tofu/internal/tools/code/lsp"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/glob"
 )
 
 type Symbols struct {
-	root contract.Root
+	root    contract.Root
+	servers *lsp.Pool
 }
 
 func NewSymbols(dir string) (Symbols, error) {
@@ -28,11 +30,12 @@ func (s Symbols) Name() string { return "symbols" }
 func (s Symbols) Definition() core.Tool {
 	return core.Tool{
 		Name: "symbols",
-		Description: "answers where one identifier is declared and every place that calls it, in go, rust and typescript files, rather than from a text match: " +
-			"go from the go parser, which also lists what a declaration calls, and rust and typescript from a scan that skips comments and strings and counts a call inside a macro. " +
+		Description: "answers where one identifier is declared and every place that calls it, in go, rust, typescript and python files, rather than from a text match: " +
+			"go from the go parser, which also lists what a declaration calls, and rust, typescript and python from the project's language server " +
+			"(rust-analyzer, typescript-language-server, pyright-langserver), which follows an import alias and also lists the references that are not calls. " +
 			"reach for it before changing a function, because it says what the change breaks: search says the name appears in these declarations and this says the name is declared here and called from these three places. " +
-			"it reads only .go, .rs, .ts and .tsx files, it matches on the identifier rather than resolving types, " +
-			"so two symbols sharing one name come back as one answer and a call made through an interface or a function value is not found, and the result says so. " +
+			"it reads only .go, .rs, .ts, .tsx and .py files. go matches on the identifier rather than resolving types, and so do rust and typescript when their server is not on PATH, " +
+			"so two symbols sharing one name come back as one answer and a call made through an interface, a function value or an alias is not found, and the result says so and names the install command. " +
 			glob.IgnoredWalkDescription,
 		Parameters: map[string]any{
 			"type": "object",
@@ -52,7 +55,7 @@ type symbolsArgs struct {
 	IncludeIgnored bool   `json:"include_ignored"`
 }
 
-func (s Symbols) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
+func (s Symbols) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args symbolsArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("symbols: arguments are not the expected shape: %w", err)
@@ -66,12 +69,22 @@ func (s Symbols) Run(_ context.Context, raw json.RawMessage) (contract.Result, e
 		return contract.Result{}, fmt.Errorf("symbols: %w", err)
 	}
 	under = listed.Under
-	graph, err := engine.Symbols(string(s.root), listed.Files, args.Name)
+	files, served := listed.Files, []string(nil)
+	if s.servers != nil {
+		files, served = s.resolve(ctx, args.Name, listed.Files)
+	}
+	graph, err := engine.Symbols(string(s.root), files, args.Name)
 	if err != nil {
 		return contract.Result{}, err
 	}
+	text := graph.Text
+	if len(served) > 0 && graph.Parsed+graph.Unparsed+graph.Unreadable == 0 {
+		text = strings.Join(served, "\n")
+	} else if len(served) > 0 {
+		text += "\n" + strings.Join(served, "\n")
+	}
 	return contract.Result{
-		Content: glob.WithNote("symbols "+args.Name+" under "+under+"\n"+graph.Text, listed.Note),
+		Content: glob.WithNote("symbols "+args.Name+" under "+under+"\n"+text, listed.Note),
 		Command: args.Name + " under " + under,
 	}, nil
 }

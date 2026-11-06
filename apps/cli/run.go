@@ -45,6 +45,7 @@ import (
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	crontool "tofu/internal/tools/agents/cron"
+	"tofu/internal/tools/code/lsp"
 	"tofu/internal/tools/code/search"
 	"tofu/internal/tools/code/symbols"
 	"tofu/internal/tools/code/test"
@@ -1125,10 +1126,11 @@ type warmProcesses struct {
 	keys     storedKeys
 	memory   wiring.SessionMemoryModel
 	drops    *loop.DropIndex
+	servers  *lsp.Pool
 }
 
 func newWarmProcesses(tabs *browser.BrowserTabs) *warmProcesses {
-	return &warmProcesses{checkers: checkers.NewTypecheckers(), tests: test.NewTestRunners(), tabs: tabs, drops: loop.NewDropIndex()}
+	return &warmProcesses{checkers: checkers.NewTypecheckers(), tests: test.NewTestRunners(), tabs: tabs, drops: loop.NewDropIndex(), servers: lsp.NewPool()}
 }
 
 func (w *warmProcesses) Close() {
@@ -1137,6 +1139,7 @@ func (w *warmProcesses) Close() {
 		w.tests.Close()
 		w.tabs.Close()
 		w.memory.Close()
+		w.servers.Close()
 	}
 }
 
@@ -1205,7 +1208,7 @@ func assembleRunTools(dir, set string, ledger *contract.ReadLedger, warm *warmPr
 		return nil, nil, err
 	}
 	plan := plantool.NewPlan()
-	full := append([]contract.Tool{readTool, writeTool, shell, plan, jobs.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(typecheckers).Ruling(rules), typecheckTool, testTool, githubTool}, verbTools...)
+	full := append([]contract.Tool{readTool, writeTool, shell, plan, jobs.Shells{}, projectTool, globTool, searchTool, symbolsTool.Serving(warm.servers), editTool.Reading(ledger).Checking(typecheckers).Ruling(rules), typecheckTool, testTool, githubTool}, verbTools...)
 	for _, construct := range leadToolConstructors() {
 		tool, err := construct(dir)
 		if err != nil {

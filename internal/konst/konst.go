@@ -589,3 +589,15 @@ const (
 	EnvManifestBytes      = 1 << 20
 	EnvKeysShown          = 100
 )
+
+const (
+	LspIdleMillis          = 300_000
+	LspStartMillis         = 60_000
+	LspRequestMillis       = 30_000
+	LspShutdownMillis      = 3_000
+	LspOpenedFiles         = 300
+	SymbolsReferencesShown = 30
+	SymbolsPreviewChars    = 120
+	LspStderrLines         = 5
+	LspStderrBytes         = 4096
+)
