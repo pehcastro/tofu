@@ -19,11 +19,11 @@ import (
 )
 
 const (
-	subcommandsUsage = "tofu rules list|check|fired|index|overrides|add|off|restore|remove|why"
+	subcommandsUsage = "tofu rules list|show|check|fired|index|overrides|add|off|restore|remove|why"
 	listUsage        = "tofu rules list [--library dir] [--dir project] [--json]"
 	overridesUsage   = "tofu rules overrides [--library dir] [--dir project] [--json]"
 	checkUsage       = "tofu rules check [path] [--library dir] [--dir project] [--json]"
-	Usage            = subcommandsUsage + " " + listUsage + " " + overridesUsage + " " + checkUsage + " " + addUsage + " " + offUsage + " " + idUsage
+	Usage            = subcommandsUsage + " " + listUsage + " " + overridesUsage + " " + checkUsage + " " + addUsage + " " + offUsage + " " + idUsage + " " + showUsage
 )
 
 type Deps struct {
@@ -55,6 +55,8 @@ func Verb(deps Deps) func(args []string, out, errOut io.Writer) int {
 			return offVerb(args[1:], out, errOut)
 		case "remove":
 			return removeVerb(args[1:], out, errOut)
+		case "show":
+			return showVerb(args[1:], out, errOut)
 		case "list":
 			return listVerb(args[1:], out, errOut)
 		case "check":
@@ -80,6 +82,16 @@ func listedOrigin(stack wiring.RuleStack, r rules.Rule) string {
 		return "shipped"
 	}
 	return "library"
+}
+
+func ruleOrigin(stack wiring.RuleStack, layers []wiring.RuleLayer, r rules.Rule) string {
+	inLayer := func(layer wiring.RuleLayer) bool {
+		return strings.HasPrefix(r.File, layer.Dir+string(filepath.Separator))
+	}
+	if at := slices.IndexFunc(layers, inLayer); at >= 0 {
+		return layers[at].Name
+	}
+	return listedOrigin(stack, r)
 }
 
 func listingMark(mode rules.Mode) cli.Mark {
@@ -123,11 +135,8 @@ func listVerb(args []string, out, errOut io.Writer) int {
 		if slices.Contains(stack.BySetting, r.ID) {
 			listing[i].Switch = "on by the setting " + wiring.RuleSetting(r.ID)
 		}
-		inLayer := func(layer wiring.RuleLayer) bool {
-			return strings.HasPrefix(r.File, layer.Dir+string(filepath.Separator))
-		}
-		if at := slices.IndexFunc(layers, inLayer); at >= 0 {
-			listing[i].Origin, listing[i].File = layers[at].Name, r.File
+		if origin := ruleOrigin(stack, layers, r); origin != listing[i].Origin {
+			listing[i].Origin, listing[i].File = origin, r.File
 		}
 	}
 	for _, off := range stack.SwitchedOff() {
