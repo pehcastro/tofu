@@ -675,6 +675,8 @@ const BashDiskWalkEntries = 20000
 const (
 	WhatifCheckMillis   = 180_000
 	OverlayStaleMinutes = 10
+	RaceBriefsFewest    = 2
+	RaceBriefsMost      = 3
 )
 
 const (

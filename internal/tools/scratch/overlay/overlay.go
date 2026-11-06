@@ -1,6 +1,7 @@
 package overlay
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -21,10 +22,11 @@ const (
 )
 
 type Overlay struct {
-	Dir    string
-	root   string
-	files  map[string]string
-	hidden []string
+	Dir     string
+	root    string
+	files   map[string]string
+	hidden  []string
+	removed context.CancelFunc
 }
 
 func Make(root string, files map[string]string, stale time.Duration, hidden ...string) (Overlay, error) {
@@ -46,11 +48,26 @@ func Make(root string, files map[string]string, stale time.Duration, hidden ...s
 	if err != nil {
 		return Overlay{}, err
 	}
-	o := Overlay{Dir: dir, root: root, files: files, hidden: hidden}
+	live, removed := context.WithCancel(context.Background())
+	o := Overlay{Dir: dir, root: root, files: files, hidden: hidden, removed: removed}
+	go o.keepFresh(live, stale/2)
 	if err := o.writeFiles(); err != nil {
 		return Overlay{}, errors.Join(err, o.Remove())
 	}
 	return o, nil
+}
+
+func (o Overlay) keepFresh(live context.Context, every time.Duration) {
+	ticker := time.NewTicker(every)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-live.Done():
+			return
+		case now := <-ticker.C:
+			_ = os.Chtimes(o.Dir, now, now)
+		}
+	}
 }
 
 func (o Overlay) writeFiles() error {
@@ -125,6 +142,7 @@ func (o Overlay) Local(output, from string) string {
 }
 
 func (o Overlay) Remove() error {
+	o.removed()
 	return os.RemoveAll(o.Dir)
 }
 
