@@ -89,7 +89,7 @@ func (AskPerson) Definition() core.Tool {
 		"properties": map[string]any{
 			"label":       map[string]any{"type": "string", "description": "1 to " + strconv.Itoa(konst.AskPersonLabelWordsMost) + " words"},
 			"description": map[string]any{"type": "string", "description": "what taking it means, in one line"},
-			"preview":     map[string]any{"type": "string", "description": "optional: a short block, such as code or a layout, shown when the option is focused"},
+			"preview":     map[string]any{"type": "string", "description": "optional: what taking it looks like, as code, a unified diff or a text screen; options that carry one are shown side by side"},
 		},
 		"required": []string{"label", "description"},
 	}
@@ -110,7 +110,7 @@ func (AskPerson) Definition() core.Tool {
 		Name: loop.AskPersonToolName,
 		Description: "puts a decision only the person can make to them: a choice between libraries or designs, a matter of taste, spending money, something that cannot be undone. " +
 			"never for permission to run a tool; the gate asks that. one call at a time, 1 to " + strconv.Itoa(konst.AskPersonQuestionsMost) + " questions, each with options and the one you recommend. " +
-			"tofu adds a free-text other to every choice, so never write one. the answer says the outcome and, for each question, its status and what was chosen. " +
+			"tofu adds a free-text other to every choice, so never write one. the answer says the outcome and, for each question, its status, what was chosen and any note the person typed with it. " +
 			"in auto the work never stops on it: with no answer in time you are told none came, nothing is chosen, and the question stays open until the person answers. " +
 			"a reversible recommendation the ask judge agrees with is taken without asking",
 		Parameters: map[string]any{
@@ -266,9 +266,9 @@ func shownToPerson(head string, result askResult, questions []loop.PersonQuestio
 	lines := []string{head}
 	for at, q := range questions {
 		given := result.Answers[at]
-		taken := strings.Join(given.Chosen, ", ")
-		if given.Text != "" {
-			taken = strings.TrimPrefix(taken+", "+given.Text, ", ")
+		taken := cmp.Or(strings.Join(given.Chosen, ", "), given.Text)
+		if given.Status == askAnswered && given.Note != "" {
+			taken += " · " + given.Note
 		}
 		lines = append(lines, q.Question+" › "+cmp.Or(taken, string(given.Status)))
 	}
@@ -308,11 +308,13 @@ func answered(reply personReply, questions []loop.PersonQuestion) askResult {
 	for _, q := range questions {
 		answer := askAnswer{ID: q.ID, Status: askUnanswered, Chosen: []string{}, Note: nothingTyped}
 		if at := slices.IndexFunc(reply.replies, func(r loop.PersonReply) bool { return r.ID == q.ID }); at >= 0 {
-			given := reply.replies[at]
-			answer.Status, answer.Note, answer.Text = askSkipped, "the person chose no option and typed nothing", given.Text
-			if len(given.Chosen) > 0 || given.Text != "" {
-				answer.Status, answer.Note = askAnswered, ""
-				answer.Chosen = append(answer.Chosen, given.Chosen...)
+			switch given := reply.replies[at]; {
+			case len(given.Chosen) > 0:
+				answer.Status, answer.Chosen, answer.Note = askAnswered, given.Chosen, given.Text
+			case given.Text != "":
+				answer.Status, answer.Note, answer.Text = askAnswered, "", given.Text
+			default:
+				answer.Status, answer.Note = askSkipped, "the person chose no option and typed nothing"
 			}
 		}
 		result.Answers = append(result.Answers, answer)

@@ -29,7 +29,11 @@ const (
 	otherHint   = "type it in the chat, then enter"
 	keysChoice  = "↑↓ move   enter choose   tab next question   esc dismiss"
 	keysMulti   = "↑↓ move   space toggle   enter confirm   tab next question   esc dismiss"
+	keysNote    = "a note typed in the chat goes with the option enter chooses"
 	previewMark = "  │ "
+	columnGap   = " │ "
+	columnLeast = 24
+	previewMost = 14
 )
 
 type Form struct {
@@ -58,10 +62,14 @@ func Open(id string, questions []loop.PersonQuestion, wait time.Duration, now ti
 
 func (f *Form) onOther() bool { return f.focus[f.at] == len(f.questions[f.at].Options) }
 
+func proposes(q loop.PersonQuestion) bool {
+	return slices.ContainsFunc(q.Options, func(o loop.PersonOption) bool { return o.Preview != "" })
+}
+
 func (f *Form) Key(key, composer string) (Action, bool) {
 	q := f.questions[f.at]
 	if composer != "" {
-		if key == "enter" && f.onOther() {
+		if key == "enter" && (f.onOther() || proposes(q)) {
 			return f.confirm(composer), true
 		}
 		return Kept, false
@@ -105,12 +113,12 @@ func (f *Form) confirm(typed string) Action {
 	case f.onOther() && typed == "":
 		return Kept
 	case f.onOther():
-		f.typed[f.at] = typed
+		clear(f.picked[f.at])
 	case q.Type != loop.QuestionMulti || !slices.Contains(f.picked[f.at], true):
 		clear(f.picked[f.at])
 		f.picked[f.at][f.focus[f.at]] = true
 	}
-	f.done[f.at] = true
+	f.typed[f.at], f.done[f.at] = typed, true
 	if next := slices.Index(f.done, false); next >= 0 {
 		f.at = next
 		return Kept
@@ -123,7 +131,7 @@ func (f *Form) Replies() []loop.PersonReply {
 	for i, q := range f.questions {
 		replies[i] = loop.PersonReply{ID: q.ID, Chosen: []string{}, Text: f.typed[i]}
 		for at, picked := range f.picked[i] {
-			if picked && f.typed[i] == "" {
+			if picked {
 				replies[i].Chosen = append(replies[i].Chosen, q.Options[at].Label)
 			}
 		}
@@ -140,26 +148,16 @@ func (f *Form) Lines(width int, now time.Time) []string {
 		lines = append(lines, render.Fit(look.Style(look.Amber).Render(waiting), inner))
 	}
 	lines = append(lines, render.Fit(look.Title(q.Question), inner))
-	for at, o := range q.Options {
-		mark := restMark
-		if at == f.focus[f.at] {
-			mark = look.Accent(focusMark)
-		}
-		box := ""
-		if q.Type == loop.QuestionMulti {
-			box = unpicked
-			if f.picked[f.at][at] {
-				box = pickedMark
-			}
-		}
-		label := strconv.Itoa(at+1) + ". " + o.Label
-		if q.Recommended != nil && *q.Recommended == at {
-			label += " (recommended)"
-		}
-		lines = append(lines, render.Fit(mark+box+look.Style(look.Text).Render(label)+look.Muted("  "+o.Description), inner))
-		if at == f.focus[f.at] && o.Preview != "" {
-			for _, row := range strings.Split(o.Preview, "\n") {
-				lines = append(lines, render.Fit(look.Faint(previewMark+row), inner))
+	column := (inner - (len(q.Options)-1)*render.Cells(columnGap)) / max(len(q.Options), 1)
+	if column >= columnLeast && proposes(q) {
+		lines = append(lines, f.columns(column)...)
+	} else {
+		for at, o := range q.Options {
+			lines = append(lines, render.Fit(f.optionHead(at)+look.Muted("  "+o.Description), inner))
+			if at == f.focus[f.at] {
+				for _, row := range previewRows(o.Preview) {
+					lines = append(lines, render.Fit(look.Faint(previewMark)+row, inner))
+				}
 			}
 		}
 	}
@@ -172,8 +170,81 @@ func (f *Form) Lines(width int, now time.Time) []string {
 	if q.Type == loop.QuestionMulti {
 		keys = keysMulti
 	}
+	if proposes(q) {
+		lines = append(lines, render.Fit(look.Faint(keysNote), inner))
+	}
 	lines = append(lines, render.Fit(look.Faint(keys), inner))
 	return strings.Split(look.Surface(width, len(lines), look.Panel, padX, strings.Join(lines, "\n")), "\n")
+}
+
+func (f *Form) optionHead(at int) string {
+	q := f.questions[f.at]
+	mark, box := restMark, ""
+	if at == f.focus[f.at] {
+		mark = look.Accent(focusMark)
+	}
+	if q.Type == loop.QuestionMulti {
+		box = unpicked
+		if f.picked[f.at][at] {
+			box = pickedMark
+		}
+	}
+	label := strconv.Itoa(at+1) + ". " + q.Options[at].Label
+	if q.Recommended != nil && *q.Recommended == at {
+		label += " (recommended)"
+	}
+	return mark + box + look.Style(look.Text).Render(label)
+}
+
+func (f *Form) columns(width int) []string {
+	q := f.questions[f.at]
+	cells, tallest := make([][]string, len(q.Options)), 0
+	for at, o := range q.Options {
+		cells[at] = []string{f.optionHead(at), look.Muted(restMark + o.Description)}
+		for _, row := range previewRows(o.Preview) {
+			cells[at] = append(cells[at], restMark+row)
+		}
+		tallest = max(tallest, len(cells[at]))
+	}
+	rows := make([]string, tallest)
+	for row := range rows {
+		parts := make([]string, len(cells))
+		for at, cell := range cells {
+			text := ""
+			if row < len(cell) {
+				text = cell[row]
+			}
+			parts[at] = render.Pad(render.Fit(text, width), width)
+		}
+		rows[row] = strings.Join(parts, look.Faint(columnGap))
+	}
+	return rows
+}
+
+func previewRows(preview string) []string {
+	if preview == "" {
+		return nil
+	}
+	raw := strings.Split(strings.TrimRight(preview, "\n"), "\n")
+	var rows []string
+	for _, row := range raw[:min(len(raw), previewMost)] {
+		colour := look.Text
+		switch {
+		case strings.HasPrefix(row, "+++"), strings.HasPrefix(row, "---"):
+			colour = look.MutedColor
+		case strings.HasPrefix(row, "+"):
+			colour = look.Mint
+		case strings.HasPrefix(row, "-"):
+			colour = look.Red
+		case strings.HasPrefix(row, "@@"):
+			colour = look.Blue
+		}
+		rows = append(rows, look.Style(colour).Render(strings.ReplaceAll(row, "\t", "    ")))
+	}
+	if hidden := len(raw) - previewMost; hidden > 0 {
+		rows = append(rows, look.Faint("+"+strconv.Itoa(hidden)+" more rows"))
+	}
+	return rows
 }
 
 func (f *Form) countdown(now time.Time) string {

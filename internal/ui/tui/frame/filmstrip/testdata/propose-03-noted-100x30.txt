@@ -1,0 +1,31 @@
+ tofu  ./tofu/                chat   agents   edits   shells   orders                 0s [settings] 
+                                                                                                    
+                                                                                                    
+                                                                                                    
+  ? Stale lock  1 of 1                                                                              
+  Which way should Resolve treat a stale lock?                                                      
+    1. fall back (recommended)                   │ › 2. refuse                                      
+    shadow mode, says why                        │   an error the caller handles                    
+    --- a/internal/judge/policy/resolve.go       │   if !lock.Valid(declared) {                     
+    +++ b/internal/judge/policy/resolve.go       │       return Resolved{}, ErrStaleLock            
+    @@ -12,9 +12,11 @@ func Resolve(declared Po… │   }                                              
+         if lock.Empty() {                       │   return Resolved{Mode: Enforced, Lock: lock.…   
+             return Resolved{Mode: Shadow}, nil  │                                                  
+         }                                       │                                                  
+    -    if declared.Mode == Enforced {          │                                                  
+    -        return Resolved{Mode: Enforced}, n… │                                                  
+    +    if declared.Mode == Enforced && lock.V… │                                                  
+    +        return Resolved{Mode: Enforced, Lo… │                                                  
+         }                                       │                                                  
+    +    if declared.Mode == Enforced {          │                                                  
+    +        return Resolved{Mode: Shadow, Why:… │                                                  
+    +    }                                       │                                                  
+    +2 more rows                                 │                                                  
+    3. other  type it in the chat, then enter                                                       
+  a note typed in the chat goes with the option enter chooses                                       
+  ↑↓ move   enter choose   tab next question   esc dismiss                                          
+                                                                                                    
+                                                                                                    
+  keep the error text short                                                                         
+                                                                                                    
+ ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

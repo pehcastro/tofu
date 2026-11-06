@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/panels/shells"
@@ -95,6 +96,17 @@ func fileWork() []app.Event {
 	}, done()...)
 }
 
+func proposal() app.Event {
+	first := 0
+	return app.Event{Kind: app.EventAwaitPerson, ID: "ask-propose", Tool: loop.AskPersonToolName, Text: "Which way should Resolve treat a stale lock?", Questions: []loop.PersonQuestion{{
+		ID: "stale-lock", Header: "Stale lock", Question: "Which way should Resolve treat a stale lock?", Type: loop.QuestionChoice, Recommended: &first,
+		Options: []loop.PersonOption{
+			{Label: "fall back", Description: "shadow mode, says why", Preview: modifiedDiff()},
+			{Label: "refuse", Description: "an error the caller handles", Preview: "if !lock.Valid(declared) {\n\treturn Resolved{}, ErrStaleLock\n}\nreturn Resolved{Mode: Enforced, Lock: lock.ID}, nil"},
+		},
+	}}}
+}
+
 func shellEntries(at time.Time) []shells.Entry {
 	exited, code := at.Add(-40*time.Second), 0
 	served := []string{"listening on 127.0.0.1:7411"}
@@ -153,6 +165,11 @@ func screens() []scenario {
 			{"running", func(r *reel) { r.settle(); r.press("alt+4") }},
 			{"exited", keys("down")},
 			{"kill-confirm", keys("up", "k")},
+		}},
+		{name: "propose", beats: []beat{
+			{"asked", func(r *reel) { r.send(proposal()) }},
+			{"second-focused", keys("down")},
+			{"noted", func(r *reel) { r.driver.Type("keep the error text short") }},
 		}},
 		{name: "settings", beats: categories},
 		{name: "theme", beats: []beat{

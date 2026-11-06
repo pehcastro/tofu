@@ -63,7 +63,7 @@ func TestAFormAnswersEveryKindOfQuestion(t *testing.T) {
 }
 
 func TestAFormLeavesTypingToTheComposer(t *testing.T) {
-	form := Open("q1", asked(), 0, openedAt())
+	form := Open("q1", asked()[1:], 0, openedAt())
 	for _, key := range []string{"a", "9", "enter"} {
 		composer := ""
 		if key == "enter" {
@@ -87,13 +87,12 @@ func TestAFormMarksTheRecommendedAndNeverAutoSelects(t *testing.T) {
 			t.Errorf("the form does not show %q:\n%s", want, before)
 		}
 	}
-	if strings.Contains(before, "resty.New") {
-		t.Errorf("an unfocused option's preview is drawn:\n%s", before)
+	if narrow := plain(form.Lines(40, opened)); strings.Contains(narrow, "resty.New") {
+		t.Errorf("too narrow for columns, an unfocused option's preview is drawn:\n%s", narrow)
 	}
 	form.Key("down", "")
-	focused := plain(form.Lines(80, opened.Add(9*time.Second)))
-	if !strings.Contains(focused, "resty.New") {
-		t.Errorf("the focused option's preview is not drawn:\n%s", focused)
+	if focused := plain(form.Lines(40, opened.Add(9*time.Second))); !strings.Contains(focused, "resty.New") {
+		t.Errorf("too narrow for columns, the focused option's preview is not drawn:\n%s", focused)
 	}
 	after := plain(form.Lines(80, opened.Add(3*time.Minute)))
 	if !strings.Contains(after, "no answer yet") || !strings.Contains(after, "answering still reaches it") || strings.Contains(after, "select") {

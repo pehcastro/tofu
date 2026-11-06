@@ -1,8 +1,9 @@
   ? HTTP client  1 of 4                                                         
   no answer yet; the lead was told none came, and answering still reaches it    
   Which HTTP client should the fetcher use?                                     
-    1. net/http (recommended)  standard library, no dependency                  
-  › 2. resty  retries built in, one dependency                                  
-    │ client := resty.New().SetRetryCount(3)                                    
+    1. net/http (recommended)          │ › 2. resty                             
+    standard library, no dependency    │   retries built in, one dependency     
+                                       │   client := resty.New().SetRetryCou…   
     3. other  type it in the chat, then enter                                   
+  a note typed in the chat goes with the option enter chooses                   
   ↑↓ move   enter choose   tab next question   esc dismiss                      
