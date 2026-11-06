@@ -903,7 +903,7 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 		own = slices.DeleteFunc(own, func(tool contract.Tool) bool { return strings.HasPrefix(tool.Name(), "browser_") })
 	}
 	if !nodeProject(dir) {
-		own = slices.DeleteFunc(own, func(tool contract.Tool) bool { return tool.Name() == "typecheck" || tool.Name() == "test" })
+		own = slices.DeleteFunc(own, func(tool contract.Tool) bool { return tool.Name() == "typecheck" })
 	}
 	orchestrating := append(loop.WithSourceBudget(append(own, spawner), prompt.subAgents.Defined), asking...)
 	if run.gate != nil {

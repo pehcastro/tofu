@@ -633,6 +633,8 @@ const (
 
 const SpawnEstimateRunsMost = 20
 
+const TestCPUs = 4
+
 const (
 	DebugRequestMillis = 10_000
 	DebugRunMillis     = 120_000
