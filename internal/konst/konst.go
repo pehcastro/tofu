@@ -624,6 +624,13 @@ const (
 	BudgetSubAgentsShown = 20
 )
 
+const (
+	ClaimsPartsChecked = 20
+	ClaimsCallsOffered = 40
+	ClaimsArgsBytes    = 200
+	ClaimsOutputBytes  = 600
+)
+
 const SpawnEstimateRunsMost = 20
 
 const (
