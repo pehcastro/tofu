@@ -96,7 +96,13 @@ func (s Symbols) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 	}
 	files, served := listed.Files, []string(nil)
 	if s.servers != nil {
-		files, served = s.resolve(ctx, args.Name, listed.Files)
+		project := listed
+		if args.Path != "" {
+			if project, err = glob.FilesUnder(s.root, ".", args.IncludeIgnored); err != nil {
+				return contract.Result{}, fmt.Errorf("symbols: %w", err)
+			}
+		}
+		files, served = s.resolve(ctx, args.Name, listed.Files, project.Files)
 	}
 	graph, err := engine.Symbols(string(s.root), files, args.Name)
 	if err != nil {

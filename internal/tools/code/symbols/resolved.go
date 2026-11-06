@@ -35,7 +35,7 @@ func (s Symbols) Serving(servers *lsp.Pool) Symbols {
 	return s
 }
 
-func (s Symbols) resolve(ctx context.Context, name string, files []string) ([]string, []string) {
+func (s Symbols) resolve(ctx context.Context, name string, files, project []string) ([]string, []string) {
 	resolved := map[string]bool{}
 	var blocks []string
 	for _, server := range lsp.Servers() {
@@ -47,7 +47,7 @@ func (s Symbols) resolve(ctx context.Context, name string, files []string) ([]st
 		if len(definitions) == 0 {
 			continue
 		}
-		found, err := s.ask(ctx, server, definitions, mine)
+		found, err := s.ask(ctx, server, definitions, project)
 		if err != nil {
 			lost := "these " + server.Language + " call sites are matched on the name alone and a call through an import alias is missed"
 			if server.Language == "python" {
