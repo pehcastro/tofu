@@ -659,6 +659,13 @@ const (
 )
 
 const (
+	HTTPReadBytes  = 16 << 20
+	HTTPShownBytes = 2048
+	HTTPItemsShown = 3
+	HTTPCallMillis = 30_000
+)
+
+const (
 	DepsRequestMillis   = 10_000
 	DepsRunMillis       = 120_000
 	DepsAdvisoriesShown = 10

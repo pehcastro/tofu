@@ -1230,6 +1230,7 @@ func leadToolConstructors() []func(dir string) (contract.Tool, error) {
 		newRaceTool,
 		profileTool,
 		recordTool,
+		newHTTPTool,
 		newDoneTool,
 	}
 }

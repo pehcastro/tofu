@@ -41,6 +41,10 @@ func main() {
 		}
 		json.NewEncoder(w).Encode(map[string]int{"order": id, "total": total})
 	})
+	mux.HandleFunc("GET /orders/export", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(exportOrders(27_000))
+	})
 	mux.HandleFunc("GET /slow", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, spin(40_000_000))
 	})
@@ -71,6 +75,36 @@ func orderTotal(db *sql.DB, id int) (int, error) {
 		total += cents[i]
 	}
 	return total, rows.Err()
+}
+
+type exportItem struct {
+	SKU   string `json:"sku"`
+	Cents int    `json:"cents"`
+}
+
+type exportOrder struct {
+	Order    int          `json:"order"`
+	Customer string       `json:"customer"`
+	Status   string       `json:"status"`
+	Items    []exportItem `json:"items"`
+	Note     string       `json:"note,omitempty"`
+	Coupon   *string      `json:"coupon"`
+}
+
+func exportOrders(count int) []exportOrder {
+	orders := make([]exportOrder, count)
+	for i := range orders {
+		orders[i] = exportOrder{
+			Order:    i + 1,
+			Customer: fmt.Sprintf("customer-%05d", i%997),
+			Status:   []string{"paid", "shipped", "refunded"}[i%3],
+			Items:    []exportItem{{SKU: fmt.Sprintf("sku-%03d", i%50), Cents: 250 + i%400}, {SKU: "sku-gift", Cents: 1200}},
+		}
+		if i%5 == 0 {
+			orders[i].Note = "leave at the door"
+		}
+	}
+	return orders
 }
 
 func spin(n int) int {
