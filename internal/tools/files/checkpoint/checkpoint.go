@@ -23,6 +23,10 @@ const Name = "checkpoint"
 
 const checkpointRefs = "refs/tofu/checkpoints"
 
+const submodule = "160000"
+
+type repo struct{ shadow.Store }
+
 type action string
 
 const (
@@ -94,14 +98,14 @@ func (r repo) save(ctx context.Context, ref, label string, turn shadow.Turn) (st
 	if err != nil {
 		return "", err
 	}
-	turns, err := r.turns(ctx)
+	turns, err := r.Recorded(ctx, konst.ShadowTurnsKept)
 	if err != nil {
 		return "", err
 	}
 	message := []string{"tofu checkpoint " + label, "", "session " + turn.Session, "turn " + turn.ID}
 	for _, earlier := range turns {
-		if earlier.session == turn.Session && earlier.id != turn.ID {
-			message = append(message, "before "+earlier.id)
+		if earlier.Session == turn.Session && earlier.ID != turn.ID {
+			message = append(message, "before "+earlier.ID)
 		}
 	}
 	commit, err := r.Git(ctx, strings.Join(message, "\n")+"\n", "commit-tree", tree)
@@ -132,7 +136,7 @@ func (r repo) save(ctx context.Context, ref, label string, turn shadow.Turn) (st
 }
 
 type verdict struct {
-	change
+	shadow.Change
 	keptBecause string
 }
 
@@ -165,46 +169,46 @@ func (r repo) plan(ctx context.Context, ref, liveTurn string) (plan, error) {
 	if p.now, err = r.Snapshot(ctx); err != nil {
 		return plan{}, err
 	}
-	turns, err := r.turns(ctx)
+	turns, err := r.Recorded(ctx, konst.ShadowTurnsKept)
 	if err != nil {
 		return plan{}, err
 	}
 	agentLeft := map[string]string{}
 	for _, turn := range turns {
-		if turn.session != session || slices.Contains(before, turn.id) {
+		if turn.Session != session || slices.Contains(before, turn.ID) {
 			continue
 		}
-		start, end := turn.parent, turn.commit
-		if turn.parent == "" {
-			if turn.id != liveTurn {
+		start, end := turn.Start, turn.End
+		if !turn.Ended() {
+			if turn.ID != liveTurn {
 				continue
 			}
-			start, end = turn.commit, p.now
+			end = p.now
 		}
-		if turn.id == p.saveTurn {
+		if turn.ID == p.saveTurn {
 			start = p.checkpoint
 		}
-		changes, err := r.changed(ctx, start, end)
+		changes, err := r.Changed(ctx, start, end)
 		if err != nil {
 			return plan{}, err
 		}
 		for _, file := range changes {
-			agentLeft[file.path] = file.toBlob
+			agentLeft[file.Path] = file.ToBlob
 		}
 	}
-	since, err := r.changed(ctx, p.checkpoint, p.now)
+	since, err := r.Changed(ctx, p.checkpoint, p.now)
 	if err != nil {
 		return plan{}, err
 	}
 	for _, file := range since {
-		left, touched := agentLeft[file.path]
-		judged := verdict{change: file}
+		left, touched := agentLeft[file.Path]
+		judged := verdict{Change: file}
 		switch {
 		case !touched:
 			judged.keptBecause = "changed since the save, and not by this session"
-		case left != file.toBlob:
+		case left != file.ToBlob:
 			judged.keptBecause = "changed by someone other than this session after it last wrote the file"
-		case file.fromMode == submodule || file.toMode == submodule:
+		case file.FromMode == submodule || file.ToMode == submodule:
 			judged.keptBecause = "a submodule, which checkpoint never moves"
 		}
 		p.files = append(p.files, judged)
@@ -220,14 +224,14 @@ func (r repo) back(ctx context.Context, ref, label, liveTurn string) (string, er
 	var restored, kept []string
 	for _, file := range p.files {
 		if file.keptBecause == "" {
-			err := r.restore(ctx, file.change)
+			err := r.Restore(ctx, file.Change)
 			if err == nil {
-				restored = append(restored, file.path)
+				restored = append(restored, file.Path)
 				continue
 			}
 			file.keptBecause = "could not be written back: " + err.Error()
 		}
-		kept = append(kept, "  "+file.path+": "+file.keptBecause+"\n")
+		kept = append(kept, "  "+file.Path+": "+file.keptBecause+"\n")
 	}
 	return fmt.Sprintf("back to checkpoint %s, saved in turn %s\nrestored: %s\nkept as they are now: %d\n%s", label, p.saveTurn, contract.Listed(restored), len(kept), strings.Join(kept, "")), nil
 }
@@ -244,23 +248,23 @@ func (r repo) diff(ctx context.Context, ref, label, liveTurn string) (string, er
 	defer func() { _ = os.RemoveAll(scratch) }()
 	said := fmt.Sprintf("checkpoint %s, saved in turn %s, against the project now: %d changed\n", label, p.saveTurn, len(p.files))
 	for _, file := range p.files {
-		patch, err := r.Git(ctx, "", "diff-tree", "-p", "-U0", "--no-renames", p.checkpoint, p.now, "--", ":(literal)"+file.path)
+		patch, err := r.Git(ctx, "", "diff-tree", "-p", "-U0", "--no-renames", p.checkpoint, p.now, "--", ":(literal)"+file.Path)
 		if err != nil {
 			return "", err
 		}
 		counts, oldSpans, newSpans := hunks(patch)
-		symbols, err := r.touched(ctx, scratch, file.path, file.fromBlob, oldSpans, nil)
+		symbols, err := r.touched(ctx, scratch, file.Path, file.FromBlob, oldSpans, nil)
 		if err != nil {
 			return "", err
 		}
-		if symbols, err = r.touched(ctx, scratch, file.path, file.toBlob, newSpans, symbols); err != nil {
+		if symbols, err = r.touched(ctx, scratch, file.Path, file.ToBlob, newSpans, symbols); err != nil {
 			return "", err
 		}
 		back := "back restores it"
 		if file.keptBecause != "" {
 			back = "back keeps it, " + file.keptBecause
 		}
-		said += fmt.Sprintf("  %s %s, symbols %s: %s\n", file.path, counts, contract.Listed(symbols), back)
+		said += fmt.Sprintf("  %s %s, symbols %s: %s\n", file.Path, counts, contract.Listed(symbols), back)
 	}
 	return said, nil
 }

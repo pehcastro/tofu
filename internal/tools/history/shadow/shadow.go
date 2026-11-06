@@ -127,34 +127,24 @@ func (s Started) Live(ctx context.Context) (Changed, error) {
 }
 
 func (s Store) Turns(ctx context.Context, count int) ([]Changed, error) {
-	if _, err := os.Stat(filepath.Join(s.gitDir, "HEAD")); errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	listed, err := s.git(ctx, "", "for-each-ref", "--sort=-refname", "--sort=-committerdate", "--count="+strconv.Itoa(count), "--format=%(objectname) %(parent)", TurnRefs)
+	recorded, err := s.Recorded(ctx, count)
 	if err != nil {
 		return nil, err
 	}
 	var turns []Changed
-	for line := range strings.Lines(listed) {
-		commit, parent, _ := strings.Cut(strings.TrimSpace(line), " ")
-		body, err := s.git(ctx, "", "log", "-1", "--format=%B", commit)
-		if err != nil {
-			return nil, err
-		}
-		turn, files := parseMessage(body)
-		if parent != "" {
-			numbers, err := s.diff(ctx, parent, commit, nil)
-			if err != nil {
+	for _, one := range slices.Backward(recorded) {
+		changed := Changed{Turn: one.Turn, Ended: one.Ended()}
+		if one.Ended() {
+			if changed.Files, err = s.diff(ctx, one.Start, one.End, nil); err != nil {
 				return nil, err
 			}
-			for i := range numbers {
-				if at := slices.IndexFunc(files, func(one File) bool { return one.Path == numbers[i].Path }); at >= 0 {
-					numbers[i].By = files[at].By
+			for i, file := range changed.Files {
+				if at := slices.IndexFunc(one.Changes, func(c Change) bool { return c.Path == file.Path }); at >= 0 {
+					changed.Files[i].By = one.Changes[at].By
 				}
 			}
-			files = numbers
 		}
-		turns = append(turns, Changed{Turn: turn, Ended: parent != "", Files: files})
+		turns = append(turns, changed)
 	}
 	return turns, nil
 }
