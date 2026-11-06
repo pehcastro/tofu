@@ -29,6 +29,7 @@ import (
 	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/agents/forget"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/history/shadow"
 	"tofu/internal/tools/shell/process"
@@ -1301,6 +1302,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				continue
 			}
 			pending, batches := decision.ToolCalls, 0
+			forgetting := forget.Hold(messages, artifacts.preview)
 			codes := map[string]Registry{}
 			toolsFor := func(gated gatedCall) Registry {
 				if code, asked := codes[gated.id]; asked {
@@ -1402,7 +1404,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				rows := make([]ToolCallRow, len(wave))
 				answers := make([]core.Message, len(wave))
 				memoHits := make([]bool, len(wave))
-				waveCtx, waveEnded := config.Inbox.stoppableWave(ctx)
+				waveCtx, waveEnded := config.Inbox.stoppableWave(forget.With(ctx, forgetting))
 				runAt := func(i, batch int) {
 					gated := wave[i]
 					if gated.call.Name == (askTool{}).Name() {
@@ -1466,6 +1468,10 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 						break
 					}
 				}
+			}
+			if after := forgetting.Applied(messages); after != nil {
+				recorded.listChange("forget", "the model dropped tool results after the last cache breakpoint on step "+strconv.Itoa(step), messages, after)
+				messages = after
 			}
 			if config.Boundary != nil {
 				asked := config.Boundary.Asked()
