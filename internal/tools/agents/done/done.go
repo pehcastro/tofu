@@ -9,6 +9,8 @@ import (
 	"strings"
 
 	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
+	"tofu/internal/tools/code/test"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/human/plan"
 )
@@ -45,8 +47,8 @@ func (Done) Name() string { return Name }
 func (Done) Definition() core.Tool {
 	return core.Tool{
 		Name: Name,
-		Description: "answers whether you can stop. lines are the task's acceptance lines, each with call, the id of the tool call whose command checked it. " +
-			"each reads yes when that command exited 0, no when it failed, and not_checked when no command checked it: no call, an id no earlier call has, or a call that ran no command. " +
+		Description: "answers whether you can stop. lines are the task's acceptance lines, each with call, the tool call whose command checked it: the [tool#abc12] reference at the top of its result, or its call id. " +
+			"each reads yes when that command exited 0 or that test call ran its tests and they passed, no when it failed, and not_checked when no command checked it: no call, a reference no earlier call or more than one has, or a call that ran no command. " +
 			"every plan item that carries a check is read too, against the call its done named. " +
 			"once you call done, the turn does not end while a line reads no: you get one more turn to fix it, run its check again and call done with the new call id.",
 		Parameters: map[string]any{
@@ -119,18 +121,43 @@ func readAll(ctx context.Context, lines []Line, earlier []core.Message) []Read {
 
 func readLine(line Line, earlier []core.Message) Read {
 	call := strings.TrimSpace(line.Call)
-	result := resultOf(earlier, call)
-	switch {
-	case call == "":
+	if call == "" {
 		return Read{Line: line, Met: NotChecked, Evidence: "no call"}
-	case result == nil:
-		return Read{Line: line, Met: NotChecked, Evidence: "no earlier call has the id " + strconv.Quote(call)}
-	case result.ToolExitCode == nil:
+	}
+	results := calledAs(earlier, call)
+	if len(results) != 1 {
+		return Read{Line: line, Met: NotChecked, Evidence: fmt.Sprintf("%d earlier calls have the id or reference %q", len(results), call)}
+	}
+	result := results[0]
+	tested := slices.ContainsFunc(earlier, func(message core.Message) bool {
+		return slices.ContainsFunc(message.ToolCalls, func(asked core.ToolCall) bool {
+			return asked.ID == result.ToolCallID && asked.Name == test.Test{}.Name()
+		})
+	})
+	switch {
+	case result.ToolExitCode == nil && !tested:
 		return Read{Line: line, Met: NotChecked, Evidence: call + " ran no command"}
+	case result.ToolExitCode == nil && result.ToolOutcome != core.ToolOutcomeRan:
+		return Read{Line: line, Met: No, Evidence: call + " test did not pass"}
+	case result.ToolExitCode == nil:
+		return Read{Line: line, Met: Yes, Evidence: call + " test passed"}
 	case *result.ToolExitCode != 0 || result.ToolOutcome != core.ToolOutcomeRan:
 		return Read{Line: line, Met: No, Evidence: call + " exit " + strconv.Itoa(*result.ToolExitCode)}
 	}
 	return Read{Line: line, Met: Yes, Evidence: call + " exit 0"}
+}
+
+func calledAs(messages []core.Message, call string) []core.Message {
+	_, hash, referred := strings.Cut(strings.TrimSuffix(call, "]"), "#")
+	var found []core.Message
+	for _, message := range messages {
+		shown, _, _ := strings.Cut(message.Content, "\n")
+		ref, shownRef := strings.CutPrefix(strings.TrimSuffix(shown, "]"), "[tool#")
+		if message.Role == core.RoleTool && (message.ToolCallID == call || referred && shownRef && session.DrawnAs(ref, hash)) {
+			found = append(found, message)
+		}
+	}
+	return found
 }
 
 func resultOf(messages []core.Message, call string) *core.Message {
