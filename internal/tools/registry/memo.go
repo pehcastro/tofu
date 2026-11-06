@@ -116,6 +116,9 @@ func (t memoTool) Definition() core.Tool { return t.tool.Definition() }
 func (t memoTool) Uncached() contract.Tool { return t.tool }
 
 func (t memoTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
+	if t.tool.Name() == "read" {
+		return t.tool.Run(ctx, raw)
+	}
 	if !SideEffectFree(t.tool.Name()) {
 		result, err := t.tool.Run(ctx, raw)
 		t.memo.forget()
