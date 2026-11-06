@@ -241,9 +241,10 @@ func sideChat(config Config) (Config, error) {
 		}
 		*config.Prefix = *parent
 	}
+	refusing := slices.DeleteFunc(orchestratorOnly(), func(name string) bool { return slices.Contains(foldedIntoHistory(), historyMode(name)) })
 	config.Instructions = strings.TrimSpace(config.Instructions + "\n\n" + "This is a side chat beside session " + side.BranchedFrom.Session +
 		", for talking with the person, not for doing that session's work: " + sideNever + ". " +
-		"Every tool of that session is listed, so the provider can reuse its cache, and " + strings.Join(orchestratorOnly(), ", ") + " refuse when called. " +
+		"Every tool of that session is listed, so the provider can reuse its cache, and " + strings.Join(refusing, ", ") + " refuse when called, and " + HistoryToolName + " refuses its " + string(historyZoom) + " and " + string(historyRecall) + " modes. " +
 		"It " + sideWrites(side.Owns) + "." + shellRules)
 	return config, nil
 }
@@ -258,7 +259,7 @@ func sideWrites(owns []string) string {
 }
 
 func orchestratorOnly() []string {
-	return []string{"spawn", "message", "subagents", ShellToolName, "settings", "cron", "remember", "zoom", "recall", "rule_override", "browser_act", "browser_do", "browser_motion"}
+	return []string{"spawn", "message", "subagents", ShellToolName, "settings", "cron", "remember", string(historyZoom), string(historyRecall), "rule_override", "browser_act", "browser_do", "browser_motion"}
 }
 
 func sideTools(registry Registry, boundary *subagents.Boundary) Registry {

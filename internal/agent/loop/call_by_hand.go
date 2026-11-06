@@ -43,8 +43,11 @@ func (c Config) CallByHand(ctx context.Context, call core.ToolCall) (core.Messag
 	if c.referencesOffered() {
 		maps.Copy(references.held, c.References)
 	}
-	running := runningTools{fetch: artifacts.FetchTool(), lookup: lookupTool{sessions: c.Sessions, current: func() string { return c.Session }}, references: references}
+	running := runningTools{fetch: artifacts.FetchTool(), history: historyTool{sessions: c.Sessions, current: func() string { return c.Session }}, references: references}
 	tools := NewRegistry(c.answerable(c.withLoopTools(c.Tools.tools, running))...)
+	if renamed, was := historyRenamed(call.Name); was {
+		return core.Message{}, NotCalledByHandError{Tool: call.Name, Why: renamed}
+	}
 	if _, offered := tools.byName[call.Name]; !offered {
 		offeredNames := make([]string, len(tools.tools))
 		for i, tool := range tools.tools {

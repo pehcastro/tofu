@@ -12,7 +12,7 @@ A tool's `Result.Command` label is published on purpose and is drawn whole. A ca
 
 They were settled one at a time and they are one rule.
 
-The quote tool hands back what was said and the names of the tools that ran. A call's arguments and a tool's output never come back, so a key pasted into a command line is not repeated by a quotation.
+The `history` tool in mode `quote` hands back what was said and the names of the tools that ran. A call's arguments and a tool's output never come back, so a key pasted into a command line is not repeated by a quotation.
 
 A running sub-agent carries tool names only. The watcher copies the name of the tool being called and reaches no other field, so a sub-agent mid-call shows `bash` and nothing more.
 

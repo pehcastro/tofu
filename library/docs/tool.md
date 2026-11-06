@@ -29,7 +29,8 @@ person reruns.
   write, edit or bash that writes is refused with the words a sub-agent
   gets.
 - `--session <name|id|head>` binds the call to a recorded session, so
-  `quote`, `lookup` and `recall` answer from it.
+  `history` answers from it in every mode: `quote`, `recall`, `zoom` and
+  `lookup`.
 - `--sift free|judged` picks the arm that cuts a bash result, as
   `tofu run --sift` does; without it the method table decides.
 

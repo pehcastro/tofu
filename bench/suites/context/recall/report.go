@@ -56,14 +56,14 @@ func Render(machine, date string, reach CorpusReach) string {
 			fmt.Fprintf(&out, "- `%s` step %d forked (`%s`) into `%s`: %d tokens down to %d, the carry named %d known sources whole.\n",
 				fork.Session, fork.Step, fork.Kind, fork.Into, fork.TokensBefore, fork.TokensAfter, fork.KnownSources)
 		}
-		out.WriteString("\nA fork drops no result in the in-place sense: it replaces the whole working set with a handle carry, so what \"was evicted\" is the entire pre-fork working set, made reachable again through `lookup` and `artifact_fetch` rather than gone.\n\n")
+		out.WriteString("\nA fork drops no result in the in-place sense: it replaces the whole working set with a handle carry, so what \"was evicted\" is the entire pre-fork working set, made reachable again through `history` in mode `lookup` and `artifact_fetch` rather than gone.\n\n")
 	}
 
 	fmt.Fprintf(&out, "## Re-fetch rate\n\n")
 	if len(reach.Forks) == 0 {
 		out.WriteString("**Undefined, not zero.** No eviction of any kind has ever run on a real session, so there is nothing for a re-fetch to be a rate of.\n\n")
 	} else {
-		fmt.Fprintf(&out, "**%d re-fetch(es) over %d fork(s).** A re-fetch is a tool call in the continuation that names a source the fork's own carry already held, keyed by `rc.Distil`, the function that built the carry, so a call matches on the same source the carry recorded. A call through `lookup` or `artifact_fetch` is the cheap path and not a re-fetch.\n\n", reach.TotalRefetches(), len(reach.Forks))
+		fmt.Fprintf(&out, "**%d re-fetch(es) over %d fork(s).** A re-fetch is a tool call in the continuation that names a source the fork's own carry already held, keyed by `rc.Distil`, the function that built the carry, so a call matches on the same source the carry recorded. A call through `history` in mode `lookup` or `artifact_fetch` is the cheap path and not a re-fetch.\n\n", reach.TotalRefetches(), len(reach.Forks))
 		out.WriteString("| session | step | into | carried | re-fetched |\n|---|---|---|---|---|\n")
 		for _, fork := range reach.Forks {
 			refetched := fmt.Sprint(fork.Refetches)

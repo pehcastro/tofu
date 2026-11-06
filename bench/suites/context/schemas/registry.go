@@ -3,6 +3,7 @@ package schemas
 import (
 	iturn "tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 	"tofu/internal/tools/code/search"
 	"tofu/internal/tools/code/symbols"
 	"tofu/internal/tools/contract"
@@ -38,7 +39,7 @@ func FullRegistry(dir string) iturn.Registry {
 	}, verbTools...)
 	full = registry.NewMemo().Wrap(full)
 
-	full = append(full, quote.NewQuote(nil, ""))
+	full = append(full, iturn.NewHistoryTool(session.NewStore(dir), "", quote.NewQuote(nil, "")))
 	full = append(full, iturn.NewSpawnTool("schemas-probe", iturn.Config{}, nil))
 	full = append(full, must(iturn.NewArtifacts(dir, true)).FetchTool())
 

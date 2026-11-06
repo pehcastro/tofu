@@ -51,8 +51,9 @@ Each trim and each fork is a list change in the session log, with the
 step, the tokens before and after, and what was shrunk. A shrunk result is
 kept whole under `~/.tofu/projects/<project>/artifacts/`, and the model
 reads any range of it back with `artifact_fetch`. A fork's earlier
-generations stay in the session store, and `lookup` brings back any call
-the carry names from any of them.
+generations stay in the session store, and the `history` tool in mode
+`lookup`, a call id as the anchor, brings back any call the carry names
+from any of them.
 
 ## Change it
 

@@ -221,21 +221,14 @@ func shippedQuoteRule(t *testing.T) rule.Rule {
 	return rule.Rule{}
 }
 
-func TestTheShippedQuoteRuleNamesTheToolThatResolvesTheReference(t *testing.T) {
+func TestTheShippedQuoteRuleNamesTheModeThatResolvesTheReference(t *testing.T) {
 	var registered contract.Tool = quote.NewQuote(nil, "")
-	defined := registered.Definition()
-	if defined.Name != registered.Name() {
+	if defined := registered.Definition(); defined.Name != registered.Name() {
 		t.Fatalf("the registry keys the tool as %q and the model is told %q", registered.Name(), defined.Name)
 	}
-	if text := shippedQuoteRule(t).Text; !strings.Contains(text, "the "+defined.Name+" tool") {
-		t.Fatalf("the rule tells the model to read a turn without naming the %s tool: %q", defined.Name, text)
-	}
-	shape, ok := defined.Parameters.(map[string]any)
-	if !ok {
-		t.Fatalf("the tool describes its arguments as %T", defined.Parameters)
-	}
-	if required, ok := shape["required"].([]string); !ok || len(required) != 1 || required[0] != "id" {
-		t.Fatalf("the tool the rule names takes %v, and the rule tells the model to call it with an id", shape["required"])
+	asked := "calling " + loop.HistoryToolName + " with mode " + registered.Name() + " and that id as its anchor"
+	if text := shippedQuoteRule(t).Text; !strings.Contains(text, asked) {
+		t.Fatalf("the rule tells the model to read a turn without saying %q: %q", asked, text)
 	}
 }
 

@@ -221,7 +221,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		maps.Copy(references.held, config.References)
 	}
 	running := func() runningTools {
-		return runningTools{fetch: artifacts.FetchTool(), lookup: lookupTool{sessions: config.Sessions, current: func() string { return recorded.session() }}, references: references}
+		return runningTools{fetch: artifacts.FetchTool(), history: historyTool{sessions: config.Sessions, current: func() string { return recorded.session() }}, references: references}
 	}
 	currentTools := func() Registry {
 		return NewRegistry(config.answerable(config.withLoopTools(source().tools, running()))...)
@@ -1699,7 +1699,7 @@ func (r *loadedReferences) Run(ctx context.Context, raw json.RawMessage) (contra
 
 type runningTools struct {
 	fetch      FetchTool
-	lookup     lookupTool
+	history    historyTool
 	references *loadedReferences
 }
 
@@ -1721,9 +1721,7 @@ func (c Config) withLoopTools(tools []contract.Tool, running runningTools) []con
 	if !c.TruncateResults {
 		added = append(added, running.fetch)
 	}
-	if c.Sessions != nil {
-		added = append(added, running.lookup)
-	}
+	added = withHistory(added, running.history)
 	if c.referencesOffered() || holdsSkill {
 		added = append(added, running.references)
 	}

@@ -158,7 +158,7 @@ func TestAForkCarriesTheLeadsOwnStateAndPointsAtCallsLookupReadsBackFromAnyGener
 			if c.stateErr != nil && (first.Carry.State != "" || !slices.ContainsFunc(row.Warnings, func(w string) bool { return strings.Contains(w, "the wire is down") })) {
 				t.Errorf("a failed state request left state %q and warnings %q", first.Carry.State, row.Warnings)
 			}
-			for _, want := range []string{"call lookup with its call id instead of reading or running it again", "session " + id, ", call call-1", "cat > a.sh <<'EOF' echo one"} {
+			for _, want := range []string{"call history with mode lookup and the call id as its anchor instead of reading or running it again", "session " + id, ", call call-1", "cat > a.sh <<'EOF' echo one"} {
 				if !strings.Contains(first.Carry.Text, want) {
 					t.Errorf("the first carry does not hold %q:\n%s", want, first.Carry.Text)
 				}
@@ -167,8 +167,8 @@ func TestAForkCarriesTheLeadsOwnStateAndPointsAtCallsLookupReadsBackFromAnyGener
 				t.Errorf("the first carry copies the script or lists the write:\n%s", first.Carry.Text)
 			}
 			after := model.asked[model.stated[0]+1]
-			if !slices.ContainsFunc(after.Tools, func(tool core.Tool) bool { return tool.Name == LookupToolName }) {
-				t.Fatal("a turn that records its session is not offered lookup")
+			if !slices.ContainsFunc(after.Tools, func(tool core.Tool) bool { return tool.Name == HistoryToolName }) {
+				t.Fatal("a turn that records its session is not offered history")
 			}
 			tasks := 0
 			for _, message := range after.Messages {
@@ -179,12 +179,12 @@ func TestAForkCarriesTheLeadsOwnStateAndPointsAtCallsLookupReadsBackFromAnyGener
 			if tasks != 1 || after.Messages[0].Content != config.Task {
 				t.Errorf("the request after the fork holds the task %d times, and opens on %q", tasks, after.Messages[0].Content)
 			}
-			lookup := lookupTool{sessions: store, current: func() string { return row.Session }}
-			found, err := lookup.Run(context.Background(), json.RawMessage(`{"call":"call-1"}`))
+			lookup := historyTool{sessions: store, current: func() string { return row.Session }}
+			found, err := lookup.Run(context.Background(), json.RawMessage(`{"mode":"lookup","anchor":"call-1"}`))
 			if err != nil || !strings.Contains(found.Content, "the text of f1.go") || !strings.Contains(found.Content, `{"path":"f1.go"}`) {
 				t.Errorf("lookup from the newest session %s did not reach call-1 in the first, %v:\n%.300s", row.Session, err, found.Content)
 			}
-			for _, wrong := range []string{`{"session":"` + row.Session + `","call":"call-404"}`, `{"session":"..","call":"call-1"}`} {
+			for _, wrong := range []string{`{"mode":"lookup","session":"` + row.Session + `","anchor":"call-404"}`, `{"mode":"lookup","session":"..","anchor":"call-1"}`} {
 				if _, err := lookup.Run(context.Background(), json.RawMessage(wrong)); err == nil {
 					t.Errorf("lookup %s answered", wrong)
 				}
@@ -244,8 +244,8 @@ func TestATrimOfResultsAlreadyReadRunsWhenTheBudgetIsCrossedAndTheForkOnlyIfItIs
 	if err != nil || !slices.ContainsFunc(facts, pointed) {
 		t.Errorf("a later fork would not point at the trimmed read of f1.go, %v:\n%s", err, strings.Join(facts, "\n"))
 	}
-	if slices.ContainsFunc(model.asked[0].Tools, func(tool core.Tool) bool { return tool.Name == LookupToolName }) {
-		t.Error("a turn that records no session is offered lookup")
+	if slices.ContainsFunc(model.asked[0].Tools, func(tool core.Tool) bool { return tool.Name == HistoryToolName }) {
+		t.Error("a turn that records no session is offered history")
 	}
 }
 
@@ -487,7 +487,7 @@ func TestLookupStopsOnACarriedFromLoopAndSaysWhatItLookedFor(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	_, err := lookupTool{sessions: store}.Run(context.Background(), json.RawMessage(`{"session":"`+a+`","call":"call-9"}`))
+	_, err := historyTool{sessions: store}.Run(context.Background(), json.RawMessage(`{"mode":"lookup","session":"`+a+`","anchor":"call-9"}`))
 	if err == nil || !strings.Contains(err.Error(), "call-9") || !strings.Contains(err.Error(), a) {
 		t.Fatalf("lookup over a loop answered %v", err)
 	}

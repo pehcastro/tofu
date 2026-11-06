@@ -113,10 +113,10 @@ func Of(name string, args json.RawMessage) Card {
 		return card(Explored, kindRead, "reading", "read", "a stored result")
 	case "search":
 		return card(Explored, kindSearch, "searching", "searched", text("pattern"))
-	case "symbols", "lookup":
+	case "symbols":
 		return card(Explored, kindSearch, "looking up", "looked up", text("name"))
-	case "recall":
-		return card(Explored, kindSearch, "recalling", "recalled", text("query"))
+	case "history":
+		return card(Explored, kindSearch, "looking back", "looked back", text("mode")+" "+text("anchor"))
 	case "glob", "scratch_list":
 		return card(Explored, kindList, "listing", "listed", text("pattern"))
 	case "shell":

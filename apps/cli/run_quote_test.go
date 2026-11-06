@@ -43,7 +43,7 @@ func quotingTurn(t *testing.T, reference string) (loop.Config, loop.Row) {
 	}
 	model := &scriptedModel{decisions: []core.Decision{
 		{Build: "stub-model", Outcome: core.OutcomeToolCalls, ToolCalls: []core.ToolCall{
-			{ID: "call-1", Name: "quote", Arguments: json.RawMessage(`{"id":"` + reference + `"}`)},
+			{ID: "call-1", Name: loop.HistoryToolName, Arguments: json.RawMessage(`{"mode":"quote","anchor":"` + reference + `"}`)},
 		}},
 		{Build: "stub-model", Outcome: core.OutcomeMessage, Content: "answered"},
 	}}
@@ -57,8 +57,8 @@ func quotingTurn(t *testing.T, reference string) (loop.Config, loop.Row) {
 
 func TestATurnCallsQuoteThroughTheToolsTheRunBuildsAndGetsTheRecordedWordsBack(t *testing.T) {
 	config, row := quotingTurn(t, quoteReference)
-	if !slices.ContainsFunc(config.Tools.Definitions(), func(one core.Tool) bool { return one.Name == "quote" }) {
-		t.Fatal("the run builds no quote tool, so the rule still tells the model to do something it cannot do")
+	if !slices.ContainsFunc(config.OfferedTools(), func(one core.Tool) bool { return one.Name == loop.HistoryToolName }) {
+		t.Fatal("the run offers no history tool, so the rule still tells the model to do something it cannot do")
 	}
 	var answers []string
 	for _, message := range row.Conversation {

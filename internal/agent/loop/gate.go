@@ -388,7 +388,7 @@ func (t *SpawnTool) orchestratorAnswers(held *heldSubAgent, site spawnSite) Pers
 		case place != "":
 			answers = ", or allow_here to allow every call of this kind (" + place + ") from " + id + " until its run ends"
 		}
-		shown := cutOnRuneBoundary(string(request.Args), konst.GateAskArgsBytes, "\n...(%s of this call cut here: lookup with call "+request.Call+" returns it whole)...\n")
+		shown := cutOnRuneBoundary(string(request.Args), konst.GateAskArgsBytes, "\n...(%s of this call cut here: history with mode lookup and anchor "+request.Call+" returns it whole)...\n")
 		allowed, err := t.askLead(ctx, held, site, request, fmt.Sprintf("sub-agent %s asks to run %s %s, because %s. it waits up to %s of the time you can answer: call message with to %s and answer allow or deny%s. "+
 			"the message call alone answers it, and the turn ends after it with nothing to write. with no answer the call is refused.",
 			id, request.Tool, shown, because, konst.SubAgentGateAnswerMillis*time.Millisecond, id, answers))

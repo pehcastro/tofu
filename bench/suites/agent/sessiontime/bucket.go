@@ -68,7 +68,7 @@ func commandBucket(command string) bucket {
 func toolBucket(tool string) bucket {
 	name := strings.ToLower(tool)
 	switch name {
-	case "read", "edit", "write", "multiedit", "notebookedit", "quote", "artifact_fetch":
+	case "read", "edit", "write", "multiedit", "notebookedit", "quote", "history", "artifact_fetch":
 		return bucketFile
 	case "search", "glob", "grep", "symbols", "zoom", "gosymbol", "toolsearch":
 		return bucketSearch

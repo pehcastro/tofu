@@ -7,7 +7,7 @@ also: library/general/references/what-reaches-a-screen.md
 
 # How a quote reference resolves
 
-A message can carry `[quote#abcd]`, where `abcd` is the tail of a recorded event id. The `quote` tool turns that into the recorded item it names, and the function under it already names every outcome the rule has to talk about.
+A message can carry `[quote#abcd]`, where `abcd` is the tail of a recorded event id. The `history` tool in mode `quote`, with the reference as its anchor, turns that into the recorded item it names, and the function under it already names every outcome the rule has to talk about.
 
 ## What an item is
 
@@ -18,9 +18,9 @@ An item is anything the screen shows with an id:
 
 The token is the same for every kind. `internal/tools/registry.QuoteRef` builds it, `[quote#` and the last six characters of the id, and the interface and the server both call it, so a token typed by hand, inserted by ctrl+r or sent over the wire is one string.
 
-## What the tool does
+## What the mode does
 
-`internal/tools/registry.Quote` takes the reference as the model received it, reads the recorded session it belongs to and every session that session was forked from, and returns the item.
+`internal/tools/history/quote.Quote`, which `history` runs for mode `quote`, takes the reference as the model received it, reads the recorded session it belongs to and every session that session was forked from, and returns the item.
 
 - A turn comes back as its own words and the names of the tools that ran, never their arguments. What the person typed comes back as it was recorded, which is the text that was already sent when the turn happened.
 - A tool call comes back as its arguments and what it returned, with every key tofu knows masked. A call still running says no result is recorded for it yet.

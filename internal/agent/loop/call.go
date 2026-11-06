@@ -32,7 +32,7 @@ const (
 func gateExempt(tool string) bool {
 	return tool == "browser_tabs" || tool == "browser_read" || tool == "browser_observe" || tool == "artifact_fetch" || tool == ReferenceToolName ||
 		tool == ScratchPathToolName || tool == ScratchListToolName || tool == ScratchReadToolName ||
-		tool == RuleOverrideToolName || tool == RememberToolName || tool == AskPersonToolName || tool == LookupToolName || tool == messageTool{}.Name()
+		tool == RuleOverrideToolName || tool == RememberToolName || tool == AskPersonToolName || tool == HistoryToolName || tool == messageTool{}.Name()
 }
 
 const theToolSucceededAndPrintedNothing = "the tool ran, succeeded and printed nothing."
@@ -143,7 +143,11 @@ func (g gatedCall) execute(ctx context.Context, tools Registry, resultBytesCap i
 	ctx = context.WithValue(context.WithValue(context.WithValue(ctx, contract.ShellOwnerKey{}, g.author), spawnSiteKey{}, g.site), runningModelKey{}, g.model)
 	tool, ok := tools.byName[call.Name]
 	if !ok {
-		row, answer := rejectedCall(call, started, "unknown tool "+strconv.Quote(call.Name), g.id, g.parent, g.author)
+		refused := "unknown tool " + strconv.Quote(call.Name)
+		if renamed, was := historyRenamed(call.Name); was {
+			refused += " " + renamed
+		}
+		row, answer := rejectedCall(call, started, refused, g.id, g.parent, g.author)
 		return row, answer, false
 	}
 
