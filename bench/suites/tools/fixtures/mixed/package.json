@@ -1,0 +1,8 @@
+{
+  "name": "mixed",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"ts/*.test.ts\""
+  }
+}

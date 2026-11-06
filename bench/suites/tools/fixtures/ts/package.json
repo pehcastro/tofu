@@ -1,0 +1,13 @@
+{
+  "name": "orders",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"src/*.test.ts\"",
+    "typecheck": "tsc -p ."
+  },
+  "devDependencies": {
+    "@types/node": "22.10.2",
+    "typescript": "5.7.2"
+  }
+}
