@@ -101,6 +101,7 @@ impl From<&str> for SessionState {
             "idle" => SessionState::Idle,
             "waiting" | "waiting for approval" => SessionState::Waiting,
             "failed" | "error" | "loop_guard" => SessionState::Failed,
+            "stopped" | "fork_stop" => SessionState::Stopped,
             _ => SessionState::Stopped,
         }
     }
