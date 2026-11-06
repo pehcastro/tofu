@@ -1206,7 +1206,20 @@ func assembleRunTools(dir, set string, ledger *contract.ReadLedger, warm *warmPr
 	}
 	plan := plantool.NewPlan()
 	full := append([]contract.Tool{readTool, writeTool, shell, plan, jobs.Shells{}, projectTool, globTool, searchTool, symbolsTool, editTool.Reading(ledger).Checking(typecheckers).Ruling(rules), typecheckTool, testTool, githubTool}, verbTools...)
+	for _, construct := range leadToolConstructors() {
+		tool, err := construct(dir)
+		if err != nil {
+			return nil, nil, err
+		}
+		full = append(full, tool)
+	}
 	return tools.NewMemo().Wrap(append(append(full, webTools...), browserTools...)), plan, nil
+}
+
+func leadToolConstructors() []func(dir string) (contract.Tool, error) {
+	return []func(dir string) (contract.Tool, error){
+		envTool,
+	}
 }
 
 func planAsOffered(model models.Model, built []contract.Tool, plan *plantool.Plan) ([]contract.Tool, *plantool.Plan) {

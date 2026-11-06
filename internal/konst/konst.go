@@ -583,3 +583,9 @@ const (
 	BraveSearchDollarsPerCall = 5.0 / 1000
 	KeyPollTimeoutMillis      = 5000
 )
+
+const (
+	EnvProbeTimeoutMillis = 5000
+	EnvManifestBytes      = 1 << 20
+	EnvKeysShown          = 100
+)
