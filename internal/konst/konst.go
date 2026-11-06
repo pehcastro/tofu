@@ -616,3 +616,10 @@ const (
 	CodemodDiffBytes    = 16 * 1024
 	CodemodCheckerBytes = 4 * 1024
 )
+
+const (
+	ContextResultsShown  = 5
+	ContextStaleShown    = 20
+	ContextLabelChars    = 80
+	BudgetSubAgentsShown = 20
+)

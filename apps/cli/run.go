@@ -1224,6 +1224,8 @@ func leadToolConstructors() []func(dir string) (contract.Tool, error) {
 		envTool,
 		newChangesTool,
 		codemodTool,
+		newContextTool,
+		newBudgetTool,
 	}
 }
 

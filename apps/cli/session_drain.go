@@ -17,6 +17,7 @@ import (
 	"tofu/internal/agent/context/recall"
 	widget "tofu/internal/cli/render"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/models/llm/catalog"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
 	"tofu/internal/store/session/drain"
@@ -57,20 +58,26 @@ func sessionDrainVerb(o output.Verb, args []string) int {
 	return sessionReport(o, func(store *session.Store) (drainReport, error) { return sessionDrain(store, handles) }, drainLines)
 }
 
-func claudeDrain(o output.Verb, path string) int {
+func drainInput() (drain.Input, catalog.Registry, error) {
 	registry, err := wiring.ModelRegistry()
 	if err != nil {
-		return o.Fail(err)
+		return drain.Input{}, catalog.Registry{}, err
 	}
 	weights, err := wiring.PricedByProvider(registry)
 	if err != nil {
-		return o.Fail(err)
+		return drain.Input{}, catalog.Registry{}, err
 	}
 	estimate, err := recall.LoadConfig()
+	return drain.Input{Weights: weights, BytesPerThousandTokens: estimate.BytesPerThousandTokens}, registry, err
+}
+
+func claudeDrain(o output.Verb, path string) int {
+	input, registry, err := drainInput()
 	if err != nil {
 		return o.Fail(err)
 	}
-	report, err := claudecode.Read(path, drain.Input{Weights: weights, LeadWindow: drain.WindowsFrom(registry), BytesPerThousandTokens: estimate.BytesPerThousandTokens})
+	input.LeadWindow = drain.WindowsFrom(registry)
+	report, err := claudecode.Read(path, input)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -91,15 +98,7 @@ func sessionDrain(store *session.Store, handles []string) (drainReport, error) {
 	if err != nil {
 		return drainReport{}, err
 	}
-	registry, err := wiring.ModelRegistry()
-	if err != nil {
-		return drainReport{}, err
-	}
-	weights, err := wiring.PricedByProvider(registry)
-	if err != nil {
-		return drainReport{}, err
-	}
-	estimate, err := recall.LoadConfig()
+	input, _, err := drainInput()
 	if err != nil {
 		return drainReport{}, err
 	}
@@ -158,7 +157,8 @@ func sessionDrain(store *session.Store, handles []string) (drainReport, error) {
 	for _, cut := range cacheTrace(events, exchanges).Breaks {
 		breaks = append(breaks, drain.Break{Request: cut.Request, Differs: cut.Differs})
 	}
-	report := drain.Read(header.ID, events, drain.Input{Breaks: breaks, Classifier: classified, Runs: runs, Weights: weights, BytesPerThousandTokens: estimate.BytesPerThousandTokens})
+	input.Breaks, input.Classifier, input.Runs = breaks, classified, runs
+	report := drain.Read(header.ID, events, input)
 	return drainReport{Handle: handleOf(once, header.ID), Report: report}, nil
 }
 
