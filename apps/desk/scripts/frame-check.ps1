@@ -13,20 +13,55 @@ $p95Limit = 8.3
 $timeout = [TimeSpan]::FromSeconds(60)
 Add-Type @"
 using System;
+using System.ComponentModel;
 using System.Runtime.InteropServices;
 public class DeskFrameCheck {
   [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
   [DllImport("user32.dll")] public static extern bool GetClientRect(IntPtr h, out RECT r);
   [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr h, ref POINT p);
-  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
-  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern IntPtr CreateDesktopW(string name, IntPtr device, IntPtr mode, uint flags, uint access, IntPtr attrs);
+  [DllImport("user32.dll")] public static extern bool CloseDesktop(IntPtr d);
+  delegate bool EnumProc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] static extern bool EnumDesktopWindows(IntPtr d, EnumProc f, IntPtr l);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint cmd);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("kernel32.dll", SetLastError = true)] static extern bool SetHandleInformation(IntPtr h, uint mask, uint flags);
+  [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)] static extern bool CreateProcessW(string app, System.Text.StringBuilder line, IntPtr pa, IntPtr ta, bool inherit, uint flags, IntPtr env, string dir, ref STARTUPINFO si, out PROCESS_INFORMATION pi);
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+  [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)] struct STARTUPINFO { public int cb; public string reserved, desktop, title; public int x, y, xs, ys, xc, yc, fill, flags; public short show, r2; public IntPtr r3, stdin, stdout, stderr; }
+  [StructLayout(LayoutKind.Sequential)] struct PROCESS_INFORMATION { public IntPtr process, thread; public int pid, tid; }
+  public static IntPtr NewDesktop(string name) {
+    IntPtr d = CreateDesktopW(name, IntPtr.Zero, IntPtr.Zero, 0, 0x01FF, IntPtr.Zero);
+    if (d == IntPtr.Zero) throw new Win32Exception();
+    return d;
+  }
+  public static int Start(string desktop, string commandLine, string dir, IntPtr log) {
+    SetHandleInformation(log, 1, 1);
+    STARTUPINFO si = new STARTUPINFO();
+    si.cb = Marshal.SizeOf(si); si.desktop = desktop; si.flags = 0x100; si.stdout = log; si.stderr = log;
+    PROCESS_INFORMATION pi;
+    if (!CreateProcessW(null, new System.Text.StringBuilder(commandLine), IntPtr.Zero, IntPtr.Zero, true, 0, IntPtr.Zero, dir, ref si, out pi)) throw new Win32Exception();
+    CloseHandle(pi.thread); CloseHandle(pi.process);
+    return pi.pid;
+  }
+  public static IntPtr FindWindow(IntPtr desktop, int pid) {
+    IntPtr found = IntPtr.Zero;
+    EnumDesktopWindows(desktop, (h, l) => {
+      uint owner; GetWindowThreadProcessId(h, out owner);
+      if (owner == pid && GetWindow(h, 4) == IntPtr.Zero && IsWindowVisible(h)) { found = h; return false; }
+      return true;
+    }, IntPtr.Zero);
+    return found;
+  }
 }
 "@
 $WM_MOUSEMOVE = 0x0200
 $WM_MOUSEWHEEL = 0x020A
 $WM_MOUSELEAVE = 0x02A3
+$WM_CLOSE = 0x0010
 
 $userHome = Join-Path ([IO.Path]::GetTempPath()) ("desk-frame-check-" + [guid]::NewGuid().ToString("N"))
 $copied = Join-Path $userHome ".tofu\desk"
@@ -37,7 +72,6 @@ foreach ($name in @("themes", "config")) {
   if (Test-Path $from) { Copy-Item -Recurse -Force -Path $from -Destination $copied }
 }
 $errLog = Join-Path $userHome "desk.err.log"
-$outLog = Join-Path $userHome "desk.out.log"
 
 function Read-Log {
   if (-not (Test-Path $errLog)) { return "" }
@@ -69,9 +103,18 @@ $savedCheck = $env:TOFU_DESK_FRAME_CHECK
 $env:USERPROFILE = $userHome
 $env:APPDATA = Join-Path $userHome "AppData\Roaming"
 $env:TOFU_DESK_FRAME_CHECK = "1"
+$desktopName = "desk-frame-check-" + [guid]::NewGuid().ToString("N")
 try {
-  $script:proc = Start-Process -FilePath $Exe -ArgumentList @("--screen", $Screen) -WorkingDirectory $desk -RedirectStandardError $errLog -RedirectStandardOutput $outLog -PassThru
+  $desktop = [DeskFrameCheck]::NewDesktop($desktopName)
+} catch { "could not make a hidden desktop: $($_.Exception.Message)"; exit 2 }
+$logStream = [IO.File]::Open($errLog, "Create", "Write", "ReadWrite")
+try {
+  $deskPid = [DeskFrameCheck]::Start($desktopName, "`"$Exe`" --screen `"$Screen`"", $desk, $logStream.SafeFileHandle.DangerousGetHandle())
+  $script:proc = Get-Process -Id $deskPid
+} catch {
+  "could not start the desk on the hidden desktop: $($_.Exception.Message)"; [DeskFrameCheck]::CloseDesktop($desktop) | Out-Null; exit 2
 } finally {
+  $logStream.Dispose()
   $env:USERPROFILE = $savedProfile
   $env:APPDATA = $savedAppData
   $env:TOFU_DESK_FRAME_CHECK = $savedCheck
@@ -80,18 +123,15 @@ $deadline = (Get-Date) + $timeout
 $script:handle = [IntPtr]::Zero
 while ($script:handle -eq [IntPtr]::Zero -and (Get-Date) -lt $deadline -and -not $proc.HasExited) {
   Start-Sleep -Milliseconds 100
-  $proc.Refresh()
-  $script:handle = $proc.MainWindowHandle
+  $script:handle = [DeskFrameCheck]::FindWindow($desktop, $deskPid)
 }
-if ($script:handle -eq [IntPtr]::Zero) { "the desk opened no window"; Read-Log; exit 2 }
-[DeskFrameCheck]::SetForegroundWindow($handle) | Out-Null
-$focused = [DeskFrameCheck]::GetForegroundWindow() -eq $handle
+if ($script:handle -eq [IntPtr]::Zero) { "the desk opened no window"; Read-Log; if (-not $proc.HasExited) { Stop-Process -Id $deskPid -Force }; [DeskFrameCheck]::CloseDesktop($desktop) | Out-Null; exit 2 }
 $rect = New-Object DeskFrameCheck+RECT
 [DeskFrameCheck]::GetClientRect($handle, [ref]$rect) | Out-Null
 $width = $rect.Right - $rect.Left
 $height = $rect.Bottom - $rect.Top
 if ($Rows.Count -eq 3) { $x, $top, $bottom = $Rows } else { $x = [int]($width / 2); $top = [int]($height * 0.15); $bottom = [int]($height * 0.85) }
-"frame-check $Screen  exe $Exe  client ${width}x${height}  column x=$x y=$top..$bottom  focused $focused"
+"frame-check $Screen  exe $Exe  client ${width}x${height}  column x=$x y=$top..$bottom  hidden desktop $desktopName"
 
 $ran = $false
 if (Wait-Phase "park" $deadline) {
@@ -122,9 +162,10 @@ if (Wait-Phase "park" $deadline) {
   }
 }
 if (-not $proc.HasExited) {
-  $proc.CloseMainWindow() | Out-Null
+  [DeskFrameCheck]::PostMessage($handle, $WM_CLOSE, [IntPtr]0, [IntPtr]0) | Out-Null
   if (-not $proc.WaitForExit(5000)) { Stop-Process -Id $proc.Id -Force }
 }
+[DeskFrameCheck]::CloseDesktop($desktop) | Out-Null
 
 $log = Read-Log
 $results = @{}
