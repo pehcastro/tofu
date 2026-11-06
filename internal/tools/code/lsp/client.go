@@ -1,13 +1,11 @@
 package lsp
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"net/textproto"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +17,7 @@ import (
 	"tofu/internal/konst"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
+	"tofu/internal/tools/code/jsonrpc"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -28,10 +27,9 @@ type Client struct {
 	cmd     *exec.Cmd
 	tree    process.Tree
 	input   io.WriteCloser
-	writing sync.Mutex
+	wire    *jsonrpc.Wire
 	state   sync.Mutex
-	next    int
-	waiting map[int]chan reply
+	pending jsonrpc.Pending[reply]
 	opened  map[string]document
 	status  string
 	exited  chan struct{}
@@ -80,8 +78,8 @@ func start(server Server, root string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%s did not start: %w", server.Program, err)
 	}
-	c := &Client{server: server, root: root, cmd: cmd, tree: tree, input: input,
-		waiting: map[int]chan reply{}, opened: map[string]document{}, exited: make(chan struct{}), quiet: make(chan struct{})}
+	c := &Client{server: server, root: root, cmd: cmd, tree: tree, input: input, wire: jsonrpc.NewWire(input),
+		opened: map[string]document{}, exited: make(chan struct{}), quiet: make(chan struct{})}
 	safe.Go(platformproject.Crashes(root), "lsp read "+server.Program, func() { c.read(output) })
 	ctx, cancel := context.WithTimeout(context.Background(), konst.LspStartMillis*time.Millisecond)
 	defer cancel()
@@ -172,41 +170,22 @@ func (c *Client) read(output io.Reader) {
 		c.release.Do(c.tree.Release)
 		close(c.exited)
 	}()
-	frames := textproto.NewReader(bufio.NewReader(output))
-	for {
-		header, err := frames.ReadMIMEHeader()
-		if err != nil {
-			return
-		}
-		length, err := strconv.Atoi(header.Get("Content-Length"))
-		if err != nil {
-			return
-		}
-		body := make([]byte, length)
-		if _, err := io.ReadFull(frames.R, body); err != nil {
-			return
-		}
+	jsonrpc.Read(output, func(body []byte) {
 		var got message
-		if json.Unmarshal(body, &got) != nil {
-			continue
+		if json.Unmarshal(body, &got) == nil {
+			c.dispatch(got)
 		}
-		c.dispatch(got)
-	}
+	})
 }
 
 func (c *Client) dispatch(got message) {
 	switch {
 	case got.Method == "" && len(got.ID) > 0:
-		id, err := strconv.Atoi(string(got.ID))
-		c.state.Lock()
-		waiter := c.waiting[id]
-		delete(c.waiting, id)
-		c.state.Unlock()
-		if err == nil && waiter != nil {
-			waiter <- reply{Result: got.Result, Error: got.Error}
+		if id, err := strconv.Atoi(string(got.ID)); err == nil {
+			c.pending.Answer(id, reply{Result: got.Result, Error: got.Error})
 		}
 	case len(got.ID) > 0:
-		_ = c.write(map[string]any{"jsonrpc": "2.0", "id": got.ID, "result": answerTo(got)})
+		_ = c.wire.Send(map[string]any{"jsonrpc": "2.0", "id": got.ID, "result": answerTo(got)})
 	case got.Method == "experimental/serverStatus":
 		var status struct {
 			Health    string `json:"health"`
@@ -237,56 +216,32 @@ func answerTo(request message) any {
 	return make([]any, len(asked.Items))
 }
 
-func (c *Client) write(body any) error {
-	encoded, err := json.Marshal(body)
-	if err != nil {
-		return err
-	}
-	c.writing.Lock()
-	defer c.writing.Unlock()
-	_, err = io.WriteString(c.input, "Content-Length: "+strconv.Itoa(len(encoded))+"\r\n\r\n"+string(encoded))
-	return err
-}
-
 func (c *Client) notify(method string, params any) error {
 	body := map[string]any{"jsonrpc": "2.0", "method": method}
 	if params != nil {
 		body["params"] = params
 	}
-	return c.write(body)
+	return c.wire.Send(body)
 }
 
 func (c *Client) call(ctx context.Context, method string, params, result any) error {
-	answered := make(chan reply, 1)
-	c.state.Lock()
-	c.next++
-	id := c.next
-	c.waiting[id] = answered
-	c.state.Unlock()
-	forget := func() {
-		c.state.Lock()
-		delete(c.waiting, id)
-		c.state.Unlock()
-	}
-	if err := c.write(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params}); err != nil {
-		forget()
+	id, answered := c.pending.Open()
+	if err := c.wire.Send(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params}); err != nil {
+		c.pending.Forget(id)
 		return err
 	}
-	select {
-	case got := <-answered:
-		if got.Error != nil {
-			return fmt.Errorf("%s answered %s with error %d: %s", c.server.Program, method, got.Error.Code, got.Error.Message)
-		}
-		if result == nil || len(got.Result) == 0 {
-			return nil
-		}
-		return json.Unmarshal(got.Result, result)
-	case <-ctx.Done():
-		forget()
-		return fmt.Errorf("%s did not answer %s: %w", c.server.Program, method, ctx.Err())
-	case <-c.exited:
+	got, err := c.pending.Await(ctx, id, answered, c.exited)
+	switch {
+	case errors.Is(err, jsonrpc.ErrGone):
 		return fmt.Errorf("%s exited before it answered %s", c.server.Program, method)
+	case err != nil:
+		return fmt.Errorf("%s did not answer %s: %w", c.server.Program, method, err)
+	case got.Error != nil:
+		return fmt.Errorf("%s answered %s with error %d: %s", c.server.Program, method, got.Error.Code, got.Error.Message)
+	case result == nil || len(got.Result) == 0:
+		return nil
 	}
+	return json.Unmarshal(got.Result, result)
 }
 
 func (c *Client) Open(paths ...string) error {

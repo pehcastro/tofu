@@ -625,3 +625,14 @@ const (
 )
 
 const SpawnEstimateRunsMost = 20
+
+const (
+	DebugRequestMillis = 10_000
+	DebugRunMillis     = 120_000
+	DebugStopMillis    = 3_000
+	DebugStackFrames   = 5
+	DebugLocals        = 30
+	DebugValueRunes    = 120
+	DebugOutputLines   = 8
+	DebugIdleMillis    = 300_000
+)
