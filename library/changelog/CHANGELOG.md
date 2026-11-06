@@ -45,9 +45,16 @@ Tools that hand the model the answer rather than the log, in Go, Rust, Python an
 - `done` reads each acceptance line against the call that checked it, and the turn does not end while one reads no.
 - `heads_up` puts one line on the person's screen and the turn goes on.
 - The `review` sub-agent reads the changes a turn made, read only, in a fresh context, and reports findings.
+- `api` returns the signature and doc of a dependency's name at the version the project pins.
+- `tofu rules show <id>` prints what a rule says: its kind, domain, concern, where it came from, its text and its notes; an unknown id names the closest.
 
 ### Changed
 
+- `search` ranks its hits through `map`, seeded by the files named, the task's words or the turn's task, and says how many it cut.
+- `db` opens the project's SQLite file when no `.env` key is set, and refuses a file outside the project.
+- When tool results fill 0.7 of the window, the lead is told which result `forget` can still drop.
+- `done` accepts the `[tool#abc12]` reference a result starts with, and reads a `test` call by whether its tests passed.
+- `race` says when to race: two or more whole approaches to one job, built at once and compared.
 - `test` runs Go, Rust and Python as well as Vitest, picked from `go.mod`, `Cargo.toml` or the Python project, and returns pass, fail and skip counts, each failure with its `path:line`, got and want, and the skipped tests by name; `repeat` says real, flaky or passes, and `changed` runs the tests of the files the turn changed.
 - `typecheck` runs `cargo check` for Rust and `pyright` or `mypy` for Python beside Go and TypeScript, and names a missing checker with its install command; `explain` runs nothing and returns each error of a failure with the code around it.
 - `edit` and `write` on a Go, Rust, Python or TypeScript file end with that file's checker errors, and an edit that would leave a Go file unable to parse is refused with nothing written.
@@ -68,6 +75,10 @@ Tools that hand the model the answer rather than the log, in Go, Rust, Python an
 - `tofu run --show-prompt` lists the tools the loop actually sends.
 - `tofu session trace --kind call` lists shell calls, and shows the range of a read.
 - `glob` on a root that does not exist says so instead of crashing.
+- `whatif` tries edits that create new files, and checks a new package in a copy of the tree.
+- `symbols` mode `impact` in TypeScript finds the tests that reach a declaration through another function.
+- `claims` reads a later passing call over an earlier failure.
+- A patch whose hunks' context lines meet applies as one hunk.
 
 ## 0.5.21 - 2026-11-05
 
