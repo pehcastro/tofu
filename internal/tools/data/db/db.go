@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -27,6 +28,8 @@ import (
 const Name = "db"
 
 const defaultKey = "DATABASE_URL"
+
+const sqliteHeader = "SQLite format 3\x00"
 
 const (
 	sqliteReadOnlyCode          = 8
@@ -57,6 +60,7 @@ func (d DB) Definition() core.Tool {
 			"with no query it prints the schema, one line per column with its type, not null and primary key, for every table or for the table named. " +
 			"with query it runs that one statement and prints the first " + strconv.Itoa(d.limits.Rows) + " rows and the full count. " +
 			"the connection is the value of a key in the project's .env or the environment, DATABASE_URL unless env names another: a postgres:// url, or a SQLite file path, sqlite: or file: in front allowed. the value is never printed. " +
+			"with no key set it opens the project's one SQLite file by itself, whatever variable the code reads its path from, so there is nothing to export first; file opens a SQLite file in the project by its path. " +
 			"SQLite opens with mode=ro, PRAGMA query_only and no ATTACH, Postgres inside BEGIN READ ONLY, so a write statement is refused by the database itself",
 		Parameters: map[string]any{
 			"type": "object",
@@ -64,14 +68,15 @@ func (d DB) Definition() core.Tool {
 				"query": map[string]any{"type": "string", "description": "one SELECT statement; left out, the schema is printed"},
 				"table": map[string]any{"type": "string", "description": "print the schema of this table only"},
 				"env":   map[string]any{"type": "string", "description": "the key holding the connection, " + defaultKey + " when left out"},
+				"file":  map[string]any{"type": "string", "description": "a SQLite file in the project, by path; used instead of any key"},
 			},
 		},
 	}
 }
 
 type engine struct {
-	driver, dsn, schema string
-	secrets             []string
+	driver, dsn, schema, name, opened string
+	secrets                           []string
 }
 
 func (d DB) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
@@ -79,6 +84,7 @@ func (d DB) Run(ctx context.Context, raw json.RawMessage) (contract.Result, erro
 		Query string `json:"query"`
 		Table string `json:"table"`
 		Env   string `json:"env"`
+		File  string `json:"file"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("db: arguments are not the expected shape: %w", err)
@@ -86,15 +92,10 @@ func (d DB) Run(ctx context.Context, raw json.RawMessage) (contract.Result, erro
 	if args.Query != "" && args.Table != "" {
 		return contract.Failure("db: give query or table, not both"), nil
 	}
-	key := cmp.Or(args.Env, defaultKey)
-	value, err := d.connection(key)
+	found, refusal, err := d.locate(args.File, args.Env)
 	if err != nil {
 		return contract.Result{}, err
 	}
-	if value == "" {
-		return contract.Failure("db: no connection: " + key + " is not set in .env or the environment; name the key holding it with env"), nil
-	}
-	found, refusal := d.open(key, value)
 	if refusal != "" {
 		return contract.Failure(refusal), nil
 	}
@@ -102,12 +103,12 @@ func (d DB) Run(ctx context.Context, raw json.RawMessage) (contract.Result, erro
 	defer cancel()
 	handle, err := sql.Open(found.driver, found.dsn)
 	if err != nil {
-		return contract.Failure(found.said("db: cannot open the database "+key+" names", err)), nil
+		return contract.Failure(found.said("db: cannot open "+found.name, err)), nil
 	}
 	defer func() { _ = handle.Close() }()
 	conn, err := handle.Conn(ctx)
 	if err != nil {
-		return contract.Failure(found.said("db: cannot reach the database "+key+" names", err)), nil
+		return contract.Failure(found.said("db: cannot reach "+found.name, err)), nil
 	}
 	defer func() { _ = conn.Close() }()
 	if found.driver == "sqlite" {
@@ -117,13 +118,73 @@ func (d DB) Run(ctx context.Context, raw json.RawMessage) (contract.Result, erro
 	}
 	tx, err := conn.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		return contract.Failure(found.said("db: cannot reach the database "+key+" names", err)), nil
+		return contract.Failure(found.said("db: cannot reach "+found.name, err)), nil
 	}
 	defer func() { _ = tx.Rollback() }()
+	var shown contract.Result
 	if args.Query == "" {
-		return columns(ctx, tx, found, args.Table)
+		shown, err = columns(ctx, tx, found, args.Table)
+	} else {
+		shown, err = d.rows(ctx, tx, found, args.Query)
 	}
-	return d.rows(ctx, tx, found, key, args.Query)
+	if shown.FailureText == "" {
+		shown.Content = found.opened + shown.Content
+	}
+	return shown, err
+}
+
+func (d DB) locate(file, env string) (engine, string, error) {
+	if file != "" {
+		path, err := d.root.Resolve(file)
+		if err != nil {
+			return engine{}, "db: " + err.Error(), nil
+		}
+		if !isSQLite(path) {
+			return engine{}, "db: " + file + " is not a SQLite file", nil
+		}
+		return sqliteEngine(path, file, "opened "+file+"\n"), "", nil
+	}
+	key := cmp.Or(env, defaultKey)
+	value, err := d.connection(key)
+	if err != nil {
+		return engine{}, "", err
+	}
+	if value != "" {
+		found, refusal := d.open(key, value)
+		return found, refusal, nil
+	}
+	if env != "" {
+		return engine{}, "db: no connection: " + key + " is not set in .env or the environment; name the key holding it with env", nil
+	}
+	listed, err := contract.WalkListing(d.root)
+	if err != nil {
+		return engine{}, "", fmt.Errorf("db: looking for a SQLite file in the project: %w", err)
+	}
+	files := slices.DeleteFunc(listed, func(rel string) bool {
+		switch strings.ToLower(filepath.Ext(rel)) {
+		case ".db", ".sqlite", ".sqlite3", ".db3":
+			return !isSQLite(filepath.Join(string(d.root), rel))
+		}
+		return true
+	})
+	switch len(files) {
+	case 0:
+		return engine{}, "db: no connection: " + key + " is not set in .env or the environment and the project holds no SQLite file; name the key holding it with env, or the file with file", nil
+	case 1:
+		return sqliteEngine(filepath.Join(string(d.root), files[0]), files[0], "opened "+files[0]+", the one SQLite file in the project, as "+key+" is not set\n"), "", nil
+	}
+	return engine{}, "db: " + key + " is not set and the project holds " + strconv.Itoa(len(files)) + " SQLite files: " + strings.Join(files, ", ") + "; name one with file", nil
+}
+
+func isSQLite(path string) bool {
+	opened, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer func() { _ = opened.Close() }()
+	head := make([]byte, len(sqliteHeader))
+	_, err = io.ReadFull(opened, head)
+	return err == nil && string(head) == sqliteHeader
 }
 
 func (d DB) connection(key string) (string, error) {
@@ -152,7 +213,7 @@ func (d DB) open(key, value string) (engine, string) {
 			return engine{}, "db: the value of " + key + " is not a postgres url"
 		}
 		password, _ := parsed.User.Password()
-		return engine{driver: "postgres", dsn: value, schema: postgresSchema, secrets: []string{value, password, parsed.Host, parsed.Hostname(), parsed.User.Username()}}, ""
+		return engine{driver: "postgres", dsn: value, schema: postgresSchema, name: "the database " + key + " names", secrets: []string{value, password, parsed.Host, parsed.Hostname(), parsed.User.Username()}}, ""
 	}
 	path := strings.TrimPrefix(strings.TrimPrefix(strings.TrimPrefix(value, "sqlite:"), "file:"), "//")
 	if !filepath.IsAbs(path) {
@@ -161,8 +222,14 @@ func (d DB) open(key, value string) (engine, string) {
 	if !contract.IsFile(path) {
 		return engine{}, "db: no SQLite file at the path " + key + " names"
 	}
+	found := sqliteEngine(path, "the database "+key+" names", "")
+	found.secrets = []string{value, path, filepath.ToSlash(path), found.dsn}
+	return found, ""
+}
+
+func sqliteEngine(path, name, opened string) engine {
 	uri := url.URL{Scheme: "file", Path: "/" + strings.TrimPrefix(filepath.ToSlash(path), "/"), RawQuery: "mode=ro&_query_only=1"}
-	return engine{driver: "sqlite", dsn: uri.String(), schema: sqliteSchema, secrets: []string{value, path, filepath.ToSlash(path), uri.String()}}, ""
+	return engine{driver: "sqlite", dsn: uri.String(), schema: sqliteSchema, name: name, opened: opened}
 }
 
 func (e engine) said(what string, err error) string {
@@ -228,15 +295,15 @@ func columns(ctx context.Context, tx *sql.Tx, found engine, table string) (contr
 	return contract.Result{Content: out.String()}, nil
 }
 
-func (d DB) rows(ctx context.Context, tx *sql.Tx, found engine, key, query string) (contract.Result, error) {
+func (d DB) rows(ctx context.Context, tx *sql.Tx, found engine, query string) (contract.Result, error) {
 	statement, err := tx.PrepareContext(ctx, query)
 	if err != nil {
-		return contract.Failure(refusedOrFailed(found, key, err)), nil
+		return contract.Failure(refusedOrFailed(found, err)), nil
 	}
 	defer func() { _ = statement.Close() }()
 	rows, err := statement.QueryContext(ctx)
 	if err != nil {
-		return contract.Failure(refusedOrFailed(found, key, err)), nil
+		return contract.Failure(refusedOrFailed(found, err)), nil
 	}
 	defer func() { _ = rows.Close() }()
 	names, err := rows.Columns()
@@ -266,18 +333,18 @@ func (d DB) rows(ctx context.Context, tx *sql.Tx, found engine, key, query strin
 	case errors.Is(ctx.Err(), context.DeadlineExceeded):
 		fmt.Fprintf(&out, "%d rows shown of at least %d: counting stopped after %d ms\n", min(count, d.limits.Rows), count, d.limits.QueryMillis)
 	case err != nil:
-		return contract.Failure(refusedOrFailed(found, key, err)), nil
+		return contract.Failure(refusedOrFailed(found, err)), nil
 	default:
 		fmt.Fprintf(&out, "%d rows shown of %d\n", min(count, d.limits.Rows), count)
 	}
 	return contract.Result{Content: out.String()}, nil
 }
 
-func refusedOrFailed(found engine, key string, err error) string {
+func refusedOrFailed(found engine, err error) string {
 	var lite interface{ Code() int }
 	var postgres interface{ SQLState() string }
 	if (errors.As(err, &lite) && lite.Code()&0xff == sqliteReadOnlyCode) || (errors.As(err, &postgres) && postgres.SQLState() == postgresReadOnlyTransaction) {
-		return found.said("db: refused, "+key+" is opened read only and this statement writes", err)
+		return found.said("db: refused, "+found.name+" is opened read only and this statement writes", err)
 	}
 	return found.said("db: the query failed", err)
 }
