@@ -71,7 +71,10 @@ func TestWalkNeverFollowsALinkOutsideTheProject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	search := Search{root: contract.Root(project)}
+	search, err := NewSearch(project)
+	if err != nil {
+		t.Fatal(err)
+	}
 	rows := []struct {
 		tool contract.Tool
 		args string

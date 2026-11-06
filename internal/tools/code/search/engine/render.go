@@ -37,7 +37,9 @@ func (r Result) render() (string, error) {
 
 func (r Result) Page(skip, budget int) (string, error) {
 	fileAt := map[string]int{}
+	matching := 0
 	for _, unit := range r.Units {
+		matching += len(unit.Matches)
 		if _, seen := fileAt[unit.Path]; !seen {
 			fileAt[unit.Path] = len(fileAt)
 		}
@@ -48,20 +50,24 @@ func (r Result) Page(skip, budget int) (string, error) {
 	stats := &r.Stats
 	stats.Budget, stats.Tokens = budget, konst.SearchResultOverhead
 	var units []Unit
-	inWindow := 0
+	inWindow, shown, shownFiles := 0, 0, map[string]bool{}
 	for _, unit := range r.Units {
 		if at := fileAt[unit.Path]; at < first || at >= last {
 			continue
 		}
 		inWindow++
+		listed := len(unit.Matches)
 		if listsLines {
 			unit.Body = matchedLines(unit)
 			unit.Tokens = (len(unit.Path) + len(unit.Symbol) + len(unit.Body)) / konst.SearchBytesPerToken
+			listed = min(listed, konst.SearchMatchLinesListed)
 		}
 		if stats.Tokens+unit.Tokens > budget {
 			continue
 		}
 		stats.Tokens += unit.Tokens
+		shown += listed
+		shownFiles[unit.Path] = true
 		units = append(units, unit)
 	}
 	slices.SortStableFunc(units, func(left, right Unit) int {
@@ -72,6 +78,9 @@ func (r Result) Page(skip, budget int) (string, error) {
 	var out strings.Builder
 	fmt.Fprintf(&out, "%d text candidates, %d units in %s, %d returned, %s, about %d tokens\n",
 		stats.Candidates, stats.Units, plural(files, "file"), stats.Returned, plural(stats.Fallbacks, "fallback"), stats.Tokens)
+	if cut := matching - shown; cut > 0 {
+		fmt.Fprintf(&out, "cut: %d of %d matching lines are not on this page; files with none shown: %d of %d\n", cut, matching, files-len(shownFiles), files)
+	}
 	r.sayWhichFormAnswered(&out)
 	if stats.Fallbacks > 0 {
 		fmt.Fprintf(&out, "%s\n", Note(Fallback, fmt.Sprintf("%d of the %d units are the lines around the match rather than a declaration", stats.Fallbacks, stats.Units)))
