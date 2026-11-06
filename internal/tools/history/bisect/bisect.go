@@ -105,15 +105,11 @@ func (b Bisect) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 			return whatif.Answer{}, fmt.Errorf("bisect: %s: %w", labelOf(at), err)
 		}
 		files[at] = held
-		answer, err := whatif.Try(ctx, b.root, held, args.Check, b.limits)
+		answer, err := whatif.Try(ctx, b.root, held, args.Check, b.limits, kept...)
 		if err != nil {
 			return answer, err
 		}
-		step := labelOf(at) + ": " + answer.Outcome.String()
-		if len(kept) > 0 {
-			step += ", with " + strings.Join(kept, ", ") + " present as it is now, because the overlay cannot hide a file that turn had not made yet"
-		}
-		steps = append(steps, step)
+		steps = append(steps, labelOf(at)+": "+answer.Outcome.String())
 		return answer, nil
 	}
 	report := func(head string, answer whatif.Answer) string {

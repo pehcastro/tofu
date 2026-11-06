@@ -83,12 +83,12 @@ type plan struct {
 	tests bool
 }
 
-func Try(ctx context.Context, root contract.Root, files map[string]string, check Check, limits Limits) (Answer, error) {
+func Try(ctx context.Context, root contract.Root, files map[string]string, check Check, limits Limits, hidden ...string) (Answer, error) {
 	from, err := root.Resolve(cmp.Or(check.Path, "."))
 	if err != nil {
 		return Answer{}, fmt.Errorf("whatif: %w", err)
 	}
-	made, err := overlay.Make(string(root), files, limits.StaleOverlay)
+	made, err := overlay.Make(string(root), files, limits.StaleOverlay, hidden...)
 	if err != nil {
 		return Answer{}, fmt.Errorf("whatif: the overlay was not made: %w", err)
 	}
@@ -97,7 +97,7 @@ func Try(ctx context.Context, root contract.Root, files map[string]string, check
 	if err != nil {
 		return Answer{}, err
 	}
-	return planned.run(ctx, limits.Check), nil
+	return planned.run(ctx, made, limits.Check), nil
 }
 
 func planOf(made overlay.Overlay, root, from string, check Check) (plan, error) {
@@ -167,7 +167,7 @@ func projectOf(root, from string) (projectKind, string) {
 	}
 }
 
-func (p plan) run(ctx context.Context, limit time.Duration) Answer {
+func (p plan) run(ctx context.Context, made overlay.Overlay, limit time.Duration) Answer {
 	ctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 	var output bytes.Buffer
@@ -198,7 +198,7 @@ func (p plan) run(ctx context.Context, limit time.Duration) Answer {
 		}
 	}
 	head := fmt.Sprintf("%s in %s, %d ms", strings.Join(ran, " then "), p.dir, time.Since(started).Milliseconds())
-	printed := strings.TrimSpace(strings.ReplaceAll(output.String(), "\r\n", "\n"))
+	printed := made.Local(strings.TrimSpace(strings.ReplaceAll(output.String(), "\r\n", "\n")), p.dir)
 	parsed := p.parse(printed)
 	explained := parsed.Explains(exit)
 	if p.tests && outcome == Passed && (!explained || parsed.Passed == 0) {

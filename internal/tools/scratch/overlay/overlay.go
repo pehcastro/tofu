@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"tofu/internal/platform/scratch"
@@ -20,12 +21,13 @@ const (
 )
 
 type Overlay struct {
-	Dir   string
-	root  string
-	files map[string]string
+	Dir    string
+	root   string
+	files  map[string]string
+	hidden []string
 }
 
-func Make(root string, files map[string]string, stale time.Duration) (Overlay, error) {
+func Make(root string, files map[string]string, stale time.Duration, hidden ...string) (Overlay, error) {
 	scratchRoot, err := scratch.ScratchRootAt(root)
 	if err != nil {
 		return Overlay{}, err
@@ -44,7 +46,7 @@ func Make(root string, files map[string]string, stale time.Duration) (Overlay, e
 	if err != nil {
 		return Overlay{}, err
 	}
-	o := Overlay{Dir: dir, root: root, files: files}
+	o := Overlay{Dir: dir, root: root, files: files, hidden: hidden}
 	if err := o.writeFiles(); err != nil {
 		return Overlay{}, errors.Join(err, o.Remove())
 	}
@@ -59,6 +61,9 @@ func (o Overlay) writeFiles() error {
 			return err
 		}
 		replace[filepath.Join(o.root, filepath.FromSlash(rel))] = copied
+	}
+	for _, rel := range o.hidden {
+		replace[filepath.Join(o.root, filepath.FromSlash(rel))] = ""
 	}
 	listing, err := json.Marshal(map[string]map[string]string{"Replace": replace})
 	if err != nil {
@@ -82,7 +87,7 @@ func (o Overlay) Tree() (string, error) {
 		switch {
 		case entry.IsDir() && (path == overlays || rel != "." && slices.Contains([]string{".git", "target"}, entry.Name())):
 			return filepath.SkipDir
-		case entry.IsDir() || !entry.Type().IsRegular():
+		case entry.IsDir() || !entry.Type().IsRegular() || slices.Contains(o.hidden, filepath.ToSlash(rel)):
 			return nil
 		}
 		info, err := entry.Info()
@@ -99,9 +104,24 @@ func (o Overlay) Tree() (string, error) {
 		if err != nil {
 			break
 		}
-		err = os.WriteFile(filepath.Join(tree, filepath.FromSlash(rel)), []byte(body), 0o644)
+		err = writeFile(filepath.Join(tree, filepath.FromSlash(rel)), []byte(body), 0o644)
 	}
 	return tree, err
+}
+
+func (o Overlay) Local(output, from string) string {
+	for _, copied := range []string{filepath.Join(o.Dir, filesFolder), filepath.Join(o.Dir, treeFolder)} {
+		forms := []string{copied}
+		if rel, err := filepath.Rel(from, copied); err == nil {
+			forms = append(forms, rel)
+		}
+		for _, form := range forms {
+			for _, spelled := range []string{form + string(filepath.Separator), filepath.ToSlash(form) + "/"} {
+				output = strings.ReplaceAll(output, spelled, "")
+			}
+		}
+	}
+	return output
 }
 
 func (o Overlay) Remove() error {
