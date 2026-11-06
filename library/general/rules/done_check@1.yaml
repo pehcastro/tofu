@@ -1,0 +1,7 @@
+id: done_check
+domain: general
+kind: human
+concern: process_discipline
+role: orchestrator
+text: when the task states acceptance lines, call done with every line and the id of the call that checked it before you end the turn, including when a line fails or cannot pass. never end on your own word that a line passed. a task with no acceptance lines does not need done.
+notes: in two real sessions with an acceptance line that cannot pass, done was offered and never called; the lead stated the failing line itself and stopped, so nothing read the line. done is a lead tool, so the rule is for the lead only.
