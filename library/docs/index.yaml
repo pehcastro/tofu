@@ -430,3 +430,15 @@
   do: tofu tool read '{"path":"README.md"}' --dir .
   check: tofu tool list --dir .
   topic: tool
+- ask: run the tests of one package and see only what failed
+  do: tofu tool test '{"path":"."}' --dir .
+  check: tofu tool list --dir .
+  topic: tools
+- ask: typecheck go, rust or python code
+  do: tofu tool typecheck '{"path":"."}' --dir .
+  check: tofu tool list --dir .
+  topic: tools
+- ask: read the lines around one function
+  do: tofu tool read '{"path":"order.go","at":"Total"}' --dir .
+  check: tofu tool list --dir .
+  topic: tools

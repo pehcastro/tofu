@@ -48,7 +48,7 @@ Each setting's own line is two sentences at most. The rest is here.
 - `skills`: the skill folders are `.tofu`, `.agents` and `.claude` in the project, and only `~/.tofu/skills` in the home directory.
 - `memory`: on also lets the lead offer one short rule. `tofu memory` lists the entries.
 - `autoMemory`: answering always on a memory card turns it on.
-- `episodes`: on also sends their view after the memory and through every fork, and offers zoom and recall. Off keeps none and offers neither, while the memory still goes.
+- `episodes`: on also sends their view after the memory and through every fork, and offers the `history` tool's `zoom` and `recall` modes. Off keeps none and offers neither mode, while the memory still goes.
 - `memoryFromAllUsers`: the memory lives in the repository's `.tofu` folder. Project local memory applies to everyone either way.
 - `memoryModel`: each summary is one line of at most 512 bytes. Empty takes the model the library marks `memory: yes` for the session's own source, never the OpenRouter key.
 - `learn`: it prints how many windows and bytes it sends first, and writes each proposal with your lead model.

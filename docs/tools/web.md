@@ -2,7 +2,7 @@
 title: Web
 description: fetch and web_search are tofu's own HTTP client, and github_pr_diff wraps gh.
 order: 5
-updated: 2026-10-04
+updated: 2026-11-06
 ---
 
 `fetch` and `web_search` are tofu's own Go HTTP client. `github_pr_diff`
@@ -25,6 +25,26 @@ bytes where it read 21,430.
 `web_search` is registered only when its provider is set up, so the model
 never sees a tool that would fail. `github_pr_diff` goes through `gh`, which
 already holds your login, so tofu never holds a GitHub token.
+
+## Dates
+
+A page's age decides whether its answer still holds, so both tools say it.
+`fetch` puts one line under its header with the date the page states: a
+published or modified date from its meta tags, its JSON-LD, or a `<time>`
+element, or `none stated` when it gives neither.
+
+```bash
+tofu tool fetch '{"url":"https://devblogs.microsoft.com/typescript/announcing-typescript-5-4/","limit":2}' --dir .
+```
+
+```text
+fetched https://devblogs.microsoft.com/typescript/announcing-typescript-5-4/: 252970 bytes of text/html became 169 units and 24411 bytes of text, dropped 5 units of navigation, 560 bytes. lines 1 to 2 of 581 follow: call fetch with this url and offset 3 to read on, and the page is read from what was already fetched rather than fetched again
+date: published 2024-03-06
+```
+
+`web_search` puts each result's date beside its title, in parentheses, when
+the provider gives one. The provider file names the field it comes from,
+`date_field`: `page_age` for Brave and `publishedDate` for SearXNG.
 
 ## Setting up search
 

@@ -2,7 +2,7 @@
 title: Shell
 description: bash wraps your shell for one command at a time, and shell is tofu's own registry of the servers bash kept running.
 order: 3
-updated: 2026-10-24
+updated: 2026-11-06
 ---
 
 `bash` is a wrapper: it runs `<your shell> -c <command>` in the working
@@ -96,7 +96,68 @@ of a process tofu started runs as `shell stop`, which ends the whole process
 tree, so the port is free.
 
 When a classifier is set up, long `bash` output is sifted before the model
-reads it.
+reads it, and repeated lines fold into templates with counts.
+
+## What bash returns for a known command
+
+`bash` reads the output of a command it knows and returns the answer rather
+than the log. It knows `go test`, `go build` and `go vet`, `cargo test` and
+`cargo check`, `pytest` and `unittest`, and `pyright --outputjson`. A run
+that passes folds to one line. A failure keeps the test's name, its
+`path:line`, and what it got against what it wanted. A build error keeps the
+`path:line` and the message, with no test count. Any other command, such as
+`echo` or `ls`, returns what it printed, as it printed it.
+
+```bash
+tofu tool bash '{"command":"go test -v ."}' --dir .
+```
+
+```text
+go test: 1 passed, 1 failed, 1 skipped
+FAIL TestDiscounted order_test.go:17: got 650, want 675
+the command exited 1
+```
+
+```text
+go build: 1 error
+broken/broken.go:4:18: cannot use "three" (untyped string constant) as int value in variable declaration
+the command exited 1
+```
+
+When a command changes files on disk under the project, the result ends
+with their paths, and a command that changes nothing ends as it always did:
+
+```bash
+tofu tool bash '{"command":"touch notes.txt"}' --dir .
+```
+
+```text
+bash: changed on disk under the project: notes.txt
+```
+
+In a tree too large to walk cheaply, the line says the check was skipped.
+
+## Waiting for a server
+
+`shell wait` with `for` returns as soon as a kept shell is ready, rather
+than when it exits. `for` takes one of four forms:
+
+| `for` | Ready when |
+|---|---|
+| a regular expression, such as `listening on` | a line the shell printed matches it |
+| `port:3000` | the port is open |
+| `file:dist/app.js` | the file exists |
+| an `http://` address | the address answers 200 |
+
+The answer is JSON: `met`, `after_ms` and the matched line, or `met` false
+with the shell's last 5 lines when the wait times out. A `for` that isn't a
+valid regular expression is refused with the character where it broke.
+
+`shell logs` folds what a shell printed into templates with counts, so a
+server that answered many requests reads as its start line and one request
+template. A
+later `shell logs` prints only `new_since_last_call`, the lines printed
+since the last one, or says `nothing`.
 
 ## Taking a shell over
 
@@ -150,6 +211,7 @@ stop them there or from the command line.
 | `bash` | `check_port` | who holds a port, without an HTTP request |
 | `shell` | `op` | `wait` until it ends, `logs` for the last 200 lines, `stop`, or `restart` |
 | `shell` | `name` | the name `bash` returned, such as `bash-1` |
+| `shell` | `for` | with `wait`, a line, port, file or address to wait for |
 
 ## Commands
 

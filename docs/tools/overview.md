@@ -2,7 +2,7 @@
 title: Tools overview
 description: What a tool is in tofu, which ones are tofu's own Go code and which wrap a program, and what tofu does to every result.
 order: 1
-updated: 2026-10-09
+updated: 2026-11-06
 ---
 
 A tool is a function the model can call during a turn. The model only asks:
@@ -12,8 +12,12 @@ session. The command line and the app build the same tool set.
 Most tools are tofu's own Go code: `read`, `write`, `edit`, `glob`,
 `search`, `symbols`, `project_report`, `fetch`, `web_search`, `plan`, the
 browser tools and the sub-agent tools. A few wrap a program: `bash` wraps your
-shell, `typecheck` wraps `tsc`, `test` wraps Vitest, `github_pr_diff` wraps
-`gh`, and the `tofu_*` verbs run the tofu binary.
+shell, `typecheck` and `test` wrap the project's own checkers and test
+runners for Go, Rust, Python and TypeScript, `github_pr_diff` wraps `gh`, and
+the `tofu_*` verbs run the tofu binary.
+
+Every tool runs by hand with `tofu tool`, which prints the exact text the
+model would receive. See [One tool call by hand](/docs/cli/tool).
 
 | Group | Tools |
 |---|---|
@@ -21,7 +25,7 @@ shell, `typecheck` wraps `tsc`, `test` wraps Vitest, `github_pr_diff` wraps
 | [Shell](/docs/tools/shell) | bash, shell |
 | [Checks](/docs/tools/checks) | typecheck, test |
 | [Web](/docs/tools/web) | web_search, fetch, github_pr_diff |
-| [Work](/docs/tools/work) | plan, settings, artifact_fetch, quote, ask_person, zoom, recall, skill, tofu verbs |
+| [Work](/docs/tools/work) | plan, settings, artifact_fetch, history, ask_person, skill, tofu verbs |
 | [Sub-agents](/docs/tools/sub-agents) | spawn, message, subagents, ask |
 | [Browser](/docs/automation/browser-tools) | browser_tabs, browser_observe, browser_act, browser_read, browser_do, browser_motion |
 
@@ -43,7 +47,9 @@ the model sees it, in this order:
    `artifact_fetch`.
 
 A read-only call repeated with the same arguments in one turn is answered
-from memory, and any other call clears that memory. The same call returning
+from memory, and any other call clears that memory. A repeated `read` of a
+file that hasn't changed answers with one line naming the earlier read,
+whatever ran between. The same call returning
 the same result three times in six calls ends the turn. Walking tools skip
 `node_modules`, `.git`, `.tofu` and what `.gitignore` excludes.
 

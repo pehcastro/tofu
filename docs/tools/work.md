@@ -1,8 +1,8 @@
 ---
 title: Work
-description: plan, settings, artifact_fetch, quote, ask_person, zoom, recall, skill and the tofu verbs, tools that organize the work rather than change files.
+description: plan, settings, artifact_fetch, history, ask_person, skill and the tofu verbs, tools that organize the work rather than change files.
 order: 6
-updated: 2026-10-14
+updated: 2026-11-06
 ---
 
 Tools that change no project file. All are tofu's own Go code, except the
@@ -20,7 +20,26 @@ You see what the model intends before it acts, and one item runs at
 a time, so the list can't drift from the work. The model writes a plan only
 for a task of several steps across more than one file, and sends a move
 beside its next real tool call rather than in a request of its own.
-Parameters: `op`, `items`, `item`.
+Parameters: `op`, `items`, `item`, `call`.
+
+An item may carry a `check`: a command or an acceptance line that proves
+it. The plan shows the check under its item:
+
+```bash
+tofu tool plan '{"op":"set","items":[{"text":"fix the discount","check":"go test -run TestDiscounted ."}]}' --dir .
+```
+
+```text
+plan, 1 items
+  running  fix the discount
+    check  go test -run TestDiscounted .
+```
+
+`done` on an item with a check needs `call`, the id of the earlier tool call
+in the session that ran the check. Without one, `done` is refused and says
+to run the check and send `done` again with that id. An id no earlier call
+has is refused too, so an item is finished only by a check that ran. A plan
+without checks works as before.
 
 Once the lead holds a plan, every later request carries it as it stands, as
 the last message, after the part the prompt cache reads. The plan is never
@@ -45,16 +64,28 @@ A result over 32 KB isn't cut and lost: the model sees the first and
 last part and a handle, and reads the middle only if it needs it.
 Parameters: `handle`, `offset`, `length`.
 
-## quote
+## history
 
-`quote` returns the words of an earlier message you referenced as
-`[message#9c2d40]`, the id the chat shows beside it, with the names of the
-tools it ran, never their output, capped at 32 KB. It looks through every
-session of the chain, so a message from before a fork or a `--continue`
-is found. An id it cannot find is an error, never the nearest message.
+`history` answers from the record of the work. One tool with a `mode`
+replaces four close ones, so the model picks the mode rather than guessing
+between tools. Each mode takes one `anchor`:
 
-A paraphrase of what was said is a new claim. A quote is a citation.
-Parameter: `id`.
+| Mode | Anchor | What it returns |
+|---|---|---|
+| `quote` | a reference you wrote, such as `[quote#3f2a]`, or the short id inside it | that recorded turn or tool call, word for word |
+| `zoom` | a memory view line's `id+n`, with `store` | the two lines it sums up, down to the original item |
+| `recall` | a regular expression, with an optional `store` | every raw item that matches, word for word |
+| `lookup` | a call id a fork's carry names | that call and its result whole, from any earlier session of the line |
+
+`quote` and `lookup` look through every session of the chain, so an item
+from before a fork or a `--continue` is found. An id that matches no item,
+or two, is an error, never the nearest item. A paraphrase of what was said
+is a new claim. A quote is a citation.
+
+A summary line is a pointer, not the thing, so the lead zooms until it has
+the part it needs whole before it acts on it. `zoom` and `recall` are
+offered while `episodes` is on. See [Memory](/docs/features/memory).
+Parameters: `mode`, `anchor`, `store`.
 
 ## ask_person
 
@@ -64,18 +95,6 @@ the lead keeps working while you decide, and the recommended option stands
 after `askPersonWaitSeconds`. It exists only in a turn you started, never
 in `tofu run`, a cron turn or a sub-agent. See [Asking
 you](/docs/features/asking). Parameter: `questions`.
-
-## zoom and recall
-
-`zoom` opens one line of a memory view into the two lines it sums up, down
-to the original message, word for word. `recall` searches the raw items of
-a store with a regular expression. The store is `episodes` for the
-conversation, or one of the four memory scopes.
-
-A summary line is a pointer, not the thing, so the lead zooms until it has
-the part it needs whole before it acts on it. See
-[Memory](/docs/features/memory). Parameters: `store`, `id`, `n` for `zoom`;
-`regex` and an optional `store` for `recall`.
 
 ## skill
 
@@ -108,7 +127,7 @@ for the recorded reason behind a gate decision.
 ## Your part
 
 The model calls these tools. You answer `settings` requests with yes or no,
-and reference an earlier message with its `[message#...]` id.
+and reference an earlier message with its `[quote#...]` id.
 
 The verbs are the same commands you run:
 

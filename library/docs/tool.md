@@ -38,6 +38,14 @@ Standard error ends with one line naming each file the call created,
 changed or removed under the tofu state folder in your home, or saying
 nothing was written.
 
+Each call is one call in a fresh turn. A second `read` of the same file
+is whole again, a `plan` holds only what that call set, and `bash` with
+`background: true` and `shell` are refused with `no shell registry is
+attached to this turn`. An old tool name that is now a mode of `history`,
+such as `quote`, is refused with the call to make instead.
+
+`tofu docs tools` says what each tool returns.
+
 ## Exit codes
 
 - 0: the tool ran and returned a result.

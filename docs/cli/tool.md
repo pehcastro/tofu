@@ -35,12 +35,23 @@ List what a spawn of one sub-agent is offered:
 tofu tool list --dir . --agent rust-dev
 ```
 
-Run one call:
+Run one call. In a Go module with one failing test:
 
+```bash
+tofu tool test '{"path":"."}' --dir .
 ```
-tofu tool read '{"path":"src/main.rs"}' --dir .
-tofu tool bash '{"command":"go test ./..."}' --dir .
+
+```text
+test: go test -json -count=1 . in E:\tofu-scratchpad\t\d2361-162046\go, 1629 ms
+go test: 1 passed, 1 failed, 1 skipped
+FAIL TestDiscounted order_test.go:17: got 650, want 675
+skipped: TestShipping
+tofu tool: under E:\tofu-scratchpad\t\d2361-162046\home\.tofu the setup wrote nothing, and the call wrote nothing
 ```
+
+The last line is on standard error and the rest on standard output, so
+`2>NUL` or `2>/dev/null` keeps only what the model reads. The call exits 1
+because the tool reported a failing test.
 
 Run it as a sub-agent would, inside the spawn's ownership boundary. A spawn made here holds no owns, so
 a write is refused with the words a sub-agent gets:
@@ -49,10 +60,18 @@ a write is refused with the words a sub-agent gets:
 tofu tool write '{"path":"notes.txt","content":"x"}' --dir . --agent rust-dev
 ```
 
-Bind the call to a recorded session, so `quote`, `lookup` and `recall` answer from it:
+Bind the call to a recorded session, so `history` answers from it in every
+mode, `quote`, `zoom`, `recall` and `lookup`:
 
 ```
-tofu tool quote '{"id":"[quote#3f2a]"}' --dir . --session head
+tofu tool history '{"mode":"quote","anchor":"[quote#3f2a]"}' --dir . --session head
+```
+
+An old tool name that is now a mode of `history` is refused with the call to
+make instead:
+
+```text
+tofu tool: quote is a mode of history now: call history with mode quote and what you asked for as its anchor
 ```
 
 ## Reference
@@ -65,8 +84,12 @@ tofu tool quote '{"id":"[quote#3f2a]"}' --dir . --session head
 Standard error ends with a line naming each file the call created, changed or removed under the tofu
 state folder in your home, or saying nothing was written.
 
+Each call is one call in a fresh turn. A `read` therefore never answers with the unchanged line, a
+`plan` holds only what that call set, and `bash` with `background: true` and `shell` are refused with
+`no shell registry is attached to this turn`, since no turn outlives the call to keep a server running.
+
 | Exit | Meaning |
 |---|---|
 | 0 | the tool ran and returned a result |
-| 1 | the tool failed; standard output holds the error text the model gets, starting `error: ` |
-| 2 | usage: a name the run does not offer (the offered names follow), malformed JSON (the byte where it broke), or `spawn`, `message`, `subagents` and `ask`, which answer only inside a live turn |
+| 1 | the tool failed, and standard output holds the error text the model gets, starting `error: `; or a check found a failure, such as a failing test or a type error, and standard output holds its result |
+| 2 | usage: a name the run does not offer (the offered names follow), malformed JSON (the byte where it broke), an old name that is now a mode of `history`, or `spawn`, `message`, `subagents` and `ask`, which answer only inside a live turn |
