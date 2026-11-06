@@ -641,6 +641,12 @@ const TestCPUs = 4
 const FormatRunMillis = 60_000
 
 const (
+	ProfileRunMillis   = 300_000
+	ProfileRows        = 10
+	ProfileOutputLines = 20
+)
+
+const (
 	DepsRequestMillis   = 10_000
 	DepsRunMillis       = 120_000
 	DepsAdvisoriesShown = 10

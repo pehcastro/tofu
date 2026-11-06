@@ -1226,6 +1226,7 @@ func leadToolConstructors() []func(dir string) (contract.Tool, error) {
 		newShapeTool,
 		newWhatifTool,
 		newBisectTool,
+		profileTool,
 	}
 }
 
