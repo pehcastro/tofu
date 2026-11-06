@@ -57,12 +57,11 @@ module-editor = []
 module-browser = []
 module-data-studio = []
 screen-platforms = []
-screen-glass-bench = []
 screen-intro = []
 screen-onboarding = ["screen-intro"]
 plugin-notepad = ["screen-work"]
 plugin-draw = ["screen-work", "dep:desk_canvas", "dep:draw_doc"]
-all-screens = ["plugin-notepad", "plugin-draw", "screen-work", "screen-boardy", "screen-settings", "screen-accounts", "screen-theme", "screen-intro-setup", "screen-library", "screen-classifier", "screen-usage", "screen-limits", "screen-context", "screen-session", "screen-forks", "screen-drain", "module-subagents", "module-file-edits", "module-shells", "module-editor", "module-browser", "module-data-studio", "screen-platforms", "screen-intro", "screen-onboarding", "screen-glass-bench"]
+all-screens = ["plugin-notepad", "plugin-draw", "screen-work", "screen-boardy", "screen-settings", "screen-accounts", "screen-theme", "screen-intro-setup", "screen-library", "screen-classifier", "screen-usage", "screen-limits", "screen-context", "screen-session", "screen-forks", "screen-drain", "module-subagents", "module-file-edits", "module-shells", "module-editor", "module-browser", "module-data-studio", "screen-platforms", "screen-intro", "screen-onboarding"]
 
 [lints]
 workspace = true

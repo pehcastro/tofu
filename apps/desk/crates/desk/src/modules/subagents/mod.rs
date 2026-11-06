@@ -12,8 +12,8 @@ use desk_ui::components::glyph::Glyph;
 
 use super::chat::{Trace, mention};
 use gpui::{
-    AnyView, App, AppContext, Context, Entity, EventEmitter, IntoElement, Render, Subscription,
-    Window,
+    AnyView, App, AppContext, Context, Entity, EventEmitter, IntoElement, Render, StyleRefinement,
+    Styled, Subscription, Window,
 };
 
 const BOARD: &str = "36-agents";
@@ -23,7 +23,7 @@ const TILE_WIDTH: f32 = 513.0;
 pub struct Subagents {
     store: Entity<Store>,
     board: Rc<AgentBoard>,
-    seen: Option<u64>,
+    seen: Option<board::Seen>,
     tile: Entity<AgentTile>,
     screen: Entity<AgentScreen>,
     _watch: Subscription,
@@ -177,21 +177,36 @@ impl Subagents {
     }
 
     fn rebuild(&mut self, cx: &mut Context<Self>) -> bool {
+        desk_perf::span!("sub-agents-rebuild");
         let store = self.store.read(cx);
-        let seen = session(store).map(|open| board::seen(open, store.agent_runs()));
-        if seen.is_some() && seen == self.seen {
+        let seen = {
+            desk_perf::span!("sub-agents-seen");
+            session(store).map(|open| board::seen(open, store.agent_runs()))
+        };
+        let same_rows =
+            seen.is_some() && seen.map(|seen| seen.rows) == self.seen.map(|was| was.rows);
+        if same_rows && seen == self.seen {
+            if let Some(board) = session(store).and_then(|open| board::rethought(&self.board, open))
+            {
+                self.board = Rc::new(board);
+                let board = self.board.clone();
+                self.tile.update(cx, |tile, cx| tile.rethink(board, cx));
+            }
             return false;
         }
         self.seen = seen;
+        desk_perf::span!("sub-agents-board");
         self.board = Rc::new(
             session(store).map_or_else(empty, |open| board::board(open, store.agent_runs())),
         );
         let board = self.board.clone();
-        self.tile
-            .update(cx, |tile, cx| tile.set_board(board.clone(), cx));
         self.screen
-            .update(cx, |screen, cx| screen.set_board(board, cx));
-        true
+            .update(cx, |screen, cx| screen.set_board(board.clone(), cx));
+        match same_rows {
+            true => self.tile.update(cx, |tile, cx| tile.rethink(board, cx)),
+            false => self.tile.update(cx, |tile, cx| tile.set_board(board, cx)),
+        }
+        !same_rows
     }
 
     pub fn counted(&mut self, cx: &mut Context<Self>) -> String {
@@ -220,6 +235,14 @@ impl Subagents {
 
 impl Render for Subagents {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-        self.tile.clone()
+        desk_perf::span!("sub-agents");
+        let tile = self
+            .tile
+            .clone()
+            .cached(StyleRefinement::default().size_full());
+        #[cfg(feature = "screen-work")]
+        return crate::screens::work::split::timed("sub-agents", tile).into_any_element();
+        #[cfg(not(feature = "screen-work"))]
+        tile.into_any_element()
     }
 }

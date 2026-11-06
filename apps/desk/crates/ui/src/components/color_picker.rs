@@ -4,9 +4,9 @@ use std::rc::Rc;
 use gpui::{
     App, Bounds, ColorExt, Context, DispatchPhase, Div, ElementId, Entity, EntityInputHandler,
     EventEmitter, FocusHandle, Focusable, Hsla, KeyDownEvent, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, Pixels, Point, Rgba, Subscription, Window,
-    canvas, div, fill, hsla, hsla_to_rgba, linear_color_stop, linear_gradient, point, prelude::*,
-    px, relative, rgb_to_hsla, size, transparent_black, white,
+    MouseMoveEvent, MouseUpEvent, Pixels, Point, Rgba, Subscription, Window, canvas, div, fill,
+    hsla, hsla_to_rgba, linear_color_stop, linear_gradient, point, prelude::*, px, relative,
+    rgb_to_hsla, size, transparent_black, white,
 };
 
 use crate::components::form::TextInput;

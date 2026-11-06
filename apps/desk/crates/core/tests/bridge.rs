@@ -10,7 +10,14 @@ use desk_core::protocol::{
 
 const TURN_DEADLINE: Duration = Duration::from_secs(60);
 
-fn tofu_replaying(scratch: &Path, cassette: &str) -> Result<Command, Box<dyn Error>> {
+fn short_temp() -> Result<tempfile::TempDir, Box<dyn Error>> {
+    let local = std::env::var_os("LOCALAPPDATA").ok_or("LOCALAPPDATA is not set")?;
+    Ok(tempfile::Builder::new()
+        .prefix("dk")
+        .tempdir_in(Path::new(&local).join("Temp"))?)
+}
+
+fn tofu_replaying(scratch: &Path, short: &Path, cassette: &str) -> Result<Command, Box<dyn Error>> {
     let project = scratch.join("project");
     let home = scratch.join("home");
     std::fs::create_dir_all(&project)?;
@@ -24,15 +31,19 @@ fn tofu_replaying(scratch: &Path, cassette: &str) -> Result<Command, Box<dyn Err
                 .join(cassette),
         )
         .env("USERPROFILE", &home)
-        .env("HOME", &home);
+        .env("HOME", &home)
+        .env("TMP", short)
+        .env("TEMP", short)
+        .env("TMPDIR", short);
     Ok(command)
 }
 
 #[test]
 fn a_turn_replayed_from_a_cassette_arrives_typed_and_ends_finished() -> Result<(), Box<dyn Error>> {
     let scratch = tempfile::tempdir()?;
+    let short = short_temp()?;
     let (bridge, hello) = Bridge::open(
-        tofu_replaying(scratch.path(), "hi.cassette")?,
+        tofu_replaying(scratch.path(), short.path(), "hi.cassette")?,
         "desk-test",
         PROTOCOL,
     )?;
@@ -96,9 +107,10 @@ fn a_turn_replayed_from_a_cassette_arrives_typed_and_ends_finished() -> Result<(
 fn a_tofu_that_does_not_speak_the_needed_protocol_is_refused_by_name() -> Result<(), Box<dyn Error>>
 {
     let scratch = tempfile::tempdir()?;
+    let short = short_temp()?;
     let needed = "tofu.host/2";
     let refused = match Bridge::open(
-        tofu_replaying(scratch.path(), "hi.cassette")?,
+        tofu_replaying(scratch.path(), short.path(), "hi.cassette")?,
         "desk-test",
         needed,
     ) {

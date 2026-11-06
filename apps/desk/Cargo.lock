@@ -1628,6 +1628,7 @@ dependencies = [
  "desk_core",
  "desk_markdown",
  "desk_motion",
+ "desk_perf",
  "desk_tiling",
  "draw_doc",
  "flume",

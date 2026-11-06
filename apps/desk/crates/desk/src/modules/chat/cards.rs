@@ -1,6 +1,6 @@
 use desk_core::model::Tool;
 use desk_core::protocol::{CardPiece, CardPieceInk, Family, ToolSummary};
-use desk_ui::components::chat::{CallState, Ink, Object, Phrase, ToolCard};
+use desk_ui::components::chat::{CallState, Ink, Object, ToolCard};
 use desk_ui::components::chip::GitStatus;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::status_icon::TicketStatus;
@@ -275,23 +275,21 @@ pub fn family_glyph(family: &Family) -> Option<Glyph> {
     }
 }
 
-pub fn phrase(pieces: &[CardPiece]) -> Option<Phrase> {
-    let inked = pieces
+pub fn inked(pieces: &[CardPiece]) -> Option<Vec<(&str, Ink)>> {
+    pieces
         .iter()
         .map(|piece| {
             let tone = match &piece.ink {
                 CardPieceInk::Plain => Ink::Plain,
-                CardPieceInk::Muted => Ink::Muted,
+                CardPieceInk::Muted | CardPieceInk::Failed => Ink::Muted,
                 CardPieceInk::Ref => Ink::Ref,
                 CardPieceInk::Added => Ink::Added,
                 CardPieceInk::Removed => Ink::Removed,
-                CardPieceInk::Failed => Ink::Failed,
                 CardPieceInk::Unknown(_) => return None,
             };
             Some((piece.text.as_str(), tone))
         })
-        .collect::<Option<Vec<_>>>()?;
-    Some(Phrase::new(inked))
+        .collect()
 }
 
 pub fn doing(tool: &Tool) -> String {
@@ -342,6 +340,13 @@ fn ran(line: &str, output: Option<&str>, code: Option<i64>) -> View {
             .filter(|_| exit.is_some())
             .map(|said| result(said).into()),
     }
+}
+
+pub fn away(tool: &Tool) -> Option<&str> {
+    let (shell, _) = spoken(tool.output.as_deref()?)
+        .next()?
+        .split_once(STILL_RUNNING)?;
+    (!shell.contains(' ')).then_some(shell)
 }
 
 fn background(output: &str) -> Option<String> {

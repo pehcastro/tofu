@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use gpui::{
     AnyElement, AnyView, App, ClickEvent, Div, ElementId, Entity, FocusHandle, FontWeight, Rgba,
-    SharedString, Stateful, StyleRefinement, Window, div, prelude::*, px, relative,
+    SharedString, Stateful, Window, div, prelude::*, px, relative,
 };
 
 use crate::component::{icon, status_item};
@@ -11,7 +11,9 @@ use crate::components::avatar::spinner;
 use crate::components::button::{ButtonKind, button};
 use crate::components::card::caption;
 use crate::components::chip::tabular;
-use crate::components::context_card::{Bands, ContextCard};
+use crate::components::classifier_card::CLASSIFIER_CARD_WIDTH;
+use crate::components::context_card::{Bands, status_card};
+use crate::components::cron_card::CRON_CARD_WIDTH;
 use crate::components::glyph::Glyph;
 use crate::components::list::{row, separator};
 use crate::components::logo::{Brand, logo};
@@ -24,7 +26,7 @@ use crate::components::size::{
 use crate::components::tooltip::{Edge, tooltip};
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
-use crate::metrics::{HAIRLINE, ICON_SMALL, STATUS_BAR_HEIGHT, STATUS_ITEM_HEIGHT, TEXT_SMALL};
+use crate::metrics::{HAIRLINE, ICON_SMALL, STATUS_BAR_HEIGHT, TEXT_SMALL};
 use crate::theme::{ColorToken, Theme};
 
 const NO_ACCOUNT: &str = "no account";
@@ -166,16 +168,23 @@ pub enum StatusPick {
 
 type OnPick = Rc<dyn Fn(&StatusPick, &mut Window, &mut App)>;
 type OnOpen = Rc<dyn Fn(&bool, &mut Window, &mut App)>;
+type OnCard = Rc<dyn Fn(&StatusPick, &bool, &mut Window, &mut App)>;
+
+#[derive(Clone)]
+pub struct OpenCard {
+    pub pick: StatusPick,
+    pub view: AnyView,
+    pub height: f32,
+}
 
 #[derive(IntoElement)]
 pub struct StatusBar {
     id: ElementId,
     status: Status,
     on_pick: OnPick,
-    cron_menu: Option<AnyView>,
     quota_open: bool,
     branch_popover: Option<(bool, OnOpen)>,
-    context_popover: Option<(Option<Entity<ContextCard>>, OnOpen)>,
+    cards: Option<(Option<OpenCard>, OnCard)>,
 }
 
 pub fn controls(status: &Status) -> Vec<(&'static str, SharedString)> {
@@ -235,61 +244,63 @@ impl StatusBar {
             id: id.into(),
             status,
             on_pick: Rc::new(on_pick),
-            cron_menu: None,
             quota_open: false,
             branch_popover: None,
-            context_popover: None,
+            cards: None,
         }
     }
 
-    pub fn context_popover(
+    pub fn status_cards(
         mut self,
-        card: Option<Entity<ContextCard>>,
-        on_open: impl Fn(&bool, &mut Window, &mut App) + 'static,
+        open: Option<OpenCard>,
+        on_toggle: impl Fn(&StatusPick, &bool, &mut Window, &mut App) + 'static,
     ) -> Self {
-        self.context_popover = Some((card, Rc::new(on_open)));
+        self.cards = Some((open, Rc::new(on_toggle)));
         self
     }
 
-    fn context(&self, theme: &Theme, cx: &App) -> AnyElement {
+    fn card(
+        &self,
+        pick: StatusPick,
+        label: &'static str,
+        width: f32,
+        fill: impl Fn(Stateful<Div>) -> Stateful<Div>,
+        theme: &Theme,
+    ) -> AnyElement {
+        let Some((open, on_toggle)) = self.cards.clone() else {
+            return fill(self.item(pick, label, theme)).into_any_element();
+        };
+        let card = open
+            .filter(|card| card.pick == pick)
+            .map(|card| (card.view, card.height));
+        status_card(
+            ElementId::Name(format!("status-{label}-pop").into()),
+            fill(status_item(label, label, theme)),
+            card,
+            width,
+            Rc::new(move |open, window, cx| on_toggle(&pick, open, window, cx)),
+        )
+        .into_any_element()
+    }
+
+    fn context(&self, theme: &Theme) -> AnyElement {
         let context = self
             .status
             .session_group
             .as_ref()
             .and_then(|group| group.context.as_ref());
         let share = context.map_or(0.0, |context| context.share);
-        let fill = |item: Stateful<Div>| {
-            item.child("ctx")
-                .child(meter_bar(share, ink(theme, BAR_FILL), theme).w(px(CTX_BAR_WIDTH)))
-                .children(context.map(|context| context.tokens.clone()))
-        };
-        let Some((card, on_open)) = self.context_popover.clone() else {
-            return fill(self.item(StatusPick::Context, "Context", theme)).into_any_element();
-        };
-        let open = card.is_some();
-        let toggle = on_open.clone();
-        let trigger = toggles_on_press(
-            fill(status_item("Context", "Context", theme)),
-            move |window, cx| toggle(&!open, window, cx),
-        );
-        let panel = card.map(|card| {
-            let height = px(card.read(cx).height(cx));
-            div()
-                .w_full()
-                .h(height)
-                .child(card.cached(StyleRefinement::default().w_full().h(height)))
-        });
-        Popover::new("status-context-pop", trigger)
-            .open(open)
-            .placement(Placement {
-                side: Side::Top,
-                align: Align::Start,
-                offset: POP_OFFSET,
-            })
-            .width(CONTEXT_POP_WIDTH)
-            .on_dismiss(move |_, window, cx| on_open(&false, window, cx))
-            .children(panel)
-            .into_any_element()
+        self.card(
+            StatusPick::Context,
+            "Context",
+            CONTEXT_POP_WIDTH,
+            |item| {
+                item.child("ctx")
+                    .child(meter_bar(share, ink(theme, BAR_FILL), theme).w(px(CTX_BAR_WIDTH)))
+                    .children(context.map(|context| context.tokens.clone()))
+            },
+            theme,
+        )
     }
 
     pub fn branch_popover(
@@ -361,11 +372,6 @@ impl StatusBar {
                     .child(line),
             )
             .into_any_element()
-    }
-
-    pub fn cron_menu(mut self, menu: Option<AnyView>) -> Self {
-        self.cron_menu = menu;
-        self
     }
 
     pub fn quota_open(mut self, open: bool) -> Self {
@@ -492,23 +498,6 @@ fn set_open(state: &Entity<QuotaOpen>, open: bool, cx: &mut App) {
         opened.open = open;
         cx.notify();
     });
-}
-
-pub fn cron_trigger(count: usize, theme: &Theme) -> Stateful<Div> {
-    status_item("Cron", "Cron", theme).child(format!("cron {count}"))
-}
-
-fn inert_cron(count: usize, theme: &Theme) -> Div {
-    div()
-        .flex()
-        .flex_none()
-        .items_center()
-        .h(px(STATUS_ITEM_HEIGHT))
-        .px_2()
-        .text_size(px(TEXT_SMALL))
-        .font_weight(FontWeight::MEDIUM)
-        .text_color(theme.color(ColorToken::TextStatus))
-        .child(format!("cron {count}"))
 }
 
 fn dim(text: impl Into<SharedString>, theme: &Theme) -> Div {
@@ -918,14 +907,21 @@ impl RenderOnce for StatusBar {
                 Some(name) => item.child(name.clone()),
             });
         let group = status.session_group.clone().map(|group| {
-            let context = self.context(&theme, cx);
-            let classifier = self
-                .item(StatusPick::Classifier, "Classifier", &theme)
-                .child(format!("classifier {}", group.classifier));
-            let cron = match self.cron_menu.clone() {
-                Some(menu) => menu.into_any_element(),
-                None => inert_cron(group.cron, &theme).into_any_element(),
-            };
+            let context = self.context(&theme);
+            let classifier = self.card(
+                StatusPick::Classifier,
+                "Classifier",
+                CLASSIFIER_CARD_WIDTH,
+                |item| item.child(format!("classifier {}", group.classifier)),
+                &theme,
+            );
+            let cron = self.card(
+                StatusPick::Cron,
+                "Cron",
+                CRON_CARD_WIDTH,
+                |item| item.child(format!("cron {}", group.cron)),
+                &theme,
+            );
             div()
                 .flex()
                 .flex_none()

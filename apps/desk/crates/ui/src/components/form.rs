@@ -4,23 +4,25 @@ use std::time::{Duration, Instant};
 
 use desk_motion::tokens::{PRESS, TOGGLE};
 use gpui::{
-    App, Bounds, ClipboardItem, Context, Corners, Div, ElementId, ElementInputHandler, Entity,
-    EntityInputHandler, FocusHandle, Focusable, FontWeight, HighlightStyle, KeyDownEvent,
-    KeyUpEvent, Keystroke, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    Pixels, PlatformInput, Point, ScrollHandle, SharedString, Stateful, StyledText, Subscription,
-    Task, TextLayout, UTF16Selection, UnderlineStyle, Window, canvas, combine_highlights, div,
-    fill, point, prelude::*, px, rgb_to_hsla, size,
+    App, Bounds, ClipboardItem, Context, Corners, DispatchPhase, Div, ElementId,
+    ElementInputHandler, Entity, EntityInputHandler, FocusHandle, Focusable, FontWeight,
+    HighlightStyle, Hsla, KeyDownEvent, KeyUpEvent, Keystroke, Modifiers, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, PlatformInput, Point, ScrollHandle,
+    SharedString, Stateful, StyledText, Subscription, Task, TextLayout, UTF16Selection,
+    UnderlineStyle, Window, canvas, combine_highlights, div, fill, point, prelude::*, px,
+    rgb_to_hsla, size, transparent_black,
 };
 
+use crate::components::hovercard::{Subject, hover, link_card};
 use crate::components::list::HoverList;
 use crate::components::overlay::{ContextMenu, actions, context_menu};
 use crate::components::paint::{arrowed, focus_ring, ink, pressed_by, tint};
 use crate::components::scroll::scrollbar;
 use crate::components::size::{
     CARET_BLINK_MS, CARET_HEIGHT, CARET_WIDTH, DIM_TEXT, FIELD, FIELD_PAD, FIELD_WIDTH, FONT_BODY,
-    FONT_SMALL, RADIUS_CHIP, RADIUS_ROW, SEGMENT_PAD_X, SEGMENT_PAD_Y, SEGMENTED_PAD,
-    SELECTION_FILL, SWITCH_HEIGHT, SWITCH_INSET, SWITCH_THUMB, SWITCH_THUMB_HELD, SWITCH_WIDTH, T1,
-    T3,
+    FONT_SMALL, RADIUS_CHIP, RADIUS_CHIP_SMALL, RADIUS_ROW, SEGMENT_PAD_X, SEGMENT_PAD_Y,
+    SEGMENTED_PAD, SELECTION_FILL, SWITCH_HEIGHT, SWITCH_INSET, SWITCH_THUMB, SWITCH_THUMB_HELD,
+    SWITCH_WIDTH, T1, T3,
 };
 use crate::live::ActiveTheme;
 use crate::theme::{ColorToken, Theme};
@@ -31,6 +33,8 @@ const TEXT_AREA_LINES: usize = 8;
 const TEXT_AREA_LINE: f32 = 20.0;
 const TEXT_AREA_PAD_Y: f32 = 5.0;
 const MARKED_UNDERLINE: f32 = 1.0;
+const CHIP_INSET: f32 = 2.5;
+const CHIP_TINT: f32 = 0.14;
 
 pub fn input(
     id: impl Into<ElementId>,
@@ -261,6 +265,19 @@ pub fn switch_bare(
         )
 }
 
+#[derive(Clone)]
+struct Chip {
+    whole: Range<usize>,
+    inner: Range<usize>,
+}
+
+type ChipSubject = Rc<dyn Fn(&str, &App) -> Option<Subject>>;
+
+struct ChipSource {
+    find: fn(&str) -> Vec<Range<usize>>,
+    subject: ChipSubject,
+}
+
 struct Span {
     text: String,
     range: Range<usize>,
@@ -268,6 +285,7 @@ struct Span {
     layout: TextLayout,
     dragging: bool,
     goal: Option<Pixels>,
+    chips: Rc<[Chip]>,
 }
 
 impl Span {
@@ -279,6 +297,7 @@ impl Span {
             layout: TextLayout::default(),
             dragging: false,
             goal: None,
+            chips: Rc::from(Vec::new()),
         }
     }
 
@@ -306,6 +325,13 @@ impl Span {
     }
 
     fn previous(&self, at: usize) -> usize {
+        let ending = self.chips.iter().find(|chip| {
+            let whole = &chip.whole;
+            whole.start < at && at <= whole.end
+        });
+        if let Some(chip) = ending {
+            return chip.whole.start;
+        }
         self.text
             .get(..at)
             .and_then(|before| before.char_indices().next_back())
@@ -313,6 +339,9 @@ impl Span {
     }
 
     fn next(&self, at: usize) -> usize {
+        if let Some(chip) = self.chips.iter().find(|chip| chip.whole.contains(&at)) {
+            return chip.whole.end;
+        }
         self.text
             .get(at..)
             .and_then(|after| after.chars().next())
@@ -330,7 +359,15 @@ impl Span {
         while !self.text.is_char_boundary(at) {
             at -= 1;
         }
-        at
+        let inside = self.chips.iter().find(|chip| {
+            let whole = &chip.whole;
+            whole.start < at && at < whole.end
+        });
+        match inside {
+            Some(chip) if at - chip.whole.start < chip.whole.end - at => chip.whole.start,
+            Some(chip) => chip.whole.end,
+            None => at,
+        }
     }
 
     fn vertical(&mut self, lines: f32, extend: bool) -> bool {
@@ -418,9 +455,26 @@ impl Span {
             }),
             ..HighlightStyle::default()
         };
+        let hidden = HighlightStyle {
+            color: Some(transparent_black()),
+            ..HighlightStyle::default()
+        };
+        let lit = HighlightStyle {
+            color: Some(rgb_to_hsla(theme.color(ColorToken::StatusAccent))),
+            ..HighlightStyle::default()
+        };
+        let chips = self.chips.iter().flat_map(|chip| {
+            let (whole, inner) = (&chip.whole, &chip.inner);
+            [
+                (whole.start..inner.start, hidden),
+                (inner.clone(), lit),
+                (inner.end..whole.end, hidden),
+            ]
+        });
         let selection = (!self.range.is_empty()).then(|| (self.range.clone(), highlight));
         let composing = marked.map(|range| (range, underline));
-        let text = StyledText::new(shown).with_highlights(combine_highlights(selection, composing));
+        let text = StyledText::new(shown)
+            .with_highlights(combine_highlights(chips.chain(selection), composing));
         self.layout = text.layout().clone();
         text
     }
@@ -538,6 +592,8 @@ struct Editor {
     reveal: bool,
     blink: Option<Task<()>>,
     focus: FocusHandle,
+    chip_source: Option<ChipSource>,
+    hovered_chip: Option<usize>,
     _focus_changes: [Subscription; 2],
 }
 
@@ -604,8 +660,69 @@ impl Editor {
             reveal: false,
             blink: None,
             focus,
+            chip_source: None,
+            hovered_chip: None,
             _focus_changes: [focused, blurred],
         }
+    }
+
+    fn rechip(&mut self) {
+        let Some(source) = &self.chip_source else {
+            return;
+        };
+        let text = &self.span.text;
+        let chips: Vec<Chip> = (source.find)(text)
+            .into_iter()
+            .filter_map(|whole| {
+                let token = text.get(whole.clone())?;
+                let first = token.chars().next()?.len_utf8();
+                let last = token.chars().next_back()?.len_utf8();
+                let inner = whole.start + first..whole.end - last;
+                (inner.start < inner.end).then_some(Chip { whole, inner })
+            })
+            .collect();
+        self.span.chips = chips.into();
+    }
+
+    fn hover_chip<T: 'static>(
+        &mut self,
+        at: Option<Point<Pixels>>,
+        window: &Window,
+        cx: &mut Context<T>,
+    ) {
+        let Some(source) = &self.chip_source else {
+            return;
+        };
+        let layout = &self.span.layout;
+        let index = at.and_then(|at| layout.index_for_position(at).ok());
+        let found = index.and_then(|index| {
+            self.span
+                .chips
+                .iter()
+                .position(|chip| chip.whole.contains(&index))
+        });
+        if found == self.hovered_chip {
+            return;
+        }
+        self.hovered_chip = found;
+        let aimed = found
+            .and_then(|ix| self.span.chips.get(ix))
+            .and_then(|chip| {
+                let subject = (source.subject)(self.span.text.get(chip.whole.clone())?, cx)?;
+                let start = layout.position_for_index(chip.whole.start)?;
+                let end = layout.position_for_index(chip.whole.end)?;
+                let whole = layout.bounds();
+                let (left, right) = match start.y == end.y {
+                    true => (start.x, end.x),
+                    false => (whole.left(), whole.right()),
+                };
+                let line = Bounds::from_corners(
+                    point(left, start.y),
+                    point(right, end.y + layout.line_height()),
+                );
+                Some((subject, line))
+            });
+        hover(cx.entity_id().as_u64(), aimed, window, cx);
     }
 
     fn touch<T: 'static>(&mut self, cx: &mut Context<T>) {
@@ -631,6 +748,7 @@ impl Editor {
         };
         self.undo = Some((self.span.text.clone(), self.span.range.clone()));
         self.span.text.replace_range(range.clone(), &typed);
+        self.rechip();
         self.span.select(range.start + typed.len(), false);
         self.marked = None;
     }
@@ -639,6 +757,7 @@ impl Editor {
         if let Some((text, range)) = self.undo.take() {
             self.marked = None;
             let current = std::mem::replace(&mut self.span.text, text);
+            self.rechip();
             self.undo = Some((current, self.span.range.clone()));
             self.span.range = range;
             self.span.reversed = false;
@@ -868,6 +987,43 @@ macro_rules! editable {
     };
 }
 
+fn paint_chips(layout: &TextLayout, chips: &[Chip], color: Hsla, window: &mut Window) {
+    let bounds = layout.bounds();
+    let line = layout.line_height();
+    let height = line - px(CHIP_INSET * 2.0);
+    for chip in chips {
+        let at = |index: usize| layout.position_for_index(index);
+        let (Some(mut from), Some(mut to), Some(first), Some(last)) = (
+            at(chip.whole.start),
+            at(chip.whole.end),
+            at(chip.inner.start),
+            at(chip.inner.end),
+        ) else {
+            continue;
+        };
+        if first.y != from.y {
+            from = point(bounds.left(), first.y);
+        }
+        if last.y != to.y {
+            to = last;
+        }
+        let pieces = match from.y == to.y {
+            true => [Some((from.x, to.x, from.y)), None],
+            false => [
+                Some((from.x, bounds.right(), from.y)),
+                Some((bounds.left(), to.x, to.y)),
+            ],
+        };
+        for (left, right, top) in pieces.into_iter().flatten() {
+            let quad = Bounds::new(
+                point(left, top + px(CHIP_INSET)),
+                size(right - left, height),
+            );
+            window.paint_quad(fill(quad, color).corner_radii(px(RADIUS_CHIP_SMALL)));
+        }
+    }
+}
+
 fn reveal(scroll: &ScrollHandle, line: Bounds<Pixels>) {
     let view = scroll.bounds();
     let offset = scroll.offset();
@@ -908,12 +1064,50 @@ fn typed<T: Editable + EntityInputHandler>(
         Some(token) => theme.color(token),
         None => ink(theme, T3),
     };
+    let chipped = editor.chip_source.is_some();
+    let chips = editor.span.chips.clone();
+    let pill = rgb_to_hsla(tint(theme.color(ColorToken::StatusAccent), CHIP_TINT));
+    let pills = layout.clone();
+    let hovering = entity.clone();
     div()
         .relative()
         .flex_1()
         .min_w_0()
         .text_color(if empty { hint } else { color })
+        .when(!chips.is_empty(), |body| {
+            body.child(
+                canvas(
+                    |_, _, _| {},
+                    move |_, (), window, _| paint_chips(&pills, &chips, pill, window),
+                )
+                .absolute()
+                .size_full(),
+            )
+        })
         .child(text)
+        .when(chipped, |body| {
+            let key = hovering.entity_id().as_u64();
+            body.child(
+                canvas(
+                    |_, _, _| {},
+                    move |_, (), window, _| {
+                        let visible = window.content_mask().bounds;
+                        window.on_mouse_event(move |event: &MouseMoveEvent, phase, window, cx| {
+                            if phase != DispatchPhase::Bubble {
+                                return;
+                            }
+                            let at = visible.contains(&event.position).then_some(event.position);
+                            hovering.update(cx, |this, cx| {
+                                this.editor().hover_chip(at, window, cx);
+                            });
+                        });
+                    },
+                )
+                .absolute()
+                .size_full(),
+            )
+            .child(link_card(key))
+        })
         .child(
             canvas(
                 move |_, _, _| {
@@ -1055,6 +1249,27 @@ impl TextArea {
 
     pub fn text(&self) -> String {
         self.editor.span.text.clone()
+    }
+
+    pub fn inline_chips(
+        &mut self,
+        find: fn(&str) -> Vec<Range<usize>>,
+        subject: impl Fn(&str, &App) -> Option<Subject> + 'static,
+        cx: &mut Context<Self>,
+    ) {
+        self.editor.chip_source = Some(ChipSource {
+            find,
+            subject: Rc::new(subject),
+        });
+        self.editor.rechip();
+        cx.notify();
+    }
+
+    pub fn focus_at_end(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let end = self.editor.span.text.len();
+        self.editor.span.select(end, false);
+        window.focus(&self.editor.focus, cx);
+        self.editor.touch(cx);
     }
 
     pub fn clear(&mut self, cx: &mut Context<Self>) {

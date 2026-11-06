@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 use desk_ui::components::title_bar::{Shade, captions_span};
 use desk_ui::effects::ascii::{Ascii, GradientAscii};
 use desk_ui::effects::{EffectCache, EffectKey, EffectParams, Lookup, Source, Stage};
-use desk_ui::glass::Glass;
+use desk_ui::glass::frosted;
 use desk_ui::theme::Theme;
 use gpui::{
     App, AppContext, Context, DevicePixels, Div, Entity, Global, IntoElement, ObjectFit, Render,
@@ -329,7 +329,7 @@ pub fn glass(radius: f32, blur: f32, scrim: u32, top: f32, bottom: f32) -> Div {
 }
 
 pub fn glass_over(radius: f32, theme: &Theme, fill: Rgba, top: f32, bottom: f32) -> Div {
-    Glass::themed(theme).apply(scrim_over(radius, fill, top, bottom))
+    frosted(scrim_over(radius, fill, top, bottom), theme)
 }
 
 fn scrim_over(radius: f32, fill: Rgba, top: f32, bottom: f32) -> Div {

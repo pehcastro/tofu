@@ -5,19 +5,20 @@ use std::time::Instant;
 use desk_ui::component::control;
 use desk_ui::components::glyph::Glyph;
 use desk_ui::components::paint::glyph;
+use desk_ui::components::tabs::{Tab, TabEvent, TabMark, TabStrip, connected_tabs, new_glyph};
 use desk_ui::components::tooltip::{Edge, tooltip};
 use desk_ui::live::ActiveTheme;
 use desk_ui::metrics::ICON;
 use desk_ui::theme::{ColorToken, Theme};
 use gpui::{
     AnyElement, AnyView, App, Axis, Bounds, ClickEvent, Context, CursorStyle, DispatchPhase, Div,
-    Entity, Focusable, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Size, Stateful,
-    StyleRefinement, WeakEntity, Window, canvas, div, prelude::*, px,
+    Entity, Focusable, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, SharedString, Size,
+    Stateful, StyleRefinement, Subscription, WeakEntity, Window, canvas, div, prelude::*, px,
 };
 
 use super::{Editor, divider};
 use crate::modules::chat::{self, Chat, ChatMirror};
-use crate::modules::terminal::{self, TerminalModule};
+use crate::modules::terminal::{self, TabChanged, TerminalModule};
 
 const BOTTOM_START: f32 = 240.0;
 const BOTTOM_LEAST: f32 = 120.0;
@@ -25,7 +26,6 @@ const BOTTOM_MOST: f32 = 0.7;
 const RIGHT_START: f32 = 380.0;
 const RIGHT_LEAST: f32 = 280.0;
 const RIGHT_MOST: f32 = 0.6;
-const FIRST_SHELL: usize = 1;
 const LATE: f64 = 1.5;
 const DISABLED: f32 = 0.45;
 const TOGGLE_PAD: f32 = 4.0;
@@ -51,7 +51,9 @@ impl Dock {
 
 pub(super) struct Docks {
     source: Option<ChatSource>,
-    terminal: Option<Entity<TerminalModule>>,
+    terminals: Vec<TerminalTab>,
+    shown: usize,
+    opened: usize,
     terminal_open: bool,
     mirror: Option<Entity<ChatMirror>>,
     bottom: f32,
@@ -63,6 +65,12 @@ pub(super) struct Docks {
     chat_box: Rc<Cell<Bounds<Pixels>>>,
     timing: Rc<RefCell<DragTiming>>,
     span: Rc<Cell<Bounds<Pixels>>>,
+}
+
+struct TerminalTab {
+    view: Entity<TerminalModule>,
+    label: SharedString,
+    _renamed: Subscription,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -94,7 +102,9 @@ impl Docks {
     pub(super) fn closed() -> Self {
         Docks {
             source: None,
-            terminal: None,
+            terminals: Vec::new(),
+            shown: 0,
+            opened: 0,
             terminal_open: false,
             mirror: None,
             bottom: BOTTOM_START,
@@ -226,9 +236,13 @@ impl Editor {
     }
 
     pub(super) fn close_docks(&mut self) {
-        if self.docks.terminal.take().is_some() {
-            eprintln!("desk: editor dock terminal closed, its shell ends with the old folder");
+        let ended = std::mem::take(&mut self.docks.terminals).len();
+        if ended > 0 {
+            eprintln!(
+                "desk: editor dock {ended} terminal tabs closed, their shells end with the old folder"
+            );
         }
+        self.docks.shown = 0;
         self.docks.terminal_open = false;
         if self.docks.mirror.take().is_some() {
             eprintln!("desk: editor dock chat closed");
@@ -241,14 +255,124 @@ impl Editor {
         if !self.docks.terminal_open {
             return eprintln!("desk: editor dock terminal closed");
         }
-        let root = &self.folder.listing.root;
-        let terminal = self
-            .docks
-            .terminal
-            .get_or_insert_with(|| terminal::mount(root, FIRST_SHELL, cx));
-        let focus = terminal.read(cx).focus_handle(cx);
-        focus.focus(window, cx);
+        if self.docks.terminals.is_empty() {
+            self.open_terminal_tab(window, cx);
+        }
+        self.focus_terminal_tab(window, cx);
         eprintln!("desk: editor dock terminal open");
+    }
+
+    fn open_terminal_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.docks.opened = self.docks.opened.saturating_add(1);
+        let number = self.docks.opened;
+        let view = terminal::mount(&self.folder.listing.root, number, cx);
+        let named = move |view: &Entity<TerminalModule>, cx: &App| {
+            view.read(cx)
+                .label(cx)
+                .unwrap_or_else(|| format!("Terminal {number}").into())
+        };
+        let label = named(&view, cx);
+        let renamed = cx.subscribe(&view, move |editor, view, _: &TabChanged, cx| {
+            let label = named(&view, cx);
+            let Some(tab) = editor
+                .docks
+                .terminals
+                .iter_mut()
+                .find(|tab| tab.view == view)
+            else {
+                return;
+            };
+            if tab.label != label {
+                tab.label = label;
+                cx.notify();
+            }
+        });
+        self.docks.terminals.push(TerminalTab {
+            view,
+            label,
+            _renamed: renamed,
+        });
+        self.docks.shown = self.docks.terminals.len().saturating_sub(1);
+        self.focus_terminal_tab(window, cx);
+        cx.notify();
+        eprintln!(
+            "desk: editor dock terminal tab {} opened, {} open",
+            self.docks.opened,
+            self.docks.terminals.len()
+        );
+    }
+
+    fn focus_terminal_tab(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if let Some(tab) = self.docks.terminals.get(self.docks.shown) {
+            let focus = tab.view.read(cx).focus_handle(cx);
+            focus.focus(window, cx);
+        }
+    }
+
+    fn terminal_tab_event(&mut self, event: TabEvent, window: &mut Window, cx: &mut Context<Self>) {
+        match event {
+            TabEvent::New => return self.open_terminal_tab(window, cx),
+            TabEvent::Select(at) if at < self.docks.terminals.len() => self.docks.shown = at,
+            TabEvent::Select(_) => return,
+            TabEvent::Close(at) if at < self.docks.terminals.len() => {
+                self.docks.terminals.remove(at);
+                eprintln!(
+                    "desk: editor dock terminal tab closed, its shell ends, {} open",
+                    self.docks.terminals.len()
+                );
+                if at < self.docks.shown || self.docks.shown >= self.docks.terminals.len() {
+                    self.docks.shown = self.docks.shown.saturating_sub(1);
+                }
+                if self.docks.terminals.is_empty() {
+                    self.docks.terminal_open = false;
+                }
+            }
+            TabEvent::Close(_) => return,
+        }
+        self.focus_terminal_tab(window, cx);
+        cx.notify();
+    }
+
+    fn terminal_strip(&self, theme: &Theme, cx: &mut Context<Self>) -> TabStrip {
+        desk_perf::span!("editor-terminal-strip");
+        let tabs: Vec<Tab> = self
+            .docks
+            .terminals
+            .iter()
+            .map(|tab| Tab {
+                label: tab.label.clone(),
+                icon: Some(Glyph::Terminal),
+                count: None,
+                mark: TabMark::Close,
+                flag: None,
+            })
+            .collect();
+        let (editor, adder) = (cx.weak_entity(), cx.weak_entity());
+        let add = new_glyph("editor-terminal-new", "New terminal", theme).on_click(
+            move |_, window, cx| {
+                if let Err(error) =
+                    adder.update(cx, |editor, cx| editor.open_terminal_tab(window, cx))
+                {
+                    eprintln!("desk: editor is gone before a terminal tab opened: {error}");
+                }
+            },
+        );
+        connected_tabs(
+            "editor-terminal-tabs",
+            &tabs,
+            self.docks.shown,
+            tabs.len().max(1),
+            theme,
+            move |event, window, cx| {
+                let event = *event;
+                if let Err(error) = editor.update(cx, |editor, cx| {
+                    editor.terminal_tab_event(event, window, cx)
+                }) {
+                    eprintln!("desk: editor is gone before its terminal tab event: {error}");
+                }
+            },
+        )
+        .new_button(add)
     }
 
     fn toggle_chat(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -337,6 +461,7 @@ impl Editor {
         theme: &Theme,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        desk_perf::span!("editor-terminal-pane");
         let room = self.docks.span.get().size;
         let bottom = fit(
             self.docks.bottom,
@@ -352,8 +477,9 @@ impl Editor {
         );
         let terminal = self
             .docks
-            .terminal
-            .clone()
+            .terminals
+            .get(self.docks.shown)
+            .map(|tab| tab.view.clone())
             .filter(|_| self.docks.terminal_open);
         let column = div()
             .flex()
@@ -366,13 +492,21 @@ impl Editor {
                 column
                     .child(self.dock_divider(Dock::Terminal, theme, cx))
                     .child(
-                        held_box(
-                            terminal.into(),
-                            self.docks.held.shell,
-                            self.docks.shell_box.clone(),
-                        )
-                        .flex_none()
-                        .h(px(bottom)),
+                        div()
+                            .flex()
+                            .flex_col()
+                            .flex_none()
+                            .min_w_0()
+                            .h(px(bottom))
+                            .child(self.terminal_strip(theme, cx))
+                            .child(
+                                held_box(
+                                    terminal.into(),
+                                    self.docks.held.shell,
+                                    self.docks.shell_box.clone(),
+                                )
+                                .flex_1(),
+                            ),
                     )
             });
         let dragging = self.docks.dragging.is_some();

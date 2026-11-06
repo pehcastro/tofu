@@ -2499,6 +2499,7 @@ fn code_area(page: Option<&Page>, theme: &Theme) -> AnyElement {
 
 impl Render for Editor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        desk_perf::span!("editor-body");
         #[cfg(feature = "screen-work")]
         let started = Instant::now();
         let theme = ActiveTheme::theme(cx);

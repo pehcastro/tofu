@@ -292,8 +292,15 @@ fn latest(session: &Session, runs: &[AgentRun]) -> i64 {
         .unwrap_or_default()
 }
 
-pub fn seen(session: &Session, runs: &[AgentRun]) -> u64 {
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Seen {
+    pub rows: u64,
+    pub output: u64,
+}
+
+pub fn seen(session: &Session, runs: &[AgentRun]) -> Seen {
     let mut hash = DefaultHasher::new();
+    let mut output = DefaultHasher::new();
     session.name.hash(&mut hash);
     for (id, member) in &session.agents {
         (
@@ -304,7 +311,7 @@ pub fn seen(session: &Session, runs: &[AgentRun]) -> u64 {
         )
             .hash(&mut hash);
         (&member.started_at, &member.ended_at, &member.task).hash(&mut hash);
-        (member.thinking.len(), &member.owns, member.number).hash(&mut hash);
+        (&member.owns, member.number).hash(&mut hash);
     }
     for (item, tool) in &session.tools {
         (
@@ -315,7 +322,7 @@ pub fn seen(session: &Session, runs: &[AgentRun]) -> u64 {
             &tool.ended_at,
         )
             .hash(&mut hash);
-        (tool.output.as_ref().map(String::len), tool.failed).hash(&mut hash);
+        (item, tool.output.as_ref().map(String::len), tool.failed).hash(&mut output);
     }
     for (key, (_, asked)) in &session.approvals {
         (key, &asked.agent, &asked.tool).hash(&mut hash);
@@ -327,7 +334,40 @@ pub fn seen(session: &Session, runs: &[AgentRun]) -> u64 {
     for run in runs {
         (&run.agent, &run.ended_at).hash(&mut hash);
     }
-    hash.finish()
+    Seen {
+        rows: hash.finish(),
+        output: output.finish(),
+    }
+}
+
+pub fn rethought(board: &AgentBoard, session: &Session) -> Option<AgentBoard> {
+    let thinking = |line: &AgentLine| {
+        session.agents.iter().find_map(|(id, member)| {
+            let agent = shown(id, member);
+            (agent.kind == line.agent.kind && agent.instance == line.agent.instance)
+                .then_some(member.thinking.as_str())
+        })
+    };
+    if board
+        .lines
+        .iter()
+        .all(|line| thinking(line).is_none_or(|now| now == line.thinking.as_ref()))
+    {
+        return None;
+    }
+    Some(AgentBoard {
+        lines: board
+            .lines
+            .iter()
+            .map(|line| AgentLine {
+                thinking: thinking(line)
+                    .map_or_else(|| line.thinking.clone(), |now| now.to_owned().into()),
+                ..line.clone()
+            })
+            .collect(),
+        events: board.events.clone(),
+        attributed: board.attributed,
+    })
 }
 
 fn seconds(at: &str) -> Option<i64> {

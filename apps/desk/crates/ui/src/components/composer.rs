@@ -1,12 +1,14 @@
 use std::cell::Cell;
+use std::ops::Range;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use desk_motion::GlideKind;
 use gpui::{
-    AnyElement, App, ClickEvent, Context, Corners, Div, ElementId, Entity, FontWeight, Image,
-    ImageFormat, Img, MouseButton, MouseDownEvent, Pixels, Point, Rgba, SharedString, Stateful,
-    Window, canvas, div, img, prelude::*, px,
+    AnyElement, App, ClickEvent, Context, Corners, Div, ElementId, Entity, ExternalPaths,
+    FontWeight, Image, ImageFormat, Img, MouseButton, MouseDownEvent, Pixels, Point, Rgba,
+    SharedString, Stateful, Window, canvas, div, img, prelude::*, px,
 };
 
 use crate::component::icon;
@@ -25,7 +27,6 @@ use crate::components::size::{
     SPINNER_TRACK, T1, T2, T3,
 };
 use crate::components::tooltip::{Edge, tooltip};
-use crate::glass::Glass;
 use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{HAIRLINE, ICON, ICON_SMALL};
@@ -58,6 +59,7 @@ const WHO_GAP: f32 = 8.0;
 const HOME_STACK_GAP: f32 = 10.0;
 const HOME_RADIUS: f32 = 18.0;
 const HOME_FILL: f32 = 0.55;
+const HOME_BLUR: f32 = 26.0;
 const HOME_RING: f32 = 0.16;
 const HOME_DROP_Y: f32 = 24.0;
 const HOME_DROP_BLUR: f32 = 70.0;
@@ -111,8 +113,10 @@ const WORKING: &str = "working";
 const CHIPS_SHOWN: usize = 3;
 const FILE_CHIP_MAX: f32 = 260.0;
 const MENU_SHADE: f32 = 1.0;
+const IMAGE_OPEN: &str = "[Image #";
 
 type OnText = Rc<dyn Fn(&str, &mut Window, &mut App)>;
+type OnPaths = Rc<dyn Fn(&[PathBuf], &mut Window, &mut App)>;
 type OnAction = Rc<dyn Fn(&mut Window, &mut App)>;
 type OnIndex = Rc<dyn Fn(usize, &mut Window, &mut App)>;
 
@@ -160,6 +164,34 @@ impl ComposerVariant {
             Self::Grown => "always grown",
         }
     }
+}
+
+pub fn image_token(n: usize) -> String {
+    format!("{IMAGE_OPEN}{n}]")
+}
+
+pub fn image_tokens(text: &str) -> Vec<(Range<usize>, usize)> {
+    let mut found = Vec::new();
+    let mut from = 0;
+    while let Some(at) = text.get(from..).and_then(|rest| rest.find(IMAGE_OPEN)) {
+        let digits = from + at + IMAGE_OPEN.len();
+        let tail = text.get(digits..).unwrap_or_default();
+        let count = tail.bytes().take_while(u8::is_ascii_digit).count();
+        let n = tail.get(..count).and_then(|n| n.parse().ok());
+        from = digits;
+        if let (Some(n), Some(b']')) = (n, tail.as_bytes().get(count)) {
+            from = digits + count + 1;
+            found.push((digits - IMAGE_OPEN.len()..from, n));
+        }
+    }
+    found
+}
+
+pub fn image_chips(text: &str) -> Vec<Range<usize>> {
+    image_tokens(text)
+        .into_iter()
+        .map(|(range, _)| range)
+        .collect()
 }
 
 pub fn picker(
@@ -296,6 +328,7 @@ pub struct Composer {
     on_remove: Option<OnIndex>,
     on_remove_trace: Option<OnIndex>,
     on_unqueue: Option<OnIndex>,
+    on_drop: Option<OnPaths>,
     content_width: Option<Pixels>,
 }
 
@@ -321,6 +354,7 @@ impl Composer {
             on_remove: None,
             on_remove_trace: None,
             on_unqueue: None,
+            on_drop: None,
             content_width: None,
         }
     }
@@ -425,6 +459,14 @@ impl Composer {
         self.on_unqueue = Some(Rc::new(on_unqueue));
         self
     }
+
+    pub fn on_drop(
+        mut self,
+        on_drop: impl Fn(&[PathBuf], &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_drop = Some(Rc::new(on_drop));
+        self
+    }
 }
 
 impl RenderOnce for Composer {
@@ -445,6 +487,7 @@ impl RenderOnce for Composer {
             self.on_stop,
             &theme,
         );
+        let typing = self.area.clone();
         let field = div()
             .flex_1()
             .min_w(px(0.0))
@@ -505,6 +548,24 @@ impl RenderOnce for Composer {
             .shadow(vec![ring(ink(&theme, COMPOSER_RING))])
             .text_size(px(FONT_TAB))
             .text_color(ink(&theme, T2));
+        let shell = shell.on_mouse_down(MouseButton::Left, move |_, window, cx| {
+            if window.default_prevented() {
+                return;
+            }
+            window.prevent_default();
+            typing.update(cx, |area, cx| area.focus_at_end(window, cx));
+        });
+        let focus = theme.color(ColorToken::FocusRing);
+        let shell = match self.on_drop {
+            Some(on_drop) => shell
+                .on_drag_over::<ExternalPaths>(move |style, _, _, _| {
+                    style.shadow(vec![ring(focus)])
+                })
+                .on_drop(move |dropped: &ExternalPaths, window, cx| {
+                    on_drop(dropped.paths(), window, cx)
+                }),
+            None => shell,
+        };
         let shell = if grown {
             shell
                 .flex_col()
@@ -1594,13 +1655,13 @@ impl Render for HomeComposer {
             theme.color(ColorToken::ButtonPrimaryText),
         ))
         .on_click(cx.listener(|this, _: &ClickEvent, window, cx| this.send(window, cx)));
-        let surface = Glass::themed(&theme)
-            .apply(div())
+        let surface = div()
             .flex()
             .flex_col()
             .gap(px(HOME_GAP))
             .rounded(px(HOME_RADIUS))
             .bg(fill)
+            .backdrop_blur(px(HOME_BLUR))
             .shadow(vec![ring(ink(&theme, HOME_RING)), shadow])
             .pt(px(HOME_PAD_TOP))
             .pr(px(HOME_PAD_RIGHT))

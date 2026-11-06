@@ -31,12 +31,9 @@ mod screens {
         feature = "screen-intro-setup",
         feature = "screen-forks",
         feature = "screen-drain",
-        feature = "screen-boardy",
-        feature = "screen-glass-bench"
+        feature = "screen-boardy"
     ))]
     pub mod frame;
-    #[cfg(feature = "screen-glass-bench")]
-    pub mod glass_bench;
     #[cfg(feature = "screen-intro")]
     pub mod intro;
     #[cfg(feature = "screen-intro-setup")]
@@ -252,7 +249,6 @@ fn screen(name: &str) -> Result<Open, String> {
         "browser" => gated!("module-browser", modules::browser::open),
         "data-studio" => gated!("module-data-studio", modules::data_studio::open),
         "platforms" => gated!("screen-platforms", screens::platforms::open),
-        "glass-bench" => gated!("screen-glass-bench", screens::glass_bench::open),
         _ => return Err(format!("unknown screen {name}\n{USAGE}")),
     };
     open.ok_or_else(|| {

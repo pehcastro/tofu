@@ -9,6 +9,7 @@ publish.workspace = true
 [dependencies]
 desk_core.workspace = true
 desk_markdown = { path = "../markdown" }
+desk_perf = { path = "../perf", default-features = false }
 desk_motion = { workspace = true }
 desk_tiling.workspace = true
 draw_doc.workspace = true

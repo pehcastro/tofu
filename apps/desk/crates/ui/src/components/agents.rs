@@ -5,9 +5,9 @@ use std::sync::Arc;
 use desk_motion::tokens::{EASE_OUT, TOGGLE_MS};
 use gpui::{
     Animation, AnimationExt, AnyElement, App, ClickEvent, Context, Div, ElementId, FocusHandle,
-    FontWeight, KeyDownEvent, MouseDownEvent, Pixels, Rgba, ScrollStrategy, SharedString, Stateful,
-    Transformation, UniformListScrollHandle, Window, canvas, div, prelude::*, px, radians,
-    relative, uniform_list,
+    FontWeight, KeyDownEvent, ListAlignment, ListState, MouseDownEvent, Pixels, Rgba,
+    ScrollStrategy, SharedString, Stateful, Transformation, UniformListScrollHandle, Window,
+    canvas, div, list, prelude::*, px, radians, relative, uniform_list,
 };
 
 use crate::component::icon;
@@ -20,7 +20,7 @@ use crate::components::empty::empty_state;
 use crate::components::glyph::Glyph;
 use crate::components::list::{HoverVariant, RowGlide};
 use crate::components::paint::{glyph, ink, ring, solid, tint};
-use crate::components::scroll::{ScrollArea, scrollbar};
+use crate::components::scroll::{ScrollArea, list_scrollbar, scrollbar};
 use crate::components::sheet::Drawer;
 use crate::components::size::{
     AVATAR_TINT_FEED, CAPTION_TEXT, CHIP, DIM_TEXT, FAIL_TINT, FCHIP_PAD, FONT_BODY, FONT_CHAT,
@@ -71,6 +71,7 @@ const DRAWER_HEAD_LINE: f32 = 19.0;
 const DRAWER_NAME: f32 = 14.0;
 const DRAWER_META_GAP: f32 = 8.0;
 const DRAWER_PAD_BOTTOM: f32 = 14.0;
+const DRAWER_OVERDRAW: f32 = 200.0;
 const DRAWER_ONE_LINE_FROM: f32 = 440.0;
 const CLAMP_LINES: usize = 6;
 const CLAMP_CHARS: usize = 360;
@@ -1283,6 +1284,8 @@ pub struct AgentTile {
     list: UniformListScrollHandle,
     open: bool,
     shown: usize,
+    feed: ListState,
+    fed: Vec<usize>,
     open_groups: [bool; 4],
     focus: FocusHandle,
     mention: AgentAction,
@@ -1303,6 +1306,8 @@ impl AgentTile {
             board,
             open: false,
             shown: 0,
+            feed: ListState::new(0, ListAlignment::Top, px(DRAWER_OVERDRAW)),
+            fed: Vec::new(),
             open_groups: open_at_start(),
             focus: cx.focus_handle(),
             mention: Rc::new(mention),
@@ -1325,14 +1330,49 @@ impl AgentTile {
         }
         self.board = board;
         self.lines = tile_lines(&self.board, self.open_groups);
+        self.refeed(false);
         cx.notify();
     }
 
+    pub fn rethink(&mut self, board: Rc<AgentBoard>, cx: &mut Context<Self>) {
+        self.board = board;
+        if self.open {
+            self.feed.remeasure_items(0..self.feed.item_count());
+            cx.notify();
+        }
+    }
+
     fn show(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+        let fresh = !(self.open && self.shown == ix);
         self.shown = ix;
         self.open = true;
+        self.refeed(fresh);
         self.focus.focus(window, cx);
         cx.notify();
+    }
+
+    fn refeed(&mut self, fresh: bool) {
+        self.fed = self
+            .board
+            .lines
+            .get(self.shown)
+            .map_or_else(Vec::new, |line| {
+                self.board
+                    .feed(Some(line.agent))
+                    .map(|(ix, _)| ix)
+                    .collect()
+            });
+        let count = self.fed.len() + 1;
+        if fresh {
+            return self.feed.reset(count);
+        }
+        let old = self.feed.item_count();
+        match count.cmp(&old) {
+            std::cmp::Ordering::Greater => self.feed.splice(old..old, count - old),
+            std::cmp::Ordering::Less => self.feed.splice(count..old, 0),
+            std::cmp::Ordering::Equal => {}
+        }
+        self.feed.remeasure_items(0..count);
     }
 
     pub fn reveal(&mut self, agent: Agent, window: &mut Window, cx: &mut Context<Self>) -> bool {
@@ -1553,29 +1593,45 @@ impl AgentTile {
             )
     }
 
-    fn drawer_body(
+    fn drawer_body(&self, cx: &mut Context<Self>) -> Div {
+        let rows = list(
+            self.feed.clone(),
+            cx.processor(|tile: &mut AgentTile, at: usize, window, cx| {
+                let theme = ActiveTheme::theme(cx);
+                tile.drawer_item(at, &theme, window, cx)
+            }),
+        )
+        .size_full();
+        div()
+            .relative()
+            .flex_1()
+            .min_h_0()
+            .child(rows)
+            .child(list_scrollbar(("drawer-scroll", self.shown), &self.feed))
+    }
+
+    fn drawer_item(
         &self,
-        line: &AgentLine,
+        at: usize,
         theme: &Theme,
         window: &mut Window,
         cx: &mut App,
-    ) -> impl IntoElement {
-        let events = self
-            .board
-            .feed(Some(line.agent))
-            .map(|(ix, event)| event_row(ix, event, &self.mention, theme, window, cx))
-            .collect::<Vec<_>>();
-        let thinking = clamped(
-            ("drawer-thinking", self.shown),
-            line.thinking.clone(),
-            theme,
-            window,
-            cx,
-        );
-        ScrollArea::new(("drawer-scroll", self.shown)).child(
-            div()
-                .px(px(DRAWER_PAD_X))
-                .pb(px(DRAWER_PAD_BOTTOM))
+    ) -> AnyElement {
+        let item = div()
+            .px(px(DRAWER_PAD_X))
+            .when(at == self.fed.len(), |item| item.pb(px(DRAWER_PAD_BOTTOM)));
+        let Some(line) = self.board.lines.get(self.shown) else {
+            return item.into_any_element();
+        };
+        let Some(nth) = at.checked_sub(1) else {
+            let thinking = clamped(
+                ("drawer-thinking", self.shown),
+                line.thinking.clone(),
+                theme,
+                window,
+                cx,
+            );
+            return item
                 .child(
                     div()
                         .px(px(THINK_PAD_X))
@@ -1588,8 +1644,16 @@ impl AgentTile {
                         .child(caption("thinking", theme).mb(px(THINK_CAPTION_GAP)))
                         .child(thinking),
                 )
-                .children(events),
+                .into_any_element();
+        };
+        let event = self
+            .fed
+            .get(nth)
+            .and_then(|&ix| Some((ix, self.board.events.get(ix)?)));
+        item.children(
+            event.map(|(ix, event)| event_row(ix, event, &self.mention, theme, window, cx)),
         )
+        .into_any_element()
     }
 }
 
@@ -1639,7 +1703,7 @@ impl Render for AgentTile {
             .when_some(shown, |drawer, line| {
                 drawer
                     .child(self.drawer_head(&line, wide, &theme, cx))
-                    .child(self.drawer_body(&line, &theme, window, cx))
+                    .child(self.drawer_body(cx))
             });
         div()
             .id("agents-tile")

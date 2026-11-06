@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use chrono::{DateTime, Utc};
 use desk_core::model::Store;
-use desk_core::protocol::{Member, MemberKind};
 use desk_core::sessions::SessionRow;
 use desk_ui::components::avatar::spinner;
 use desk_ui::components::glyph::Glyph;
@@ -35,15 +34,6 @@ pub(super) fn forks(store: &Store) -> Option<i64> {
         .as_ref()
         .filter(|read| store.open.as_ref() == Some(&read.value.id))
         .map(|read| forks_in(read.value.generations))
-}
-
-fn member_word(kind: &MemberKind) -> &str {
-    match kind {
-        MemberKind::Tui => "TUI",
-        MemberKind::Desk => "Desk",
-        MemberKind::Serve => "Serve",
-        MemberKind::Unknown(kind) => kind,
-    }
 }
 
 pub struct SessionHead {
@@ -95,21 +85,6 @@ impl SessionHead {
             self.loading = loading;
             cx.notify();
         }
-    }
-
-    fn members<'a>(&'a self, store: &'a Store) -> &'a [Member] {
-        let row = self
-            .row
-            .as_ref()
-            .filter(|row| store.open.as_ref().is_none_or(|open| *open == row.id));
-        store
-            .open
-            .as_ref()
-            .and_then(|open| store.sessions.get(open))
-            .map(|session| session.members.as_slice())
-            .filter(|members| !members.is_empty())
-            .or_else(|| row.map(|row| row.members.as_slice()))
-            .unwrap_or_default()
     }
 
     pub fn show(&mut self, row: SessionRow, cx: &mut Context<Self>) {
@@ -167,16 +142,6 @@ impl Render for SessionHead {
         let theme = ActiveTheme::theme(cx);
         let store = self.store.read(cx);
         let info = self.known(store);
-        let members: Vec<(String, String)> = self
-            .members(store)
-            .iter()
-            .map(|member| {
-                (
-                    member_word(&member.kind).to_owned(),
-                    format!("process {}", member.process),
-                )
-            })
-            .collect();
         let name = info
             .as_ref()
             .map(|info| info.handle.clone())
@@ -243,27 +208,6 @@ impl Render for SessionHead {
                 cx,
             )
         });
-        let members = members
-            .into_iter()
-            .enumerate()
-            .map(|(at, (word, process))| {
-                tooltip(
-                    ("chat-head-member-tip", at),
-                    div()
-                        .id(("chat-head-member", at))
-                        .flex()
-                        .items_center()
-                        .px_1()
-                        .rounded(px(RADIUS_CHIP))
-                        .text_color(dim)
-                        .child(word),
-                    Edge::Frame,
-                    process,
-                    &theme,
-                    window,
-                    cx,
-                )
-            });
         let duration = div()
             .min_w(px(DURATION_WIDTH))
             .when(pending, |duration| duration.text_color(dim))
@@ -276,7 +220,6 @@ impl Render for SessionHead {
             .text_color(ink(&theme, T2))
             .child(title)
             .children(loading)
-            .children(members)
             .child(tooltip(
                 "chat-head-copy-tip",
                 copy,

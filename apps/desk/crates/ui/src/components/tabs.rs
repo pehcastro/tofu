@@ -1264,9 +1264,13 @@ fn new_tab(id: &SharedString, theme: &Theme, on: &OnTab) -> Stateful<Div> {
 }
 
 pub fn new_tab_glyph(id: impl Into<SharedString>, theme: &Theme) -> Stateful<Div> {
+    new_glyph(id, "New workspace", theme)
+}
+
+pub fn new_glyph(id: impl Into<SharedString>, label: &'static str, theme: &Theme) -> Stateful<Div> {
     let glyph = div()
         .id((id.into(), usize::MAX))
-        .aria_label("New workspace")
+        .aria_label(label)
         .flex()
         .flex_none()
         .items_center()

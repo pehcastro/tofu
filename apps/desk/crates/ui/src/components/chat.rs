@@ -2365,6 +2365,7 @@ pub enum Ink {
     Added,
     Removed,
     Failed,
+    Warn,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2445,6 +2446,7 @@ fn object_chip(object: &Object, theme: &Theme) -> AnyElement {
                     Ink::Added => theme.color(ColorToken::GitAdded),
                     Ink::Removed => theme.color(ColorToken::GitDeleted),
                     Ink::Failed => theme.color(ColorToken::StatusDanger),
+                    Ink::Warn => theme.color(ColorToken::StatusWarn),
                 };
                 (range.clone(), HighlightStyle::from(color))
             });

@@ -139,6 +139,15 @@
         "account": {
           "type": "string"
         },
+        "attempts": {
+          "items": {
+            "$ref": "#/$defs/RefreshTry"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "id": {
           "type": "integer"
         },
@@ -4534,6 +4543,26 @@
         "value",
         "deadBand",
         "blocked"
+      ],
+      "type": "object"
+    },
+    "RefreshTry": {
+      "additionalProperties": false,
+      "properties": {
+        "answer": {
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "status": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "at",
+        "answer"
       ],
       "type": "object"
     },

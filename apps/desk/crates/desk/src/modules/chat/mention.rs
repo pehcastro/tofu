@@ -1,16 +1,26 @@
-use std::path::Path;
-use std::process;
+use std::hash::{DefaultHasher, Hash, Hasher};
+use std::io::Cursor;
+use std::ops::Range;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::sync::Arc;
+use std::{fs, process};
 
+use desk_core::home::Home;
 use desk_core::model::{Session, Tool};
 use desk_core::protocol::command::Command;
-use desk_core::protocol::{MentionParams, MentionResolvedOutcome, NoParams, request};
+use desk_core::protocol::{
+    AttachedImage, MentionParams, MentionResolvedOutcome, NoParams, request,
+};
 use desk_ui::components::chat::Object;
-use desk_ui::components::composer::{MentionGroup, MentionMenu, MentionRow, TraceChip};
+use desk_ui::components::composer::{
+    MentionGroup, MentionMenu, MentionRow, TraceChip, image_chips, image_token, image_tokens,
+};
 use desk_ui::components::glyph::Glyph;
+use desk_ui::components::hovercard::Subject;
 use gpui::{
-    App, Context, Entity, EntityInputHandler, Focusable, Global, KeyDownEvent, SharedString,
-    WeakEntity, Window,
+    App, ClipboardEntry, Context, Entity, EntityInputHandler, Focusable, Global, Image,
+    KeyDownEvent, SharedString, Task, WeakEntity, Window,
 };
 
 use super::Chat;
@@ -23,6 +33,25 @@ const MENU_COMMANDS: usize = 10;
 const NOT_FOUND: &str = "not found: tofu has no recorded item with this id";
 const AMBIGUOUS: &str = "ambiguous: more than one recorded item ends in this id";
 const ASKING: &str = "asking tofu what this points to";
+const SAVING: &str = "an image is still being saved";
+const IMAGES: &str = "images";
+const HOST_READS: [&str; 5] = ["png", "jpg", "jpeg", "gif", "webp"];
+const CONVERTED: [&str; 1] = ["bmp"];
+
+pub(super) struct Picture {
+    n: usize,
+    saved: Saved,
+}
+
+enum Saved {
+    Saving { _task: Task<()> },
+    Done(PathBuf),
+}
+
+enum Source {
+    Pasted(Image),
+    File(PathBuf),
+}
 
 #[derive(Clone, PartialEq)]
 pub struct Trace {
@@ -78,6 +107,14 @@ impl Global for Mentioner {}
 
 pub(super) fn aim(chat: &Entity<Chat>, cx: &mut App) {
     cx.set_global(Mentioner(chat.downgrade()));
+    let pictured = chat.downgrade();
+    let picture = move |token: &str, cx: &App| {
+        let (_, n) = image_tokens(token).into_iter().next()?;
+        let path = pictured.upgrade()?.read(cx).picture_path(n).map(Arc::from);
+        Some(Subject::Image(u32::try_from(n).ok()?, path))
+    };
+    let area = chat.read(cx).area.clone();
+    area.update(cx, |area, cx| area.inline_chips(image_chips, picture, cx));
 }
 
 pub fn mention(trace: Trace, window: &mut Window, cx: &mut App) {
@@ -270,6 +307,44 @@ fn commanded<'a>(commands: &'a [Command], query: &str) -> Vec<&'a Command> {
         .collect()
 }
 
+fn extension(path: &Path) -> String {
+    path.extension()
+        .map(|extension| extension.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default()
+}
+
+fn is_image(path: &Path) -> bool {
+    let extension = extension(path);
+    HOST_READS.contains(&extension.as_str()) || CONVERTED.contains(&extension.as_str())
+}
+
+fn store(source: Source, folder: &Path) -> Result<PathBuf, String> {
+    let bytes = match source {
+        Source::File(path) if HOST_READS.contains(&extension(&path).as_str()) => {
+            return match fs::metadata(&path) {
+                Ok(_) => Ok(path),
+                Err(error) => Err(format!("{}: {error}", path.display())),
+            };
+        }
+        Source::File(path) => {
+            fs::read(&path).map_err(|error| format!("{}: {error}", path.display()))?
+        }
+        Source::Pasted(image) => image.bytes,
+    };
+    let decoded = image::load_from_memory(&bytes)
+        .map_err(|error| format!("the image does not decode: {error}"))?;
+    let mut png = Vec::new();
+    decoded
+        .write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png)
+        .map_err(|error| format!("the image does not encode to png: {error}"))?;
+    let mut hasher = DefaultHasher::new();
+    png.hash(&mut hasher);
+    let path = folder.join(format!("{:016x}.png", hasher.finish()));
+    fs::create_dir_all(folder).map_err(|error| format!("{}: {error}", folder.display()))?;
+    fs::write(&path, png).map_err(|error| format!("{}: {error}", path.display()))?;
+    Ok(path)
+}
+
 fn git_files(root: &Path) -> Result<Vec<String>, String> {
     let mut command = process::Command::new("git");
     command
@@ -376,11 +451,175 @@ impl Chat {
     }
 
     pub(super) fn held(&self) -> Option<&'static str> {
+        let saving = self
+            .pictures
+            .iter()
+            .any(|picture| matches!(picture.saved, Saved::Saving { .. }));
+        if saving {
+            return Some(SAVING);
+        }
         self.mentions.iter().find_map(|known| match known.state {
             Resolve::Asking => Some(ASKING),
             Resolve::Broken(_) => Some("a mention does not resolve, so the send is held"),
             Resolve::Found => None,
         })
+    }
+
+    pub(super) fn picture_path(&self, n: usize) -> Option<&Path> {
+        self.pictures
+            .iter()
+            .find(|picture| picture.n == n)
+            .and_then(|picture| match &picture.saved {
+                Saved::Done(path) => Some(path.as_path()),
+                Saved::Saving { .. } => None,
+            })
+    }
+
+    pub(super) fn numbered(&self, text: &str) -> (String, Vec<AttachedImage>) {
+        let (mut sent, mut images, mut from) = (String::new(), Vec::new(), 0);
+        for (range, n) in image_tokens(text) {
+            let Some(path) = self.picture_path(n) else {
+                continue;
+            };
+            sent.push_str(text.get(from..range.start).unwrap_or_default());
+            images.push(AttachedImage {
+                path: path.to_string_lossy().into_owned(),
+            });
+            sent.push_str(&image_token(images.len()));
+            from = range.end;
+        }
+        sent.push_str(text.get(from..).unwrap_or_default());
+        (sent, images)
+    }
+
+    fn insert(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
+        self.area.update(cx, |area, cx| {
+            area.replace_text_in_range(None, text, window, cx)
+        });
+    }
+
+    fn paste_image(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        let Some(item) = cx.read_from_clipboard() else {
+            return false;
+        };
+        let entries = item.entries();
+        if entries
+            .iter()
+            .any(|entry| matches!(entry, ClipboardEntry::String(_)))
+        {
+            return false;
+        }
+        for entry in entries {
+            match entry {
+                ClipboardEntry::Image(image) => {
+                    eprintln!(
+                        "desk: chat paste image {:?} {} bytes",
+                        image.format,
+                        image.bytes.len()
+                    );
+                    self.attach_image(Source::Pasted(image.clone()), window, cx);
+                    return true;
+                }
+                ClipboardEntry::ExternalPaths(paths) => {
+                    self.attach_paths(paths.paths(), window, cx);
+                    return true;
+                }
+                ClipboardEntry::String(_) => {}
+            }
+        }
+        false
+    }
+
+    pub(super) fn attach_paths(
+        &mut self,
+        paths: &[PathBuf],
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let root = PathBuf::from(&self.project);
+        for path in paths {
+            if is_image(path) {
+                self.attach_image(Source::File(path.clone()), window, cx);
+                continue;
+            }
+            let shown = path
+                .strip_prefix(&root)
+                .unwrap_or(path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            eprintln!("desk: chat attach {shown}");
+            self.insert(&format!("@{shown} "), window, cx);
+        }
+    }
+
+    fn attach_image(&mut self, source: Source, window: &mut Window, cx: &mut Context<Self>) {
+        let folder = match Home::find() {
+            Ok(home) => home.state.join(IMAGES),
+            Err(error) => return self.fail(format!("the image was not attached: {error}"), cx),
+        };
+        let n = self
+            .pictures
+            .iter()
+            .map(|picture| picture.n)
+            .max()
+            .unwrap_or(0)
+            + 1;
+        self.insert(&image_token(n), window, cx);
+        let saving = cx.spawn_in(window, async move |chat, cx| {
+            let saved = cx
+                .background_executor()
+                .spawn(async move { store(source, &folder) })
+                .await;
+            if let Err(error) =
+                chat.update_in(cx, |chat, window, cx| chat.saved(n, saved, window, cx))
+            {
+                eprintln!("desk: the chat closed before image {n} was saved: {error}");
+            }
+        });
+        self.pictures.push(Picture {
+            n,
+            saved: Saved::Saving { _task: saving },
+        });
+        cx.notify();
+    }
+
+    fn saved(
+        &mut self,
+        n: usize,
+        saved: Result<PathBuf, String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let path = match saved {
+            Ok(path) => path,
+            Err(error) => {
+                self.pictures.retain(|picture| picture.n != n);
+                let text = self.area.read(cx).text();
+                if let Some((range, _)) = image_tokens(&text).into_iter().find(|(_, at)| *at == n) {
+                    self.erase(&text, range, window, cx);
+                }
+                return self.fail(format!("image {n} was not attached: {error}"), cx);
+            }
+        };
+        eprintln!("desk: chat image {n} saved at {}", path.display());
+        if let Some(picture) = self.pictures.iter_mut().find(|picture| picture.n == n) {
+            picture.saved = Saved::Done(path);
+        }
+        cx.notify();
+    }
+
+    fn erase(
+        &mut self,
+        text: &str,
+        range: Range<usize>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let start = units(text.get(..range.start).unwrap_or_default());
+        let end = start + units(text.get(range).unwrap_or_default());
+        self.area.update(cx, |area, cx| {
+            area.replace_text_in_range(Some(start..end), "", window, cx)
+        });
     }
 
     pub(super) fn take_tokens(&mut self) -> Vec<String> {
@@ -430,6 +669,14 @@ impl Chat {
 
     pub(super) fn typed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.area.read(cx).text();
+        let present = image_tokens(&text);
+        self.pictures.retain(|picture| {
+            let kept = present.iter().any(|(_, n)| *n == picture.n);
+            if !kept {
+                eprintln!("desk: chat image {} removed", picture.n);
+            }
+            kept
+        });
         if let Some((open, token)) = typed_token(&text) {
             let start = units(text.get(..open).unwrap_or_default());
             let range = start..start + units(token);
@@ -638,6 +885,11 @@ impl Chat {
     ) {
         if !self.area.focus_handle(cx).is_focused(window) {
             return;
+        }
+        let keys = &event.keystroke;
+        let pasting = keys.key == "v" && keys.modifiers.secondary() && !keys.modifiers.shift;
+        if pasting && self.paste_image(window, cx) {
+            return cx.stop_propagation();
         }
         let key = event.keystroke.key.as_str();
         if let Some(menu) = &mut self.menu {

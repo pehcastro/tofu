@@ -72,6 +72,18 @@ impl Feed {
         cx.notify();
     }
 
+    pub(super) fn page(&mut self, up: bool, rows: usize, cx: &mut Context<Self>) {
+        let shown = self.transcript.visible();
+        let step = shown.len().saturating_sub(1).max(1);
+        let to = if up {
+            shown.start.saturating_sub(step)
+        } else {
+            shown.end.saturating_add(step).min(rows).saturating_sub(1)
+        };
+        eprintln!("desk: chat page up {up} from rows {shown:?} to row {to} of {rows}");
+        self.reveal(to, cx);
+    }
+
     pub(super) fn reveal(&mut self, item: usize, cx: &mut Context<Self>) {
         self.transcript.reveal(item);
         cx.notify();

@@ -7,8 +7,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use desk_core::model::{Agent as SubAgent, Role, Session, Tool};
 use desk_core::protocol::{
-    AgentState, ApprovalResolved, Family, Notification, OriginKind, ToolCard as WireCard,
-    ToolCardTone, TurnCompletedStatus,
+    AgentState, ApprovalResolved, CardPiece, Family, Notification, OriginKind,
+    ToolCard as WireCard, ToolCardTone, TurnCompletedStatus,
 };
 use desk_ui::components::board::{BoardCard, board_card};
 use desk_ui::components::button::{ButtonKind, button};
@@ -53,6 +53,7 @@ const LINE: &str = "line ";
 const MET: &str = "met:";
 const UNMET: &str = "unmet:";
 const DOT: &str = " \u{b7} ";
+const FAILED_INK: Ink = Ink::Warn;
 const FORKED: &str = "forked into ";
 const FORK_KIND: &str = " as ";
 const FORK_AT: &str = " at ";
@@ -268,7 +269,12 @@ pub fn settled(session: &Session, entry: &Entry) -> bool {
         Entry::Worked { steps, open } => {
             !open
                 && steps.iter().all(|step| match step {
-                    Step::Tool(id) => session.tools.get(id).is_none_or(|t| t.output.is_some()),
+                    Step::Tool(id) => session.tools.get(id).is_none_or(|t| {
+                        t.output.is_some()
+                            && cards::away(t).is_none_or(|shell| {
+                                session.shells.get(shell).is_none_or(|ended| ended.exited)
+                            })
+                    }),
                     Step::Agent(id) => session
                         .agents
                         .get(id)
@@ -317,7 +323,6 @@ fn work(session: &Session, order: &mut Vec<Entry>, step: Step) {
         .iter_mut()
         .rev()
         .find(|earlier| !quiet(session, earlier))
-        && !regrouped(session, steps, &step)
     {
         if !steps.contains(&step) {
             steps.push(step);
@@ -329,21 +334,6 @@ fn work(session: &Session, order: &mut Vec<Entry>, step: Step) {
         steps: vec![step],
         open: true,
     });
-}
-
-fn group<'a>(session: &'a Session, step: &Step) -> Option<&'a str> {
-    match step {
-        Step::Tool(id) => session.tools.get(id)?.group.as_deref(),
-        Step::Agent(_) => None,
-    }
-}
-
-fn regrouped(session: &Session, steps: &[Step], step: &Step) -> bool {
-    let was = steps
-        .iter()
-        .rev()
-        .find_map(|earlier| group(session, earlier));
-    matches!((was, group(session, step)), (Some(was), Some(now)) if was != now)
 }
 
 fn close(order: &mut [Entry]) {
@@ -447,10 +437,30 @@ fn local(at: &str) -> Option<SharedString> {
     )
 }
 
-fn said(time: SharedString, text: SharedString, complete: bool, was: Option<&Item>) -> Lead {
+pub type Parsed = BTreeMap<SharedString, Rc<Vec<Block>>>;
+
+pub fn parsed_of(items: &[Item]) -> Parsed {
+    items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Lead(lead) if lead.complete => Some((lead.text.clone(), lead.blocks.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+fn said(
+    time: SharedString,
+    text: SharedString,
+    complete: bool,
+    (was, parsed): (Option<&Item>, &Parsed),
+) -> Lead {
     if complete {
         return Lead {
-            blocks: Rc::new(chat::markdown(&text)),
+            blocks: parsed
+                .get(&text)
+                .cloned()
+                .unwrap_or_else(|| Rc::new(chat::markdown(&text))),
             complete,
             streaming: None,
             time,
@@ -474,7 +484,7 @@ fn said(time: SharedString, text: SharedString, complete: bool, was: Option<&Ite
     }
 }
 
-pub fn item(session: &Session, entry: &Entry, was: Option<&Item>) -> Option<Item> {
+pub fn item(session: &Session, entry: &Entry, was: Option<&Item>, parsed: &Parsed) -> Option<Item> {
     if quiet(session, entry) {
         return None;
     }
@@ -497,7 +507,12 @@ pub fn item(session: &Session, entry: &Entry, was: Option<&Item>) -> Option<Item
                     images,
                 }),
                 Role::Cron { job, schedule } => Some(cron(session, job, schedule, &message.text)),
-                Role::Assistant => Some(Item::Lead(said(time, text, message.complete, was))),
+                Role::Assistant => Some(Item::Lead(said(
+                    time,
+                    text,
+                    message.complete,
+                    (was, parsed),
+                ))),
                 Role::Inbox | Role::Thinking | Role::Taken | Role::Harness(_) => None,
                 Role::Note => fork(&message.text).or(Some(Item::Note(text))),
                 Role::Failure => Some(Item::Failure(text)),
@@ -597,6 +612,7 @@ fn worked(session: &Session, steps: &[Step]) -> Option<Item> {
         .collect();
     if let ([(id, tool)], []) = (shown.as_slice(), agents.as_slice())
         && cards::kind(tool) != Kind::Refused
+        && cards::state(tool) != CallState::Failed
     {
         return Some(Item::Tool(called(id, tool)));
     }
@@ -650,7 +666,6 @@ fn worked(session: &Session, steps: &[Step]) -> Option<Item> {
         steps => format!("{steps} steps"),
     })
     .chain(counts)
-    .chain((failed > 0).then(|| format!("{failed} failed")))
     .chain(cards::wall(&all))
     .collect::<Vec<_>>()
     .join(DOT);
@@ -659,7 +674,13 @@ fn worked(session: &Session, steps: &[Step]) -> Option<Item> {
         head: ToolCard {
             glyphs,
             verb: if running { "Working" } else { "Worked" }.into(),
-            objects: Vec::new(),
+            objects: (failed > 0)
+                .then(|| {
+                    let failed = format!("{failed} failed");
+                    Object::Phrase(Phrase::new([(failed.as_str(), FAILED_INK)]))
+                })
+                .into_iter()
+                .collect(),
             meta: Some(meta.into()),
             state: match running {
                 true => CallState::Running,
@@ -677,50 +698,150 @@ fn stretch(
     agents: &[(&str, &SubAgent)],
     lines: &[(&str, String)],
 ) -> Option<Item> {
-    let group = tools.first()?.1.group.as_deref()?;
     let carded = tools
         .iter()
         .map(|&(id, tool)| {
-            let card = tool.card.as_ref()?;
-            (tool.group.as_deref() == Some(group)).then_some((id, tool, card))
+            tool.group.as_ref()?;
+            Some((id, tool, tool.card.as_ref()?))
         })
         .collect::<Option<Vec<_>>>()?;
     let (alone, together): (Vec<_>, Vec<_>) = carded
         .iter()
         .copied()
-        .partition(|(_, _, card)| card.tone == ToolCardTone::Fail || card.family == Family::Asked);
+        .partition(|(_, _, card)| card.family == Family::Asked);
     let alone = alone
         .iter()
         .map(|&(id, tool, card)| lone(id, tool, card))
         .collect::<Option<Vec<_>>>()?;
-    let summary = session.stretches.get(group);
-    let mut families = Vec::new();
-    for line in summary
+    let mut seen: Vec<&str> = Vec::new();
+    for (_, tool, _) in &carded {
+        if let Some(group) = tool.group.as_deref().filter(|group| !seen.contains(group)) {
+            seen.push(group);
+        }
+    }
+    let mut details: Vec<(&Family, &[CardPiece])> = Vec::new();
+    for line in seen
         .iter()
+        .filter_map(|group| session.stretches.get(*group))
         .flat_map(|summary| &summary.open)
         .filter(|line| line.family != Family::Asked)
     {
-        let glyph = cards::family_glyph(&line.family)?;
-        let held: Vec<(&str, &Tool)> = together
+        match details
+            .iter_mut()
+            .find(|(family, _)| **family == line.family)
+        {
+            Some(slot) => slot.1 = &line.detail,
+            None => details.push((&line.family, &line.detail)),
+        }
+    }
+    let spawns = together
+        .iter()
+        .filter(|(_, tool, card)| card.family == Family::Agents && tool.name == SPAWN)
+        .count();
+    let started = match spawns {
+        1 => "1 agent started".to_owned(),
+        many => format!("{many} agents started"),
+    };
+    let outcomes: Vec<(&Family, String, Ink, bool)> = together
+        .iter()
+        .filter_map(|(_, tool, card)| {
+            let shell = cards::away(tool)?;
+            let command = card
+                .object
+                .as_deref()
+                .filter(|object| !object.is_empty())
+                .unwrap_or_else(|| cards::text(&tool.args, "command"));
+            let ended = session.shells.get(shell).filter(|ended| ended.exited);
+            let (said, ink) = match ended {
+                Some(ended) if ended.killed => (format!("stopped in {shell}"), Ink::Muted),
+                Some(ended) => match ended.exit_code {
+                    Some(0) => (format!("exited 0 in {shell}"), Ink::Plain),
+                    Some(code) => (format!("exited {code} in {shell}"), FAILED_INK),
+                    None => (format!("ended in {shell}"), Ink::Muted),
+                },
+                None => (format!("running in {shell}"), Ink::Muted),
+            };
+            Some((
+                &card.family,
+                format!("{command} {said}"),
+                ink,
+                ended.is_none(),
+            ))
+        })
+        .collect();
+    let failing = |card: &WireCard| card.tone == ToolCardTone::Fail;
+    let mut families = Vec::new();
+    let mut said: Vec<(&str, Ink)> = Vec::new();
+    for &(family, detail) in &details {
+        let glyph = cards::family_glyph(family)?;
+        let held: Vec<(&str, &Tool, &WireCard)> = together
             .iter()
-            .filter(|(_, _, card)| card.family == line.family)
-            .map(|&(id, tool, _)| (id, tool))
+            .copied()
+            .filter(|(_, _, card)| card.family == *family)
             .collect();
-        let spawned = line.family == Family::Agents && held.iter().any(|(_, t)| t.name == SPAWN);
+        let away: Vec<(&str, Ink)> = outcomes
+            .iter()
+            .filter(|(of, _, _, _)| *of == family)
+            .flat_map(|(_, said, ink, _)| [(DOT, Ink::Muted), (said.as_str(), *ink)])
+            .skip(1)
+            .collect();
+        let detail = match (family, spawns) {
+            (Family::Agents, 1..) => vec![(started.as_str(), Ink::Plain)],
+            _ if !away.is_empty() => away,
+            _ => cards::inked(detail)?,
+        };
+        said.push((DOT, Ink::Muted));
+        said.extend(detail.iter().copied());
         let subs = agents
             .iter()
-            .filter(|_| spawned)
+            .filter(|_| *family == Family::Agents && spawns > 0)
             .map(|(id, agent)| Member::Sub(sub(id, agent, lines)));
-        let shown = held.iter().filter_map(|(id, tool)| own(id, tool));
-        let state = match held.is_empty() {
+        let shown = held
+            .iter()
+            .filter_map(|&(id, tool, card)| match failing(card) {
+                true => lone(id, tool, card).map(Member::Call),
+                false => own(id, tool),
+            })
+            .collect::<Vec<_>>();
+        let pending = outcomes
+            .iter()
+            .any(|(of, _, _, running)| *of == family && *running);
+        let state = match held.is_empty() || pending {
             true => CallState::Skipped,
-            false => stage(&held),
+            false => stage(
+                &held
+                    .iter()
+                    .map(|&(id, tool, _)| (id, tool))
+                    .collect::<Vec<_>>(),
+            ),
         };
         families.push(Group {
-            key: format!("{key}:{:?}", line.family).into(),
-            head: phrased(vec![glyph], cards::phrase(&line.detail)?, None, state),
+            key: format!("{key}:{family:?}").into(),
+            head: phrased(vec![glyph], Phrase::new(detail), None, state),
             members: Rc::new(subs.chain(shown).collect()),
         });
+    }
+    let stray: Vec<Member> = together
+        .iter()
+        .filter(|(_, _, card)| failing(card) && !details.iter().any(|(f, _)| **f == card.family))
+        .filter_map(|&(id, tool, card)| lone(id, tool, card).map(Member::Call))
+        .collect();
+    let failed = together.iter().filter(|(_, _, card)| failing(card)).count();
+    let failed = format!("{failed} failed");
+    if !stray.is_empty() {
+        families.push(Group {
+            key: format!("{key}:failed").into(),
+            head: phrased(
+                vec![Glyph::Terminal],
+                Phrase::new([(failed.as_str(), FAILED_INK)]),
+                None,
+                CallState::Done,
+            ),
+            members: Rc::new(stray),
+        });
+    }
+    if together.iter().any(|(_, _, card)| failing(card)) {
+        said.extend([(DOT, Ink::Muted), (failed.as_str(), FAILED_INK)]);
     }
     let mut glyphs = Vec::new();
     for (_, _, card) in &together {
@@ -738,8 +859,8 @@ fn stretch(
         .iter()
         .rev()
         .find(|(_, tool, _)| cards::state(tool) == CallState::Running);
-    let head = match (running, summary) {
-        (Some((_, _, card)), _) => {
+    let head = match running {
+        Some((_, _, card)) => {
             let doing = [Some(card.doing.as_str()), card.object.as_deref()]
                 .into_iter()
                 .flatten()
@@ -752,14 +873,18 @@ fn stretch(
                 (doing.as_str(), Ink::Plain),
             ])
         }
-        (None, Some(summary)) => cards::phrase(&summary.head)?,
-        (None, None) => Phrase::new([(calls.as_str(), Ink::Muted)]),
+        None => Phrase::new(std::iter::once((calls.as_str(), Ink::Muted)).chain(said)),
     };
     let together: Vec<(&str, &Tool)> = together.iter().map(|&(id, tool, _)| (id, tool)).collect();
     Some(Item::Stretch {
         key: key.clone(),
-        head: (!together.is_empty())
-            .then(|| phrased(glyphs, head, cards::wall(&all), stage(&together))),
+        head: (!together.is_empty()).then(|| {
+            let state = match outcomes.iter().any(|(_, _, _, running)| *running) {
+                true => CallState::Skipped,
+                false => stage(&together),
+            };
+            phrased(glyphs, head, cards::wall(&all), state)
+        }),
         families: Rc::new(families),
         alone: Rc::new(alone),
     })

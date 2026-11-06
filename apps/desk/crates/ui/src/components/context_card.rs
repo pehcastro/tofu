@@ -3,8 +3,9 @@ use std::time::Instant;
 
 use desk_motion::tokens::{EASE_OUT, TOGGLE_MS};
 use gpui::{
-    App, ClickEvent, Context, Div, Entity, FocusHandle, Focusable, FontWeight, MouseMoveEvent,
-    Rgba, SharedString, Subscription, Window, div, prelude::*, px, relative,
+    AnyView, App, Context, Div, ElementId, Entity, FocusHandle, Focusable, FontWeight,
+    MouseMoveEvent, Rgba, SharedString, Stateful, StyleRefinement, Subscription, Window, div,
+    prelude::*, px, relative,
 };
 
 use crate::component::icon;
@@ -12,6 +13,7 @@ use crate::components::charts::{Chart, DotGrid, GridPart, PartHovered, cached};
 use crate::components::chip::tabular;
 use crate::components::list::{bare_row, separator};
 use crate::components::logo::{Brand, logo};
+use crate::components::overlay::{Align, Placement, Popover, Side, toggles_on_press};
 use crate::components::paint::{ink, tint};
 use crate::components::size::{CHIP_FILL, FONT_BODY, FONT_SMALL, RADIUS_CHIP_SMALL, T1, T2, T3};
 use crate::components::status_bar::{ContextUse, Level};
@@ -25,11 +27,12 @@ const OPEN_CONTEXT: &str = "Open context";
 const READING: &str = "Reading the bands from query.context";
 const DOTS: usize = 200;
 const COUNT_MS: f32 = 0.35;
-const HEADER_ROW: f32 = 22.0;
-const FIGURE_ROW: f32 = 32.0;
-const LEGEND_ROW: f32 = 26.0;
-const FOOTER_ROW: f32 = 20.0;
-const GAP: f32 = 12.0;
+pub(crate) const HEADER_ROW: f32 = 22.0;
+pub(crate) const FIGURE_ROW: f32 = 32.0;
+pub(crate) const LEGEND_ROW: f32 = 26.0;
+pub(crate) const FOOTER_ROW: f32 = 20.0;
+pub(crate) const GAP: f32 = 12.0;
+const POP_OFFSET: f32 = 4.0;
 const SECTIONS: f32 = 6.0;
 const FIGURE: f32 = 28.0;
 const SWATCH: f32 = 8.0;
@@ -89,7 +92,162 @@ impl Count {
     }
 }
 
-type OnOpen = Rc<dyn Fn(&mut Window, &mut App)>;
+pub(crate) type OnOpen = Rc<dyn Fn(&mut Window, &mut App)>;
+pub type OnToggle = Rc<dyn Fn(&bool, &mut Window, &mut App)>;
+
+pub fn status_card(
+    id: impl Into<ElementId>,
+    trigger: Stateful<Div>,
+    card: Option<(AnyView, f32)>,
+    width: f32,
+    on_toggle: OnToggle,
+) -> Popover {
+    let open = card.is_some();
+    let toggle = on_toggle.clone();
+    let trigger = toggles_on_press(trigger, move |window, cx| toggle(&!open, window, cx));
+    let panel = card.map(|(card, height)| {
+        div()
+            .w_full()
+            .h(px(height))
+            .child(card.cached(StyleRefinement::default().size_full()))
+    });
+    Popover::new(id, trigger)
+        .open(open)
+        .placement(Placement {
+            side: Side::Top,
+            align: Align::Start,
+            offset: POP_OFFSET,
+        })
+        .width(width)
+        .on_dismiss(move |_, window, cx| on_toggle(&false, window, cx))
+        .children(panel)
+}
+
+pub(crate) fn card_frame(focus: &FocusHandle) -> Div {
+    div()
+        .track_focus(focus)
+        .size_full()
+        .flex()
+        .flex_col()
+        .gap(px(GAP))
+        .overflow_hidden()
+}
+
+pub(crate) fn card_header(title: &'static str, chip: Option<Div>, theme: &Theme) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap_2()
+        .h(px(HEADER_ROW))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .text_size(px(FONT_BODY))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(ink(theme, T1))
+                .child(title),
+        )
+        .children(chip)
+}
+
+pub(crate) fn slug_brand(slug: &str) -> Option<Brand> {
+    slug.split('/').next().and_then(Brand::for_source)
+}
+
+pub(crate) fn header_chip(text: SharedString, brand: Option<Brand>, theme: &Theme) -> Div {
+    div()
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap_1()
+        .max_w(px(CHIP_WIDEST))
+        .h_full()
+        .px(px(CHIP_PAD))
+        .rounded(px(RADIUS_CHIP_SMALL))
+        .bg(ink(theme, CHIP_FILL))
+        .text_size(px(FONT_SMALL))
+        .text_color(ink(theme, T2))
+        .children(brand.map(|brand| logo(brand, px(ICON_SMALL), theme)))
+        .child(div().min_w_0().truncate().child(text))
+}
+
+pub(crate) fn figure_row(figure: impl IntoElement, label: impl IntoElement, theme: &Theme) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap_2()
+        .h(px(FIGURE_ROW))
+        .child(
+            div()
+                .flex_none()
+                .text_size(px(FIGURE))
+                .line_height(relative(1.0))
+                .font_weight(FontWeight::SEMIBOLD)
+                .font_features(tabular())
+                .text_color(ink(theme, T1))
+                .child(figure),
+        )
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .text_size(px(FONT_SMALL))
+                .child(label),
+        )
+}
+
+pub(crate) fn footer_row(said: impl IntoElement) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap_2()
+        .h(px(FOOTER_ROW))
+        .text_size(px(FONT_SMALL))
+        .child(div().flex_1().min_w_0().truncate().child(said))
+}
+
+pub(crate) fn note(text: impl Into<SharedString>, color: Rgba) -> Div {
+    div()
+        .h(px(LEGEND_ROW))
+        .flex()
+        .items_center()
+        .truncate()
+        .text_size(px(FONT_SMALL))
+        .text_color(color)
+        .child(text.into())
+}
+
+pub(crate) fn swatch(color: Rgba) -> Div {
+    div()
+        .flex_none()
+        .size(px(SWATCH))
+        .rounded(px(SWATCH_RADIUS))
+        .bg(color)
+}
+
+pub(crate) fn open_link(
+    id: &'static str,
+    label: &'static str,
+    on_open: OnOpen,
+    theme: &Theme,
+) -> Stateful<Div> {
+    div()
+        .id(id)
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap_1()
+        .cursor_pointer()
+        .font_weight(FontWeight::SEMIBOLD)
+        .text_color(ink(theme, T2))
+        .hover(|style| style.text_color(ink(theme, T1)))
+        .on_click(move |_, window, cx| on_open(window, cx))
+        .child(label)
+        .child(icon(Icon::Arrow, ICON_SMALL, ink(theme, T2)))
+}
 
 pub struct ContextCard {
     shown: ContextUse,
@@ -204,42 +362,6 @@ impl ContextCard {
         cx.notify();
     }
 
-    fn header(&self, theme: &Theme) -> Div {
-        let chip = self.shown.model.clone().map(|slug| {
-            let brand = slug.split('/').next().and_then(Brand::for_source);
-            div()
-                .flex()
-                .flex_none()
-                .items_center()
-                .gap_1()
-                .max_w(px(CHIP_WIDEST))
-                .h_full()
-                .px(px(CHIP_PAD))
-                .rounded(px(RADIUS_CHIP_SMALL))
-                .bg(ink(theme, CHIP_FILL))
-                .text_size(px(FONT_SMALL))
-                .text_color(ink(theme, T2))
-                .children(brand.map(|brand| logo(brand, px(ICON_SMALL), theme)))
-                .child(div().min_w_0().truncate().child(slug))
-        });
-        div()
-            .flex()
-            .items_center()
-            .gap_2()
-            .h(px(HEADER_ROW))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .text_size(px(FONT_BODY))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(ink(theme, T1))
-                    .child(TITLE),
-            )
-            .children(chip)
-    }
-
     fn figure(&self, now: Instant, swap: f32, theme: &Theme) -> Div {
         let label = match self.band(self.lit) {
             Some(band) => div()
@@ -268,54 +390,18 @@ impl ContextCard {
                 .text_color(level.text(theme))
                 .child(format!("{percent}%"))
         });
-        div()
-            .flex()
-            .items_center()
-            .gap_2()
-            .h(px(FIGURE_ROW))
-            .child(
-                div()
-                    .flex_none()
-                    .text_size(px(FIGURE))
-                    .line_height(relative(1.0))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .font_features(tabular())
-                    .text_color(ink(theme, T1))
-                    .child(short(self.figure.at(now))),
-            )
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .text_size(px(FONT_SMALL))
-                    .child(label),
-            )
-            .children(badge)
+        figure_row(short(self.figure.at(now)), label, theme).children(badge)
     }
 
     fn legend(&self, swap: f32, theme: &Theme, cx: &mut Context<Self>) -> Div {
         let legend = div().flex().flex_col();
-        let note = |text: SharedString, color: Rgba| {
-            div()
-                .h(px(LEGEND_ROW))
-                .flex()
-                .items_center()
-                .truncate()
-                .text_size(px(FONT_SMALL))
-                .text_color(color)
-                .child(text)
-        };
         let bands = match &self.shown.bands {
-            Bands::Reading => return legend.child(note(READING.into(), ink(theme, T3))),
+            Bands::Reading => return legend.child(note(READING, ink(theme, T3))),
             Bands::Unread(reason) => {
                 return legend.child(note(reason.clone(), theme.color(ColorToken::StatusWarn)));
             }
             Bands::Read { bands, .. } if bands.is_empty() => {
-                return legend.child(note(
-                    "query.context reported no bands".into(),
-                    ink(theme, T3),
-                ));
+                return legend.child(note("query.context reported no bands", ink(theme, T3)));
             }
             Bands::Read { bands, .. } => bands,
         };
@@ -346,14 +432,7 @@ impl ContextCard {
                         card.light(cx);
                     }
                 }))
-                .child(
-                    div()
-                        .flex_none()
-                        .size(px(SWATCH))
-                        .rounded(px(SWATCH_RADIUS))
-                        .bg(band_color(at, theme))
-                        .opacity(shade),
-                )
+                .child(swatch(band_color(at, theme)).opacity(shade))
                 .child(div().flex_1().min_w_0().truncate().child(band.name.clone()))
                 .child(
                     div()
@@ -364,7 +443,7 @@ impl ContextCard {
         }))
     }
 
-    fn footer(&self, swap: f32, theme: &Theme, cx: &mut Context<Self>) -> Div {
+    fn footer(&self, swap: f32, theme: &Theme) -> Div {
         let said = match self.band(self.lit) {
             Some(band) => div().text_color(ink(theme, T1)).child(format!(
                 "{} · {} of the window",
@@ -380,36 +459,12 @@ impl ContextCard {
                 ))
             }
         };
-        let on_open = self.on_open.clone();
-        div()
-            .flex()
-            .items_center()
-            .gap_2()
-            .h(px(FOOTER_ROW))
-            .text_size(px(FONT_SMALL))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .opacity(swap)
-                    .child(said),
-            )
-            .child(
-                div()
-                    .id("context-card-open")
-                    .flex()
-                    .flex_none()
-                    .items_center()
-                    .gap_1()
-                    .cursor_pointer()
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(ink(theme, T2))
-                    .hover(|style| style.text_color(ink(theme, T1)))
-                    .on_click(cx.listener(move |_, _: &ClickEvent, window, cx| on_open(window, cx)))
-                    .child(OPEN_CONTEXT)
-                    .child(icon(Icon::Arrow, ICON_SMALL, ink(theme, T2))),
-            )
+        footer_row(said.opacity(swap)).child(open_link(
+            "context-card-open",
+            OPEN_CONTEXT,
+            self.on_open.clone(),
+            theme,
+        ))
     }
 }
 
@@ -432,19 +487,18 @@ impl Render for ContextCard {
         if swap < 1.0 || self.figure.moving(now) {
             window.request_animation_frame();
         }
-        div()
-            .track_focus(&self.focus)
-            .size_full()
-            .flex()
-            .flex_col()
-            .gap(px(GAP))
-            .overflow_hidden()
-            .child(self.header(&theme))
+        let chip = self
+            .shown
+            .model
+            .as_ref()
+            .map(|slug| header_chip(slug.clone(), slug_brand(slug), &theme));
+        card_frame(&self.focus)
+            .child(card_header(TITLE, chip, &theme))
             .child(self.figure(now, swap, &theme))
             .child(cached(&self.grid, cx))
             .child(self.legend(swap, &theme, cx))
             .child(separator(&theme).mx_0())
-            .child(self.footer(swap, &theme, cx))
+            .child(self.footer(swap, &theme))
     }
 }
 

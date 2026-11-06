@@ -20,15 +20,15 @@ use desk_core::model::{ModelError, PersonAsk, PersonKind, Role, Statuses, Store}
 use desk_core::protocol::turn::{PersonQuestion, PersonReply};
 use desk_core::protocol::{
     Accounts, ApprovalAnswer, ApprovalRequest, ApprovalRequestDecisions, ApprovalRequestRisk,
-    ApprovalRevokeParams, ContextReport, CredentialReport, CronCommandParams, Decision,
-    InitializeResult, LedgerParams, ModelPick, ModelsQuery, NoParams, Notification, PROTOCOL,
-    QuestionAnswer, QuestionOutcome, Request, RequestId, SessionAsking, SessionForked,
-    SessionHistory, SessionHistoryParams, SessionInfo, SessionListParams, SessionOpenParams,
-    SessionOpenResult, SessionParams, SessionRenameParams, SessionSetParams, SessionState,
-    SessionTrace, ShellParams, StatusListParams, TurnCompleted, TurnParams, TurnSendParams,
-    request, subagent,
+    ApprovalRevokeParams, AttachedImage, ContextReport, CredentialReport, CronCommandParams,
+    Decision, DecisionMade, InitializeResult, LedgerParams, ModelPick, ModelsQuery, NoParams,
+    Notification, PROTOCOL, QuestionAnswer, QuestionOutcome, Request, RequestId, SessionAsking,
+    SessionForked, SessionHistory, SessionHistoryParams, SessionInfo, SessionListParams,
+    SessionOpenParams, SessionOpenResult, SessionParams, SessionRenameParams, SessionSetParams,
+    SessionState, SessionTrace, ShellParams, StatusListParams, TurnCompleted, TurnParams,
+    TurnSendParams, request, subagent,
 };
-use desk_core::query::{Answer, FilledEmails, QueryError, Read};
+use desk_core::query::{Answer, FilledEmails, QueryError, Read, session_ledger};
 use desk_core::sessions::SessionRow;
 use desk_ui::components::ask::{
     Act, Answer as Offer, Ask, Asking, Choice, Pick, Question, Risk, Shape, ask_bar,
@@ -52,7 +52,7 @@ use cassette::{Replay, Step};
 use feed::{Feed, Seat};
 use head::SessionHead;
 use items::{Entry, Item};
-use mention::{List, Mention, Menu};
+use mention::{List, Mention, Menu, Picture};
 pub use mention::{Trace, mention};
 pub use mirror::{ChatMirror, mirror};
 
@@ -73,7 +73,8 @@ const COLUMN_TOP: f32 = 16.0;
 const DOCK_GAP: f32 = 8.0;
 const DOCK_INSET: f32 = 16.0;
 const OTHER: &str = "Type your own answer";
-const PAGE_LINES: i64 = 60;
+const PAGE_LINES: i64 = 240;
+const KEPT_PAGES_AROUND: usize = 2;
 const STATUS_LEDGER_LAST: i64 = 150;
 const WORKING: &str = "working";
 const YES_NO: [&str; 2] = ["yes", "no"];
@@ -142,6 +143,12 @@ pub struct Decisions {
     pub capped: bool,
 }
 
+#[derive(Default)]
+struct Ledger {
+    shown: Decisions,
+    made: Vec<DecisionMade>,
+}
+
 impl std::fmt::Display for Decisions {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let more = if self.capped { "+" } else { "" };
@@ -166,6 +173,8 @@ enum Asked {
 }
 
 struct Page {
+    session: String,
+    from: Option<String>,
     first: i64,
     end: i64,
     lines: Vec<Notification>,
@@ -173,28 +182,46 @@ struct Page {
 }
 
 impl Page {
-    fn decode(page: SessionHistory, before: Option<i64>, from: Option<i64>) -> (Page, i64) {
+    fn decode(
+        page: SessionHistory,
+        home: &str,
+        (before, from): (Option<i64>, Option<i64>),
+    ) -> (Page, i64) {
         let end = before.map_or(page.total, |before| before.max(0).min(page.total));
         let first = from
             .map_or(page.first, |from| from.max(page.first))
             .min(end);
         let skip = usize::try_from(first.saturating_sub(page.first)).unwrap_or(0);
+        let from = page
+            .lines
+            .iter()
+            .skip(skip)
+            .find_map(|line| line.params.get("at")?.as_str().map(str::to_owned));
         let total = page.total;
         let lines = page
             .lines
             .into_iter()
             .skip(skip)
-            .filter_map(
-                |line| match Notification::parse(&line.method, line.params) {
+            .filter_map(|mut line| {
+                if let Some(said) = line
+                    .params
+                    .get_mut("session")
+                    .filter(|said| said.is_string())
+                {
+                    *said = home.into();
+                }
+                match Notification::parse(&line.method, line.params) {
                     Ok(notification) => Some(notification.unsequenced()),
                     Err(error) => {
                         eprintln!("desk: session.history {}: {error}", line.method);
                         None
                     }
-                },
-            )
+                }
+            })
             .collect();
         let page = Page {
+            session: page.session,
+            from,
             first,
             end,
             lines,
@@ -211,6 +238,19 @@ enum Paging {
     Drop { older: usize, newer: usize },
 }
 
+#[derive(Clone, Copy)]
+enum Reach {
+    Chat,
+    Shared,
+}
+
+enum Older {
+    Page { session: String, before: i64 },
+    Parent { session: String },
+    Unknown { of: String },
+    Root,
+}
+
 struct History {
     session: String,
     asked: Instant,
@@ -221,6 +261,7 @@ struct History {
     asking: bool,
     behind: bool,
     open_at_join: Vec<String>,
+    parents: BTreeMap<String, Option<String>>,
 }
 
 impl History {
@@ -235,7 +276,52 @@ impl History {
             asking: false,
             behind: false,
             open_at_join: Vec::new(),
+            parents: BTreeMap::new(),
         }
+    }
+
+    fn older(&self) -> Older {
+        let Some(front) = self.pages.front() else {
+            return Older::Root;
+        };
+        if front.first > 0 {
+            return Older::Page {
+                session: front.session.clone(),
+                before: front.first,
+            };
+        }
+        match self.parents.get(&front.session) {
+            Some(Some(parent)) => Older::Parent {
+                session: parent.clone(),
+            },
+            Some(None) => Older::Root,
+            None => Older::Unknown {
+                of: front.session.clone(),
+            },
+        }
+    }
+
+    fn droppable_newer(&self, newer: usize) -> usize {
+        let after_parents = self
+            .pages
+            .iter()
+            .rposition(|page| page.session != self.session)
+            .map_or(0, |at| at.saturating_add(2));
+        let kept = self
+            .pages
+            .len()
+            .saturating_sub(newer)
+            .max(after_parents)
+            .min(self.pages.len());
+        self.pages.len().saturating_sub(kept)
+    }
+
+    fn continues_front(&self, page: &Page) -> bool {
+        self.pages.front().is_some_and(|front| {
+            (page.session == front.session && page.end == front.first)
+                || (front.first == 0
+                    && self.parents.get(&front.session) == Some(&Some(page.session.clone())))
+        })
     }
 
     fn prompt_shown_by_history(&self, entry: &Entry) -> bool {
@@ -279,12 +365,19 @@ impl History {
         };
         let top = page_of(visible.start);
         let bottom = page_of(visible.end.saturating_sub(1)).max(top);
-        let older = top.saturating_sub(1);
-        let newer = last.saturating_sub(bottom.saturating_add(1));
+        let older = top.saturating_sub(KEPT_PAGES_AROUND);
+        let newer =
+            self.droppable_newer(last.saturating_sub(bottom.saturating_add(KEPT_PAGES_AROUND)));
         if older > 0 || newer > 0 {
             return Some(Paging::Drop { older, newer });
         }
-        if top == 0 && self.held().start > 0 {
+        let oldest_rows = self
+            .pages
+            .iter()
+            .map(|page| page.rows)
+            .find(|rows| *rows > 0)
+            .unwrap_or(0);
+        if visible.start < oldest_rows.max(1) && !matches!(self.older(), Older::Root) {
             return Some(Paging::Older);
         }
         (bottom == last && !self.tail).then_some(Paging::Newer)
@@ -304,6 +397,8 @@ pub struct Chat {
     orders: BTreeMap<String, Vec<Entry>>,
     awaiting_delta: BTreeMap<String, Instant>,
     slots: Vec<Slot>,
+    parsed: items::Parsed,
+    transcript: Store,
     opening: Opening,
     items: Rc<Vec<Item>>,
     feed: Entity<Feed>,
@@ -329,11 +424,11 @@ pub struct Chat {
     choices: Vec<Option<(String, String)>>,
     models: Entity<MenuButton>,
     labelled: String,
-    ledger: Option<(String, Option<Decisions>)>,
+    ledger: Option<(String, Option<Ledger>)>,
     emails: Result<FilledEmails, String>,
     signing: Option<SigningIn>,
     mentions: Vec<Mention>,
-    attached: Vec<String>,
+    pictures: Vec<Picture>,
     menu: Option<Menu>,
     dismissed: Option<usize>,
     files: List<String>,
@@ -639,6 +734,8 @@ impl Chat {
             orders: BTreeMap::new(),
             awaiting_delta: BTreeMap::new(),
             slots: Vec::new(),
+            parsed: items::Parsed::new(),
+            transcript: Store::default(),
             opening: Opening::Closed,
             items: Rc::default(),
             feed,
@@ -668,7 +765,7 @@ impl Chat {
             emails: load_emails(),
             signing: None,
             mentions: Vec::new(),
-            attached: Vec::new(),
+            pictures: Vec::new(),
             menu: None,
             dismissed: None,
             files: List::Unlisted,
@@ -750,7 +847,7 @@ impl Chat {
         self.painting.get_or_insert((opened.session.clone(), asked));
         if opened.fresh {
             eprintln!("desk: chat open asks cron for fresh {}", opened.session);
-            self.ledger = Some((opened.session.clone(), Some(Decisions::default())));
+            self.ledger = Some((opened.session.clone(), Some(Ledger::default())));
         } else {
             eprintln!(
                 "desk: chat open asks query.ledger session {} last {STATUS_LEDGER_LAST}, session.trace, session.history, cron",
@@ -778,6 +875,11 @@ impl Chat {
         let Some(history) = self.history.as_mut() else {
             return;
         };
+        let newer = history.droppable_newer(newer);
+        history.asking = false;
+        if older == 0 && newer == 0 {
+            return;
+        }
         let kept = history.pages.len().saturating_sub(newer);
         history.pages.truncate(kept);
         history.pages.drain(..older.min(kept));
@@ -785,8 +887,7 @@ impl Chat {
             history.tail = false;
             history.live = Vec::new();
         }
-        history.asking = false;
-        self.replay(cx);
+        self.replay(Reach::Chat, cx);
         self.told_pages(&format!("dropped {older} older and {newer} newer"));
     }
 
@@ -794,23 +895,38 @@ impl Chat {
         let Some(history) = self.history.as_mut() else {
             return;
         };
-        let held = history.held();
-        let (before, from) = match (history.pages.is_empty(), paging) {
-            (true, _) => (None, None),
-            (false, Paging::Newer) => (Some(held.end.saturating_add(PAGE_LINES)), Some(held.end)),
-            (false, Paging::Older | Paging::Drop { .. }) => (Some(held.start), None),
+        let end = history.pages.back().map_or(0, |back| back.end);
+        let (target, before, from) = match (history.pages.is_empty(), paging) {
+            (true, _) => (history.session.clone(), None, None),
+            (false, Paging::Newer) => (
+                history.session.clone(),
+                Some(end.saturating_add(PAGE_LINES)),
+                Some(end),
+            ),
+            (false, Paging::Older | Paging::Drop { .. }) => match history.older() {
+                Older::Page { session, before } => (session, Some(before), None),
+                Older::Parent { session } => (session, None, None),
+                Older::Unknown { of } => {
+                    history.asking = true;
+                    return self.ask_parent(of, cx);
+                }
+                Older::Root => {
+                    history.asking = false;
+                    return eprintln!("desk: chat history reached the first session of its line");
+                }
+            },
         };
         history.asking = true;
         let session = history.session.clone();
         let params = SessionHistoryParams {
-            session: session.clone(),
+            session: target.clone(),
             limit: Some(PAGE_LINES),
             before,
         };
         let asked = Instant::now();
         self.request::<request::SessionHistory>(&params, cx, move |chat, page, cx| {
             eprintln!(
-                "desk: session.history {session} page of {PAGE_LINES} before {} answered in {} ms",
+                "desk: session.history {target} for {session} page of {PAGE_LINES} before {} answered in {} ms",
                 before.map_or_else(|| "the end".to_owned(), |at| at.to_string()),
                 asked.elapsed().as_millis()
             );
@@ -825,7 +941,9 @@ impl Chat {
                     return;
                 }
             };
-            let decoded = cx.background_spawn(async move { Page::decode(page, before, from) });
+            let home = session.clone();
+            let decoded =
+                cx.background_spawn(async move { Page::decode(page, &home, (before, from)) });
             cx.spawn(async move |chat, cx| {
                 let landed = decoded.await;
                 if let Err(error) = chat.update(cx, |chat, cx| chat.paged(&session, landed, cx)) {
@@ -836,6 +954,35 @@ impl Chat {
         });
     }
 
+    fn ask_parent(&mut self, of: String, cx: &mut Context<Self>) {
+        let params = SessionParams {
+            session: Some(of.clone()),
+        };
+        self.request::<request::SessionInfo>(&params, cx, move |chat, info, cx| {
+            let Some(history) = chat.history.as_mut() else {
+                return;
+            };
+            history.asking = false;
+            let parent = match info {
+                Ok(info) => info
+                    .parent
+                    .or_else(|| info.carried_from.map(|carried| carried.session))
+                    .filter(|parent| *parent != of),
+                Err(error) => {
+                    return eprintln!("desk: session.info {of} for its parent failed: {error}");
+                }
+            };
+            eprintln!(
+                "desk: chat history of {of} continues from {}",
+                parent
+                    .as_deref()
+                    .unwrap_or("nothing, it is the first session")
+            );
+            history.parents.insert(of, parent);
+            chat.ask_page(Paging::Older, cx);
+        });
+    }
+
     fn paged(&mut self, session: &str, (page, total): (Page, i64), cx: &mut Context<Self>) {
         let Some(history) = self.history.as_mut().filter(|h| h.session == session) else {
             return;
@@ -843,14 +990,27 @@ impl Chat {
         history.asking = false;
         let held = history.held();
         let first = history.pages.is_empty();
-        let caught_up = !first && history.tail && page.first == held.end;
-        history.total = total;
-        let newest = first || page.first == held.end;
+        let newest = first
+            || (page.session == history.session
+                && history
+                    .pages
+                    .back()
+                    .is_some_and(|back| back.session == page.session && back.end == page.first));
+        let older = !newest && history.continues_front(&page);
+        eprintln!(
+            "desk: chat page {} from {}",
+            page.session,
+            page.from.as_deref().unwrap_or("no timestamp")
+        );
+        let caught_up = !first && newest && history.tail;
+        if page.session == history.session {
+            history.total = total;
+        }
         if newest {
             history.tail = page.end >= total;
         }
         let reached = newest && history.tail;
-        if page.first == page.end && !first {
+        if page.first == page.end && newest && !first {
             history.tail |= page.end >= total;
             history.behind &= !history.tail;
             return self.told_pages("nothing newer");
@@ -872,8 +1032,8 @@ impl Chat {
         eprintln!(
             "desk: session.history {session} page lead calls {calls}, with card {carded}, with group {grouped}, completed with groupSummary {summed}"
         );
-        match (first, page.end == held.start, page.first == held.end) {
-            (true, _, _) | (false, false, true) => {
+        match (newest, older) {
+            (true, _) => {
                 history.settle_live(&page.lines);
                 match history.pages.back_mut().filter(|_| caught_up) {
                     Some(back) => {
@@ -883,16 +1043,21 @@ impl Chat {
                     None => history.pages.push_back(page),
                 }
             }
-            (false, true, _) => history.pages.push_front(page),
-            (false, false, false) => {
+            (false, true) => history.pages.push_front(page),
+            (false, false) => {
                 return eprintln!(
-                    "desk: session.history page {}..{} does not touch the held {}..{}, dropped",
-                    page.first, page.end, held.start, held.end
+                    "desk: session.history page {} {}..{} does not touch the held {}..{}, dropped",
+                    page.session, page.first, page.end, held.start, held.end
                 );
             }
         }
         let replaying = Instant::now();
-        let refused = self.replay(cx);
+        let rows = self.items.len();
+        let refused = self.replay(if older { Reach::Chat } else { Reach::Shared }, cx);
+        if older && self.items.len() == rows {
+            eprintln!("desk: chat page added no rows, the next older page is asked at once");
+            self.ask_page(Paging::Older, cx);
+        }
         let (stretches, calls, worked) = items::shapes(&self.items);
         eprintln!(
             "desk: paint replayed {} lines into {} rows in {} ms, {stretches} stretch rows, {calls} single call rows, {worked} worked rows, {refused} refused",
@@ -972,7 +1137,7 @@ impl Chat {
         }
     }
 
-    fn replay(&mut self, cx: &mut Context<Self>) -> usize {
+    fn replay(&mut self, reach: Reach, cx: &mut Context<Self>) -> usize {
         let Some(history) = &self.history else {
             return 0;
         };
@@ -996,25 +1161,37 @@ impl Chat {
         if let Some(newest) = pages.last_mut() {
             newest.extend(live.cloned().map(Event::Notification));
         }
-        self.store.update(cx, |store, _| {
-            store
-                .sessions
-                .entry(id.clone())
-                .or_default()
-                .reset_transcript();
-        });
+        self.transcript
+            .sessions
+            .entry(id.clone())
+            .or_default()
+            .reset_transcript();
         self.orders.remove(&id);
         let mut refused = 0;
         let mut entries = Vec::with_capacity(pages.len());
         for events in &pages {
             refused += events
                 .iter()
-                .filter(|event| self.absorb(event, cx).is_err())
+                .filter(|event| self.absorb(event).is_err())
                 .count();
             entries.push(self.orders.get(&id).map_or(0, Vec::len));
         }
+        if let (Reach::Shared, Some(newest)) = (reach, pages.last()) {
+            self.store.update(cx, |store, cx| {
+                store
+                    .sessions
+                    .entry(id.clone())
+                    .or_default()
+                    .reset_transcript();
+                let refused = newest
+                    .iter()
+                    .filter(|event| store.apply_batch(slice::from_ref(event)).is_err())
+                    .count();
+                eprintln!("desk: chat newest page given to the shared store, {refused} refused");
+                cx.notify();
+            });
+        }
         drop(pages);
-        self.store.update(cx, |_, cx| cx.notify());
         self.rebuild(cx);
         if let Some(history) = self.history.as_mut() {
             for (page, entries) in history.pages.iter_mut().zip(entries) {
@@ -1031,8 +1208,10 @@ impl Chat {
 
     fn rebuild(&mut self, cx: &mut Context<Self>) {
         let shown = std::mem::take(&mut self.items);
+        self.parsed = items::parsed_of(&shown);
         self.slots.clear();
-        self.restack(cx);
+        self.restack();
+        self.parsed.clear();
         let head = shown
             .iter()
             .zip(self.items.iter())
@@ -1426,6 +1605,7 @@ impl Chat {
             cx.notify();
         });
         self.orders.retain(|id, _| id == busy);
+        self.transcript.sessions.retain(|id, _| id == busy);
         self.forget_view(cx);
     }
 
@@ -1436,6 +1616,7 @@ impl Chat {
             cx.notify();
         });
         self.orders.clear();
+        self.transcript = Store::default();
         self.forget_view(cx);
     }
 
@@ -1469,26 +1650,24 @@ impl Chat {
         });
     }
 
-    fn absorb(&mut self, event: &Event, cx: &mut Context<Self>) -> Result<(), ModelError> {
+    fn absorb(&mut self, event: &Event) -> Result<(), ModelError> {
         let granted = match event {
             Event::Notification(Notification::ApprovalResolved(resolved)) => self
-                .store
-                .read(cx)
+                .transcript
                 .sessions
                 .get(&resolved.session)
                 .and_then(|session| items::granted(session, resolved))
                 .map(|entry| (resolved.session.clone(), entry)),
             _ => None,
         };
-        let before = self.store.update(cx, |store, _| {
-            let before: Vec<(String, usize)> = store
-                .sessions
-                .iter()
-                .map(|(id, session)| (id.clone(), session.messages.len()))
-                .collect();
-            store.apply_batch(slice::from_ref(event)).map(|()| before)
-        })?;
-        for (id, session) in &self.store.read(cx).sessions {
+        let before: Vec<(String, usize)> = self
+            .transcript
+            .sessions
+            .iter()
+            .map(|(id, session)| (id.clone(), session.messages.len()))
+            .collect();
+        self.transcript.apply_batch(slice::from_ref(event))?;
+        for (id, session) in &self.transcript.sessions {
             let was = before
                 .iter()
                 .find(|(seen, _)| seen == id)
@@ -1504,13 +1683,13 @@ impl Chat {
                 .is_some_and(|history| history.prompt_shown_by_history(&entry))
         {
             let order = self.orders.entry(session.to_owned()).or_default();
-            match self.store.read(cx).sessions.get(session) {
+            match self.transcript.sessions.get(session) {
                 Some(found) => items::place(found, order, entry),
                 None => order.push(entry),
             }
         }
         if let Some((session, entry)) = granted
-            && let Some(found) = self.store.read(cx).sessions.get(&session)
+            && let Some(found) = self.transcript.sessions.get(&session)
         {
             items::place(found, self.orders.entry(session).or_default(), entry);
         }
@@ -1538,7 +1717,10 @@ impl Chat {
                 history.live.push(notification.unsequenced());
             }
         }
-        match self.absorb(event, cx) {
+        let shared = self
+            .store
+            .update(cx, |store, _| store.apply_batch(slice::from_ref(event)));
+        match shared.and(self.absorb(event)) {
             Ok(()) => {}
             Err(error) if matches!(event, Event::Notification(Notification::Status(_))) => {
                 return self.fail(
@@ -1795,7 +1977,7 @@ impl Chat {
     }
 
     fn refresh(&mut self, cx: &mut Context<Self>) {
-        let spliced = self.restack(cx);
+        let spliced = self.restack();
         let Some(id) = self.shown_id() else {
             return;
         };
@@ -1829,11 +2011,11 @@ impl Chat {
         cx.notify();
     }
 
-    fn restack(&mut self, cx: &mut Context<Self>) -> Vec<Spliced> {
+    fn restack(&mut self) -> Vec<Spliced> {
         let Some(id) = self.shown_id() else {
             return Vec::new();
         };
-        let Some(session) = self.store.read(cx).sessions.get(&id) else {
+        let Some(session) = self.transcript.sessions.get(&id) else {
             return Vec::new();
         };
         let order = self.orders.get(&id).map_or(&[][..], Vec::as_slice);
@@ -1850,6 +2032,7 @@ impl Chat {
                 session,
                 entry,
                 self.slots.get(index).and_then(|slot| slot.item.as_ref()),
+                &self.parsed,
             );
             let settled = items::settled(session, entry);
             let was = match self.slots.get_mut(index) {
@@ -2166,12 +2349,22 @@ impl Chat {
             .get(open)
             .map_or(0, |session| session.decisions.len());
         let past = match &self.ledger {
-            Some((session, Some(past))) if session == open => *past,
+            Some((session, Some(past))) if session == open => past.shown,
             Some(_) | None => Decisions::default(),
         };
         Decisions {
             count: past.count.saturating_add(live),
             capped: past.capped,
+        }
+    }
+
+    pub fn past_decisions(&self) -> &[DecisionMade] {
+        let Opening::Open(open) = &self.opening else {
+            return &[];
+        };
+        match &self.ledger {
+            Some((session, Some(past))) if session == open => &past.made,
+            Some(_) | None => &[],
         }
     }
 
@@ -2183,19 +2376,25 @@ impl Chat {
             ..LedgerParams::default()
         };
         self.call::<request::QueryLedger>(&params, cx, move |chat, ledger, cx| {
-            let rows = ledger
+            let mut turns: Vec<&str> = ledger
                 .rows
                 .iter()
-                .filter(|row| row.turn_id.is_some())
-                .count();
+                .filter_map(|row| row.turn_id.as_deref())
+                .collect();
+            turns.sort_unstable();
+            turns.dedup();
+            let made: Vec<DecisionMade> = session_ledger(&ledger.rows, &session, &turns)
+                .into_iter()
+                .map(|(_, made)| made)
+                .collect();
             let capped =
                 i64::try_from(ledger.rows.len()).is_ok_and(|read| read >= STATUS_LEDGER_LAST);
-            let past = Decisions {
-                count: rows,
+            let shown = Decisions {
+                count: made.len(),
                 capped,
             };
             eprintln!(
-                "desk: status bar classifier reads {past} of {} ledger rows, last {STATUS_LEDGER_LAST}, for {session}",
+                "desk: status bar classifier reads {shown} of {} ledger rows, last {STATUS_LEDGER_LAST}, for {session}",
                 ledger.rows.len()
             );
             if chat
@@ -2203,7 +2402,7 @@ impl Chat {
                 .as_ref()
                 .is_some_and(|(asked, _)| *asked == session)
             {
-                chat.ledger = Some((session, Some(past)));
+                chat.ledger = Some((session, Some(Ledger { shown, made })));
                 chat.store.update(cx, |_, cx| cx.notify());
             }
         });
@@ -2547,21 +2746,27 @@ impl Chat {
         if let Some(held) = self.held() {
             return eprintln!("desk: send held: {held}");
         }
+        let (typed, images) = self.numbered(text.trim());
         let mut words = self.take_tokens();
-        words.extend(self.attached.drain(..).map(|path| format!("@{path}")));
-        words.push(text.trim().to_owned());
+        words.push(typed);
         let text = words.join(" ").trim().to_owned();
         if text.is_empty() {
             return;
         }
+        eprintln!("desk: chat sends {} images", images.len());
+        self.pictures.clear();
         self.area.update(cx, |area, cx| area.clear(cx));
-        self.post(text, cx);
+        self.post_with(text, images, cx);
     }
 
     fn post(&mut self, text: String, cx: &mut Context<Self>) {
+        self.post_with(text, Vec::new(), cx);
+    }
+
+    fn post_with(&mut self, text: String, images: Vec<AttachedImage>, cx: &mut Context<Self>) {
         self.problem = None;
         match &self.opening {
-            Opening::Open(session) => self.deliver(session.clone(), text, cx),
+            Opening::Open(session) => self.deliver(session.clone(), text, images, cx),
             Opening::Pending => {
                 self.fail("the session is still opening".to_owned(), cx);
             }
@@ -2580,17 +2785,24 @@ impl Chat {
                     );
                     chat.opened(opened, Instant::now(), cx);
                     chat.relist(cx);
-                    chat.post(text, cx);
+                    chat.post_with(text, images, cx);
                 });
             }
         }
         cx.notify();
     }
 
-    fn deliver(&mut self, session: String, text: String, cx: &mut Context<Self>) {
+    fn deliver(
+        &mut self,
+        session: String,
+        text: String,
+        images: Vec<AttachedImage>,
+        cx: &mut Context<Self>,
+    ) {
         let params = TurnSendParams {
             session,
             text,
+            images,
             ..TurnSendParams::default()
         };
         self.request_typed::<request::TurnSend>(&params, cx, |chat, sent, cx| match sent {
@@ -2638,37 +2850,15 @@ impl Chat {
                     );
                 }
             };
-            if chat
-                .update(cx, |chat, cx| chat.attach_picked(picked, cx))
-                .is_err()
-            {
+            let landed = chat.update_in(cx, |chat, window, cx| {
+                chat.attach_paths(&picked, window, cx);
+                chat.area.focus_handle(cx).focus(window, cx);
+            });
+            if landed.is_err() {
                 eprintln!("desk: the chat closed before the attached file landed");
             }
         })
         .detach();
-    }
-
-    fn attach_picked(&mut self, picked: Vec<PathBuf>, cx: &mut Context<Self>) {
-        let root = PathBuf::from(&self.project);
-        for path in picked {
-            let shown = path
-                .strip_prefix(&root)
-                .unwrap_or(&path)
-                .to_string_lossy()
-                .replace('\\', "/");
-            eprintln!("desk: chat attach {shown}");
-            if !self.attached.contains(&shown) {
-                self.attached.push(shown);
-            }
-        }
-        cx.notify();
-    }
-
-    fn unattach(&mut self, at: usize, cx: &mut Context<Self>) {
-        if at < self.attached.len() {
-            self.attached.remove(at);
-            cx.notify();
-        }
     }
 
     fn act(&mut self, act: Act, window: &mut Window, cx: &mut Context<Self>) {
@@ -2939,7 +3129,7 @@ impl Render for Chat {
             window,
             cx,
         );
-        let unattach = cx.listener(|chat, at: &usize, _, cx| chat.unattach(*at, cx));
+        let dropped = cx.weak_entity();
         let stop = cx.listener(|chat, _: &(), _, cx| chat.stop(cx));
         let pick = cx.listener(|chat, at: &usize, window, cx| chat.pick(*at, window, cx));
         let unmention = cx.listener(|chat, at: &usize, _, cx| chat.remove_mention(*at, cx));
@@ -2949,13 +3139,6 @@ impl Render for Chat {
             .busy(busy)
             .quiet(quiet)
             .phase(phase)
-            .attachments(
-                self.attached
-                    .iter()
-                    .cloned()
-                    .map(SharedString::from)
-                    .collect(),
-            )
             .below_start(clip)
             .below_end(self.models.clone())
             .traces(self.chips())
@@ -2965,7 +3148,15 @@ impl Render for Chat {
             })
             .on_send(cx.listener(|chat, text: &str, _, cx| chat.send(text, cx)))
             .on_stop(move |window, cx| stop(&(), window, cx))
-            .on_remove(move |at, window, cx| unattach(&at, window, cx))
+            .on_drop(move |paths, window, cx| {
+                let landed = dropped.update(cx, |chat, cx| {
+                    chat.attach_paths(paths, window, cx);
+                    chat.area.focus_handle(cx).focus(window, cx);
+                });
+                if let Err(error) = landed {
+                    eprintln!("desk: a drop outlived the chat: {error}");
+                }
+            })
             .on_remove_trace(move |at, window, cx| unmention(&at, window, cx));
         let answer = cx.listener(|chat, act: &Act, window, cx| chat.act(*act, window, cx));
         let ask = self.ask_card(
@@ -2985,7 +3176,14 @@ impl Render for Chat {
         div()
             .track_focus(&self.focus)
             .capture_key_down(cx.listener(|chat, event: &KeyDownEvent, window, cx| {
-                chat.mention_key(event, window, cx)
+                let up = match event.keystroke.key.as_str() {
+                    "pageup" => true,
+                    "pagedown" => false,
+                    _ => return chat.mention_key(event, window, cx),
+                };
+                cx.stop_propagation();
+                let rows = chat.items.len();
+                chat.feed.update(cx, |feed, cx| feed.page(up, rows, cx));
             }))
             .on_key_down(
                 cx.listener(|chat, event: &KeyDownEvent, window, cx| chat.key(event, window, cx)),

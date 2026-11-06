@@ -38,6 +38,8 @@ use crate::screens::work::split::timed;
 #[cfg(feature = "screen-work")]
 use crate::screens::work::{self, Work};
 use crate::status_bar::status_bar;
+#[cfg(feature = "screen-work")]
+use crate::status_bar::{cron_jobs, rulings};
 use crate::title_bar::{self, ask_github, github, title_bar};
 #[cfg(feature = "screen-work")]
 use desk_core::boardy::Gate;
@@ -48,7 +50,7 @@ use desk_core::model::Store;
 #[cfg(feature = "screen-work")]
 use desk_core::protocol::{
     AccountStateChanged, AccountStateChangedState, AccountStatusState, Accounts as AccountList,
-    CronJob, QuotaWindow, Role, WindowStatus,
+    QuotaWindow, Role, WindowStatus,
 };
 #[cfg(feature = "screen-boardy")]
 use desk_core::protocol::{NoParams, request::QuerySettings};
@@ -59,9 +61,11 @@ use desk_core::settings::Settings;
 #[cfg(feature = "screen-work")]
 use desk_tiling::WORKSPACE_EDGE;
 use desk_tiling::{Action, Key, SHORTCUTS};
+use desk_ui::components::classifier_card::ClassifierCard;
 use desk_ui::components::context_card::ContextCard;
 #[cfg(feature = "screen-work")]
 use desk_ui::components::context_card::{Band, Bands};
+use desk_ui::components::cron_card::CronCard;
 use desk_ui::components::empty::{EmptyAction, empty_state};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::form::TextInput;
@@ -71,7 +75,7 @@ use desk_ui::components::keymap::editor_claims;
 use desk_ui::components::media_view::OpenMedia;
 use desk_ui::components::overlay::toast;
 #[cfg(feature = "screen-work")]
-use desk_ui::components::overlay::{Align, MenuButton, MenuItem, Placement, Side, context_menu};
+use desk_ui::components::overlay::{MenuItem, context_menu};
 use desk_ui::components::paint::{SpinLayer, ink, ring};
 use desk_ui::components::palette::{Palette, PaletteEntry, PaletteItem};
 #[cfg(feature = "screen-work")]
@@ -84,9 +88,9 @@ use desk_ui::components::sidebar::{SessionAt, unnamed};
 use desk_ui::components::size::T2;
 #[cfg(feature = "screen-work")]
 use desk_ui::components::status_bar::{
-    Account, Branch, ContextUse, Reset, Serving, SessionGroup, Standing, UsageWindow, cron_trigger,
+    Account, Branch, ContextUse, Reset, Serving, SessionGroup, Standing, UsageWindow,
 };
-use desk_ui::components::status_bar::{Accounts, Status};
+use desk_ui::components::status_bar::{Accounts, OpenCard, Status, StatusPick};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::tabs::{ScreenTabMenu, Tab, TabFlag, TabMark};
 #[cfg(feature = "screen-work")]
@@ -94,6 +98,7 @@ use desk_ui::components::tiling_board::Reopened;
 use desk_ui::components::title_bar::{CaptionInk, Github, Marks, Shade, TitleBar};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::tree::OpenProject;
+use desk_ui::glass;
 #[cfg(feature = "screen-work")]
 use desk_ui::icon::Icon;
 use desk_ui::live::ActiveTheme;
@@ -105,12 +110,13 @@ use desk_ui::theme::{ColorToken, Mode, Theme, WordToken};
 #[cfg(feature = "screen-work")]
 use gpui::EntityInputHandler;
 use gpui::{
-    AnyElement, AnyView, App, ClickEvent, Context, Entity, FocusHandle, IntoElement, KeyDownEvent,
-    Pixels, Render, SharedString, Size, StyleRefinement, Task, TitlebarOptions, WeakEntity, Window,
-    WindowBounds, WindowOptions, div, prelude::*, px, size,
+    AnyElement, AnyView, App, ClickEvent, Context, Entity, FocusHandle, Focusable, IntoElement,
+    KeyDownEvent, Pixels, Render, Rgba, SharedString, Size, StyleRefinement, Task, TitlebarOptions,
+    WeakEntity, Window, WindowBackgroundAppearance, WindowBounds, WindowOptions, div, prelude::*,
+    px, size,
 };
 #[cfg(feature = "screen-work")]
-use gpui::{ClipboardItem, Focusable, Point};
+use gpui::{ClipboardItem, Point};
 #[cfg(feature = "screen-work")]
 use std::path::PathBuf;
 #[cfg(feature = "screen-work")]
@@ -131,6 +137,8 @@ const WINDOW_RING: f32 = 0.1;
 const SETTINGS: &str = "settings";
 const LIMITS_SCREEN: &str = "limits";
 const CONTEXT_SCREEN: &str = "context";
+#[cfg(feature = "screen-work")]
+const CLASSIFIER_SCREEN: &str = "classifier";
 const INTRO_SCREEN: &str = "intro";
 const WHOLE_SCREENS: [&str; 3] = [INTRO_SCREEN, "onboarding", "no-tofu"];
 const SCREEN_ID: &str = "screen.";
@@ -209,32 +217,63 @@ pub fn screen_mark(name: &str) -> Option<&'static ScreenMark> {
     SCREEN_MARKS.iter().find(|mark| mark.name == name)
 }
 #[cfg(feature = "screen-work")]
-const CRON_PROMPT_CHARS: usize = 32;
-#[cfg(feature = "screen-work")]
 const MINUTES_PER_HOUR: i64 = 60;
 #[cfg(feature = "screen-work")]
 const MINUTES_PER_DAY: i64 = 1440;
 #[cfg(feature = "screen-work")]
 const NO_TOFU: &str = "no work screen runs tofu here";
 
-#[cfg(feature = "screen-work")]
-fn cron_button(cx: &mut App) -> Entity<MenuButton> {
-    let button = MenuButton::new("Cron".into(), Vec::new(), cx);
-    button.update(cx, |button, _| {
-        button.placement(Placement {
-            side: Side::Top,
-            align: Align::End,
-            ..Placement::below()
-        });
-    });
-    button
+#[derive(Clone)]
+enum Card {
+    Context(Entity<ContextCard>),
+    Classifier(Entity<ClassifierCard>),
+    Cron(Entity<CronCard>),
 }
 
-#[cfg(feature = "screen-work")]
-fn shortened(prompt: &str) -> String {
-    match prompt.char_indices().nth(CRON_PROMPT_CHARS) {
-        Some((cut, _)) => format!("{}…", prompt.get(..cut).unwrap_or(prompt)),
-        None => prompt.to_owned(),
+fn leave_for(
+    desk: WeakEntity<Desk>,
+    pick: StatusPick,
+    screen: &'static str,
+) -> impl Fn(&mut Window, &mut App) + 'static {
+    move |window, cx| {
+        let opened = desk.update(cx, |desk, cx| {
+            desk.open_card(&pick, false, window, cx);
+            desk.show(screen, window, cx);
+        });
+        if let Err(error) = opened {
+            eprintln!("desk: a status card outlived the desk: {error}");
+        }
+    }
+}
+
+impl Card {
+    fn pick(&self) -> StatusPick {
+        match self {
+            Card::Context(_) => StatusPick::Context,
+            Card::Classifier(_) => StatusPick::Classifier,
+            Card::Cron(_) => StatusPick::Cron,
+        }
+    }
+
+    fn open(&self, cx: &App) -> OpenCard {
+        let (view, height): (AnyView, f32) = match self {
+            Card::Context(card) => (card.clone().into(), card.read(cx).height(cx)),
+            Card::Classifier(card) => (card.clone().into(), card.read(cx).height()),
+            Card::Cron(card) => (card.clone().into(), card.read(cx).height()),
+        };
+        OpenCard {
+            pick: self.pick(),
+            view,
+            height,
+        }
+    }
+
+    fn focus(&self, cx: &App) -> FocusHandle {
+        match self {
+            Card::Context(card) => card.focus_handle(cx),
+            Card::Classifier(card) => card.focus_handle(cx),
+            Card::Cron(card) => card.focus_handle(cx),
+        }
     }
 }
 
@@ -343,8 +382,8 @@ pub struct Desk {
     toast: Option<Toast>,
     toasts: u64,
     branch_open: bool,
-    context_card: Option<Entity<ContextCard>>,
-    context_watch: Vec<gpui::Subscription>,
+    card: Option<Card>,
+    card_watch: Vec<gpui::Subscription>,
     screens: Vec<Screen>,
     shown: Shown,
     parked: Vec<Shown>,
@@ -354,6 +393,7 @@ pub struct Desk {
     marks: Marks,
     github: Github,
     intro_shade: Shade,
+    shell: Option<(WindowBackgroundAppearance, Rgba)>,
     #[cfg(feature = "screen-work")]
     projects: Projects,
     #[cfg(feature = "screen-work")]
@@ -368,8 +408,6 @@ pub struct Desk {
     menu_screen: Option<&'static str>,
     #[cfg(feature = "screen-work")]
     menu_at: Option<Point<Pixels>>,
-    #[cfg(feature = "screen-work")]
-    cron: Entity<MenuButton>,
     #[cfg(feature = "screen-work")]
     gate: Option<Gate>,
 }
@@ -879,8 +917,8 @@ impl Desk {
             toast: None,
             toasts: 0,
             branch_open: false,
-            context_card: None,
-            context_watch: Vec::new(),
+            card: None,
+            card_watch: Vec::new(),
             screens,
             shown: Shown::new(name, view),
             parked: Vec::new(),
@@ -890,6 +928,7 @@ impl Desk {
             marks: title_bar::marks(),
             github: Github::Asking,
             intro_shade: Shade::Dark,
+            shell: None,
             #[cfg(feature = "screen-work")]
             projects: Projects {
                 named,
@@ -907,8 +946,6 @@ impl Desk {
             menu_screen: None,
             #[cfg(feature = "screen-work")]
             menu_at: None,
-            #[cfg(feature = "screen-work")]
-            cron: cron_button(cx),
             #[cfg(feature = "screen-work")]
             gate: None,
         };
@@ -1560,19 +1597,21 @@ impl Desk {
             Part::Sidebar => self.sidebar(cx).into_any_element(),
             Part::Status => {
                 let status = self.status(cx);
-                let cron = status.session_group.as_ref().map_or(0, |group| group.cron);
-                let cron_menu = self.cron_menu(cron, cx);
+                let desk = cx.entity().downgrade();
                 status_bar(&ActiveTheme::problems(cx), status, cx)
-                    .cron_menu(cron_menu)
                     .branch_popover(
                         self.branch_open,
                         cx.listener(|desk, open: &bool, _, cx| desk.open_branch(*open, cx)),
                     )
-                    .context_popover(
-                        self.context_card.clone(),
-                        cx.listener(|desk, open: &bool, window, cx| {
-                            desk.open_context(*open, window, cx)
-                        }),
+                    .status_cards(
+                        self.card.as_ref().map(|card| card.open(cx)),
+                        move |pick, open, window, cx| {
+                            let toggled =
+                                desk.update(cx, |desk, cx| desk.open_card(pick, *open, window, cx));
+                            if let Err(error) = toggled {
+                                eprintln!("desk: a status card outlived the desk: {error}");
+                            }
+                        },
                     )
                     .into_any_element()
             }
@@ -1653,82 +1692,131 @@ impl Desk {
         self.toast(control.tell().into(), Some(TELL_BADGE), cx);
     }
 
-    pub fn open_context(&mut self, open: bool, window: &mut Window, cx: &mut Context<Self>) {
-        eprintln!("desk: status context card open {open}");
+    pub fn open_card(
+        &mut self,
+        pick: &StatusPick,
+        open: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        eprintln!("desk: status card {pick:?} open {open}");
+        let shown = self.card.as_ref().map(Card::pick);
         if !open {
-            self.context_watch.clear();
-            if let Some(card) = self.context_card.take()
-                && card.focus_handle(cx).is_focused(window)
-            {
-                self.focus_shown(window, cx);
+            if shown.as_ref() == Some(pick) {
+                self.close_card(window, cx);
             }
-            return cx.notify();
+            return;
         }
-        let Some(shown) = self
-            .status(cx)
-            .session_group
-            .and_then(|group| group.context)
-        else {
-            return eprintln!("desk: status context: no session is open, so no window to show");
+        if shown.is_some() {
+            self.close_card(window, cx);
+        }
+        let Some(card) = self.new_card(pick, cx) else {
+            return eprintln!("desk: status card {pick:?}: no session is open, so nothing to show");
         };
         #[cfg(feature = "screen-work")]
         if let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) {
             let store = chat.read(cx).store().clone();
-            self.context_watch = vec![
-                cx.observe(&store, |desk, _, cx| desk.refresh_context(cx)),
-                cx.observe(&chat, |desk, _, cx| desk.refresh_context(cx)),
+            self.card_watch = vec![
+                cx.observe(&store, |desk, _, cx| desk.refresh_card(cx)),
+                cx.observe(&chat, |desk, _, cx| desk.refresh_card(cx)),
             ];
-            chat.update(cx, |chat, cx| {
-                chat.want_context(cx);
-                let shown = chat.shown_id();
-                let context = &chat.store().read(cx).context;
-                let stale = !context.asking
-                    && context
-                        .read
-                        .as_ref()
-                        .is_none_or(|read| read.value.session != shown);
-                if stale {
-                    chat.reread_context(cx);
+            chat.update(cx, |chat, cx| match pick {
+                StatusPick::Context => {
+                    chat.want_context(cx);
+                    let shown = chat.shown_id();
+                    let context = &chat.store().read(cx).context;
+                    let stale = !context.asking
+                        && context
+                            .read
+                            .as_ref()
+                            .is_none_or(|read| read.value.session != shown);
+                    if stale {
+                        chat.reread_context(cx);
+                    }
                 }
+                StatusPick::Classifier => chat.want_accounts(cx),
+                _ => {}
             });
         }
-        let desk = cx.entity().downgrade();
-        let card = cx.new(|cx| {
-            ContextCard::new(
-                shown,
-                move |window, cx| {
-                    let opened = desk.update(cx, |desk, cx| {
-                        desk.open_context(false, window, cx);
-                        desk.show(CONTEXT_SCREEN, window, cx);
-                    });
-                    if let Err(error) = opened {
-                        eprintln!("desk: open context outlived the desk: {error}");
-                    }
-                },
-                cx,
-            )
-        });
-        window.focus(&card.focus_handle(cx), cx);
-        self.context_card = Some(card);
+        window.focus(&card.focus(cx), cx);
+        self.card = Some(card);
         cx.notify();
     }
 
+    fn close_card(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.card_watch.clear();
+        if let Some(card) = self.card.take()
+            && card.focus(cx).is_focused(window)
+        {
+            self.focus_shown(window, cx);
+        }
+        cx.notify();
+    }
+
+    fn new_card(&self, pick: &StatusPick, cx: &mut Context<Self>) -> Option<Card> {
+        let desk = cx.entity().downgrade();
+        match pick {
+            StatusPick::Context => {
+                let shown = self.status(cx).session_group?.context?;
+                let leave = leave_for(desk, StatusPick::Context, CONTEXT_SCREEN);
+                Some(Card::Context(
+                    cx.new(|cx| ContextCard::new(shown, leave, cx)),
+                ))
+            }
+            #[cfg(feature = "screen-work")]
+            StatusPick::Classifier => {
+                let chat = self.work()?.read(cx).chat().clone();
+                let shown = rulings(chat.read(cx), cx);
+                let leave = leave_for(desk, StatusPick::Classifier, CLASSIFIER_SCREEN);
+                Some(Card::Classifier(
+                    cx.new(|cx| ClassifierCard::new(shown, leave, cx)),
+                ))
+            }
+            #[cfg(feature = "screen-work")]
+            StatusPick::Cron => {
+                let chat = self.work()?.read(cx).chat().clone();
+                let jobs = cron_jobs(chat.read(cx), cx);
+                let chat = chat.downgrade();
+                let run = move |line: String, _: &mut Window, cx: &mut App| {
+                    if let Err(error) = chat.update(cx, |chat, cx| chat.cron_command(line, cx)) {
+                        eprintln!("desk: the cron card lost its chat: {error}");
+                    }
+                };
+                Some(Card::Cron(cx.new(|cx| CronCard::new(jobs, run, cx))))
+            }
+            _ => None,
+        }
+    }
+
     #[cfg(feature = "screen-work")]
-    fn refresh_context(&mut self, cx: &mut Context<Self>) {
-        let Some(card) = self.context_card.clone() else {
+    fn refresh_card(&mut self, cx: &mut Context<Self>) {
+        let Some(card) = self.card.clone() else {
             return;
         };
-        match self
-            .status(cx)
-            .session_group
-            .and_then(|group| group.context)
-        {
-            Some(context) => card.update(cx, |card, cx| card.set(context, cx)),
-            None => {
-                eprintln!("desk: status context: the session closed, so the card closes");
-                self.context_watch.clear();
-                self.context_card = None;
-                cx.notify();
+        let Some(chat) = self.work().map(|work| work.read(cx).chat().clone()) else {
+            return;
+        };
+        match card {
+            Card::Context(card) => match self
+                .status(cx)
+                .session_group
+                .and_then(|group| group.context)
+            {
+                Some(context) => card.update(cx, |card, cx| card.set(context, cx)),
+                None => {
+                    eprintln!("desk: status context: the session closed, so the card closes");
+                    self.card_watch.clear();
+                    self.card = None;
+                    cx.notify();
+                }
+            },
+            Card::Classifier(card) => {
+                let shown = rulings(chat.read(cx), cx);
+                card.update(cx, |card, cx| card.set(shown, cx));
+            }
+            Card::Cron(card) => {
+                let jobs = cron_jobs(chat.read(cx), cx);
+                card.update(cx, |card, cx| card.set(jobs, cx));
             }
         }
     }
@@ -1851,11 +1939,6 @@ impl Desk {
     #[cfg(not(feature = "screen-work"))]
     pub fn sign_in(&mut self, source: &str, _: &mut Context<Self>) {
         eprintln!("desk: sign in {source}: this build has no work screen to run tofu");
-    }
-
-    #[cfg(not(feature = "screen-work"))]
-    fn cron_menu(&self, _: usize, _: &mut Context<Self>) -> Option<AnyView> {
-        None
     }
 
     #[cfg(not(feature = "screen-work"))]
@@ -2625,67 +2708,6 @@ impl Desk {
         }
     }
 
-    fn cron_menu(&self, live: usize, cx: &mut Context<Self>) -> Option<AnyView> {
-        let chat = self.work()?.read(cx).chat().clone();
-        let jobs: Vec<CronJob> = {
-            let chat = chat.read(cx);
-            let session = chat.store().read(cx).sessions.get(chat.open_id()?)?;
-            session
-                .cron
-                .as_ref()?
-                .jobs
-                .iter()
-                .filter(|job| job.ended.is_none())
-                .cloned()
-                .collect()
-        };
-        if jobs.is_empty() {
-            return None;
-        }
-        let mut items = Vec::new();
-        let mut lines = Vec::new();
-        for job in &jobs {
-            let toggle = if job.paused { "resume" } else { "pause" };
-            items.push(MenuItem::Submenu {
-                label: format!("{} {} {}", job.id, job.schedule, shortened(&job.prompt)).into(),
-                icon: None,
-                items: vec![
-                    MenuItem::action(if job.paused { "Resume" } else { "Pause" }),
-                    MenuItem::action("Delete"),
-                ],
-            });
-            lines.extend([
-                Vec::new(),
-                vec![format!("/cron {toggle} {}", job.id)],
-                vec![format!("/cron delete {}", job.id)],
-            ]);
-        }
-        items.extend([MenuItem::Separator, MenuItem::action("Stop all")]);
-        lines.extend([
-            Vec::new(),
-            jobs.iter()
-                .map(|job| format!("/cron delete {}", job.id))
-                .collect(),
-        ]);
-        let chat = chat.downgrade();
-        self.cron.update(cx, |button, cx| {
-            button.items(items, cx);
-            button.trigger(move |_, theme| cron_trigger(live, theme));
-            button.on_pick(move |at, _, cx| {
-                let sent = lines.get(*at).cloned().unwrap_or_default();
-                let updated = chat.update(cx, |chat, cx| {
-                    for line in sent {
-                        chat.cron_command(line, cx);
-                    }
-                });
-                if let Err(error) = updated {
-                    eprintln!("desk: cron menu lost its chat: {error}");
-                }
-            });
-        });
-        Some(self.cron.clone().into())
-    }
-
     pub fn status(&self, cx: &App) -> Status {
         let branch = self
             .projects
@@ -3041,6 +3063,35 @@ impl Render for Desk {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let edge_to_edge = window.is_maximized() || window.is_fullscreen();
         let theme = ActiveTheme::theme(cx);
+        let (backdrop, fill) = glass::shell(&theme);
+        if self.shell != Some((backdrop, fill)) {
+            if self.shell.map(|(was, _)| was) != Some(backdrop) {
+                match backdrop {
+                    WindowBackgroundAppearance::Opaque => {
+                        let desk = cx.entity().downgrade();
+                        window.on_next_frame(move |window, cx| {
+                            let still = desk
+                                .read_with(cx, |desk, _| desk.shell.map(|(now, _)| now))
+                                .ok()
+                                .flatten();
+                            if still == Some(WindowBackgroundAppearance::Opaque) {
+                                window.set_background_appearance(backdrop);
+                            }
+                        });
+                    }
+                    _ => window.set_background_appearance(backdrop),
+                }
+            }
+            let byte = |channel: f32| (channel.clamp(0.0, 1.0) * 255.0).round() as u8;
+            eprintln!(
+                "desk: shell backdrop {backdrop:?} fill #{:02x}{:02x}{:02x}{:02x}",
+                byte(fill.red),
+                byte(fill.green),
+                byte(fill.blue),
+                byte(fill.alpha)
+            );
+            self.shell = Some((backdrop, fill));
+        }
         let toast_layer = self.toast.as_ref().map(|shown| {
             div()
                 .absolute()
@@ -3107,8 +3158,10 @@ impl Render for Desk {
             })
             .flex()
             .flex_col()
-            .when(!edge_to_edge, |root| root.rounded(px(WINDOW_RADIUS)))
-            .bg(theme.color(ColorToken::SurfaceWindow))
+            .when(!edge_to_edge && backdrop.is_transparent(), |root| {
+                root.rounded(px(WINDOW_RADIUS))
+            })
+            .bg(fill)
             .shadow(vec![ring(ink(&theme, WINDOW_RING))])
             .text_size(px(TEXT))
             .text_color(theme.color(ColorToken::TextBase))
