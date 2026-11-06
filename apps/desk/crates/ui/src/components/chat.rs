@@ -2365,6 +2365,7 @@ pub enum CallState {
     Done,
     Failed,
     Skipped,
+    Warned,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -2498,7 +2499,7 @@ fn call_status(id: &ElementId, state: CallState, theme: &Theme) -> AnyElement {
                 theme.color(ColorToken::StatusLive),
             ))
             .into_any_element(),
-        CallState::Skipped => div().flex_none().w(px(MARK)).into_any_element(),
+        CallState::Skipped | CallState::Warned => div().flex_none().w(px(MARK)).into_any_element(),
     }
 }
 
@@ -2511,11 +2512,12 @@ fn card_row(
 ) -> Stateful<Div> {
     let danger = theme.color(ColorToken::StatusDanger);
     let failed = card.state == CallState::Failed;
-    let lead = lead_glyphs(
-        &card.glyphs,
-        if failed { danger } else { ink(theme, T3) },
-        theme,
-    );
+    let tone = match card.state {
+        CallState::Failed => danger,
+        CallState::Warned => theme.color(ColorToken::StatusWarn),
+        CallState::Running | CallState::Done | CallState::Skipped => ink(theme, T3),
+    };
+    let lead = lead_glyphs(&card.glyphs, tone, theme);
     let status = call_status(&id, card.state, theme);
     let verb = match card.state {
         CallState::Running => Shimmer::new(
@@ -2525,7 +2527,7 @@ fn card_row(
             ink(theme, HOVER_TEXT),
         )
         .into_any_element(),
-        CallState::Done | CallState::Failed => div()
+        CallState::Done | CallState::Failed | CallState::Warned => div()
             .flex_none()
             .child(card.verb.clone())
             .into_any_element(),
@@ -2537,7 +2539,7 @@ fn card_row(
     };
     let meta = line(card.meta.clone().unwrap_or_default())
         .flex_1()
-        .text_color(if failed { danger } else { ink(theme, T3) });
+        .text_color(tone);
     row(theme)
         .id(id)
         .relative()

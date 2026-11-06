@@ -121,6 +121,7 @@ pub struct Tool {
     pub card: Option<ToolCard>,
     pub group: Option<String>,
     pub failed: bool,
+    pub outcome: Option<crate::protocol::ToolCompletedOutcome>,
     pub started_at: Option<String>,
     pub ended_at: Option<String>,
 }
@@ -724,6 +725,7 @@ impl Session {
                         card: e.card.clone(),
                         group: e.group.clone(),
                         failed: false,
+                        outcome: None,
                         started_at: Some(e.started_at.clone()),
                         ended_at: None,
                     },
@@ -740,6 +742,7 @@ impl Session {
                 tool.output = Some(e.output.clone());
                 tool.summary = Some(e.summary.clone());
                 tool.failed = e.failed;
+                tool.outcome = Some(e.outcome.clone());
                 if e.card.is_some() {
                     tool.card.clone_from(&e.card);
                 }

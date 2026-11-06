@@ -1,5 +1,5 @@
 use desk_core::model::Tool;
-use desk_core::protocol::{CardPiece, CardPieceInk, Family, ToolSummary};
+use desk_core::protocol::{CardPiece, CardPieceInk, Family, ToolCompletedOutcome, ToolSummary};
 use desk_ui::components::chat::{CallState, Ink, Object, ToolCard};
 use desk_ui::components::chip::GitStatus;
 use desk_ui::components::glyph::Glyph;
@@ -224,6 +224,13 @@ pub fn state(tool: &Tool) -> CallState {
     if refused(tool).is_some() {
         return CallState::Skipped;
     }
+    match tool.outcome {
+        Some(ToolCompletedOutcome::Skipped | ToolCompletedOutcome::Aborted) => {
+            return CallState::Warned;
+        }
+        Some(ToolCompletedOutcome::Failed) => return CallState::Failed,
+        Some(ToolCompletedOutcome::Ran | ToolCompletedOutcome::Unknown(_)) | None => {}
+    }
     match (tool.failed, &tool.output) {
         (true, _) => CallState::Failed,
         (false, None) => CallState::Running,
@@ -240,7 +247,9 @@ pub fn card(tool: &Tool) -> ToolCard {
         (CallState::Skipped, _) => (NOT_RUN.to_owned(), said.objects),
         (_, Some(title)) => (title.clone(), Vec::new()),
         (CallState::Running, None) => (said.now, said.objects),
-        (CallState::Done | CallState::Failed, None) => (said.done, said.objects),
+        (CallState::Done | CallState::Failed | CallState::Warned, None) => {
+            (said.done, said.objects)
+        }
     };
     ToolCard {
         glyphs: vec![tool_glyph(&tool.name)],
@@ -249,6 +258,10 @@ pub fn card(tool: &Tool) -> ToolCard {
         meta: match state {
             CallState::Failed => summed.or_else(|| Some(failure(output))),
             CallState::Skipped => refused(tool),
+            CallState::Warned => match tool.outcome {
+                Some(ToolCompletedOutcome::Aborted) => Some("aborted".to_owned()),
+                _ => Some("skipped".to_owned()),
+            },
             CallState::Running | CallState::Done => {
                 let parts: Vec<String> = [said.meta, summed].into_iter().flatten().collect();
                 (!parts.is_empty()).then(|| parts.join(" "))
