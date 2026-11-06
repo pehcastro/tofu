@@ -306,6 +306,9 @@ func FilesUnder(root contract.Root, under string, includeIgnored bool) (Listing,
 	walked := walk{root: root, unfiltered: includeIgnored,
 		ahead: map[string]chan dirListing{}, readers: make(chan struct{}, runtime.GOMAXPROCS(0))}
 	if _, err := os.Stat(from); err != nil {
+		if _, gone := os.Stat(string(root)); gone != nil {
+			return Listing{}, fmt.Errorf("the folder %s does not exist or cannot be read: %w", root, gone)
+		}
 		repaired, note, refusal := Repair(root, under, true)
 		if refusal != nil {
 			return Listing{}, refusal
