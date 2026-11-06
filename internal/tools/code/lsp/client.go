@@ -31,6 +31,11 @@ type Client struct {
 	state   sync.Mutex
 	pending jsonrpc.Pending[reply]
 	opened  map[string]document
+	checked map[string]diagnosis
+	clock   int
+	heard   int
+	arrived chan struct{}
+	pulls   bool
 	status  string
 	exited  chan struct{}
 	quiet   chan struct{}
@@ -39,8 +44,10 @@ type Client struct {
 }
 
 type document struct {
+	uri     string
 	version int
 	text    string
+	sent    int
 }
 
 type rpcError struct {
@@ -79,7 +86,7 @@ func start(server Server, root string) (*Client, error) {
 		return nil, fmt.Errorf("%s did not start: %w", server.Program, err)
 	}
 	c := &Client{server: server, root: root, cmd: cmd, tree: tree, input: input, wire: jsonrpc.NewWire(input),
-		opened: map[string]document{}, exited: make(chan struct{}), quiet: make(chan struct{})}
+		opened: map[string]document{}, checked: map[string]diagnosis{}, arrived: make(chan struct{}), exited: make(chan struct{}), quiet: make(chan struct{})}
 	safe.Go(platformproject.Crashes(root), "lsp read "+server.Program, func() { c.read(output) })
 	ctx, cancel := context.WithTimeout(context.Background(), konst.LspStartMillis*time.Millisecond)
 	defer cancel()
@@ -123,14 +130,21 @@ func (c *Client) initialize(ctx context.Context) error {
 		"rootUri":          fileURI(c.root),
 		"workspaceFolders": []map[string]string{{"uri": fileURI(c.root), "name": filepath.Base(c.root)}},
 		"capabilities": map[string]any{
-			"textDocument": map[string]any{"documentSymbol": map[string]any{"hierarchicalDocumentSymbolSupport": true}},
+			"textDocument": map[string]any{"documentSymbol": map[string]any{"hierarchicalDocumentSymbolSupport": true},
+				"publishDiagnostics": map[string]any{"versionSupport": true}, "diagnostic": map[string]any{}},
 			"experimental": map[string]any{"serverStatusNotification": true},
 		},
 		"initializationOptions": c.server.Options,
 	}
-	if err := c.call(ctx, "initialize", params, nil); err != nil {
+	var answered struct {
+		Capabilities struct {
+			DiagnosticProvider json.RawMessage `json:"diagnosticProvider"`
+		} `json:"capabilities"`
+	}
+	if err := c.call(ctx, "initialize", params, &answered); err != nil {
 		return err
 	}
+	c.pulls = len(answered.Capabilities.DiagnosticProvider) > 0 && string(answered.Capabilities.DiagnosticProvider) != "null"
 	if err := c.notify("initialized", map[string]any{}); err != nil {
 		return err
 	}
@@ -202,6 +216,8 @@ func (c *Client) dispatch(got message) {
 		if status.Quiescent {
 			c.settle.Do(func() { close(c.quiet) })
 		}
+	case got.Method == "textDocument/publishDiagnostics":
+		c.diagnosed(got.Params)
 	}
 }
 
@@ -250,27 +266,33 @@ func (c *Client) Open(paths ...string) error {
 		if err != nil {
 			return err
 		}
-		text := string(body)
-		c.state.Lock()
-		was, opened := c.opened[path]
-		if was.text != text || !opened {
-			c.opened[path] = document{version: was.version + 1, text: text}
-		}
-		c.state.Unlock()
-		switch {
-		case !opened:
-			err = c.notify("textDocument/didOpen", map[string]any{"textDocument": map[string]any{
-				"uri": fileURI(path), "languageId": c.server.Extensions[filepath.Ext(path)], "version": 1, "text": text}})
-		case was.text != text:
-			err = c.notify("textDocument/didChange", map[string]any{
-				"textDocument":   map[string]any{"uri": fileURI(path), "version": was.version + 1},
-				"contentChanges": []map[string]string{{"text": text}}})
-		}
-		if err != nil {
+		if err := c.Show(path, string(body)); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (c *Client) Show(path, text string) error {
+	c.state.Lock()
+	was, opened := c.opened[PathKey(path)]
+	if opened && was.text == text {
+		c.state.Unlock()
+		return nil
+	}
+	if !opened {
+		was.uri = fileURI(path)
+	}
+	c.clock++
+	c.opened[PathKey(path)] = document{uri: was.uri, version: was.version + 1, text: text, sent: c.clock}
+	c.state.Unlock()
+	if !opened {
+		return c.notify("textDocument/didOpen", map[string]any{"textDocument": map[string]any{
+			"uri": was.uri, "languageId": c.server.Extensions[filepath.Ext(path)], "version": 1, "text": text}})
+	}
+	return c.notify("textDocument/didChange", map[string]any{
+		"textDocument":   map[string]any{"uri": was.uri, "version": was.version + 1},
+		"contentChanges": []map[string]string{{"text": text}}})
 }
 
 func (c *Client) Shutdown() {

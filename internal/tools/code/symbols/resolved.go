@@ -16,10 +16,13 @@ import (
 )
 
 type declared struct {
-	at    lsp.Location
-	label string
-	used  lsp.Usages
+	at     lsp.Location
+	kind   string
+	symbol string
+	used   lsp.Usages
 }
+
+func (d declared) label() string { return d.kind + " " + d.symbol }
 
 type answer struct {
 	server      lsp.Server
@@ -66,15 +69,32 @@ func (s Symbols) resolve(ctx context.Context, name string, files []string) ([]st
 func (s Symbols) declarations(name string, files []string) []declared {
 	var found []declared
 	var scanned []string
-	pythonHead := regexp.MustCompile(`^[ \t]*(?:async[ \t]+)?(def|class)[ \t]+` + regexp.QuoteMeta(name) + `\b`)
+	pythonHead := regexp.MustCompile(`^([ \t]*)(?:async[ \t]+)?(def|class)[ \t]+([A-Za-z_]\w*)`)
 	for _, rel := range files {
 		if filepath.Ext(rel) != ".py" {
 			scanned = append(scanned, rel)
 			continue
 		}
+		type class struct {
+			indent int
+			name   string
+		}
+		var classes []class
 		for number, line := range lsp.Lines(s.abs(rel)) {
-			if head := pythonHead.FindStringSubmatchIndex(line); head != nil {
-				found = append(found, declared{at: s.at(rel, number+1, line[:head[1]-len(name)]), label: line[head[2]:head[3]] + " " + name})
+			head := pythonHead.FindStringSubmatch(line)
+			if head == nil {
+				continue
+			}
+			classes = slices.DeleteFunc(classes, func(outer class) bool { return outer.indent >= len(head[1]) })
+			symbol := head[3]
+			if len(classes) > 0 {
+				symbol = classes[len(classes)-1].name + "." + head[3]
+			}
+			if head[3] == name {
+				found = append(found, declared{at: s.at(rel, number+1, line[:len(head[0])-len(name)]), kind: head[2], symbol: symbol})
+			}
+			if head[2] == "class" {
+				classes = append(classes, class{indent: len(head[1]), name: head[3]})
 			}
 		}
 	}
@@ -86,7 +106,7 @@ func (s Symbols) declarations(name string, files []string) []declared {
 		text := lsp.Lines(s.abs(definition.Path))
 		for number := definition.FirstLine; number <= min(definition.LastLine, len(text)); number++ {
 			if column := lsp.WordAt(text[number-1], name); column >= 0 {
-				found = append(found, declared{at: s.at(definition.Path, number, text[number-1][:column]), label: string(definition.Kind) + " " + definition.Symbol})
+				found = append(found, declared{at: s.at(definition.Path, number, text[number-1][:column]), kind: string(definition.Kind), symbol: definition.Symbol})
 				break
 			}
 		}
@@ -110,14 +130,8 @@ func (s Symbols) ask(ctx context.Context, server lsp.Server, definitions []decla
 		byRoot[root] = append(byRoot[root], &found.definitions[at])
 	}
 	for root, here := range byRoot {
-		var opened []string
-		for _, rel := range files {
-			if within, err := filepath.Rel(root, s.abs(rel)); err == nil && !strings.HasPrefix(within, "..") && len(opened) < konst.LspOpenedFiles {
-				opened = append(opened, s.abs(rel))
-			}
-		}
 		err := s.servers.Use(server, root, func(client *lsp.Client) error {
-			if err := client.Open(opened...); err != nil {
+			if err := client.Open(s.under(server, root, files)...); err != nil {
 				return err
 			}
 			for _, definition := range here {
@@ -141,6 +155,17 @@ func (s Symbols) ask(ctx context.Context, server lsp.Server, definitions []decla
 	return found, nil
 }
 
+func (s Symbols) under(server lsp.Server, root string, files []string) []string {
+	var opened []string
+	for _, rel := range files {
+		_, served := server.Extensions[filepath.Ext(rel)]
+		if within, err := filepath.Rel(root, s.abs(rel)); served && err == nil && !strings.HasPrefix(within, "..") && len(opened) < konst.LspOpenedFiles {
+			opened = append(opened, s.abs(rel))
+		}
+	}
+	return opened
+}
+
 func (s Symbols) render(name string, found answer) string {
 	var calls, others int
 	for _, definition := range found.definitions {
@@ -153,7 +178,7 @@ func (s Symbols) render(name string, found answer) string {
 		fmt.Fprintf(&out, "%s says: %s\n", found.server.Program, status)
 	}
 	for _, definition := range found.definitions {
-		fmt.Fprintf(&out, "\ndefined %s:%d %s\n", s.shown(definition.at.Path), definition.at.Line, definition.label)
+		fmt.Fprintf(&out, "\ndefined %s:%d %s\n", s.shown(definition.at.Path), definition.at.Line, definition.label())
 		if len(definition.used.Calls) == 0 {
 			fmt.Fprintf(&out, "  nothing calls it: 0 callers\n")
 		} else {

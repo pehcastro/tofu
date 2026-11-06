@@ -5,14 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"unicode"
 	"unicode/utf16"
-
-	platformproject "tofu/internal/platform/project"
 )
 
 type Location struct {
@@ -24,6 +21,7 @@ type Location struct {
 type Call struct {
 	Location
 	Within string
+	Opens  int
 }
 
 type Usages struct {
@@ -110,7 +108,8 @@ func (c *Client) Usages(ctx context.Context, at Location) (Usages, error) {
 				return Usages{}, err
 			}
 		}
-		used.Calls = append(used.Calls, Call{Location: reference, Within: innermost(scopes[reference.Path], reference.Line)})
+		inside := innermost(scopes[reference.Path], reference.Line)
+		used.Calls = append(used.Calls, Call{Location: reference, Within: inside.name, Opens: inside.first})
 	}
 	slices.SortFunc(used.Calls, func(a, b Call) int { return a.compare(b.Location) })
 	used.Calls = slices.CompactFunc(used.Calls, func(a, b Call) bool { return a.Location == b.Location })
@@ -188,18 +187,11 @@ func (c *Client) resolvesTo(ctx context.Context, from, target Location) (bool, e
 		if landed.TargetURI != "" {
 			at = landed.TargetChosen
 		}
-		if samePath(uriPath(uri), target.Path) && at.Start.Line+1 == target.Line && at.Start.Character == target.Character {
+		if PathKey(uriPath(uri)) == PathKey(target.Path) && at.Start.Line+1 == target.Line && at.Start.Character == target.Character {
 			return true, nil
 		}
 	}
 	return false, nil
-}
-
-func samePath(a, b string) bool {
-	if platformproject.FoldsCase() {
-		return strings.EqualFold(filepath.Clean(a), filepath.Clean(b))
-	}
-	return filepath.Clean(a) == filepath.Clean(b)
 }
 
 func called(after string) bool {
@@ -221,17 +213,14 @@ func called(after string) bool {
 	return strings.HasPrefix(strings.TrimPrefix(rest, "?."), "(")
 }
 
-func innermost(scopes []scope, line int) string {
-	var inside *scope
-	for at, one := range scopes {
-		if one.first <= line && line <= one.last && (inside == nil || one.last-one.first < inside.last-inside.first) {
-			inside = &scopes[at]
+func innermost(scopes []scope, line int) scope {
+	var inside scope
+	for _, one := range scopes {
+		if one.first <= line && line <= one.last && (inside.name == "" || one.last-one.first < inside.last-inside.first) {
+			inside = one
 		}
 	}
-	if inside == nil {
-		return ""
-	}
-	return inside.name
+	return inside
 }
 
 func (l Location) params() map[string]any {
@@ -264,23 +253,32 @@ type symbolNode struct {
 	Name     string               `json:"name"`
 	Kind     int                  `json:"kind"`
 	Range    *span                `json:"range"`
+	Chosen   *span                `json:"selectionRange"`
 	Location struct{ Range span } `json:"location"`
 	Children []symbolNode         `json:"children"`
 }
 
-func (c *Client) scopes(ctx context.Context, path string) ([]scope, error) {
+func (n symbolNode) reach() *span { return cmp.Or(n.Range, &n.Location.Range) }
+
+func (c *Client) outline(ctx context.Context, path string) ([]symbolNode, error) {
 	if err := c.Open(path); err != nil {
 		return nil, err
 	}
 	var nodes []symbolNode
-	if err := c.call(ctx, "textDocument/documentSymbol", map[string]any{"textDocument": map[string]string{"uri": fileURI(path)}}, &nodes); err != nil {
+	err := c.call(ctx, "textDocument/documentSymbol", map[string]any{"textDocument": map[string]string{"uri": fileURI(path)}}, &nodes)
+	return nodes, err
+}
+
+func (c *Client) scopes(ctx context.Context, path string) ([]scope, error) {
+	nodes, err := c.outline(ctx, path)
+	if err != nil {
 		return nil, err
 	}
 	var found []scope
 	for len(nodes) > 0 {
 		node := nodes[0]
 		nodes = append(nodes[1:], node.Children...)
-		reach := cmp.Or(node.Range, &node.Location.Range)
+		reach := node.reach()
 		if slices.Contains([]int{symbolKindMethod, symbolKindConstructor, symbolKindFunction}, node.Kind) {
 			found = append(found, scope{name: node.Name, first: reach.Start.Line + 1, last: reach.End.Line + 1})
 		}
