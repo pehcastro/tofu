@@ -1,16 +1,18 @@
 use std::cell::Cell;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Instant;
 
-use desk_core::protocol::request::{QueryModels, QuerySettings, SettingsSet};
+use desk_core::protocol::boardy::InitRequest;
+use desk_core::protocol::request::{BoardyInit, QueryModels, QuerySettings, SettingsSet};
 use desk_core::protocol::{
     self, ModelsQuery, NoParams, Request, SettingValue, SettingValueKind, SettingsReport,
     SettingsSetParams,
 };
 use desk_core::query::{Answer, QueryError, Read};
 use desk_core::settings::{self as wire, Scope, Settings, Value};
+use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::{header_button, header_control};
 use desk_ui::components::chip::{Tone, flat_chip};
 use desk_ui::components::form::{FieldWidth, TextInput, switch_bare};
@@ -33,10 +35,10 @@ use desk_ui::metrics::ICON_SMALL;
 use desk_ui::motion::{Phase, Presence, reduced_motion};
 use desk_ui::theme::{ColorToken, NumberToken, Theme};
 use gpui::{
-    AnyElement, ClickEvent, Context, Div, Entity, EntityId, EntityInputHandler, Focusable,
-    FontWeight, KeyDownEvent, MouseDownEvent, Render, SharedString, Stateful, StyleRefinement,
-    Subscription, Transformation, WeakEntity, Window, canvas, deferred, div, prelude::*, px,
-    radians, relative,
+    AnyElement, AnyWindowHandle, ClickEvent, Context, Div, Entity, EntityId, EntityInputHandler,
+    Focusable, FontWeight, KeyDownEvent, MouseDownEvent, Render, SharedString, Stateful,
+    StyleRefinement, Subscription, Transformation, WeakEntity, Window, canvas, deferred, div,
+    prelude::*, px, radians, relative,
 };
 
 use super::appearance::Appearance;
@@ -48,7 +50,8 @@ use super::keys::KeysPage;
 use super::plugins::PluginsPage;
 use super::stored::Stored;
 use super::terminal::TerminalPage;
-use crate::modules::chat::Chat;
+use crate::desk::{Desk, Unpicked};
+use crate::modules::chat::{Chat, SettingsMoved};
 use crate::plugins;
 use crate::screens::frame;
 use crate::screens::work::split::{self, Spans, rooted, timed};
@@ -103,6 +106,9 @@ const ENABLED_ROW: &str = "projectManagement.enabled";
 const ENABLED: &str = "Enabled";
 const TOOL: &str = "Tool";
 const OFF: &str = "off";
+const CREATE_BOARD: &str = "Create a board";
+const BOARDY_SCREEN: &str = "screen.boardy";
+const BOARD_KEY_MOST: usize = 10;
 const BRANDS: [(&str, &str); 5] = [
     ("boardy", "Boardy"),
     ("jira", "Jira"),
@@ -135,6 +141,7 @@ pub struct Rows {
     switching: HashMap<String, bool>,
     asked: HashMap<String, String>,
     problems: HashMap<String, SharedString>,
+    board_opening: Option<Subscription>,
     fields: HashMap<String, Field>,
     shells: Option<Entity<TerminalPage>>,
     keys: Option<Entity<KeysPage>>,
@@ -202,6 +209,7 @@ struct Described {
     about: SharedString,
     list: bool,
     restart: bool,
+    reason: Option<SharedString>,
 }
 
 impl Described {
@@ -219,6 +227,12 @@ impl Described {
             about,
             list: matches!(setting.kind, SettingValueKind::List),
             restart: setting.restart == Some(true),
+            reason: setting
+                .reason
+                .as_deref()
+                .map(str::trim)
+                .filter(|said| !said.is_empty())
+                .map(|said| sentence(&capitalized(said))),
         }
     }
 }
@@ -253,6 +267,7 @@ impl Rows {
             switching: HashMap::new(),
             asked: HashMap::new(),
             problems: HashMap::new(),
+            board_opening: None,
             fields: HashMap::new(),
             shells: None,
             keys: None,
@@ -407,8 +422,15 @@ impl Rows {
                 let Some(kept) = read.value.get(&key).map(|setting| setting.value.wire()) else {
                     continue;
                 };
-                if kept != wanted {
-                    eprintln!("desk: settings {key} asked {wanted}, tofu keeps {kept}");
+                if kept == wanted {
+                    continue;
+                }
+                eprintln!("desk: settings {key} asked {wanted}, tofu keeps {kept}");
+                if self
+                    .described
+                    .get(&key)
+                    .is_none_or(|said| said.reason.is_none())
+                {
                     self.problems.insert(
                         key,
                         format!("Tofu wrote {wanted} but keeps {kept} in force here.").into(),
@@ -512,6 +534,82 @@ impl Rows {
         };
         self.switching.insert(ENABLED_ROW.to_owned(), !on);
         self.write(MANAGED_KEY.to_owned(), value, cx);
+    }
+
+    fn create_board(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let chat = self.tofu.as_ref().and_then(|(chat, _)| chat.upgrade());
+        let Some(Some(desk)) = window.root::<Desk>() else {
+            return eprintln!("desk: settings found no desk window to open boardy in");
+        };
+        let named = chat.as_ref().and_then(|chat| {
+            let folder = Path::new(chat.read(cx).project()).file_name()?;
+            Some(folder.to_string_lossy().into_owned())
+        });
+        let Some(name) = named else {
+            self.problems.insert(
+                MANAGED_KEY.to_owned(),
+                sentence("tofu has not said which project folder it runs in"),
+            );
+            return cx.notify();
+        };
+        let key: String = name
+            .chars()
+            .filter(char::is_ascii_alphanumeric)
+            .map(|letter| letter.to_ascii_uppercase())
+            .take(BOARD_KEY_MOST)
+            .collect();
+        eprintln!("desk: settings boardy init {key} named {name}");
+        self.problems.remove(MANAGED_KEY);
+        let params = InitRequest {
+            hooks: Vec::new(),
+            key,
+            mode: None,
+            name,
+        };
+        let handle = window.window_handle();
+        self.send::<BoardyInit>(params, cx, move |rows, reply, cx| match reply {
+            Ok(_) => {
+                eprintln!("desk: settings boardy init made a board");
+                rows.open_board_when_on(&desk, handle, cx);
+                if let Some(chat) = chat {
+                    chat.update(cx, |_, cx| cx.emit(SettingsMoved));
+                }
+            }
+            Err(problem) => {
+                eprintln!("desk: settings boardy init refused: {problem}");
+                rows.problems
+                    .insert(MANAGED_KEY.to_owned(), sentence(&problem));
+                cx.notify();
+            }
+        });
+    }
+
+    fn open_board_when_on(
+        &mut self,
+        desk: &Entity<Desk>,
+        handle: AnyWindowHandle,
+        cx: &mut Context<Self>,
+    ) {
+        let rows = cx.weak_entity();
+        self.board_opening = Some(cx.observe(desk, move |_, desk, cx| {
+            let rows = rows.clone();
+            cx.defer(move |cx| {
+                let picked = handle.update(cx, |_, window, cx| {
+                    desk.update(cx, |desk, cx| desk.pick(BOARDY_SCREEN, window, cx))
+                });
+                match picked {
+                    Ok(Err(Unpicked::Off(_))) => return,
+                    Ok(Ok(())) => eprintln!("desk: settings opened boardy"),
+                    Ok(Err(Unpicked::Failed(why))) => {
+                        eprintln!("desk: settings cannot open boardy: {why}")
+                    }
+                    Err(error) => eprintln!("desk: settings lost its window: {error}"),
+                }
+                if let Err(error) = rows.update(cx, |rows, _| rows.board_opening = None) {
+                    eprintln!("desk: settings closed before boardy opened: {error}");
+                }
+            });
+        }));
     }
 
     fn flip_tofu(&mut self, key: &str, cx: &mut Context<Self>) {
@@ -1532,12 +1630,43 @@ impl Rows {
                 this.flip_enabled(cx);
             },
         ));
+        let reason = self
+            .described
+            .get(MANAGED_KEY)
+            .and_then(|said| said.reason.clone())
+            .filter(|_| picked.as_str() == OFF);
+        let create = reason.is_some().then(|| {
+            button(
+                "settings-create-board",
+                CREATE_BOARD,
+                Some(Glyph::FolderAdd),
+                ButtonKind::Plain,
+                theme,
+            )
+            .on_click(cx.listener(|this, _: &ClickEvent, window, cx| {
+                cx.stop_propagation();
+                this.create_board(window, cx);
+            }))
+        });
         let enabled = SettingRow {
             id: ENABLED_ROW.into(),
             name: ENABLED.into(),
-            about: self.problems.get(MANAGED_KEY).cloned().unwrap_or_default(),
+            about: self
+                .problems
+                .get(MANAGED_KEY)
+                .cloned()
+                .or(reason)
+                .unwrap_or_default(),
             source: badge(managed.source),
-            control: column(switch).into_any_element(),
+            control: column(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(SOURCE_GAP))
+                    .children(create)
+                    .child(switch),
+            )
+            .into_any_element(),
         };
         let mut rows = vec![(enabled, None)];
         if !on {
