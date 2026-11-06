@@ -1,7 +1,7 @@
 ---
 topic: tools
 title: What the tools return
-summary: what read, edit, write, bash, shell, typecheck, test, plan, fetch, web_search, history, env, http, record, profile, shape and db give the model, and how to see it for yourself
+summary: what read, edit, write, bash, shell, typecheck, test, plan, fetch, web_search, history, env, http, record, profile, shape, db, spawn, race, ask_person and heads_up give the model, and how to see it for yourself
 verbs: tool
 ---
 
@@ -117,8 +117,45 @@ ORDER_API_URL: set in .env
 ORDER_DB_PATH: missing from .env
 ```
 
+## Delegation and the person
+
+- `spawn` with `estimate` set to `true` returns the median USD, model calls
+  and wall time of the last 20 finished runs of that agent type in this
+  project, and starts nothing. Every real spawn names the same medians. A
+  project with none says `no history: go-dev has no finished run recorded
+  in this project, so there is no estimate. nothing was started`; when no
+  run recorded a cost it says `no cost recorded` in place of the USD.
+- `race` takes 2 to 3 `briefs`, one whole approach each, and a `check` of
+  `build`, `test` or `command`. Each brief runs on its own sub-agent in its
+  own copy of the project under the scratchpad. The first run whose check
+  passes is applied to the working tree and the rest are stopped; the
+  result lists each run's outcome, cost, requests and check, and the
+  winner's diff. When none passes the tree is byte for byte as it was. It
+  is for two or more whole approaches built and compared; `whatif` tries a
+  small edit and `edit` makes one fix.
+- `ask_person` options may carry a `preview`, as code, a diff or a text
+  screen. Options that carry one are shown side by side, each over its
+  preview, up to 14 rows; under 24 cells a column, they stack and the
+  focused one shows its preview. On such a question, a line typed in the
+  chat and then enter chooses the focused option and goes with it as
+  `note` in the answer.
+- `heads_up` shows one line on the person's screen, `heads up: ` at `info`
+  or `heads up, warning: ` at `warn`, and the turn goes on. The lead reads
+  `shown to the person; the turn goes on`. An empty line, a line break or
+  another level is refused and nothing is shown.
+
+```text
+tofu: heads up, warning: order_test.go fails before any change
+shown to the person; the turn goes on
+```
+
 ## How to
 
+- `tofu tool spawn '{"estimate":true,"agent":"go-dev"}' --dir .` says what
+  a go-dev run usually costs here, and starts nothing.
+- `tofu tool heads_up '{"level":"info","line":"the full test run takes about two minutes"}' --dir .`
+  prints the line the person would see.
+- `tofu docs asking` says how the lead's questions reach you.
 - `tofu tool test '{"path":"."}' --dir .` runs the tests of one package.
 - `tofu tool typecheck '{"path":"broken"}' --dir .` checks one directory.
 - `tofu tool read '{"path":"order.go","at":"Total"}' --dir .` reads around

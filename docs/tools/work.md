@@ -1,6 +1,6 @@
 ---
 title: Work
-description: plan, settings, artifact_fetch, history, ask_person, skill and the tofu verbs, tools that organize the work rather than change files.
+description: plan, settings, artifact_fetch, history, ask_person, heads_up, skill and the tofu verbs, tools that organize the work rather than change files.
 order: 6
 updated: 2026-11-06
 ---
@@ -91,10 +91,115 @@ Parameters: `mode`, `anchor`, `store`.
 
 `ask_person` puts one to four questions to you, each with up to four
 options, the one the lead recommends, and room for your own words. In auto
-the lead keeps working while you decide, and the recommended option stands
-after `askPersonWaitSeconds`. It exists only in a turn you started, never
+the lead keeps working while you decide. With no answer in
+`askPersonWaitSeconds` it is told none came and picks nothing, and the form
+stays open for a later answer. It exists only in a turn you started, never
 in `tofu run`, a cron turn or a sub-agent. See [Asking
-you](/docs/features/asking). Parameter: `questions`.
+you](/docs/features/asking).
+
+### Options you can look at
+
+An option may carry a `preview`: what taking it looks like, as code, a
+unified diff or a text screen. When the options of a question carry one,
+the form shows them side by side, each option over its own preview, so you
+compare two designs rather than two labels. A diff preview is colored as a
+diff, and a preview shows up to 14 rows. On a screen too narrow for columns
+of 24 cells, the options stack and the focused one shows its preview under
+it.
+
+What the form showed at 110 columns, with two options that each carry a
+diff:
+
+```text
+  ? Discount fix  1 of 1
+  no answer yet; the lead hears in 1m 59s that none came, and picks nothing
+  Which fix for the discount do you want?
+  › 1. Round at the end (recommended)                 │   2. Round each line
+    keep cents until the total                        │   round every line first
+    - return sum * (100 - rate) / 100                 │   - total += line * (100 - rate) / 100
+    + return round(sum * (100 - rate), 100)           │   + total += round(line * (100 - rate), 100)
+    3. other  type it in the chat, then enter
+  a note typed in the chat goes with the option enter chooses
+  ↑↓ move   enter choose   tab next question   esc dismiss
+```
+
+### A note with your choice
+
+On a question whose options carry a preview, type a line in the chat and
+press **enter**: the focused option is chosen and your line goes with it as
+a note. You pick a design and say what to change about it in one answer.
+The chat shows both:
+
+```text
+    · you answered
+      Which fix for the discount do you want? › Round at the end · keep it in cents
+```
+
+and the lead reads the note beside the choice:
+
+```text
+the answer to your ask_person question: {"outcome":"submitted","answers":[{"id":"fix","status":"answered","chosen":["Round at the end"],"note":"keep it in cents"}],"next":"on any outcome but submitted, take each recommended option, say which you took, and continue. on submitted, follow what was chosen; a skipped question is yours to decide."}
+```
+
+### Parameters
+
+`questions` holds 1 to 4 questions. Each question takes:
+
+| Field | What it does |
+|---|---|
+| `id` | names the question in the answer |
+| `header` | 1 to 4 words, the form's title |
+| `question` | one sentence |
+| `type` | `choice`, `multi`, `text` or `yesno` |
+| `options` | 2 to 4, for `choice` and `multi`; each has a `label` of 1 to 5 words, a one-line `description` and an optional `preview` |
+| `recommended` | the index of the option the lead would take, for every type but `text` |
+| `reversible` | `true` only when the recommended option can be undone later at little cost |
+
+tofu adds the **other** row to every choice, so an option never says
+"other". Run by hand, `tofu tool ask_person` is refused, because nobody is
+there to answer:
+
+```text
+error: ask_person refused: nobody is here to answer this turn: tofu run has no person and a cron job runs unattended, so take the recommended option where it can be undone, or end the turn on the question. it stays listed so the tool list matches the one this session's cache was written with
+```
+
+## heads_up
+
+`heads_up` puts one line on your screen while the lead keeps working. It
+never waits for an answer and never stops the turn.
+
+The lead tells you a thing worth knowing now, such as a slow step starting,
+a risk it found, or a result worth seeing before the turn ends, without
+turning it into a question you have to answer. To ask and wait, the lead
+uses `ask_person`.
+
+```bash
+tofu tool heads_up '{"level":"warn","line":"order_test.go fails before any change"}' --dir .
+```
+
+```text
+tofu: heads up, warning: order_test.go fails before any change
+shown to the person; the turn goes on
+```
+
+The first line is what you see; the second is what the lead reads. In the
+chat the line sits in the lead's turn:
+
+```text
+    · heads up, warning: order_test.go fails before any change
+```
+
+At `info` the line starts `heads up:`. A line with a line break, an empty
+line or another level is refused and nothing is shown:
+
+```text
+error: heads_up: line holds more than one line, so nothing was shown; say it in one line
+```
+
+| Parameter | What it does |
+|---|---|
+| `level` | `info`, or `warn` for something that may need you |
+| `line` | the one line to show |
 
 ## skill
 

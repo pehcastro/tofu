@@ -31,13 +31,20 @@ its description, the recommended one marked, and a last row, other, for
 an answer in your own words. Up and down move, a digit or enter chooses,
 space toggles an option of a `multi`, tab goes to the next question, and
 Esc dismisses it. On other, type the answer in the chat and press enter.
-The focused option's preview shows under it.
+
+When the options carry a preview, they are shown side by side, each
+option over its preview, so you compare what each one looks like. On a
+screen too narrow for columns of 24 cells they stack, and the focused
+option's preview shows under it. On such a question, type a line in the
+chat and press enter: the focused option is chosen and the line goes with
+it as a note.
 
 The answer goes back to the lead as the tool's result under `ask`, and as
 a message under `auto`:
 
     {"outcome": "submitted", "answers": [
-      {"id": "lib", "status": "answered", "chosen": ["net/http"]}]}
+      {"id": "fix", "status": "answered", "chosen": ["Round at the end"],
+       "note": "keep it in cents"}]}
 
 - outcome: `submitted`; `cancelled`, you pressed Esc or the turn stopped,
   and the recommended option stands; `timed_out`, no answer in time under

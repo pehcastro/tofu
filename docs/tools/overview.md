@@ -26,8 +26,8 @@ model would receive. See [One tool call by hand](/docs/cli/tool).
 | [Shell](/docs/tools/shell) | bash, shell |
 | [Checks](/docs/tools/checks) | typecheck, test |
 | [Web](/docs/tools/web) | web_search, fetch, github_pr_diff |
-| [Work](/docs/tools/work) | plan, settings, artifact_fetch, history, ask_person, skill, tofu verbs |
-| [Sub-agents](/docs/tools/sub-agents) | spawn, message, subagents, ask |
+| [Work](/docs/tools/work) | plan, settings, artifact_fetch, history, ask_person, heads_up, skill, tofu verbs |
+| [Sub-agents](/docs/tools/sub-agents) | spawn, race, message, subagents, ask |
 | [Environment](/docs/tools/environment) | env, shell ports |
 | [Observe](/docs/tools/observe) | http, record, profile |
 | [Data](/docs/tools/data) | shape, db |

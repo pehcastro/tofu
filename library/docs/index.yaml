@@ -454,3 +454,15 @@
   do: tofu tool shape '{"path":"orders.json"}' --dir .
   check: tofu tool list --dir .
   topic: tools
+- ask: what does a sub-agent usually cost before I start one
+  do: tofu tool spawn '{"estimate":true,"agent":"go-dev"}' --dir .
+  check: tofu tool list --dir .
+  topic: tools
+- ask: try two approaches at once and keep the one that passes
+  do: tofu docs tools
+  check: tofu tool list --dir .
+  topic: tools
+- ask: tell me something during a turn without stopping it
+  do: tofu tool heads_up '{"level":"info","line":"the full test run takes about two minutes"}' --dir .
+  check: tofu tool list --dir .
+  topic: tools

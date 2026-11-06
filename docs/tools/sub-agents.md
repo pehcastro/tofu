@@ -1,13 +1,14 @@
 ---
 title: Sub-agent tools
-description: spawn, message, subagents and ask, the tools the lead and its sub-agents use to hand out work and talk while it runs.
+description: spawn, race, message, subagents and ask, the tools the lead and its sub-agents use to hand out work, weigh its cost and talk while it runs.
 order: 7
-updated: 2026-11-01
+updated: 2026-11-06
 ---
 
-Four tools, tofu's own Go code. The lead gets `spawn`; the loop adds
-`message` and `subagents` beside it; each sub-agent gets `ask`. How the lead
-and sub-agents work together is on [Sub-agents](/docs/features/orchestration).
+Five tools, tofu's own Go code. The lead gets `spawn` and `race`; the loop
+adds `message` and `subagents` beside them; each sub-agent gets `ask`. How
+the lead and sub-agents work together is on
+[Sub-agents](/docs/features/orchestration).
 
 ## Why spawn returns at once
 
@@ -29,6 +30,70 @@ first raise missed: the lead rewrites the outcome with `tofu boardy set
 the count starts again under the new acceptance. A spawn with no ticket is
 not counted.
 
+## What a spawn costs, before it starts
+
+`spawn` with `estimate` set to `true` answers what a sub-agent usually costs
+in this project and starts nothing. It reads up to the last 20 finished runs
+of that agent type in the project's sessions and gives the median USD, the
+median number of model calls and the median wall time.
+
+The lead weighs a spawn before it pays for one, from what that agent type
+has cost here before rather than a guess. Every real spawn names the same
+three medians in its result, so the lead sees them even when it never asks.
+
+Name the agent type in `agent`, or leave it out for a sub-agent on the
+lead's own model. A project with no finished run of that type says so:
+
+```bash
+tofu tool spawn '{"estimate":true,"agent":"go-dev"}' --dir .
+```
+
+```text
+no history: go-dev has no finished run recorded in this project, so there is no estimate. nothing was started
+```
+
+With history the answer reads `estimate for go-dev, the median of its last
+N finished runs in M sessions:` and then the USD, the calls and the wall
+time. When none of those runs recorded a cost, it says `no cost recorded`
+in place of the USD. An agent type tofu doesn't know is refused with the
+list of the ones it does:
+
+```text
+error: spawn refused: nope is no sub-agent tofu found; the enabled sub-agents are advisor, go-dev, hunter, py-dev, referee, review, rust-dev, skeptic, ts-dev, browser, research, qa
+```
+
+## race
+
+`race` builds two or three whole approaches to one job at once and keeps the
+first one whose check passes. Each brief runs on its own sub-agent, in its
+own copy of the project under the scratchpad, so two approaches that change
+the same file never meet in your working tree.
+
+Use it when you ask for rival approaches built and compared, for example
+"try two fixes for this bug and keep the one that passes". Building them one
+after another in the tree means saving, restoring and deleting the loser by
+hand; `race` does it in one call and the loser never touches your files.
+Every run is a sub-agent you pay for, and the result says what each one
+cost.
+
+When a run ends, its edits are checked on the real project through an
+overlay, with `check` set to `build`, `test` or `command`. The first run
+that passes is applied to the working tree, and the others are stopped. The
+result lists every run's outcome, its cost, its requests and its check, and
+the winner's diff. When no run passes, nothing is applied and the tree is
+byte for byte as it was.
+
+The sub-agents run on your model and spawn no sub-agents of their own. A
+call with the wrong number of briefs is refused before anything runs:
+
+```bash
+tofu tool race '{"briefs":["round at the end"],"check":"test","path":"."}' --dir .
+```
+
+```text
+error: race: 1 briefs, and a race takes 2 to 3
+```
+
 ## Parameters
 
 The lead calls them. You watch on the **sub-agents** tab, and raise the
@@ -40,6 +105,11 @@ limits in settings.
 | `spawn` | `owns` | the paths the sub-agent may write |
 | `spawn` | `agent` | a defined sub-agent, on its own model |
 | `spawn` | `effort` | `none` to `max`; left out, the lead's; one the model lacks runs at the nearest it has; on a ticket, a second raise under one acceptance is refused |
+| `spawn` | `estimate` | `true` returns the median USD, calls and wall time of that agent type's finished runs here, and starts nothing |
+| `race` | `briefs` | 2 to 3 briefs, one whole approach each, its tests included |
+| `race` | `check` | `build`, `test` or `command`, run on each run's edits |
+| `race` | `path`, `name` | where the check runs, `.` when left out, and for `test` the one test to run |
+| `race` | `command` | for `command`, the program and its arguments as a list |
 | `message` | `to`, `text`, `stop` | more work, a correction, or a stop; resumes a finished one |
 | `subagents` | none | each sub-agent's state, steps and last tool |
 | `ask` | `question`, `why`, `default` | the default stands when no answer comes |
