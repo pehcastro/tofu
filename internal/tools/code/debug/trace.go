@@ -10,13 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/konst"
 	"tofu/internal/tools/code/dap"
 )
 
-const (
-	traceCalls        = 20
-	traceInstructions = 4096
-)
+const traceCalls = konst.DebugTraceCalls
 
 type call struct {
 	args     []string
@@ -151,7 +149,7 @@ func (t *tracer) watchReturns(ctx context.Context, ip string) error {
 			Instruction string `json:"instruction"`
 		} `json:"instructions"`
 	}
-	if err := t.s.client.Call(ctx, "disassemble", map[string]any{"memoryReference": ip, "instructionCount": traceInstructions}, &listing); err != nil {
+	if err := t.s.client.Call(ctx, "disassemble", map[string]any{"memoryReference": ip, "instructionCount": konst.DebugTraceInstructions}, &listing); err != nil {
 		return err
 	}
 	var asked []map[string]any

@@ -687,6 +687,12 @@ const (
 )
 
 const (
+	EvalRunMillis   = 180_000
+	EvalStdoutLines = 20
+	EvalValueBytes  = 4000
+)
+
+const (
 	ShapeSampleBytes       = 16 << 20
 	ShapeErrorContextBytes = 40
 )
@@ -707,6 +713,9 @@ const (
 	DebugValueRunes    = 120
 	DebugOutputLines   = 8
 	DebugIdleMillis    = 300_000
+
+	DebugTraceCalls        = 20
+	DebugTraceInstructions = 4096
 )
 
 const (
