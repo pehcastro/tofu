@@ -30,7 +30,6 @@ type impacted struct {
 	by       string
 	callers  []caller
 	tests    []string
-	direct   bool
 	packages []string
 	affected []string
 	note     string
@@ -194,10 +193,10 @@ func (s Symbols) impactServed(ctx context.Context, target declared, files []stri
 	server, _ := lsp.ServerFor(target.at.Path)
 	asked, err := s.ask(ctx, server, []declared{target}, files)
 	if err != nil {
-		return contract.Result{}, fmt.Errorf("symbols: %s: %w", server.Program, err)
+		return contract.Result{}, fmt.Errorf("symbols: %w", err)
 	}
 	used := asked.definitions[0].used
-	found := impacted{by: server.Program, direct: true, note: strings.Join(asked.statuses, "; ")}
+	found := impacted{by: server.Program, note: strings.Join(asked.statuses, "; ")}
 	add := func(at lsp.Location, within string, opens int, kind string) {
 		text := lsp.Lines(at.Path)
 		line := ""
@@ -207,9 +206,6 @@ func (s Symbols) impactServed(ctx context.Context, target declared, files []stri
 		switch {
 		case servedTest(text, at, opens):
 			kind = "test"
-			if within != "" {
-				found.tests = append(found.tests, s.shown(at.Path)+" "+within)
-			}
 		case regexp.MustCompile(`^(pub(\([^)]*\))?\s+)?(unsafe\s+)?impl\b|\b(implements|extends)\b|^class\s+\w+\s*\(`).MatchString(line):
 			kind = "impl"
 		}
@@ -222,7 +218,44 @@ func (s Symbols) impactServed(ctx context.Context, target declared, files []stri
 	for _, other := range used.Others {
 		add(other, "", 0, "ref")
 	}
+	if found.tests, err = s.servedTests(ctx, asked, files); err != nil {
+		return contract.Result{}, fmt.Errorf("symbols: %w", err)
+	}
 	return s.impactResult(target, found), nil
+}
+
+func (s Symbols) servedTests(ctx context.Context, asked answer, files []string) ([]string, error) {
+	var tests []string
+	seen := map[lsp.Location]bool{asked.definitions[0].at: true}
+	for {
+		var callers []declared
+		for _, definition := range asked.definitions {
+			for _, call := range definition.used.Calls {
+				text := lsp.Lines(call.Path)
+				if servedTest(text, call.Location, call.Opens) {
+					tests = append(tests, s.shown(call.Path)+" "+cmp.Or(call.Within, fmt.Sprintf("line %d", call.Line)))
+					continue
+				}
+				if call.Within == "" || call.Opens > len(text) {
+					continue
+				}
+				head := text[call.Opens-1]
+				column := lsp.WordAt(head, call.Within)
+				enclosing := lsp.Location{Path: call.Path, Line: call.Opens, Character: lsp.Units(head[:max(column, 0)])}
+				if column >= 0 && !seen[enclosing] {
+					seen[enclosing] = true
+					callers = append(callers, declared{at: enclosing, symbol: call.Within})
+				}
+			}
+		}
+		if len(callers) == 0 {
+			return tests, nil
+		}
+		var err error
+		if asked, err = s.ask(ctx, asked.server, callers, files); err != nil {
+			return nil, err
+		}
+	}
 }
 
 func servedTest(text []string, at lsp.Location, opens int) bool {
@@ -273,9 +306,6 @@ func (s Symbols) impactResult(target declared, found impacted) contract.Result {
 		head string
 		list []string
 	}{{"tests that reach it", found.tests}, {"packages", found.packages}, {"types affected", found.affected}}
-	if found.direct {
-		sections[0].head = "tests that call it directly, since a language server answers one level of callers"
-	}
 	for _, section := range sections {
 		if len(section.list) > 0 {
 			fmt.Fprintf(&out, "\n%s\n  %s\n", section.head, strings.Join(section.list, "\n  "))
