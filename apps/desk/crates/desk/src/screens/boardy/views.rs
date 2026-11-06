@@ -16,7 +16,7 @@ use desk_ui::components::button::{ButtonKind, button};
 use desk_ui::components::card::caption;
 use desk_ui::components::chip::tabular;
 use desk_ui::components::dot_chip::{dot_chip, icon_chip};
-use desk_ui::components::empty::empty_state;
+use desk_ui::components::empty::{EmptyAction, empty_state};
 use desk_ui::components::flip::flip;
 use desk_ui::components::form::TextArea;
 use desk_ui::components::glyph::Glyph;
@@ -769,6 +769,11 @@ pub(super) fn main(
         (Place::Attention, _) => attention(boardy, theme, cx),
         (Place::Board(key, Section::Triage), _) => triage(boardy, &key.clone(), theme, window, cx),
         (Place::Board(key, Section::Milestones), _) => milestones(boardy, key, theme, cx),
+        (Place::Board(_, Section::Tickets), Layout::Board)
+            if boardy.inbox.lanes.iter().all(|(_, cards)| cards.is_empty()) =>
+        {
+            nothing_here(boardy, theme, cx)
+        }
         (Place::Board(_, Section::Tickets), Layout::Board) => {
             columns(boardy, cx).into_any_element()
         }
@@ -792,16 +797,7 @@ fn list(
 ) -> AnyElement {
     let lines = lines(boardy);
     if lines.is_empty() {
-        return empty_state(
-            "boardy-empty",
-            "Nothing here",
-            None,
-            &[],
-            &[],
-            theme,
-            |_, _, _| {},
-        )
-        .into_any_element();
+        return nothing_here(boardy, theme, cx);
     }
     if boardy.follow {
         boardy.follow = false;
@@ -859,6 +855,28 @@ fn list(
             )
         })
         .into_any_element()
+}
+
+fn nothing_here(boardy: &Boardy, theme: &Theme, cx: &Context<Boardy>) -> AnyElement {
+    let new = EmptyAction {
+        label: format!("New {}", boardy.store.words.ticket).into(),
+        glyph: None,
+        keys: Some("C".into()),
+    };
+    let this = cx.weak_entity();
+    empty_state(
+        "boardy-empty",
+        "Nothing here",
+        None,
+        &[new],
+        &[],
+        theme,
+        move |_, _, cx| {
+            this.update(cx, |boardy, cx| boardy.open_create(None, cx))
+                .unwrap_or_else(|_| eprintln!("desk: boardy: the screen is gone"));
+        },
+    )
+    .into_any_element()
 }
 
 fn line_row(boardy: &Boardy, line: &Line, theme: &Theme, cx: &mut Context<Boardy>) -> AnyElement {

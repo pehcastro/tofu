@@ -148,6 +148,8 @@ const OPEN_SETTINGS_ID: &str = "settings.open";
 const FRAME_OVERLAY_ID: &str = "perf.overlay";
 #[cfg(feature = "screen-work")]
 const REOPEN_ID: &str = "tab.reopen";
+#[cfg(feature = "screen-boardy")]
+const NEW_TICKET_ID: &str = "boardy.new";
 #[cfg(feature = "screen-work")]
 const WORK_SCREEN: &str = "work";
 #[cfg(feature = "screen-work")]
@@ -1167,6 +1169,20 @@ impl Desk {
         #[cfg(feature = "screen-work")]
         if id == REOPEN_ID {
             self.reopen(window, cx);
+            return Ok(());
+        }
+        #[cfg(feature = "screen-boardy")]
+        if id == NEW_TICKET_ID {
+            if let Some(off) = self.gated_off(BOARDY_SCREEN) {
+                return Err(Unpicked::Off(off));
+            }
+            self.open_screen(BOARDY_SCREEN, window, cx)
+                .map_err(Unpicked::Failed)?;
+            if let Body::View(view) = &self.shown.body
+                && let Ok(boardy) = view.clone().downcast::<BoardyScreen>()
+            {
+                boardy.update(cx, |boardy, cx| boardy.open_create(None, cx));
+            }
             return Ok(());
         }
         let action = id
@@ -2486,6 +2502,18 @@ impl Desk {
         }
         eprintln!("desk: boardy gate on {} flow {:?}", gate.on, gate.flow);
         self.gate = Some(gate);
+        let mut items = commands(&self.screens);
+        if gate.on {
+            items.push(PaletteItem {
+                id: NEW_TICKET_ID.into(),
+                label: "New ticket".into(),
+                group: "Boardy".into(),
+                keys: Some("C".into()),
+            });
+        }
+        let entries = items.into_iter().map(|item| (item, None)).collect();
+        self.palette
+            .update(cx, |palette, cx| palette.replace(entries, cx));
         let open = self.tabbed.contains(&BOARDY_SCREEN)
             || self.shown.name == BOARDY_SCREEN
             || self.parked.iter().any(|p| p.name == BOARDY_SCREEN);

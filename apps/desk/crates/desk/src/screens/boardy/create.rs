@@ -673,7 +673,7 @@ pub(super) fn modal(
         .flex_col()
         .w(px(if draft.wide { CARD_WIDE } else { CARD_WIDTH }))
         .max_w(relative(CARD_SHARE))
-        .bg(theme.color(ColorToken::ToastFill))
+        .bg(tint(theme.color(ColorToken::ToastFill), 1.0))
         .rounded(px(RADIUS_POP))
         .shadow(vec![
             ring(ink(theme, SHEET_RING)),
