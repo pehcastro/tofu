@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"tofu/internal/konst"
+	"tofu/internal/tools/agents/done"
 )
 
 func handbackOffers() []string {
@@ -29,6 +30,12 @@ func handedBack(reply string) string {
 func pollNote(open []string) string {
 	return "your " + AskPersonToolName + " questions are still open, and the person can answer them after this turn:\n" + strings.Join(open, "\n") +
 		"\nend your report with them as a poll: each question and its options, saying it has no answer yet. take no option for the person and do nothing that depends on one."
+}
+
+func unmetNote(unmet []string) string {
+	return "the turn does not end here, because " + done.Name + " reads these acceptance lines as no:\n" + strings.Join(unmet, "\n") +
+		"\nthis is your one grace turn: fix what each check found, run the check again, and call " + done.Name + " with the new call id before you end. " +
+		"a line you cannot meet is reported as unmet, never as met."
 }
 
 func handbackNote(closing string, tools Registry) string {

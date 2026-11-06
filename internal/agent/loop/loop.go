@@ -29,6 +29,7 @@ import (
 	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
+	"tofu/internal/tools/agents/done"
 	"tofu/internal/tools/agents/forget"
 	"tofu/internal/tools/agents/note"
 	"tofu/internal/tools/contract"
@@ -940,7 +941,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		row.ForkStop = why
 		return endAt(OutcomeForkStop, why, messages)
 	}
-	askedAgainAfterBlank, polled, nudged := false, false, false
+	askedAgainAfterBlank, polled, nudged, graced := false, false, false, false
 	steeredAt := 0
 	var left []string
 	var asked *openQuestion
@@ -1216,6 +1217,17 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			}
 			if blocked != "" {
 				row.Warnings = append(row.Warnings, "the turn ended with a "+string(stop)+" hook still blocking after "+strconv.Itoa(stopContinuations)+" continuations: "+blocked)
+			}
+			unmet := done.Unmet(ctx, messages)
+			if len(unmet) > 0 && !graced {
+				graced = true
+				stepRow.Warnings = append(stepRow.Warnings, "done read a line as no, so the turn did not end and was given one grace turn: "+strings.Join(unmet, "; "))
+				messages = append(messages, inserted(core.Origin{Source: core.SourceHandback}, unmetNote(unmet)))
+				keep(stepRow)
+				continue
+			}
+			if len(unmet) > 0 {
+				row.Warnings = append(row.Warnings, "the turn ended after its one grace turn with done still reading no: "+strings.Join(unmet, "; "))
 			}
 			if asked != nil && !asked.endHeld {
 				asked.endHeld = true

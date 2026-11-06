@@ -103,6 +103,11 @@ func WithEarlierCalls(ctx context.Context, messages []core.Message) context.Cont
 	return context.WithValue(ctx, earlierCallsKey{}, messages)
 }
 
+func EarlierCalls(ctx context.Context) []core.Message {
+	earlier, _ := ctx.Value(earlierCallsKey{}).([]core.Message)
+	return earlier
+}
+
 func (p *Plan) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	args, err := parsePlanArgs(raw)
 	if err != nil {
@@ -110,8 +115,7 @@ func (p *Plan) Run(ctx context.Context, raw json.RawMessage) (contract.Result, e
 	}
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
-	earlier, _ := ctx.Value(earlierCallsKey{}).([]core.Message)
-	next, err := applyPlan(p.items, args, earlier)
+	next, err := applyPlan(p.items, args, EarlierCalls(ctx))
 	if err != nil {
 		return contract.Result{}, err
 	}
