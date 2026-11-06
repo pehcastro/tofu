@@ -60,6 +60,7 @@ import (
 	recalltool "tofu/internal/tools/history/recall"
 	zoomtool "tofu/internal/tools/history/zoom"
 	"tofu/internal/tools/human/ask"
+	"tofu/internal/tools/human/notice"
 	plantool "tofu/internal/tools/human/plan"
 	"tofu/internal/tools/human/remember"
 	"tofu/internal/tools/human/settings"
@@ -125,7 +126,7 @@ func (r runtime) leadTools(lead []contract.Tool) loop.Registry {
 	if r.cron != nil {
 		scheduled = crontool.Cron{Book: r.cron, Now: r.now, Told: r.notify}
 	}
-	return loop.NewRegistry(append(slices.Clone(lead), scheduled)...)
+	return loop.NewRegistry(append(slices.Clone(lead), scheduled, notice.HeadsUp{Say: r.notify})...)
 }
 
 type summaryOmitted struct{ inner loop.Model }

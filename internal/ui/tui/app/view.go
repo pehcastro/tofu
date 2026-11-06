@@ -173,7 +173,8 @@ func (a *App) body() string {
 	case screenChat:
 		a.view.ChatShowsTools = a.flag(isettings.ChatShowsTools)
 		a.view.Welcome = nil
-		a.view.Notice, _ = a.shimmer()
+		shimmered, _ := a.shimmer()
+		a.view.Notice = cmp.Or(a.statusWatch.headsUp, shimmered)
 		a.view.Question = nil
 		if len(a.questions) > 0 {
 			a.view.Question = a.questions[0].Lines(a.width, a.options.Now())

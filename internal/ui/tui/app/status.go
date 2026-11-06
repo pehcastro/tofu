@@ -9,7 +9,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/internal/host"
+	"tofu/internal/tools/human/notice"
 	"tofu/internal/ui/statusline"
+	"tofu/internal/ui/tui/look/look"
 	"tofu/internal/ui/tui/panels/shells"
 )
 
@@ -29,6 +31,7 @@ type statusWatch struct {
 	failure string
 	failed  string
 	cron    string
+	headsUp string
 	focus   focus
 	asks    []Event
 	seen    map[string]time.Time
@@ -81,11 +84,18 @@ func (a *App) followStatus(msg tea.Msg) {
 			watch.failure = msg.Text
 		case msg.Kind == EventDone && msg.Status == host.StatusFailed:
 			watch.failure = msg.Text
-		case msg.Kind == EventTask && msg.Origin.Kind == host.OriginCron:
-			watch.cron = msg.Origin.Job
+		case msg.Kind == EventTask:
+			watch.headsUp = ""
+			if msg.Origin.Kind == host.OriginCron {
+				watch.cron = msg.Origin.Job
+			}
+		case msg.Kind == EventNote && strings.HasPrefix(msg.Text, notice.WarnHead):
+			watch.headsUp = look.Style(look.Amber).Render(msg.Text)
+		case msg.Kind == EventNote && strings.HasPrefix(msg.Text, notice.InfoHead):
+			watch.headsUp = look.Style(look.Text).Render(msg.Text)
 		}
 	case Closed:
-		watch.after = statusline.Done
+		watch.after, watch.headsUp = statusline.Done, ""
 		watch.asks = slices.DeleteFunc(watch.asks, func(asked Event) bool { return asked.Questions == nil })
 		switch {
 		case watch.failure != "":
