@@ -1115,10 +1115,11 @@ type warmProcesses struct {
 	memory   wiring.SessionMemoryModel
 	drops    *loop.DropIndex
 	servers  *lsp.Pool
+	seen     *jobs.Seen
 }
 
 func newWarmProcesses(tabs *browser.BrowserTabs) *warmProcesses {
-	return &warmProcesses{checkers: checkers.NewTypecheckers(), tests: test.NewTestRunners(), tabs: tabs, drops: loop.NewDropIndex(), servers: lsp.NewPool()}
+	return &warmProcesses{checkers: checkers.NewTypecheckers(), tests: test.NewTestRunners(), tabs: tabs, drops: loop.NewDropIndex(), servers: lsp.NewPool(), seen: &jobs.Seen{}}
 }
 
 func (w *warmProcesses) Close() {
@@ -1144,7 +1145,7 @@ func buildRunToolsForRun(dir, set string, ledger *contract.ReadLedger, warm *war
 
 func assembleRunTools(dir, set string, ledger *contract.ReadLedger, warm *warmProcesses, bashTool *loop.BashTool) ([]contract.Tool, *plantool.Plan, error) {
 	if warm == nil {
-		warm = &warmProcesses{}
+		warm = &warmProcesses{seen: &jobs.Seen{}}
 	}
 	typecheckers := warm.checkers
 	reader, readErr := read.NewReadTool(dir)
@@ -1196,7 +1197,7 @@ func assembleRunTools(dir, set string, ledger *contract.ReadLedger, warm *warmPr
 		return nil, nil, err
 	}
 	plan := plantool.NewPlan()
-	full := append([]contract.Tool{readTool, writeTool, shell, plan, jobs.Shells{}, projectTool, globTool, searchTool, symbolsTool.Serving(warm.servers), editTool.Reading(ledger).Checking(typecheckers).Ruling(rules), typecheckTool, testTool, githubTool}, verbTools...)
+	full := append([]contract.Tool{readTool, writeTool, shell, plan, jobs.Shells{Seen: warm.seen}, projectTool, globTool, searchTool, symbolsTool.Serving(warm.servers), editTool.Reading(ledger).Checking(typecheckers).Ruling(rules), typecheckTool, testTool, githubTool}, verbTools...)
 	for _, construct := range leadToolConstructors() {
 		tool, err := construct(dir)
 		if err != nil {

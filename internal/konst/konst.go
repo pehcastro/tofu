@@ -204,6 +204,7 @@ const (
 	BashSoftLimitMillis   = 30000
 	ShellWaitMillis       = 300000
 	ShellWaitMatchMillis  = 1000
+	ShellWaitMissLines    = 5
 	ShellNamedLogBytes    = 65536
 	ShellTailBytes        = 262144
 
