@@ -313,9 +313,11 @@ pub fn settled(session: &Session, entry: &Entry) -> bool {
                         .is_none_or(|agent| agent.ended_at.is_some() && !live(agent)),
                 })
         }
-        Entry::Tool(_) | Entry::Spawn(_) | Entry::Report(_) | Entry::Task(_) | Entry::Done(_) => {
-            true
-        }
+        Entry::Task(turn) => session
+            .turns
+            .get(turn)
+            .is_none_or(|started| started.status.is_some()),
+        Entry::Tool(_) | Entry::Spawn(_) | Entry::Report(_) | Entry::Done(_) => true,
         Entry::Grant { revoked, .. } => *revoked,
         Entry::Resolved(_) => true,
     }
@@ -967,7 +969,7 @@ fn lone(id: &str, tool: &Tool, card: &WireCard) -> Option<Called> {
     };
     let verb = match state {
         CallState::Running => &card.doing,
-        CallState::Done | CallState::Failed | CallState::Skipped => &card.verb,
+        CallState::Done | CallState::Failed | CallState::Skipped | CallState::Warned => &card.verb,
     };
     let object = card.object.as_deref().filter(|object| !object.is_empty());
     Some(Called {
