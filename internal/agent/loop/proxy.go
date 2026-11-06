@@ -103,6 +103,11 @@ func (p *CommandProxy) rewrite(ctx context.Context, call core.ToolCall) (json.Ra
 	if rewritten == "" || rewritten == args.Command {
 		return call.Arguments, row
 	}
+	if runtime.GOOS == "windows" && strings.ContainsAny(args.Command, "{}*?[") {
+		row.Note = "the command ran as it was asked for, without " + proxyUseRTK + ": on Windows " + proxyUseRTK +
+			" passes an argument holding { } * ? or [ unquoted to an MSYS program, whose runtime expands it as a glob before the program reads it. its output is whole and was not filtered"
+		return call.Arguments, row
+	}
 	if verb, reason := refusedVerb(rewritten); verb != "" {
 		row.Note = "the command ran as it was asked for, without " + proxyUseRTK + ": " + proxyUseRTK + " " + verb + " would " + reason + ". its output is whole and was not filtered"
 		return call.Arguments, row
