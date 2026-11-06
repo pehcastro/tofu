@@ -87,14 +87,33 @@ func Unified(path, before, after string) string {
 	old := splitLines(before)
 	out := &strings.Builder{}
 	fmt.Fprintf(out, "--- %s\n+++ %s\n", path, path)
-	for _, hunk := range hunks {
-		head := max(hunk.BeforeStart-konst.DiffContextLinesDefault, 0)
-		tail := min(hunk.BeforeStart+len(hunk.Removed)+konst.DiffContextLinesDefault, len(old))
-		lead, trail := hunk.BeforeStart-head, tail-(hunk.BeforeStart+len(hunk.Removed))
-		fmt.Fprintf(out, "@@ -%d,%d +%d,%d @@\n",
-			head+1, tail-head,
-			hunk.AfterStart-lead+1, lead+len(hunk.Added)+trail)
-		for _, line := range old[head:hunk.BeforeStart] {
+	for len(hunks) > 0 {
+		group := 1
+		for group < len(hunks) && hunks[group].BeforeStart-beforeEnd(hunks[group-1]) <= 2*konst.DiffContextLinesDefault {
+			group++
+		}
+		writeGroup(out, old, hunks[:group])
+		hunks = hunks[group:]
+	}
+	return out.String()
+}
+
+func beforeEnd(hunk Hunk) int {
+	return hunk.BeforeStart + len(hunk.Removed)
+}
+
+func writeGroup(out *strings.Builder, old []string, group []Hunk) {
+	first, last := group[0], group[len(group)-1]
+	head := max(first.BeforeStart-konst.DiffContextLinesDefault, 0)
+	tail := min(beforeEnd(last)+konst.DiffContextLinesDefault, len(old))
+	afterLines := tail - head
+	for _, hunk := range group {
+		afterLines += len(hunk.Added) - len(hunk.Removed)
+	}
+	fmt.Fprintf(out, "@@ -%d,%d +%d,%d @@\n", head+1, tail-head, first.AfterStart-(first.BeforeStart-head)+1, afterLines)
+	at := head
+	for _, hunk := range group {
+		for _, line := range old[at:hunk.BeforeStart] {
 			writeDiffLine(out, ' ', line)
 		}
 		for _, line := range hunk.Removed {
@@ -103,11 +122,11 @@ func Unified(path, before, after string) string {
 		for _, line := range hunk.Added {
 			writeDiffLine(out, '+', line)
 		}
-		for _, line := range old[hunk.BeforeStart+len(hunk.Removed) : tail] {
-			writeDiffLine(out, ' ', line)
-		}
+		at = beforeEnd(hunk)
 	}
-	return out.String()
+	for _, line := range old[at:tail] {
+		writeDiffLine(out, ' ', line)
+	}
 }
 
 func writeDiffLine(out *strings.Builder, sign byte, line string) {
