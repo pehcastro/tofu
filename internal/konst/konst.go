@@ -323,6 +323,13 @@ const (
 )
 
 const (
+	APISignatureBytes = 2000
+	APIDocBytes       = 1500
+	APINames          = 80
+	APIMatches        = 4
+)
+
+const (
 	DiffContextLinesTight   = 2
 	DiffContextLinesDefault = 3
 	DiffContextLinesWide    = 5

@@ -1212,7 +1212,7 @@ func assembleRunTools(dir, set string, ledger *contract.ReadLedger, warm *warmPr
 		return nil, nil, err
 	}
 	plan := plantool.NewPlan()
-	full := append([]contract.Tool{readTool, writeTool, shell, plan, jobs.Shells{Seen: warm.seen}, projectTool, globTool, searchTool, symbolsTool.Serving(warm.servers), editTool.Reading(ledger).Checking(typecheckers).Ruling(rules), typecheckTool, testTool, githubTool}, verbTools...)
+	full := append([]contract.Tool{readTool, writeTool, shell, plan, jobs.Shells{Seen: warm.seen}, projectTool, globTool, searchTool, symbolsTool.Serving(warm.servers), editTool.Reading(ledger).Checking(typecheckers).Ruling(rules), typecheckTool, testTool.Serving(warm.servers), githubTool}, verbTools...)
 	for _, construct := range leadToolConstructors() {
 		tool, err := construct(dir)
 		if err != nil {
@@ -1252,6 +1252,7 @@ func leadToolConstructors() []func(dir string) (contract.Tool, error) {
 		newEvalTool,
 		newMutateTool,
 		newMapTool,
+		newAPITool,
 	}
 }
 
