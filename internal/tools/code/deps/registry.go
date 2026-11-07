@@ -6,10 +6,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	goversion "go/version"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
+
+	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/semver"
 
 	"tofu/internal/konst"
 )
@@ -52,6 +60,10 @@ func (d Deps) ask(ctx context.Context, method, address string, body []byte, into
 		return false, 0, fmt.Errorf("%s answered %s for %s", host, response.Status, address)
 	case into == nil:
 		return true, response.ContentLength, nil
+	}
+	if raw, ok := into.(*[]byte); ok {
+		*raw, err = io.ReadAll(response.Body)
+		return err == nil, response.ContentLength, err
 	}
 	if err := json.NewDecoder(response.Body).Decode(into); err != nil {
 		return false, 0, fmt.Errorf("%s sent an answer that is not the expected JSON: %w", host, err)
@@ -128,6 +140,66 @@ func (d Deps) release(ctx context.Context, e ecosystem, pkg, version string) (re
 		return got, found, err
 	}
 	panic(fmt.Sprintf("deps: unknown ecosystem %d", int(e)))
+}
+
+func (d Deps) newestGoAllowed(ctx context.Context, pkg string) (string, string, error) {
+	text, err := os.ReadFile(filepath.Join(string(d.root), "go.mod"))
+	if err != nil {
+		return "", "", err
+	}
+	project, err := modfile.ParseLax("go.mod", text, nil)
+	if err != nil || project.Go == nil {
+		return "", "", err
+	}
+	allowed := project.Go.Version
+	module := "https://" + goModules.registry() + "/" + goEscape(pkg)
+	var latest struct{ Version string }
+	if found, _, err := d.ask(ctx, http.MethodGet, module+"/@latest", nil, &latest); !found || err != nil {
+		return "", "", err
+	}
+	newestNeeds, err := d.goLine(ctx, module, latest.Version)
+	if err != nil || goversion.Compare("go"+newestNeeds, "go"+allowed) <= 0 {
+		return "", "", err
+	}
+	var listed []byte
+	if _, _, err := d.ask(ctx, http.MethodGet, module+"/@v/list", nil, &listed); err != nil {
+		return "", "", err
+	}
+	var older []string
+	for _, v := range strings.Fields(string(listed)) {
+		if semver.IsValid(v) && semver.Compare(v, latest.Version) < 0 && (semver.Prerelease(v) == "" || semver.Prerelease(latest.Version) != "") {
+			older = append(older, v)
+		}
+	}
+	semver.Sort(older)
+	slices.Reverse(older)
+	needs, errs := make([]string, len(older)), make([]error, len(older))
+	var checked sync.WaitGroup
+	for i, v := range older {
+		checked.Go(func() { needs[i], errs[i] = d.goLine(ctx, module, v) })
+	}
+	checked.Wait()
+	for i, v := range older {
+		if errs[i] != nil {
+			return "", "", errs[i]
+		}
+		if goversion.Compare("go"+needs[i], "go"+allowed) <= 0 {
+			return v, fmt.Sprintf("go_line: kept at %s, the newest release %s needs go %s\n", allowed, latest.Version, newestNeeds), nil
+		}
+	}
+	return "", "", fmt.Errorf("no version of %s allows this module's go %s. the newest, %s, needs go %s", pkg, allowed, latest.Version, newestNeeds)
+}
+
+func (d Deps) goLine(ctx context.Context, module, version string) (string, error) {
+	var text []byte
+	if _, _, err := d.ask(ctx, http.MethodGet, module+"/@v/"+goEscape(version)+".mod", nil, &text); err != nil {
+		return "", err
+	}
+	mod, err := modfile.ParseLax(version+".mod", text, nil)
+	if err != nil || mod.Go == nil {
+		return "", err
+	}
+	return mod.Go.Version, nil
 }
 
 func (d Deps) licensed(ctx context.Context, e ecosystem, pkg string, got release) (string, error) {

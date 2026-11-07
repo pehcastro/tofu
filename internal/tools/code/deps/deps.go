@@ -140,6 +140,12 @@ func (d Deps) change(ctx context.Context, e ecosystem, m mode, pkg, version stri
 	if m == upgrade && from == "" {
 		return refused(asked, pkg+" is not a dependency in "+e.lockfiles()[0]+". use mode add")
 	}
+	goLine := ""
+	if e == goModules && version == "" {
+		if version, goLine, err = d.newestGoAllowed(ctx, pkg); err != nil {
+			return unwritten(err)
+		}
+	}
 	to, found, err := d.release(ctx, e, pkg, version)
 	switch {
 	case err != nil:
@@ -155,7 +161,7 @@ func (d Deps) change(ctx context.Context, e ecosystem, m mode, pkg, version stri
 	}
 	queries := []dependency{{name: pkg, version: to.version}}
 	var said strings.Builder
-	fmt.Fprintf(&said, "deps %s\necosystem: %s\nfrom: %s\nto: %s\nlicense: %s\nsize: %d bytes (%s)\n", asked, e, cmp.Or(from, "none"), to.version, license, to.size, e.registry())
+	fmt.Fprintf(&said, "deps %s\necosystem: %s\nfrom: %s\nto: %s\nlicense: %s\nsize: %d bytes (%s)\n%s", asked, e, cmp.Or(from, "none"), to.version, license, to.size, e.registry(), goLine)
 	if from != "" {
 		before, found, err := d.release(ctx, e, pkg, from)
 		if err != nil {
