@@ -18,6 +18,7 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
 - `session.list`: takes `search`, `limit` and `kind`; answers `head` and `sessions`, each `id`, `name`,
   `handle`, `task`, `turns`, `lastAt`, `wire`, `model`, `costUsd`, `outcome`, `open` (here), `running`,
   `members` (every tofu, desk and serve joined to it), `kept` and `kind`, `main` or `side`; a side chat adds `parent`, `owns`, `preset`, and a fork names the generation it came from as `parent`. It stops reading once `limit` rows are found
+- `client.visible`: takes `visible`; a hidden child checks every 2 s, sends only `session.listed` and `session.updated`, and sends one `resync` a session when shown. A client that never sends it stays visible. The `initialize` capability `noQuota` stops the child's quota checks
 - `session.keep`: takes `session`; keeps this member joined to it without its event stream, so opening another session leaves its cron running. `session.release` takes `session` and lets it go as `session.close` would
 - side chats (capability `side`): `session.branch` takes `session`, `kind: "side"`, `seed` (`summary` or
   `none`), `owns` or `preset`, `name`, `model`, `effort` and `at` `{item}`, the parent's event to branch from

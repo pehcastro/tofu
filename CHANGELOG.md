@@ -48,6 +48,7 @@ Tools that hand the model the answer rather than the log, in Go, Rust, Python an
 - `api` returns the signature and doc of a dependency's name at the version the project pins.
 - `tofu projects` lists every project and its sessions with no host running, and `--json` prints the same as data.
 - `tofu serve` answers `session.keep` and `session.release`: a kept session stays joined without its event stream, so switching away never stops its cron.
+- `tofu serve` answers `client.visible`: a hidden child checks every 2 s, sends only `session.listed` and `session.updated`, and resyncs when shown; the `noQuota` capability stops its quota checks.
 - `tofu rules show <id>` prints what a rule says: its kind, domain, concern, where it came from, its text and its notes; an unknown id names the closest.
 
 ### Changed
