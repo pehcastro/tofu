@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/internal/konst"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/tools/code/dap"
@@ -161,6 +162,40 @@ func (s *session) breakAt(ctx context.Context, spec string) (string, error) {
 		return "", errors.New(place[:cut] + " is not a file")
 	}
 	breaks := append(slices.Clone(s.breaks[path]), breakpoint{line: line, condition: condition})
+	answer, err := s.setBreakpoints(ctx, path, breaks)
+	if err != nil {
+		return "", err
+	}
+	set := answer[len(breaks)-1]
+	refusesUnplaced := s.program == delve().adapter.Program
+	if refusesUnplaced && !set.Verified && set.Message != "" {
+		return "", s.refused(ctx, path, line, set.Message)
+	}
+	for i, set := range answer {
+		breaks[i].id = set.ID
+	}
+	s.breaks[path] = breaks
+	said := "break " + s.shown(path) + ":" + strconv.Itoa(line)
+	if condition != "" {
+		said += " if " + condition
+	}
+	if !set.Verified && set.Message != "" {
+		return said + ": not set yet, " + s.program + " said " + set.Message + "\n", nil
+	}
+	if set.Line != 0 && set.Line != line {
+		return said + ": set at line " + strconv.Itoa(set.Line) + ", the nearest line that runs\n", nil
+	}
+	return said + ": set\n", nil
+}
+
+type placed struct {
+	ID       int    `json:"id"`
+	Verified bool   `json:"verified"`
+	Line     int    `json:"line"`
+	Message  string `json:"message"`
+}
+
+func (s *session) setBreakpoints(ctx context.Context, path string, breaks []breakpoint) ([]placed, error) {
 	asked := make([]map[string]any, len(breaks))
 	for i, held := range breaks {
 		asked[i] = map[string]any{"line": held.line}
@@ -169,37 +204,56 @@ func (s *session) breakAt(ctx context.Context, spec string) (string, error) {
 		}
 	}
 	var answer struct {
-		Breakpoints []struct {
-			ID       int    `json:"id"`
-			Verified bool   `json:"verified"`
-			Line     int    `json:"line"`
-			Message  string `json:"message"`
-		} `json:"breakpoints"`
+		Breakpoints []placed `json:"breakpoints"`
 	}
 	requesting, cancel := context.WithTimeout(ctx, s.limits.Request)
 	defer cancel()
 	if err := s.client.Call(requesting, "setBreakpoints", map[string]any{"source": map[string]any{"path": path}, "breakpoints": asked}, &answer); err != nil {
-		return "", err
+		return nil, err
 	}
 	if len(answer.Breakpoints) != len(breaks) {
-		return "", fmt.Errorf("%s answered %d breakpoints for the %d asked in %s", s.program, len(answer.Breakpoints), len(breaks), s.shown(path))
+		return nil, fmt.Errorf("%s answered %d breakpoints for the %d asked in %s", s.program, len(answer.Breakpoints), len(breaks), s.shown(path))
 	}
-	for i, set := range answer.Breakpoints {
-		breaks[i].id = set.ID
+	return answer.Breakpoints, nil
+}
+
+func (s *session) refused(ctx context.Context, path string, line int, message string) error {
+	said := s.program + " could not set it: " + message + ". "
+	var window []breakpoint
+	for probe := max(1, line-konst.DebugStatementProbeLines); probe <= line+konst.DebugStatementProbeLines; probe++ {
+		window = append(window, breakpoint{line: probe})
 	}
-	s.breaks[path] = breaks
-	set := answer.Breakpoints[len(breaks)-1]
-	said := "break " + s.shown(path) + ":" + strconv.Itoa(line)
-	if condition != "" {
-		said += " if " + condition
+	probed, probeErr := s.setBreakpoints(ctx, path, window)
+	restored, err := s.setBreakpoints(ctx, path, s.breaks[path])
+	if err != nil {
+		return errors.New(said + "putting back the other breaks in " + s.shown(path) + " failed: " + err.Error())
 	}
-	switch {
-	case !set.Verified && set.Message != "":
-		return said + ": not set yet, " + s.program + " said " + set.Message + "\n", nil
-	case set.Line != 0 && set.Line != line:
-		return said + ": set at line " + strconv.Itoa(set.Line) + ", the nearest line that runs\n", nil
+	for i, set := range restored {
+		s.breaks[path][i].id = set.ID
 	}
-	return said + ": set\n", nil
+	if probeErr != nil {
+		return errors.New(said + "the program has not run")
+	}
+	before, after := 0, 0
+	for _, probe := range probed {
+		switch {
+		case !probe.Verified:
+		case probe.Line < line:
+			before = probe.Line
+		case probe.Line > line && after == 0:
+			after = probe.Line
+		}
+	}
+	var near []string
+	for _, statement := range []int{before, after} {
+		if statement != 0 {
+			near = append(near, s.shown(path)+":"+strconv.Itoa(statement))
+		}
+	}
+	if len(near) == 0 {
+		return errors.New(said + "no line within " + strconv.Itoa(konst.DebugStatementProbeLines) + " of it holds a statement, and the program has not run")
+	}
+	return errors.New(said + "the nearest lines with a statement are " + strings.Join(near, " and ") + ", and the program has not run")
 }
 
 func (s *session) run(ctx context.Context) (string, error) {
