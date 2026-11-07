@@ -4,58 +4,58 @@ Written by `go run ./bench/suites/perf/binsize` on 2026-11-07, go1.27.1, windows
 
 | build | bytes | MiB | bytes added | init ms | parser init ms |
 |---|---:|---:|---:|---:|---:|
-| without cat-grep | 65163264 | 62.14 |  | 7.46 | 0.00 |
-| cat-grep, no language | 78374912 | 74.74 | 13211648 | 11.80 | 0.49 |
-| + bash | 79766528 | 76.07 | 1391616 | 16.22 | 2.99 |
-| + c | 79821824 | 76.12 | 55296 | 11.80 | 1.49 |
-| + c_sharp | 80180224 | 76.47 | 358400 | 10.90 | 1.50 |
-| + clojure | 80194048 | 76.48 | 13824 | 10.92 | 1.49 |
-| + cmake | 80236544 | 76.52 | 42496 | 11.40 | 1.49 |
-| + cpp | 80662528 | 76.93 | 425984 | 13.88 | 1.49 |
-| + css | 80696832 | 76.96 | 34304 | 11.40 | 1.49 |
-| + dart | 80811520 | 77.07 | 114688 | 11.89 | 1.49 |
-| + dockerfile | 80847872 | 77.10 | 36352 | 12.40 | 1.49 |
-| + elixir | 81088000 | 77.33 | 240128 | 11.92 | 1.49 |
-| + erlang | 81140736 | 77.38 | 52736 | 12.42 | 1.49 |
-| + go | 81203200 | 77.44 | 62464 | 11.92 | 1.49 |
-| + groovy | 81280512 | 77.52 | 77312 | 11.81 | 1.89 |
-| + haskell | 81697792 | 77.91 | 417280 | 11.80 | 1.90 |
-| + hcl | 81735168 | 77.95 | 37376 | 13.45 | 1.50 |
-| + html | 81782784 | 77.99 | 47616 | 12.41 | 1.98 |
-| + java | 81832448 | 78.04 | 49664 | 12.91 | 1.99 |
-| + javascript | 81899008 | 78.10 | 66560 | 12.81 | 1.50 |
-| + json | 81901056 | 78.11 | 2048 | 12.73 | 1.50 |
-| + julia | 82168320 | 78.36 | 267264 | 11.78 | 2.00 |
-| + kotlin | 82597888 | 78.77 | 429568 | 12.24 | 1.99 |
-| + less | 82624000 | 78.80 | 26112 | 14.29 | 2.39 |
-| + lua | 82651648 | 78.82 | 27648 | 11.38 | 1.50 |
-| + make | 82684928 | 78.85 | 33280 | 11.33 | 1.90 |
-| + markdown | 82778624 | 78.94 | 93696 | 12.92 | 1.90 |
-| + nix | 82821120 | 78.98 | 42496 | 12.70 | 1.90 |
-| + objc | 83080192 | 79.23 | 259072 | 11.81 | 2.39 |
-| + ocaml | 83512320 | 79.64 | 432128 | 11.91 | 1.89 |
-| + php | 83637248 | 79.76 | 124928 | 12.32 | 1.50 |
-| + powershell | 83727360 | 79.85 | 90112 | 12.28 | 1.99 |
-| + proto | 83744768 | 79.87 | 17408 | 12.45 | 1.49 |
-| + python | 83853312 | 79.97 | 108544 | 12.42 | 1.90 |
-| + r | 83921408 | 80.03 | 68096 | 14.33 | 3.40 |
-| + ruby | 84137984 | 80.24 | 216576 | 19.32 | 4.89 |
-| + rust | 84278784 | 80.37 | 140800 | 38.29 | 11.99 |
-| + scala | 84893696 | 80.96 | 614912 | 34.90 | 12.49 |
-| + scss | 84928512 | 80.99 | 34816 | 12.40 | 1.50 |
-| + solidity | 84971520 | 81.04 | 43008 | 10.90 | 1.48 |
-| + sql | 85574656 | 81.61 | 603136 | 10.93 | 1.49 |
-| + svelte | 85606400 | 81.64 | 31744 | 16.91 | 3.40 |
-| + swift | 86022144 | 82.04 | 415744 | 12.32 | 1.90 |
-| + toml | 86034944 | 82.05 | 12800 | 11.41 | 1.99 |
-| + tsx | 86193664 | 82.20 | 158720 | 11.39 | 1.49 |
-| + typescript | 86336000 | 82.34 | 142336 | 11.89 | 1.49 |
-| + vue | 86363648 | 82.36 | 27648 | 11.81 | 1.90 |
-| + yaml | 86530048 | 82.52 | 166400 | 11.84 | 1.98 |
-| + zig | 86578176 | 82.57 | 48128 | 10.91 | 1.50 |
-| every language, built with -tags grammar_subset and one tag per language | 86191104 | 82.20 | -387072 | 11.87 | 0.99 |
+| without cat-grep | 65188352 | 62.17 |  | 5.95 | 0.00 |
+| cat-grep, no language | 78495232 | 74.86 | 13306880 | 9.93 | 0.50 |
+| + bash | 79888384 | 76.19 | 1393152 | 10.83 | 1.50 |
+| + c | 79963648 | 76.26 | 75264 | 11.29 | 1.49 |
+| + c_sharp | 80291328 | 76.57 | 327680 | 14.29 | 1.50 |
+| + clojure | 80329728 | 76.61 | 38400 | 11.44 | 1.49 |
+| + cmake | 80356352 | 76.63 | 26624 | 12.91 | 1.49 |
+| + cpp | 80791552 | 77.05 | 435200 | 10.84 | 1.49 |
+| + css | 80808960 | 77.07 | 17408 | 10.97 | 1.49 |
+| + dart | 80939520 | 77.19 | 130560 | 10.78 | 1.48 |
+| + dockerfile | 80970752 | 77.22 | 31232 | 11.34 | 1.49 |
+| + elixir | 81207808 | 77.45 | 237056 | 11.28 | 1.90 |
+| + erlang | 81263104 | 77.50 | 55296 | 10.93 | 1.49 |
+| + go | 81318912 | 77.55 | 55808 | 10.83 | 1.50 |
+| + groovy | 81415680 | 77.64 | 96768 | 11.33 | 1.49 |
+| + haskell | 81813504 | 78.02 | 397824 | 12.41 | 1.49 |
+| + hcl | 81871360 | 78.08 | 57856 | 11.25 | 1.49 |
+| + html | 81905152 | 78.11 | 33792 | 11.84 | 1.49 |
+| + java | 81953280 | 78.16 | 48128 | 9.95 | 1.49 |
+| + javascript | 82018304 | 78.22 | 65024 | 11.31 | 1.49 |
+| + json | 82038272 | 78.24 | 19968 | 12.91 | 1.49 |
+| + julia | 82297344 | 78.48 | 259072 | 11.92 | 1.49 |
+| + kotlin | 82728448 | 78.90 | 431104 | 10.90 | 1.49 |
+| + less | 82733568 | 78.90 | 5120 | 10.89 | 1.49 |
+| + lua | 82783232 | 78.95 | 49664 | 11.87 | 1.49 |
+| + make | 82799616 | 78.96 | 16384 | 10.03 | 1.49 |
+| + markdown | 82913280 | 79.07 | 113664 | 10.93 | 1.49 |
+| + nix | 82944000 | 79.10 | 30720 | 9.95 | 1.49 |
+| + objc | 83200512 | 79.35 | 256512 | 11.43 | 1.49 |
+| + ocaml | 83652608 | 79.78 | 452096 | 12.82 | 1.98 |
+| + php | 83764736 | 79.88 | 112128 | 12.39 | 1.49 |
+| + powershell | 83863040 | 79.98 | 98304 | 11.44 | 1.90 |
+| + proto | 83869696 | 79.98 | 6656 | 11.80 | 1.50 |
+| + python | 83970048 | 80.08 | 100352 | 10.92 | 1.49 |
+| + r | 84055552 | 80.16 | 85504 | 10.95 | 1.49 |
+| + ruby | 84260864 | 80.36 | 205312 | 11.39 | 1.49 |
+| + rust | 84399104 | 80.49 | 138240 | 11.43 | 1.50 |
+| + scala | 85015552 | 81.08 | 616448 | 11.42 | 1.49 |
+| + scss | 85050880 | 81.11 | 35328 | 11.41 | 1.89 |
+| + solidity | 85086208 | 81.14 | 35328 | 11.26 | 1.90 |
+| + sql | 85696000 | 81.73 | 609792 | 9.90 | 1.49 |
+| + svelte | 85725184 | 81.75 | 29184 | 11.44 | 1.49 |
+| + swift | 86146048 | 82.16 | 420864 | 11.43 | 1.49 |
+| + toml | 86164480 | 82.17 | 18432 | 10.89 | 1.49 |
+| + tsx | 86317568 | 82.32 | 153088 | 11.80 | 1.90 |
+| + typescript | 86474240 | 82.47 | 156672 | 11.90 | 1.49 |
+| + vue | 86484992 | 82.48 | 10752 | 11.95 | 1.99 |
+| + yaml | 86650368 | 82.64 | 165376 | 10.43 | 1.50 |
+| + zig | 86694400 | 82.68 | 44032 | 10.93 | 1.49 |
+| every language, built with -tags grammar_subset and one tag per language | 86308864 | 82.31 | -385536 | 9.46 | 0.50 |
 
-With cat-grep and every language (47) the binary is 86578176 bytes, 82.57 MiB, 21414912 bytes more than without cat-grep, and the parser packages take 1.50 ms of init. Built with the tags below, which drop the scanners of every grammar tofu does not use, it is 86191104 bytes and 0.99 ms.
+With cat-grep and every language that built (47) the binary is 86694400 bytes, 82.68 MiB, 21506048 bytes more than without cat-grep, and the parser packages take 1.49 ms of init. Built with the tags below, which drop the scanners of every grammar tofu does not use, it is 86308864 bytes and 0.50 ms.
 
 ```
 -tags grammar_subset,grammar_subset_bash,grammar_subset_c,grammar_subset_c_sharp,grammar_subset_clojure,grammar_subset_cmake,grammar_subset_cpp,grammar_subset_css,grammar_subset_dart,grammar_subset_dockerfile,grammar_subset_elixir,grammar_subset_erlang,grammar_subset_go,grammar_subset_groovy,grammar_subset_haskell,grammar_subset_hcl,grammar_subset_html,grammar_subset_java,grammar_subset_javascript,grammar_subset_json,grammar_subset_julia,grammar_subset_kotlin,grammar_subset_less,grammar_subset_lua,grammar_subset_make,grammar_subset_markdown,grammar_subset_nix,grammar_subset_objc,grammar_subset_ocaml,grammar_subset_php,grammar_subset_powershell,grammar_subset_proto,grammar_subset_python,grammar_subset_r,grammar_subset_ruby,grammar_subset_rust,grammar_subset_scala,grammar_subset_scss,grammar_subset_solidity,grammar_subset_sql,grammar_subset_svelte,grammar_subset_swift,grammar_subset_toml,grammar_subset_tsx,grammar_subset_typescript,grammar_subset_vue,grammar_subset_yaml,grammar_subset_zig
