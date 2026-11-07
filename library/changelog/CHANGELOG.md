@@ -86,6 +86,7 @@ Tools that hand the model the answer rather than the log, in Go, Rust, Python an
 - `bash` keeps what a test printed beside its failures, and rtk keeps its history under tofu's own config, out of the project.
 - A sub-agent whose spawn is refused before it starts reads errored, never running.
 - Reopening a session whose turn is running joins that turn.
+- `deps add` on Go with no version takes the newest release the module's `go` line allows, and says when it kept the line.
 
 ## 0.5.21 - 2026-11-05
 
