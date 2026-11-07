@@ -10,6 +10,8 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.22 - 2026-11-07
+
 Tools that hand the model the answer rather than the log, in Go, Rust, Python and TypeScript, and `tofu tool` to run any of them by hand.
 
 ### Added
@@ -85,6 +87,7 @@ Tools that hand the model the answer rather than the log, in Go, Rust, Python an
 - A sub-agent whose spawn is refused before it starts reads errored, never running.
 - Reopening a session whose turn is running joins that turn.
 - `deps add` on Go with no version takes the newest release the module's `go` line allows, and says when it kept the line.
+- A busy turn no longer drops the TUI or desk from its session for a missed heartbeat: only 10 s of silence from it does.
 - A tool that fails to start is named in `tofu tool list`, `tofu run` and the turn, and every other tool still loads.
 - A spawn whose task quotes a path that names no folder, such as `<project>/<origin>`, composes its sub-agent.
 

@@ -144,6 +144,18 @@ FAIL TestDiscounted order_test.go:17: got 650, want 675
 
 `changed` runs only inside a turn, so `tofu tool test` cannot show it.
 
+## mutate
+
+`mutate` answers whether a test would catch a bug in a file. It plants
+small bugs in `path` one at a time, runs the test named in `test` against
+each in an overlay, and returns every survivor as `path:line` with the
+change the test missed. The project's files are never changed.
+`test_path` names the package of the test when it lives in another one.
+
+```bash
+tofu tool mutate '{"path":"order.go","test":"TestDiscounted"}' --dir .
+```
+
 ## Parameters
 
 The model calls both tools on its own. Neither has a command of its own;
