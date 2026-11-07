@@ -9,7 +9,8 @@ use desk_core::git::{
 };
 use desk_core::limits::TOAST_LIFETIME;
 use desk_ui::components::overlay::MenuButton;
-use gpui::{Context, Entity, Task, UniformListScrollHandle, Window};
+use desk_ui::components::tree::{ProjectTable, project_folder};
+use gpui::{Context, Entity, Subscription, Task, UniformListScrollHandle, Window};
 
 use super::history::History;
 use super::pane::Panes;
@@ -137,6 +138,7 @@ pub struct GitScreen {
     pub(super) opened: Instant,
     pub(super) _watching: Option<Task<()>>,
     pub(super) _toast: Option<Task<()>>,
+    _project: Subscription,
 }
 
 impl GitScreen {
@@ -168,9 +170,23 @@ impl GitScreen {
             opened: Instant::now(),
             _watching: None,
             _toast: None,
+            _project: cx.observe_global_in::<ProjectTable>(window, Self::follow_project),
         };
         screen.open_repo(cx);
         screen
+    }
+
+    fn follow_project(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(folder) = project_folder(cx).filter(|folder| *folder != self.root) else {
+            return;
+        };
+        let root = folder.to_path_buf();
+        eprintln!("desk: git reloads for {}", root.display());
+        let (left, right) = (self.left, self.right);
+        *self = GitScreen::new(root, window, cx);
+        self.left = left;
+        self.right = right;
+        cx.notify();
     }
 
     pub fn snapshot(&self) -> &Snapshot {

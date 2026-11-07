@@ -224,10 +224,16 @@ impl GitScreen {
         let Some(git) = self.binary() else {
             return;
         };
+        let asked = Arc::clone(&git);
         let read = cx.background_spawn(async move { read(&git) });
         cx.spawn(async move |screen, cx| {
             let read = loaded(read.await);
             let kept = screen.update(cx, |screen, cx| {
+                if !screen.binary().is_some_and(|git| Arc::ptr_eq(&git, &asked)) {
+                    return eprintln!(
+                        "desk: git: an answer for a folder no longer shown was dropped"
+                    );
+                }
                 if keep(screen, read, cx) == Shown::Changed {
                     cx.notify();
                 }
@@ -241,10 +247,20 @@ impl GitScreen {
 
     pub(super) fn open_repo(&mut self, cx: &mut Context<Self>) {
         let root = self.root.clone();
-        let opened = cx.background_spawn(async move { GitBinary::open(&root) });
+        let opened = cx.background_spawn({
+            let root = root.clone();
+            async move { GitBinary::open(&root) }
+        });
         cx.spawn(async move |screen, cx| {
             let opened = opened.await;
-            if let Err(error) = screen.update(cx, |screen, cx| screen.opened_repo(opened, cx)) {
+            let kept = screen.update(cx, |screen, cx| match screen.root == root {
+                true => screen.opened_repo(opened, cx),
+                false => eprintln!(
+                    "desk: git: {} opened after the screen moved on",
+                    root.display()
+                ),
+            });
+            if let Err(error) = kept {
                 eprintln!("desk: git: the repository opened after the screen closed: {error}");
             }
         })

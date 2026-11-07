@@ -279,6 +279,54 @@ struct Folder {
     git: Option<Arc<GitBinary>>,
     tree: Entity<FileTree>,
     watched: Option<flume::Sender<Watched>>,
+    missing: Option<SharedString>,
+}
+
+struct Rooted {
+    listing: Listing,
+    git: Option<Arc<GitBinary>>,
+    top: Vec<TreeNode>,
+    missing: Option<SharedString>,
+}
+
+impl Rooted {
+    fn read(root: PathBuf) -> Rooted {
+        if !root.is_dir() {
+            let missing = format!("{} is not a folder any more", root.display());
+            return Rooted {
+                listing: Listing::new(root),
+                git: None,
+                top: Vec::new(),
+                missing: Some(missing.into()),
+            };
+        }
+        let git = repository(&root);
+        let (listing, top, _) = listed(root, git.as_deref(), &[]);
+        Rooted {
+            listing,
+            git,
+            top,
+            missing: None,
+        }
+    }
+}
+
+type Listed = (Listing, Vec<TreeNode>, Vec<(String, Vec<TreeNode>)>);
+
+fn listed(root: PathBuf, git: Option<&GitBinary>, folders: &[String]) -> Listed {
+    let mut listing = Listing::new(root);
+    if let Some(git) = git {
+        match states(git, &listing.root) {
+            Ok(found) => listing.states = found,
+            Err(error) => eprintln!("desk: editor shows no git badges: {error}"),
+        }
+    }
+    let top = listing.children("");
+    let inside = folders
+        .iter()
+        .map(|folder| (folder.clone(), listing.children(folder)))
+        .collect();
+    (listing, top, inside)
 }
 
 impl Folder {
@@ -295,6 +343,7 @@ impl Folder {
             pack,
             tree: cx.new(|_| tree),
             watched: None,
+            missing: None,
         })
     }
 
@@ -340,6 +389,7 @@ pub struct Editor {
     _edited: Subscription,
     _watching: Option<Task<()>>,
     _refreshing: Option<Task<()>>,
+    _rooting: Option<(PathBuf, Task<()>)>,
     _unfolding: Vec<Task<()>>,
     _marking: Option<Task<()>>,
     _blaming: Option<Task<()>>,
@@ -425,6 +475,7 @@ impl Editor {
             _edited: cx.observe_global::<EditedFile>(Self::edited),
             _watching: None,
             _refreshing: None,
+            _rooting: None,
             _unfolding: Vec::new(),
             _marking: None,
             _blaming: None,
@@ -464,15 +515,60 @@ impl Editor {
             return;
         };
         if root == self.folder.listing.root {
+            self._rooting = None;
             return;
         }
-        let folder = match Folder::new(root, cx) {
-            Ok(folder) => folder,
-            Err(error) => return eprintln!("desk: editor keeps its folder: {error}"),
-        };
-        eprintln!("desk: editor rooted at {}", folder.listing.root.display());
-        self._tree = cx.subscribe_in(&folder.tree, window, Self::tree_event);
-        self.folder = folder;
+        if self
+            ._rooting
+            .as_ref()
+            .is_some_and(|(asked, _)| *asked == root)
+        {
+            return;
+        }
+        let read = cx.background_spawn({
+            let root = root.clone();
+            async move { Rooted::read(root) }
+        });
+        let rooting = cx.spawn_in(window, async move |editor, cx| {
+            let rooted = read.await;
+            let landed =
+                editor.update_in(cx, |editor, window, cx| editor.rooted(rooted, window, cx));
+            if let Err(error) = landed {
+                eprintln!("desk: editor closed before its new folder was read: {error}");
+            }
+        });
+        self._rooting = Some((root, rooting));
+    }
+
+    fn rooted(&mut self, rooted: Rooted, window: &mut Window, cx: &mut Context<Self>) {
+        let Rooted {
+            listing,
+            git,
+            top,
+            missing,
+        } = rooted;
+        if project_folder(cx).map(absolute).as_ref() != Some(&listing.root) {
+            return eprintln!(
+                "desk: editor drops {}, the selection moved on",
+                listing.root.display()
+            );
+        }
+        self._rooting = None;
+        eprintln!("desk: editor rooted at {}", listing.root.display());
+        if let Some(missing) = &missing {
+            eprintln!("desk: editor shows no files: {missing}");
+        }
+        let tree = FileTree::new("editor-files", top, &self.folder.icons)
+            .badges()
+            .focusable(cx);
+        let tree = cx.new(|_| tree);
+        self._tree = cx.subscribe_in(&tree, window, Self::tree_event);
+        self._refreshing = None;
+        self.folder.tree = tree;
+        self.folder.listing = Arc::new(listing);
+        self.folder.git = git;
+        self.folder.watched = None;
+        self.folder.missing = missing;
         let aside = self.aside.take().map(|pane| pane.pages).unwrap_or_default();
         self.pages.extend(aside);
         self.pages.retain(|page| page.dirty);
@@ -485,7 +581,7 @@ impl Editor {
         #[cfg(feature = "screen-work")]
         self.close_docks();
         self.start_watching(cx);
-        self.refresh(cx);
+        self.rewatch(cx);
         self.index(cx);
         cx.notify();
     }
@@ -1123,26 +1219,11 @@ impl Editor {
             .map(String::from)
             .collect();
         let started = Instant::now();
-        let listed = cx.background_executor().spawn(async move {
-            let mut listing = Listing::new(root);
-            if let Some(git) = git {
-                match states(&git, &listing.root) {
-                    Ok(found) => listing.states = found,
-                    Err(error) => eprintln!("desk: editor shows no git badges: {error}"),
-                }
-            }
-            let top = listing.children("");
-            let inside: Vec<(String, Vec<TreeNode>)> = folders
-                .into_iter()
-                .map(|folder| {
-                    let children = listing.children(&folder);
-                    (folder, children)
-                })
-                .collect();
-            (listing, top, inside)
-        });
+        let read = cx
+            .background_executor()
+            .spawn(async move { listed(root, git.as_deref(), &folders) });
         self._refreshing = Some(cx.spawn(async move |this, cx| {
-            let (listing, top, inside) = listed.await;
+            let (listing, top, inside) = read.await;
             let done = this.update(cx, |editor, cx| {
                 let icons = &editor.folder.icons;
                 let count = top.len();
@@ -2529,7 +2610,19 @@ impl Render for Editor {
                 cx.listener(|editor, at: &usize, window, cx| editor.tree_pick(*at, window, cx)),
             )
             .child(painted)
-            .child(self.folder.tree.clone());
+            .child(match &self.folder.missing {
+                None => self.folder.tree.clone().into_any_element(),
+                Some(missing) => empty_state(
+                    "editor-folder-missing",
+                    "Folder not found",
+                    Some(missing.clone()),
+                    &[],
+                    &[],
+                    &theme,
+                    |_, _, _| {},
+                )
+                .into_any_element(),
+            });
         let side = div()
             .flex()
             .flex_col()
