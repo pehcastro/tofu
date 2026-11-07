@@ -295,12 +295,11 @@ process.stdout.write("\n" + env.TOFU_EVAL_MARKER + "\n" + JSON.stringify(out) + 
 
 const pythonRunner = `import importlib
 import json
-import os
 import sys
 import time
 import traceback
+from os import environ as env
 
-env = os.environ
 sys.path[0:1] = [env["TOFU_EVAL_ROOT"], env["TOFU_EVAL_DIR"]]
 names = {"__builtins__": __builtins__}
 try:

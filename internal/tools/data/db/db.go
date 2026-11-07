@@ -22,6 +22,7 @@ import (
 	sqlite3 "modernc.org/sqlite/lib"
 
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/credential"
 	"tofu/internal/tools/contract"
 )
 
@@ -145,6 +146,9 @@ func (d DB) locate(file, env string) (engine, string, error) {
 		return sqliteEngine(path, file, "opened "+file+"\n"), "", nil
 	}
 	key := cmp.Or(env, defaultKey)
+	if slices.Contains(credential.KeyNames(), key) {
+		return engine{}, "db: env names " + key + ", which holds a tofu credential rather than a connection, so it is not read", nil
+	}
 	value, err := d.connection(key)
 	if err != nil {
 		return engine{}, "", err
@@ -188,7 +192,7 @@ func isSQLite(path string) bool {
 }
 
 func (d DB) connection(key string) (string, error) {
-	body, err := os.ReadFile(filepath.Join(string(d.root), ".env"))
+	body, err := credential.ReadCredential(filepath.Join(string(d.root), credential.CredentialFileName))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("db: reading .env: %w", err)
 	}
