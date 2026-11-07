@@ -84,6 +84,10 @@ prints the host's process, socket, project, version, members and start time; `to
 
 lists this project's conversations, one row per family, newest first, `●` on the head, each with its handle, age, steps, state and task, and counts the sessions idle past `sessionStaleDays`. A session that cannot be read goes under `unreadable` with a `✗`. `--all` adds the side chats. Every session command takes `head` in place of a name or an id, for the session `●` marks: `tofu session trace head`, `tofu session request head <request id>`. In a project with no session, `head` says `no session recorded here` and points at `tofu session list`.
 
+    tofu projects --json
+
+lists every project tofu knows, the one opened last first, each with its id, path, name, `lastUsed`, `missing` when its folder is gone, and its sessions: id, name, handle, `lastAt`, `working`, and `endedAt` with `endReason` once one ended. It reads each session's header up to its turn count and the file times, starts no host and no git, and registers nothing; a session whose header does not read is counted under `skipped`. Opening a project with tofu stamps its `lastUsed`.
+
     tofu session <name|id|head>
 
 prints the family: when it started, how long it was worked on (each turn from its first event to its

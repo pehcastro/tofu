@@ -106,21 +106,25 @@ func takeLock(path string) (*os.File, *lockHolder, error) {
 }
 
 func (s *Store) Busy(id string) error {
-	path := filepath.Join(s.Dir(id), lockName)
+	holder, held, err := heldLock(filepath.Join(s.Dir(id), lockName))
+	if held && holder.PID != os.Getpid() {
+		return BusyError{ID: id, PID: holder.PID, Since: holder.Since}
+	}
+	return err
+}
+
+func heldLock(path string) (lockHolder, bool, error) {
 	if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
-		return nil
+		return lockHolder{}, false, nil
 	}
 	file, held, err := platformfs.TryLock(path)
 	switch {
 	case err != nil:
-		return err
+		return lockHolder{}, false, err
 	case !held:
-		return file.Close()
+		return lockHolder{}, false, file.Close()
 	}
-	if holder := holderOf(path); holder.PID != os.Getpid() {
-		return BusyError{ID: id, PID: holder.PID, Since: holder.Since}
-	}
-	return nil
+	return holderOf(path), true, nil
 }
 
 func holderOf(path string) lockHolder {

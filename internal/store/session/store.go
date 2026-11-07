@@ -963,24 +963,56 @@ func (s *Store) scanEvents(id string, held func(Event) bool, scanned func(line [
 }
 
 func (s *Store) Listing() (Listing, error) {
-	ids, err := entryIDs(s.dir)
+	return s.listingBy(func(entry sessionEntry) (Header, error) {
+		if header, kept := s.headers[entry.id]; kept {
+			return header, nil
+		}
+		return s.readEntry(entry)
+	}, s.heldHeader)
+}
+
+func (s *Store) listingBy(read func(sessionEntry) (Header, error), keep func(id string, header Header) Header) (Listing, error) {
+	entries, err := sessionEntries(s.dir)
 	if err != nil {
 		return Listing{}, err
 	}
+	headers, failures, gone := make([]Header, len(entries)), make([]error, len(entries)), make([]bool, len(entries))
+	inParallel(len(entries), func(i int) {
+		headers[i], failures[i] = read(entries[i])
+		if errors.Is(failures[i], fs.ErrNotExist) {
+			_, logged := os.Stat(s.EventsPath(entries[i].id))
+			gone[i] = errors.Is(logged, fs.ErrNotExist)
+		}
+	})
 	var listing Listing
-	for _, id := range ids {
-		header, err := s.read(id)
-		if _, logged := os.Stat(s.EventsPath(id)); errors.Is(err, fs.ErrNotExist) && errors.Is(logged, fs.ErrNotExist) {
-			continue
+	for i, entry := range entries {
+		switch {
+		case gone[i]:
+		case failures[i] != nil:
+			listing.Skipped = append(listing.Skipped, Skip{ID: entry.id, Reason: failures[i]})
+		default:
+			listing.Sessions = append(listing.Sessions, keep(entry.id, headers[i]))
 		}
-		if err != nil {
-			listing.Skipped = append(listing.Skipped, Skip{ID: id, Reason: err})
-			continue
-		}
-		listing.Sessions = append(listing.Sessions, header)
 	}
 	slices.SortFunc(listing.Sessions, func(a, b Header) int { return b.At.Compare(a.At) })
 	return listing, nil
+}
+
+func inParallel(n int, do func(i int)) {
+	next := make(chan int)
+	var workers sync.WaitGroup
+	for range min(max(runtime.GOMAXPROCS(0)/konst.CPUsPerReadWorker, 1), n) {
+		workers.Go(func() {
+			for i := range next {
+				do(i)
+			}
+		})
+	}
+	for i := range n {
+		next <- i
+	}
+	close(next)
+	workers.Wait()
 }
 
 func (s *Store) Head() (Head, error) {
@@ -1066,15 +1098,28 @@ func (s *Store) read(id string) (Header, error) {
 	if header, kept := s.headers[id]; kept {
 		return header, nil
 	}
+	header, err := s.readEntry(sessionEntry{id: id})
+	if err != nil {
+		return Header{}, err
+	}
+	return s.heldHeader(id, header), nil
+}
+
+func (s *Store) readEntry(entry sessionEntry) (Header, error) {
+	id := entry.id
 	if err := namesOneSession(id); err != nil {
 		return Header{}, err
+	}
+	if entry.singleFile {
+		header, _, err := s.singleFile(id)
+		return header, err
 	}
 	path := filepath.Join(s.Dir(id), headerName)
 	var at fileStamp
 	if s.recent != nil {
 		at = stampOf(path)
 		if header, found := s.recent.header(id, at); found {
-			return s.heldHeader(id, header), nil
+			return header, nil
 		}
 	}
 	raw, err := s.readSettled(path)
@@ -1089,7 +1134,7 @@ func (s *Store) read(id string) (Header, error) {
 		if at.found {
 			s.recent.keepHeader(id, at, header)
 		}
-		return s.heldHeader(id, header), nil
+		return header, nil
 	}
 	if !errors.Is(err, fs.ErrNotExist) {
 		return Header{}, err

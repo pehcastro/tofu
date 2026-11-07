@@ -8,6 +8,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -451,7 +452,12 @@ func marshalled(value any) json.RawMessage {
 	return raw
 }
 
-func entryIDs(dir string) ([]string, error) {
+type sessionEntry struct {
+	id         string
+	singleFile bool
+}
+
+func sessionEntries(dir string) ([]sessionEntry, error) {
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, fs.ErrNotExist) {
 		return nil, nil
@@ -459,15 +465,17 @@ func entryIDs(dir string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	var ids []string
+	var listed []sessionEntry
 	for _, entry := range entries {
 		name := entry.Name()
 		switch {
 		case entry.IsDir() && !strings.HasPrefix(name, "."):
-			ids = append(ids, name)
+			listed = append(listed, sessionEntry{id: name})
 		case !entry.IsDir() && filepath.Ext(name) == legacySuffix:
-			ids = append(ids, strings.TrimSuffix(name, legacySuffix))
+			id := strings.TrimSuffix(name, legacySuffix)
+			at, named := slices.BinarySearchFunc(entries, id, func(entry os.DirEntry, id string) int { return strings.Compare(entry.Name(), id) })
+			listed = append(listed, sessionEntry{id: id, singleFile: !named || !entries[at].IsDir()})
 		}
 	}
-	return ids, nil
+	return listed, nil
 }

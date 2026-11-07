@@ -84,6 +84,7 @@ Verbs:
   judge     read a state and a question battery, print the answers
   check     run the tool gate on a shell command, in shadow, and log it
   session   list the recorded sessions, read one, rename one, or continue one
+  projects  list every project tofu knows, newest opened first, with its sessions
   shells    list the persistent processes an agent left running, read one's log, kill one
   hooks     list the Claude Code, codex and tofu hooks a turn runs, with where each
             came from, its trust and its last result, or trust this project's
@@ -306,6 +307,8 @@ func verbNamed(name string) verb {
 		return verb{run: continueVerb}
 	case "session":
 		return verb{sessionVerb, strings.Join([]string{sessionSubcommands, sessionBranchUsage, sessionDrainUsage, sessionFindUsage, sessionTraceUsage, sessionTranscriptUsage}, " ")}
+	case "projects":
+		return verb{withoutIn(projectsVerb), projectsUsage}
 	case "shells":
 		return verb{run: withoutIn(shellsverb.Verb)}
 	case "hooks":

@@ -524,6 +524,20 @@ func TestProjectOpenedWithoutTheFlagStopsBeingTemporaryAndTheFlagNeverMarksAKept
 	}
 }
 
+func TestProjectEveryOpenStampsUsedAndALaterOpenMovesItForward(t *testing.T) {
+	home := stateHome(t)
+	kept := openedAs(t, false, filepath.Join(t.TempDir(), "kept"))
+	first := registered(t, home)[filepath.Base(kept.State)]
+	if first.Used.IsZero() || first.Temporary {
+		t.Fatalf("the first open of a kept project is registered as %+v, want used stamped and not temporary", first)
+	}
+	openedAs(t, true, kept.Path)
+	again := registered(t, home)[filepath.Base(kept.State)]
+	if !again.Used.After(first.Used) || again.Temporary {
+		t.Fatalf("the reopen of a kept project is registered as %+v after %+v, want used later and still not temporary", again, first)
+	}
+}
+
 func TestProjectReapWithNothingIdleLeavesTheRegistryUnwritten(t *testing.T) {
 	home := stateHome(t)
 	openedAs(t, false, filepath.Join(t.TempDir(), "kept"))

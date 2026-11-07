@@ -258,6 +258,10 @@
   do: tofu session resume <name|id|head>
   check: tofu session list
   topic: sessions
+- ask: list every project and its sessions
+  do: tofu projects --json
+  check: tofu projects
+  topic: sessions
 - ask: give a session a name
   do: tofu session rename <name|id|head> "<new name>"
   check: tofu session info <name|id|head>

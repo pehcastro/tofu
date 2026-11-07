@@ -74,17 +74,17 @@ type Family struct {
 func (f Family) Head() Header { return f.Generations[len(f.Generations)-1] }
 
 func (l Listing) Families() []Family {
-	byID := map[string]Header{}
-	for _, header := range l.Sessions {
-		byID[header.ID] = header
+	byID := make(map[string]*Header, len(l.Sessions))
+	for i := range l.Sessions {
+		byID[l.Sessions[i].ID] = &l.Sessions[i]
 	}
 	members := map[string][]Header{}
 	for _, header := range l.Sessions {
-		chain := []Header{header}
-		for parent, found := byID[header.Parent]; found && !slices.ContainsFunc(chain, func(seen Header) bool { return seen.ID == parent.ID }); parent, found = byID[parent.Parent] {
-			chain = append(chain, parent)
+		chain := []string{header.ID}
+		for parent := byID[header.Parent]; parent != nil && !slices.Contains(chain, parent.ID); parent = byID[parent.Parent] {
+			chain = append(chain, parent.ID)
 		}
-		first := chain[len(chain)-1].ID
+		first := chain[len(chain)-1]
 		members[first] = append(members[first], header)
 	}
 	families := make([]Family, 0, len(members))
@@ -95,7 +95,7 @@ func (l Listing) Families() []Family {
 		for _, header := range generations {
 			familyOf[header.ID] = len(families)
 		}
-		families = append(families, Family{Identity: identityOf(head, byID[first], len(generations)), Generations: generations, BranchedFrom: byID[first].BranchedFrom})
+		families = append(families, Family{Identity: identityOf(head, *byID[first], len(generations)), Generations: generations, BranchedFrom: byID[first].BranchedFrom})
 	}
 	for _, family := range families {
 		if family.BranchedFrom == nil {

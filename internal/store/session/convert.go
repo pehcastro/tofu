@@ -40,14 +40,15 @@ type oldEntry struct {
 }
 
 func (s *Store) PlanConversion() (Conversion, error) {
-	ids, err := entryIDs(s.dir)
+	listed, err := sessionEntries(s.dir)
 	if err != nil {
 		return Conversion{}, err
 	}
 	var plan Conversion
 	entries := map[string]*oldEntry{}
 	var order []string
-	for _, id := range ids {
+	for _, entry := range listed {
+		id := entry.id
 		if !s.legacy(id) {
 			continue
 		}

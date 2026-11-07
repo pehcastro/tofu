@@ -50,17 +50,16 @@ type projectRegistry struct {
 }
 
 type Project struct {
-	Path         string
-	State        string
-	Legacy       string
-	Registered   bool
-	Temporary    bool
-	Moved        *ProjectEntry
-	home         string
-	remote       string
-	root         string
-	identified   bool
-	wasTemporary bool
+	Path       string
+	State      string
+	Legacy     string
+	Registered bool
+	Temporary  bool
+	Moved      *ProjectEntry
+	home       string
+	remote     string
+	root       string
+	identified bool
 }
 
 func projectKey(path string) string {
@@ -110,7 +109,7 @@ func dashed(s string) string {
 	}, s)
 }
 
-func samePath(a, b string) bool {
+func SamePath(a, b string) bool {
 	if FoldsCase() {
 		return strings.EqualFold(a, b)
 	}
@@ -119,7 +118,7 @@ func samePath(a, b string) bool {
 
 func (r projectRegistry) holding(path string) *ProjectEntry {
 	for i, entry := range r.Projects {
-		if slices.ContainsFunc(entry.Paths, func(p string) bool { return samePath(p, path) }) {
+		if slices.ContainsFunc(entry.Paths, func(p string) bool { return SamePath(p, path) }) {
 			return &r.Projects[i]
 		}
 	}
@@ -169,9 +168,8 @@ func readProjectRegistry(home string) (projectRegistry, error) {
 }
 
 type registeredEntry struct {
-	Folder    string   `json:"folder"`
-	Paths     []string `json:"paths"`
-	Temporary bool     `json:"temporary"`
+	Folder string   `json:"folder"`
+	Paths  []string `json:"paths"`
 }
 
 func registeredFolder(home, path string) (registeredEntry, error) {
@@ -217,8 +215,8 @@ func folderHolding(decoder *json.Decoder, path string) (registeredEntry, error) 
 			if err := decoder.Decode(&entry); err != nil {
 				return found, err
 			}
-			if found.Folder == "" && slices.ContainsFunc(entry.Paths, func(p string) bool { return samePath(p, path) }) {
-				found = registeredEntry{Folder: entry.Folder, Temporary: entry.Temporary}
+			if found.Folder == "" && slices.ContainsFunc(entry.Paths, func(p string) bool { return SamePath(p, path) }) {
+				found = registeredEntry{Folder: entry.Folder}
 			}
 		}
 		if _, err := decoder.Token(); err != nil {
@@ -241,7 +239,7 @@ func locateProject(home, dir string) (Project, projectRegistry, error) {
 		return Project{}, projectRegistry{}, err
 	}
 	if found.Folder != "" {
-		project.State, project.Registered, project.wasTemporary = filepath.Join(projects, found.Folder), true, found.Temporary
+		project.State, project.Registered = filepath.Join(projects, found.Folder), true
 		return project, projectRegistry{}, nil
 	}
 	registry, err := readProjectRegistry(home)
@@ -367,7 +365,8 @@ func (p Project) RegisterIdentityLater() error {
 		if registry.folder(filepath.Base(p.State)) != nil {
 			return nil, fmt.Errorf("the project folder %s was taken by another project while %s was opening", p.State, p.Path)
 		}
-		entry := ProjectEntry{Folder: filepath.Base(p.State), Paths: []string{p.Path}, Remote: p.remote, Root: p.root, Created: time.Now().UTC(), Temporary: p.Temporary, Used: usedNow(p.Temporary)}
+		now := time.Now().UTC()
+		entry := ProjectEntry{Folder: filepath.Base(p.State), Paths: []string{p.Path}, Remote: p.remote, Root: p.root, Created: now, Temporary: p.Temporary, Used: now}
 		if p.Legacy != "" {
 			entry.Legacy = filepath.Base(p.Legacy)
 		}
@@ -376,25 +375,20 @@ func (p Project) RegisterIdentityLater() error {
 	})
 }
 
-func usedNow(temporary bool) time.Time {
-	if temporary {
-		return time.Now().UTC()
-	}
-	return time.Time{}
-}
-
 func (p Project) Reopen() error {
-	if !p.wasTemporary {
-		return nil
-	}
 	return p.editRegistry(func(registry *projectRegistry) (*ProjectEntry, error) {
 		entry := registry.holding(p.Path)
 		if entry == nil {
 			return nil, fmt.Errorf("%s left the project registry while it was opening", p.Path)
 		}
-		entry.Temporary, entry.Used = p.Temporary, usedNow(p.Temporary)
+		entry.Temporary, entry.Used = entry.Temporary && p.Temporary, time.Now().UTC()
 		return entry, nil
 	})
+}
+
+func Registered(home string) ([]ProjectEntry, error) {
+	registry, err := readProjectRegistry(home)
+	return registry.Projects, err
 }
 
 func ReapTemporaryProjects(home string, now time.Time) ([]string, error) {

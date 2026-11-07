@@ -55,6 +55,11 @@ const (
 	servePoll        = konst.ServeShellPollMillis * time.Millisecond
 )
 
+const (
+	hubLockSuffix     = ".lock"
+	hubRegistrySuffix = ".json"
+)
+
 var (
 	ErrHubRunning = errors.New("a tofu host already serves this project")
 	errNoHub      = errors.New("no tofu host serves this project")
@@ -151,7 +156,7 @@ func placeOf(project string) (hubPlace, error) {
 	if err != nil {
 		return hubPlace{}, err
 	}
-	return hubPlace{project: abs, socket: socket, lock: short + ".lock", log: short + ".log", registry: filepath.Join(home, hubHostsDir, key+".json")}, nil
+	return hubPlace{project: abs, socket: socket, lock: short + hubLockSuffix, log: short + ".log", registry: filepath.Join(home, hubHostsDir, key+hubRegistrySuffix)}, nil
 }
 
 func socketWithinLimit(socket string) (string, error) {
@@ -204,6 +209,43 @@ func HubStatusOf(project string) (HubStatus, error) {
 		return HubStatus{}, err
 	}
 	return askStatus(place)
+}
+
+func RunningHubs() ([]HubStatus, error) {
+	home, err := fs.HomeConfigDir()
+	if err != nil {
+		return nil, err
+	}
+	registries, err := os.ReadDir(filepath.Join(home, hubHostsDir))
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var running []HubStatus
+	for _, registry := range registries {
+		key, isRegistry := strings.CutSuffix(registry.Name(), hubRegistrySuffix)
+		if !isRegistry || len(key) < hubShortKey || !hubLockHeld(filepath.Join(home, hubSocketDir, key[:hubShortKey]+hubLockSuffix)) {
+			continue
+		}
+		var status HubStatus
+		if data, err := os.ReadFile(filepath.Join(home, hubHostsDir, registry.Name())); err == nil && json.Unmarshal(data, &status) == nil {
+			running = append(running, status)
+		}
+	}
+	return running, nil
+}
+
+func hubLockHeld(lock string) bool {
+	if _, err := os.Stat(lock); err != nil {
+		return false
+	}
+	file, held, err := fs.TryLock(lock)
+	if err == nil && !held {
+		_ = file.Close()
+	}
+	return held
 }
 
 func StopHub(project string) (HubStatus, error) {
