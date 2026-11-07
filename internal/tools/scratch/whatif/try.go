@@ -93,14 +93,14 @@ func Try(ctx context.Context, root contract.Root, files map[string]string, check
 		return Answer{}, fmt.Errorf("whatif: the overlay was not made: %w", err)
 	}
 	defer func() { _ = made.Remove() }()
-	planned, err := planOf(made, string(root), from, check)
+	planned, err := planOf(made, files, string(root), from, check)
 	if err != nil {
 		return Answer{}, err
 	}
 	return planned.run(ctx, made, limits.Check), nil
 }
 
-func planOf(made overlay.Overlay, root, from string, check Check) (plan, error) {
+func planOf(made overlay.Overlay, files map[string]string, root, from string, check Check) (plan, error) {
 	inTree := func(dir string) (string, error) {
 		tree, err := made.Tree()
 		rel, _ := filepath.Rel(root, dir)
@@ -117,13 +117,22 @@ func planOf(made overlay.Overlay, root, from string, check Check) (plan, error) 
 	default:
 		return plan{}, fmt.Errorf("whatif: check %q is none of build, test or command", check.Kind)
 	}
+	if contract.IsFile(from) || filepath.Ext(from) == ".go" {
+		from = filepath.Dir(from)
+	}
 	project, at := projectOf(root, from)
 	switch project {
 	case goModule:
 		rel, _ := filepath.Rel(at, from)
 		pkg := "./" + filepath.ToSlash(rel)
 		dir, overlaid, err := at, []string{made.GoFlag()}, error(nil)
-		if _, absent := os.Stat(from); absent != nil {
+		_, absent := os.Stat(from)
+		for edited := range files {
+			if _, missing := os.Stat(filepath.Join(root, filepath.Dir(filepath.FromSlash(edited)))); missing != nil {
+				absent = missing
+			}
+		}
+		if absent != nil {
 			dir, err = inTree(at)
 			overlaid = nil
 		}
