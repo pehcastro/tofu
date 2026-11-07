@@ -14,30 +14,12 @@ use serde_json::Value;
 
 use crate::limits;
 use crate::protocol::{
-    Ack, InitializeParams, InitializeResult, Notification, Refusal, Request, RequestId,
-    ServerRequest, SessionParams, request,
+    InitializeParams, InitializeResult, Notification, Refusal, Request, RequestId, ServerRequest,
+    request,
 };
 
-pub struct SessionKeep;
-
-impl Request for SessionKeep {
-    const METHOD: &'static str = "session.keep";
-    type Params = SessionParams;
-    type Result = Ack;
-}
-
-#[derive(Serialize)]
-pub struct ClientVisibleParams {
-    pub visible: bool,
-}
-
-pub struct ClientVisible;
-
-impl Request for ClientVisible {
-    const METHOD: &'static str = "client.visible";
-    type Params = ClientVisibleParams;
-    type Result = Ack;
-}
+pub use crate::protocol::ClientVisibleParams;
+pub use crate::protocol::request::{ClientVisible, SessionKeep};
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;

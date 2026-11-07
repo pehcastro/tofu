@@ -936,6 +936,18 @@
       ],
       "type": "object"
     },
+    "ClientVisibleParams": {
+      "additionalProperties": false,
+      "properties": {
+        "visible": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "visible"
+      ],
+      "type": "object"
+    },
     "CommandList": {
       "additionalProperties": false,
       "properties": {
@@ -3409,6 +3421,9 @@
           "format": "date-time",
           "type": "string"
         },
+        "kept": {
+          "type": "boolean"
+        },
         "kind": {
           "enum": [
             "tui",
@@ -4317,6 +4332,12 @@
     "PlanStep": {
       "additionalProperties": false,
       "properties": {
+        "call": {
+          "type": "string"
+        },
+        "check": {
+          "type": "string"
+        },
         "phase": {
           "type": "string"
         },
@@ -5730,6 +5751,9 @@
         "item": {
           "type": "string"
         },
+        "kept": {
+          "type": "boolean"
+        },
         "kind": {
           "type": "string"
         },
@@ -5981,6 +6005,9 @@
         },
         "id": {
           "type": "string"
+        },
+        "kept": {
+          "type": "boolean"
         },
         "kind": {
           "type": "string"
@@ -11674,6 +11701,87 @@
             },
             "params": {
               "$ref": "#/$defs/SessionCloseParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.keep"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.release"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "client.visible"
+            },
+            "params": {
+              "$ref": "#/$defs/ClientVisibleParams"
             }
           },
           "required": [
@@ -18977,7 +19085,10 @@
     "boardy",
     "scratch",
     "sessions",
-    "takeover"
+    "takeover",
+    "keep",
+    "visible",
+    "noQuota"
   ],
   "x-notifications": {
     "account.state": {
@@ -19365,6 +19476,14 @@
       },
       "result": {
         "$ref": "#/$defs/boardy.TriageAnswer"
+      }
+    },
+    "client.visible": {
+      "params": {
+        "$ref": "#/$defs/ClientVisibleParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Ack"
       }
     },
     "cron.command": {
@@ -19831,6 +19950,14 @@
         "$ref": "#/$defs/SessionInfo"
       }
     },
+    "session.keep": {
+      "params": {
+        "$ref": "#/$defs/SessionParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Ack"
+      }
+    },
     "session.list": {
       "params": {
         "$ref": "#/$defs/SessionListParams"
@@ -19845,6 +19972,14 @@
       },
       "result": {
         "$ref": "#/$defs/SessionOpenResult"
+      }
+    },
+    "session.release": {
+      "params": {
+        "$ref": "#/$defs/SessionParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Ack"
       }
     },
     "session.rename": {
