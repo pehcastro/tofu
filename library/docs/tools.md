@@ -22,6 +22,9 @@ Each group has a page of its own:
   name is declared and who calls it, what a change reaches, which files
   matter for a task, and what a dependency looks like at its pinned
   version.
+- `tofu docs tools-debug`: `debug`, which runs a Go or Python program or
+  test under `dlv` or `debugpy`, stops it at a line, and prints the values
+  there, or lists every call of one Go function.
 - `tofu docs tools-work`: `plan`, `history`, `fetch`, `web_search`, `env`,
   `http`, `record`, `profile`, `shape`, `db`, `spawn`, `race`,
   `ask_person` and `heads_up`, which organize the work, read the web and

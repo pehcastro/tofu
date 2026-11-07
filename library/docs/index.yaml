@@ -462,6 +462,14 @@
   do: tofu docs turn-history
   check: tofu tool list --dir .
   topic: turn-history
+- ask: see the values on one call of a function without print lines
+  do: tofu tool debug '{"steps":["start test TestTill","break till.go:14 --if t.rung == 3","run","eval cents","stop"]}' --dir .
+  check: tofu tool list --dir .
+  topic: tools-debug
+- ask: list every call of a go function with its arguments and result
+  do: tofu tool debug '{"steps":["start test TestTill","trace orders.(*Till).Ring","stop"]}' --dir .
+  check: tofu tool list --dir .
+  topic: tools-debug
 - ask: which tools does the review agent get
   do: tofu tool list --agent review
   check: tofu tool list --dir .

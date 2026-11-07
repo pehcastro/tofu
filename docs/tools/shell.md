@@ -2,7 +2,7 @@
 title: Shell
 description: bash wraps your shell for one command at a time, and shell is tofu's own registry of the servers bash kept running.
 order: 3
-updated: 2026-11-06
+updated: 2026-11-07
 ---
 
 `bash` is a wrapper: it runs `<your shell> -c <command>` in the working
@@ -137,6 +137,26 @@ bash: changed on disk under the project: notes.txt
 
 In a tree too large to walk cheaply, the line says the check was skipped.
 
+What the test itself printed is kept. For `go test`, `unittest` and
+`pytest`, the lines the program wrote, such as a `fmt.Println` or a
+`print`, come after the verdict under `printed by the program:`, and the
+runner's own lines are left out. A long block keeps its first lines and
+says how many more it did not show.
+
+```bash
+tofu tool bash '{"command":"go test -run TestRing ."}' --dir .
+```
+
+```text
+go test: 1 failed (passes print only under -v)
+FAIL TestRing ring_test.go:14: got 1425, want 1500
+printed by the program:
+rang 1 for 250
+rang 2 for 500
+rang 3 for 675
+the command exited 1
+```
+
 ## Waiting for a server
 
 `shell wait` with `for` returns as soon as a kept shell is ready, rather
@@ -185,11 +205,17 @@ By default, each `bash` command is first passed to `rtk rewrite`, with a 5 s
 limit, and the rewritten command runs instead, such as `rtk git diff` for
 `git diff`, so the model reads a compact form of the same output. A
 background command, a piped one and a redirected one run as written, and
-so does a build, test or install that could move to a background shell,
-because rtk prints nothing until the command exits. rtk
+so does a build or install that could move to a background shell,
+because rtk prints nothing until the command exits. A test command, such
+as `go test`, `cargo test`, `pytest` or `vitest`, always runs as written,
+so what the test printed reaches the model whole. rtk
 also stands aside when it isn't on `PATH`, when the project ships
 `.rtk/filters.toml`, and when the rewrite is `rtk tsc` or `rtk npx`, which
 can download a compiler.
+
+rtk keeps a history of the commands it ran. tofu points it at
+`~/.tofu/rtk/history.db`, so no `rtk` folder appears in your project. An
+`RTK_DB_PATH` you set yourself wins.
 
 To turn it off, put this in `tools/shell/proxy.yaml` under `~/.tofu` or the
 project's `.tofu`:

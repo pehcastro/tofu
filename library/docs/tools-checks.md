@@ -46,8 +46,12 @@ run its commands. Each result is the answer rather than a log: counts and
 - `bash` folds the output of `go test`, `go build`, `go vet`, `cargo test`,
   `cargo check`, `pytest`, `unittest` and `pyright --outputjson`: a passing
   run is one line, a failure keeps its name, `path:line`, got and want, and
-  a build error keeps its `path:line` and message. It ends with `bash:
-  changed on disk under the project:` and the paths a command changed.
+  a build error keeps its `path:line` and message. What the test itself
+  printed for `go test`, `unittest` and `pytest` follows under `printed by
+  the program:`. A test command always runs as written, never through rtk,
+  and rtk's history goes to `~/.tofu/rtk/history.db`, never the project. It
+  ends with `bash: changed on disk under the project:` and the paths a
+  command changed.
 - `shell wait` with `for` returns once a kept shell is ready: a line
   matching a regular expression, `port:3000`, `file:dist/app.js`, or an
   `http://` address answering 200. `shell logs` folds what a shell printed

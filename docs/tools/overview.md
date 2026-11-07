@@ -2,7 +2,7 @@
 title: Tools overview
 description: What a tool is in tofu, which ones are tofu's own Go code and which wrap a program, and what tofu does to every result.
 order: 1
-updated: 2026-11-06
+updated: 2026-11-07
 ---
 
 A tool is a function the model can call during a turn. The model only asks:
@@ -16,7 +16,8 @@ Most tools are tofu's own Go code: `read`, `write`, `edit`, `glob`,
 `whatif`, the browser tools and the sub-agent tools.
 `profile` runs the project's own profiler. A few wrap a program: `bash` wraps your
 shell, `typecheck` and `test` wrap the project's own checkers and test
-runners for Go, Rust, Python and TypeScript, `github_pr_diff` wraps `gh`, and
+runners for Go, Rust, Python and TypeScript, `debug` wraps `dlv` and
+`debugpy`, `github_pr_diff` wraps `gh`, and
 the `tofu_*` verbs run the tofu binary.
 
 Every tool runs by hand with `tofu tool`, which prints the exact text the
@@ -28,6 +29,7 @@ model would receive. See [One tool call by hand](/docs/cli/tool).
 | [Code intelligence](/docs/tools/code) | symbols, map, api |
 | [Shell](/docs/tools/shell) | bash, shell |
 | [Checks](/docs/tools/checks) | typecheck, test |
+| [Debug](/docs/tools/debug) | debug |
 | [Web](/docs/tools/web) | web_search, fetch, github_pr_diff |
 | [Work](/docs/tools/work) | plan, settings, artifact_fetch, history, ask_person, heads_up, skill, tofu verbs |
 | [Sub-agents](/docs/tools/sub-agents) | spawn, race, message, subagents, ask |
