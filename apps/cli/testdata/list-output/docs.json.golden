@@ -178,6 +178,51 @@ exit 0
         "summary": "tofu reports what the lead, each sub-agent and each kept shell is doing with OSC 7501, so a terminal or an agent inbox reads it instead of guessing"
       },
       {
+        "topic": "tool",
+        "title": "One tool call by hand",
+        "summary": "list the tools a run offers and run one call the way the loop runs it, printing the exact text the model would receive"
+      },
+      {
+        "topic": "tools-change",
+        "title": "The tools that change code",
+        "summary": "what codemod, scaffold, format and deps give the model: one code shape rewritten everywhere on the syntax tree, a new file shaped like a sibling, the project's formatter on the files named, and a dependency added after its license, size and advisories are read"
+      },
+      {
+        "topic": "tools-checks",
+        "title": "Checks, files and shell tools",
+        "summary": "what test, typecheck, read, write, edit, bash and shell give the model, and how to see it for yourself"
+      },
+      {
+        "topic": "tools-code",
+        "title": "Code intelligence tools",
+        "summary": "what symbols, map and api give the model: where a name is declared and who calls it, what a change reaches, what matters for a task, and a dependency at its pinned version"
+      },
+      {
+        "topic": "tools-context",
+        "title": "Tools for the agent's own context and its own work",
+        "summary": "what context, budget, forget, note, digest, done, claims and the review agent give the model"
+      },
+      {
+        "topic": "tools-debug",
+        "title": "The debug tool",
+        "summary": "what debug gives the model: a Go or Python program or test run under dlv or debugpy, stopped at a line, with the values there, and every call of one Go function"
+      },
+      {
+        "topic": "tools-work",
+        "title": "Work, web, environment and delegation tools",
+        "summary": "what plan, history, fetch, web_search, env, http, record, profile, shape, db, spawn, race, ask_person and heads_up give the model"
+      },
+      {
+        "topic": "tools",
+        "title": "What the tools return",
+        "summary": "what each tool gives the model, grouped by job, which page says more about each group, and how to see a result for yourself"
+      },
+      {
+        "topic": "turn-history",
+        "title": "History and undo",
+        "summary": "changes, trail, bisect, checkpoint and whatif, the tools that say what each turn changed, find the turn that broke a check, and put back one turn's edits while keeping the rest"
+      },
+      {
         "topic": "update",
         "title": "Updating tofu",
         "summary": "how tofu finds the latest release, installs it in the background or with tofu update, and says when to restart"
@@ -580,6 +625,12 @@ exit 0
         "topic": "sessions"
       },
       {
+        "ask": "list every project and its sessions",
+        "do": "tofu projects --json",
+        "check": "tofu projects",
+        "topic": "sessions"
+      },
+      {
         "ask": "give a session a name",
         "do": "tofu session rename <name|id|head> \"<new name>\"",
         "check": "tofu session info <name|id|head>",
@@ -830,6 +881,198 @@ exit 0
         "do": "tofu guard git commit-msg .git/COMMIT_EDITMSG",
         "check": "tofu guard git release-docs .git/COMMIT_EDITMSG",
         "topic": "guard"
+      },
+      {
+        "ask": "run one tool call by hand and see what the model would read",
+        "do": "tofu tool read '{\"path\":\"README.md\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tool"
+      },
+      {
+        "ask": "run the tests of one package and see only what failed",
+        "do": "tofu tool test '{\"path\":\".\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "check a report against the calls the session made",
+        "do": "tofu tool claims '{\"report\":\"All tests pass.\"}' --dir . --session head",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "what did the last few turns change",
+        "do": "tofu tool changes '{\"turns\":4}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "turn-history"
+      },
+      {
+        "ask": "which turn made this change, and put it back",
+        "do": "tofu tool trail '{\"mode\":\"find\",\"anchor\":\"handling fee\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "turn-history"
+      },
+      {
+        "ask": "who wrote this line",
+        "do": "tofu tool trail '{\"mode\":\"owner_of\",\"line\":\"order.go:11\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "turn-history"
+      },
+      {
+        "ask": "which turn broke the tests",
+        "do": "tofu tool bisect '{\"check\":\"test\",\"name\":\"TestTotal\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "turn-history"
+      },
+      {
+        "ask": "try an edit without changing my files",
+        "do": "tofu docs turn-history",
+        "check": "tofu tool list --dir .",
+        "topic": "turn-history"
+      },
+      {
+        "ask": "see the values on one call of a function without print lines",
+        "do": "tofu tool debug '{\"steps\":[\"start test TestTill\",\"break till.go:14 --if t.rung == 3\",\"run\",\"eval cents\",\"stop\"]}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools-debug"
+      },
+      {
+        "ask": "list every call of a go function with its arguments and result",
+        "do": "tofu tool debug '{\"steps\":[\"start test TestTill\",\"trace orders.(*Till).Ring\",\"stop\"]}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools-debug"
+      },
+      {
+        "ask": "rewrite one code shape everywhere without touching strings",
+        "do": "tofu tool codemod '{\"lang\":\"go\",\"pattern\":\"t.Fatalf($$$ARGS)\",\"rewrite\":\"t.Errorf($$$ARGS)\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools-change"
+      },
+      {
+        "ask": "make a new file shaped like an existing one",
+        "do": "tofu tool scaffold '{\"kind\":\"type\",\"name\":\"Invoice\",\"like\":\"order.go\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools-change"
+      },
+      {
+        "ask": "format only the files i changed",
+        "do": "tofu tool format '{\"paths\":[\"label.go\"]}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools-change"
+      },
+      {
+        "ask": "add a dependency after checking its license and advisories",
+        "do": "tofu tool deps '{\"mode\":\"add\",\"package\":\"github.com/google/uuid\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools-change"
+      },
+      {
+        "ask": "which dependencies have a newer release",
+        "do": "tofu tool deps '{\"mode\":\"outdated\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools-change"
+      },
+      {
+        "ask": "which tools does the review agent get",
+        "do": "tofu tool list --agent review",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "typecheck go, rust or python code",
+        "do": "tofu tool typecheck '{\"path\":\".\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "read the lines around one function",
+        "do": "tofu tool read '{\"path\":\"order.go\",\"at\":\"Total\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "who calls this function, through every import alias",
+        "do": "tofu tool symbols '{\"name\":\"total\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "what else must change if I change this type",
+        "do": "tofu tool symbols '{\"name\":\"Order\",\"mode\":\"impact\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "rename a function everywhere it is used",
+        "do": "tofu tool symbols '{\"name\":\"total\",\"path\":\"src/pricing.rs\",\"mode\":\"rename\",\"to\":\"amount\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "which files matter for this task",
+        "do": "tofu tool map '{\"task\":\"Discounted returns 650, want 675\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "what does this dependency look like at the version we pinned",
+        "do": "tofu tool api '{\"package\":\"github.com/pelletier/go-toml/v2\",\"name\":\"NewDecoder\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "can this project build here, and which env keys are missing",
+        "do": "tofu tool env '{}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "see what is in the project database without writing to it",
+        "do": "tofu tool db '{\"env\":\"DATABASE_URL\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "get a type for a json sample",
+        "do": "tofu tool shape '{\"path\":\"orders.json\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "what does a sub-agent usually cost before I start one",
+        "do": "tofu tool spawn '{\"estimate\":true,\"agent\":\"go-dev\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "try two approaches at once and keep the one that passes",
+        "do": "tofu docs tools",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "tell me something during a turn without stopping it",
+        "do": "tofu tool heads_up '{\"level\":\"info\",\"line\":\"the full test run takes about two minutes\"}' --dir .",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "what does the model see filling its own window",
+        "do": "tofu tool context '{}' --dir . --session head",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "what has this session cost, by turn and by agent",
+        "do": "tofu tool budget '{}' --dir . --session head",
+        "check": "tofu tool list --dir .",
+        "topic": "tools"
+      },
+      {
+        "ask": "let the model ask a cheap model about one long result",
+        "do": "tofu settings set modelTier.dumb <source/model>",
+        "check": "tofu settings",
+        "topic": "tools"
       }
     ]
   },

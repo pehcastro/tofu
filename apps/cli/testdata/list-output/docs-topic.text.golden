@@ -104,8 +104,8 @@ The detail
     the entries.
   - `autoMemory`: answering always on a memory card turns it on.
   - `episodes`: on also sends their view after the memory and through every
-    fork, and offers zoom and recall. Off keeps none and offers neither, while
-    the memory still goes.
+    fork, and offers the `history` tool's `zoom` and `recall` modes. Off keeps
+    none and offers neither mode, while the memory still goes.
   - `memoryFromAllUsers`: the memory lives in the repository's `.tofu` folder.
     Project local memory applies to everyone either way.
   - `memoryModel`: each summary is one line of at most 512 bytes. Empty takes

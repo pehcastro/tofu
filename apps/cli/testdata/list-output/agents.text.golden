@@ -1,6 +1,6 @@
 exit 1
 --- stdout
-Sub-agents · 14 defined                                               ✗ 1 broken
+Sub-agents · 15 defined                                               ✗ 1 broken
 
   ○ idle      inherit                   project  runs on the orchestrator's
     model
@@ -18,7 +18,8 @@ Sub-agents · 14 defined                                               ✗ 1 bro
     gate before it edits, changes the least it can, and is done only when go
     vet, the covering tests and the project's linter pass the way the project
     runs them.
-    tools      read, glob, search, symbols, edit, write, bash, skill
+    tools      read, glob, search, symbols, edit, typecheck, test, write,
+      bash, skill, codemod, scaffold, format, deps
     reference  go-verify  3.1 KB
     reference  go-errors-and-context  3.9 KB
     reference  go-concurrency  3.8 KB
@@ -33,7 +34,8 @@ Sub-agents · 14 defined                                               ✗ 1 bro
     project's own gate before it edits, runs every tool through the project's
     own environment, and is done only when ruff, the type checker and the
     covering tests pass the way the project runs them.
-    tools      read, glob, search, symbols, edit, write, bash, skill
+    tools      read, glob, search, symbols, edit, typecheck, test, write,
+      bash, skill, codemod, scaffold, format, deps
     reference  py-verify  3.5 KB
     reference  py-errors-and-resources  3.5 KB
     reference  py-async  3.2 KB
@@ -44,11 +46,17 @@ Sub-agents · 14 defined                                               ✗ 1 bro
     reproduction, or an input and the path it takes. Spawned by /hunt last;
     writes only in its scratch folder.
     tools      read, glob, search, symbols, bash, write, skill
+  ○ review    inherit                   library  Reads the changes a turn made
+    and the task it was given, in a fresh context, and reports what is wrong
+    with them as findings with path:line and kind. Read-only. Spawned by the
+    lead before the person sees the work, never by the author of the changes.
+    tools      read, glob, search, symbols, changes, skill
   ○ rust-dev  inherit                   library  Writes and fixes Rust in the
     project it is given. Reads the manifest and the toolchain before it edits,
     changes the least it can, and is done only when cargo check, clippy, the
     covering tests and fmt pass the way the project runs them.
-    tools      read, glob, search, symbols, edit, write, bash, skill
+    tools      read, glob, search, symbols, edit, typecheck, test, write,
+      bash, skill, codemod, scaffold, format, deps
     reference  gpui-verify  3.8 KB
     reference  rust-verify  3.8 KB
     reference  gpui-layout  3.6 KB
@@ -70,7 +78,7 @@ Sub-agents · 14 defined                                               ✗ 1 bro
     in the project it is given. Reads before it edits, changes the least it can,
     and is done only when the project's own typecheck, lint and tests pass.
     tools      read, glob, search, symbols, edit, typecheck, test, write,
-      bash, skill
+      bash, skill, codemod, scaffold, format, deps
     reference  react-effects  4.1 KB
     reference  react-rules-and-compiler  4.7 KB
     reference  react-rendering  4.1 KB

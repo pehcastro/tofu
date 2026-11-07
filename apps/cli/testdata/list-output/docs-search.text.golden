@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                           73 matches
+Docs · "change the colours"                                          103 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -8,6 +8,10 @@ Docs · "change the colours"                                           73 matche
     → tofu boardy manager add <session>
   change when a scheduled job fires
     → /cron edit c1 --schedule "every 30m" --reason "the build is stable"
+  what did the last few turns change
+    → tofu tool changes '{"turns":4}' --dir .
+  format only the files i changed
+    → tofu tool format '{"paths":["label.go"]}' --dir .
   Sub-agents
     → tofu docs agents
   What an API key has spent
@@ -64,6 +68,24 @@ Docs · "change the colours"                                           73 matche
     → tofu docs start
   Program status on the terminal
     → tofu docs status
+  One tool call by hand
+    → tofu docs tool
+  The tools that change code
+    → tofu docs tools-change
+  Checks, files and shell tools
+    → tofu docs tools-checks
+  Code intelligence tools
+    → tofu docs tools-code
+  Tools for the agent's own context and its own work
+    → tofu docs tools-context
+  The debug tool
+    → tofu docs tools-debug
+  Work, web, environment and delegation tools
+    → tofu docs tools-work
+  What the tools return
+    → tofu docs tools
+  History and undo
+    → tofu docs turn-history
   Updating tofu
     → tofu docs update
   Subscription quota
@@ -136,6 +158,44 @@ Docs · "change the colours"                                           73 matche
     → ctrl+p in the app, type part of it, then enter
   check a commit message the way the git hook does
     → tofu guard git commit-msg .git/COMMIT_EDITMSG
+  run one tool call by hand and see what the model would read
+    → tofu tool read '{"path":"README.md"}' --dir .
+  run the tests of one package and see only what failed
+    → tofu tool test '{"path":"."}' --dir .
+  check a report against the calls the session made
+    → tofu tool claims '{"report":"All tests pass."}' --dir . --session head
+  which turn made this change, and put it back
+    → tofu tool trail '{"mode":"find","anchor":"handling fee"}' --dir .
+  which turn broke the tests
+    → tofu tool bisect '{"check":"test","name":"TestTotal"}' --dir .
+  see the values on one call of a function without print lines
+    → tofu tool debug '{"steps":["start test TestTill","break till.go:14 --if t.rung == 3","run","eval cents","stop"]}' --dir .
+  rewrite one code shape everywhere without touching strings
+    → tofu tool codemod '{"lang":"go","pattern":"t.Fatalf($$$ARGS)","rewrite":"t.Errorf($$$ARGS)"}' --dir .
+  make a new file shaped like an existing one
+    → tofu tool scaffold '{"kind":"type","name":"Invoice","like":"order.go"}' --dir .
+  add a dependency after checking its license and advisories
+    → tofu tool deps '{"mode":"add","package":"github.com/google/uuid"}' --dir .
+  which dependencies have a newer release
+    → tofu tool deps '{"mode":"outdated"}' --dir .
+  which tools does the review agent get
+    → tofu tool list --agent review
+  read the lines around one function
+    → tofu tool read '{"path":"order.go","at":"Total"}' --dir .
+  what else must change if I change this type
+    → tofu tool symbols '{"name":"Order","mode":"impact"}' --dir .
+  what does this dependency look like at the version we pinned
+    → tofu tool api '{"package":"github.com/pelletier/go-toml/v2","name":"NewDecoder"}' --dir .
+  see what is in the project database without writing to it
+    → tofu tool db '{"env":"DATABASE_URL"}' --dir .
+  try two approaches at once and keep the one that passes
+    → tofu docs tools
+  tell me something during a turn without stopping it
+    → tofu tool heads_up '{"level":"info","line":"the full test run takes about two minutes"}' --dir .
+  what does the model see filling its own window
+    → tofu tool context '{}' --dir . --session head
+  let the model ask a cheap model about one long result
+    → tofu settings set modelTier.dumb <source/model>
   Files tofu reads and writes
     → tofu docs files
   Instruction files

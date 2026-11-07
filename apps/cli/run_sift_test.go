@@ -123,7 +123,7 @@ func assumesTheRuleIsOutOfShadow(t *testing.T) {
 func siftableOutput() string {
 	var out strings.Builder
 	for chunk := range 6 {
-		for line := range 8 {
+		for line := range 7 {
 			fmt.Fprintf(&out, "chunk %d line %d: %s\n", chunk, line, strings.Repeat("filler ", 9))
 		}
 		out.WriteString("\n")

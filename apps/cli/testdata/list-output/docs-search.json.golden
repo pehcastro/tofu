@@ -21,6 +21,14 @@ exit 0
         "do": "/cron edit c1 --schedule \"every 30m\" --reason \"the build is stable\""
       },
       {
+        "text": "what did the last few turns change",
+        "do": "tofu tool changes '{\"turns\":4}' --dir ."
+      },
+      {
+        "text": "format only the files i changed",
+        "do": "tofu tool format '{\"paths\":[\"label.go\"]}' --dir ."
+      },
+      {
         "text": "Sub-agents",
         "do": "tofu docs agents"
       },
@@ -131,6 +139,42 @@ exit 0
       {
         "text": "Program status on the terminal",
         "do": "tofu docs status"
+      },
+      {
+        "text": "One tool call by hand",
+        "do": "tofu docs tool"
+      },
+      {
+        "text": "The tools that change code",
+        "do": "tofu docs tools-change"
+      },
+      {
+        "text": "Checks, files and shell tools",
+        "do": "tofu docs tools-checks"
+      },
+      {
+        "text": "Code intelligence tools",
+        "do": "tofu docs tools-code"
+      },
+      {
+        "text": "Tools for the agent's own context and its own work",
+        "do": "tofu docs tools-context"
+      },
+      {
+        "text": "The debug tool",
+        "do": "tofu docs tools-debug"
+      },
+      {
+        "text": "Work, web, environment and delegation tools",
+        "do": "tofu docs tools-work"
+      },
+      {
+        "text": "What the tools return",
+        "do": "tofu docs tools"
+      },
+      {
+        "text": "History and undo",
+        "do": "tofu docs turn-history"
       },
       {
         "text": "Updating tofu",
@@ -275,6 +319,82 @@ exit 0
       {
         "text": "check a commit message the way the git hook does",
         "do": "tofu guard git commit-msg .git/COMMIT_EDITMSG"
+      },
+      {
+        "text": "run one tool call by hand and see what the model would read",
+        "do": "tofu tool read '{\"path\":\"README.md\"}' --dir ."
+      },
+      {
+        "text": "run the tests of one package and see only what failed",
+        "do": "tofu tool test '{\"path\":\".\"}' --dir ."
+      },
+      {
+        "text": "check a report against the calls the session made",
+        "do": "tofu tool claims '{\"report\":\"All tests pass.\"}' --dir . --session head"
+      },
+      {
+        "text": "which turn made this change, and put it back",
+        "do": "tofu tool trail '{\"mode\":\"find\",\"anchor\":\"handling fee\"}' --dir ."
+      },
+      {
+        "text": "which turn broke the tests",
+        "do": "tofu tool bisect '{\"check\":\"test\",\"name\":\"TestTotal\"}' --dir ."
+      },
+      {
+        "text": "see the values on one call of a function without print lines",
+        "do": "tofu tool debug '{\"steps\":[\"start test TestTill\",\"break till.go:14 --if t.rung == 3\",\"run\",\"eval cents\",\"stop\"]}' --dir ."
+      },
+      {
+        "text": "rewrite one code shape everywhere without touching strings",
+        "do": "tofu tool codemod '{\"lang\":\"go\",\"pattern\":\"t.Fatalf($$$ARGS)\",\"rewrite\":\"t.Errorf($$$ARGS)\"}' --dir ."
+      },
+      {
+        "text": "make a new file shaped like an existing one",
+        "do": "tofu tool scaffold '{\"kind\":\"type\",\"name\":\"Invoice\",\"like\":\"order.go\"}' --dir ."
+      },
+      {
+        "text": "add a dependency after checking its license and advisories",
+        "do": "tofu tool deps '{\"mode\":\"add\",\"package\":\"github.com/google/uuid\"}' --dir ."
+      },
+      {
+        "text": "which dependencies have a newer release",
+        "do": "tofu tool deps '{\"mode\":\"outdated\"}' --dir ."
+      },
+      {
+        "text": "which tools does the review agent get",
+        "do": "tofu tool list --agent review"
+      },
+      {
+        "text": "read the lines around one function",
+        "do": "tofu tool read '{\"path\":\"order.go\",\"at\":\"Total\"}' --dir ."
+      },
+      {
+        "text": "what else must change if I change this type",
+        "do": "tofu tool symbols '{\"name\":\"Order\",\"mode\":\"impact\"}' --dir ."
+      },
+      {
+        "text": "what does this dependency look like at the version we pinned",
+        "do": "tofu tool api '{\"package\":\"github.com/pelletier/go-toml/v2\",\"name\":\"NewDecoder\"}' --dir ."
+      },
+      {
+        "text": "see what is in the project database without writing to it",
+        "do": "tofu tool db '{\"env\":\"DATABASE_URL\"}' --dir ."
+      },
+      {
+        "text": "try two approaches at once and keep the one that passes",
+        "do": "tofu docs tools"
+      },
+      {
+        "text": "tell me something during a turn without stopping it",
+        "do": "tofu tool heads_up '{\"level\":\"info\",\"line\":\"the full test run takes about two minutes\"}' --dir ."
+      },
+      {
+        "text": "what does the model see filling its own window",
+        "do": "tofu tool context '{}' --dir . --session head"
+      },
+      {
+        "text": "let the model ask a cheap model about one long result",
+        "do": "tofu settings set modelTier.dumb <source/model>"
       },
       {
         "text": "Files tofu reads and writes",
