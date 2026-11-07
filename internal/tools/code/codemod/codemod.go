@@ -64,7 +64,9 @@ func (Codemod) Definition() core.Tool {
 			"refuses when expect is given and the match count differs from it, and returns the checker's errors after the write. " +
 			"give rule instead of pattern to match on more than one condition: an object whose keys are pattern, kind (a node kind of lang), regex (over the node text), " +
 			"all and any (lists of rules), not (a rule), inside and has (a rule plus stopBy: neighbor, the default, end, or a rule to stop at, and field: a field name of lang). " +
-			"the matched node is replaced whole by rewrite. a name outside strings: {\"pattern\": \"old\", \"not\": {\"inside\": {\"kind\": \"string\", \"stopBy\": \"end\"}}}",
+			"the matched node is replaced whole by rewrite. a pattern never matches the text of a string or a comment, and a name in an f-string or template interpolation is code, so a plain rename needs no rule. " +
+			"to rename old only within the function or call that names main, where has looks at each enclosing node's own children: " +
+			"{\"pattern\": \"old\", \"inside\": {\"stopBy\": \"end\", \"has\": {\"regex\": \"^main$\"}}}",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
