@@ -83,3 +83,7 @@ methods:
     method: judged
     why: not measured against labels. no labelled sample of reports exists and no free arm, such as a word list over pass, fixed and done matched to the last shell exit code, has been run beside it; three driven reports on the go fixture read not_shown for tests pass with no test call, contradicted for tests pass against a failing go test, and shown with the call id for a passing one, and claim_at, shown_at and contradicted_at at 0.5 are uncalibrated priors
     cost: one jev request a report, three questions a part asked against the latest calls; 216 ms on one driven request, cost not measured
+  done_line:
+    method: judged
+    why: not measured against labels. no labelled sample of done calls exists and no free arm, such as matching the cited command to a word in the line, has been run beside it; on the tree build a line whose cited call does not check it read not_checked at 0.02 and one whose call does read yes at 0.63, and checks_at 0.5 is an uncalibrated prior until a labelled sample moves it
+    cost: one jev request a done call with a cited call that exited 0, one checks question a line; latency and cost are not measured
