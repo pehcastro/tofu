@@ -2,12 +2,14 @@ package catgrep
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -46,7 +48,7 @@ func Rewrite(ctx context.Context, src, rewrite string, l lang.Lang, paths []stri
 	if err != nil {
 		return nil, err
 	}
-	found, err := search(ctx, l, paths, func(n tree.Node) (replace.Edit, bool, error) {
+	found, err := search(ctx, l, paths, p.Words(), func(n tree.Node) (replace.Edit, bool, error) {
 		env, matched := p.Match(n)
 		if !matched {
 			return replace.Edit{}, false, nil
@@ -61,19 +63,16 @@ func Rewrite(ctx context.Context, src, rewrite string, l lang.Lang, paths []stri
 	if err != nil {
 		return nil, err
 	}
+	defer parsed.Release()
 	fault, broken := lang.FirstFault(parsed)
-	if !broken {
+	if !broken || fault.Missing {
 		return nil, nil
-	}
-	problem := "does not parse"
-	if fault.Missing {
-		problem = "is missing a " + fault.Kind
 	}
 	column := int(fault.At.Column)
 	if fault.At.Row == 0 {
 		column -= len(l.PreprocessPattern(""))
 	}
-	return nil, fmt.Errorf("pattern has an error: at line %d column %d it %s as %s, and it matched nothing. write it as code that parses on its own", fault.At.Row+1, column+1, problem, l)
+	return nil, fmt.Errorf("pattern has an error: at line %d column %d it does not parse as %s, and it matched nothing. write it as code that parses on its own", fault.At.Row+1, column+1, l)
 }
 
 func RewriteRule(ctx context.Context, raw []byte, rewrite string, l lang.Lang, paths []string) ([]File, error) {
@@ -81,7 +80,7 @@ func RewriteRule(ctx context.Context, raw []byte, rewrite string, l lang.Lang, p
 	if err != nil {
 		return nil, err
 	}
-	return search(ctx, l, paths, func(n tree.Node) (replace.Edit, bool, error) {
+	return search(ctx, l, paths, nil, func(n tree.Node) (replace.Edit, bool, error) {
 		env, matched := r.Match(n)
 		if !matched {
 			return replace.Edit{}, false, nil
@@ -92,20 +91,27 @@ func RewriteRule(ctx context.Context, raw []byte, rewrite string, l lang.Lang, p
 	})
 }
 
-func search(ctx context.Context, l lang.Lang, paths []string, edit editor) ([]File, error) {
-	files, err := Files(l, paths)
+func search(ctx context.Context, l lang.Lang, paths, words []string, edit editor) ([]File, error) {
+	files, sizes, err := walk(l, paths)
 	if err != nil {
 		return nil, err
 	}
+	largestFirst := make([]int, len(files))
+	for i := range largestFirst {
+		largestFirst[i] = i
+	}
+	slices.SortFunc(largestFirst, func(a, b int) int { return cmp.Compare(sizes[b], sizes[a]) })
 	searched := make([]File, len(files))
 	failures := make([]error, len(files))
 	var next atomic.Int64
 	var workers sync.WaitGroup
-	for range runtime.GOMAXPROCS(0) {
+	for range min(runtime.GOMAXPROCS(0), len(files)) {
 		workers.Go(func() {
-			for i := int(next.Add(1) - 1); i < len(files) && ctx.Err() == nil; i = int(next.Add(1) - 1) {
+			parser := lang.NewParser(l)
+			for at := int(next.Add(1) - 1); at < len(files) && ctx.Err() == nil; at = int(next.Add(1) - 1) {
+				i := largestFirst[at]
 				searched[i].Path = files[i]
-				searched[i].Sites, failures[i] = rewriteFile(files[i], l, edit)
+				searched[i].Sites, failures[i] = rewriteFile(files[i], parser, words, edit)
 			}
 		})
 	}
@@ -125,23 +131,30 @@ func search(ctx context.Context, l lang.Lang, paths []string, edit editor) ([]Fi
 	return found, nil
 }
 
-func rewriteFile(path string, l lang.Lang, edit editor) ([]Site, error) {
+func rewriteFile(path string, parser lang.Parser, words []string, edit editor) ([]Site, error) {
 	source, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
+	for _, word := range words {
+		if !bytes.Contains(source, []byte(word)) {
+			return nil, nil
+		}
+	}
 	searched := source
-	if host, _ := lang.FromPath(path); host != l {
+	if host, _ := lang.FromPath(path); host != parser.Lang {
 		var scripted bool
-		if searched, scripted, err = lang.Scripts(source, host, l); err != nil || !scripted {
+		if searched, scripted, err = lang.Scripts(source, host, parser.Lang); err != nil || !scripted {
 			return nil, err
 		}
 	}
-	root, err := tree.Parse(string(searched), l)
+	root, err := tree.ParseWith(parser, searched)
 	if err != nil {
 		return nil, err
 	}
+	defer root.Release()
 	var sites []Site
+	line, counted := 1, 0
 	pending := []tree.Node{root.Node()}
 	for len(pending) > 0 {
 		node := pending[len(pending)-1]
@@ -150,17 +163,18 @@ func rewriteFile(path string, l lang.Lang, edit editor) ([]Site, error) {
 		if err != nil {
 			return nil, err
 		}
+		for i := node.ChildCount() - 1; i >= 0; i-- {
+			pending = append(pending, node.Child(i))
+		}
 		if !matched {
-			children := node.Children()
-			for i := len(children) - 1; i >= 0; i-- {
-				pending = append(pending, children[i])
-			}
 			continue
 		}
+		line += bytes.Count(source[counted:made.Start], []byte("\n"))
+		counted = int(made.Start)
 		sites = append(sites, Site{
 			Start:  int(made.Start),
 			End:    int(made.End),
-			Line:   bytes.Count(source[:made.Start], []byte("\n")) + 1,
+			Line:   line,
 			Before: string(source[made.Start:made.End]),
 			After:  made.Text,
 		})
@@ -169,7 +183,13 @@ func rewriteFile(path string, l lang.Lang, edit editor) ([]Site, error) {
 }
 
 func Files(l lang.Lang, roots []string) ([]string, error) {
+	files, _, err := walk(l, roots)
+	return files, err
+}
+
+func walk(l lang.Lang, roots []string) ([]string, []int64, error) {
 	var files []string
+	var sizes []int64
 	for _, root := range roots {
 		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil {
@@ -185,12 +205,16 @@ func Files(l lang.Lang, roots []string) ([]string, error) {
 			case len(files) == konst.CodemodFilesScanned:
 				return fmt.Errorf("more than %d %s files under paths: narrow paths", konst.CodemodFilesScanned, l)
 			}
-			files = append(files, path)
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			files, sizes = append(files, path), append(sizes, info.Size())
 			return nil
 		})
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
-	return files, nil
+	return files, sizes, nil
 }

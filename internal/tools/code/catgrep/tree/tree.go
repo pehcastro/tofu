@@ -19,12 +19,18 @@ type Node struct {
 }
 
 func Parse(source string, l lang.Lang) (*Root, error) {
-	parsed, err := lang.Parse([]byte(source), l)
+	return ParseWith(lang.NewParser(l), []byte(source))
+}
+
+func ParseWith(parser lang.Parser, source []byte) (*Root, error) {
+	parsed, err := parser.Parse(source)
 	if err != nil {
 		return nil, err
 	}
-	return &Root{tree: parsed, source: []byte(source)}, nil
+	return &Root{tree: parsed, source: source}, nil
 }
+
+func (r *Root) Release() { r.tree.Release() }
 
 func (r *Root) Node() Node { return Node{inner: r.tree.RootNode(), root: r} }
 
@@ -66,6 +72,10 @@ func (n Node) Field(name string) (Node, bool) {
 	return Node{inner: child, root: n.root}, child != nil
 }
 
+func (n Node) ChildCount() int { return n.inner.ChildCount() }
+
+func (n Node) Child(i int) Node { return Node{inner: n.inner.Child(i), root: n.root} }
+
 func (n Node) Children() []Node {
 	inner := n.inner.Children()
 	children := make([]Node, len(inner))
@@ -84,9 +94,8 @@ func (n Node) PreOrder() iter.Seq[Node] {
 			if !yield(next) {
 				return
 			}
-			children := next.Children()
-			for i := len(children) - 1; i >= 0; i-- {
-				pending = append(pending, children[i])
+			for i := next.ChildCount() - 1; i >= 0; i-- {
+				pending = append(pending, next.Child(i))
 			}
 		}
 	}

@@ -15,15 +15,26 @@ type Fault struct {
 	Kind    string
 }
 
-func Parse(source []byte, l Lang) (*gotreesitter.Tree, error) {
-	parser := gotreesitter.NewParser(l.grammar())
-	parser.SetTimeoutMicros(konst.CodemodRunMillis * 1000)
-	tree, err := parser.Parse(source)
+type Parser struct {
+	Lang  Lang
+	inner *gotreesitter.Parser
+}
+
+func NewParser(l Lang) Parser {
+	inner := gotreesitter.NewParser(l.grammar())
+	inner.SetTimeoutMicros(konst.CodemodRunMillis * 1000)
+	return Parser{Lang: l, inner: inner}
+}
+
+func (p Parser) Parse(source []byte) (*gotreesitter.Tree, error) {
+	tree, err := p.inner.Parse(source)
 	if err != nil {
-		return nil, fmt.Errorf("parse %s: %w", l, err)
+		return nil, fmt.Errorf("parse %s: %w", p.Lang, err)
 	}
 	return tree, nil
 }
+
+func Parse(source []byte, l Lang) (*gotreesitter.Tree, error) { return NewParser(l).Parse(source) }
 
 func FirstFault(tree *gotreesitter.Tree) (Fault, bool) {
 	pending := []*gotreesitter.Node{tree.RootNode()}

@@ -45,6 +45,7 @@ func New(src string, l lang.Lang) (Pattern, error) {
 	if err != nil {
 		return Pattern{}, fmt.Errorf("pattern %q does not parse as %s: %w", src, l, err)
 	}
+	defer parsed.Release()
 	statements := parsed.Node().Children()
 	if len(statements) > 0 && statements[0].Kind() == phpOpenTag {
 		statements = statements[1:]
@@ -105,7 +106,27 @@ func ellipsisOf(goal *node) (metavar.Var, bool) {
 
 func (g *node) trivial() bool { return g.shape == terminalShape && !g.named }
 
+func (p Pattern) Words() []string {
+	if p.Strictness == Signature {
+		return nil
+	}
+	return p.root.words(nil)
+}
+
+func (g *node) words(into []string) []string {
+	if g.shape == terminalShape && g.named {
+		return append(into, g.text)
+	}
+	for i := range g.children {
+		into = g.children[i].words(into)
+	}
+	return into
+}
+
 func (p Pattern) Match(candidate tree.Node) (*metavar.Env, bool) {
+	if p.root.shape != metaVarShape && p.Strictness != Template && !p.root.matchesKind(candidate) {
+		return nil, false
+	}
 	env := envBinder{metavar.NewEnv()}
 	if p.matchRoot(candidate, env) != matchedBoth {
 		return nil, false
