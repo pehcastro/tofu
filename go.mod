@@ -19,6 +19,7 @@ require (
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/gorilla/websocket v1.5.3
 	github.com/lib/pq v1.12.3
+	github.com/odvcencio/gotreesitter v0.56.0
 	github.com/pelletier/go-toml/v2 v2.3.0
 	golang.org/x/crypto v0.55.0
 	golang.org/x/net v0.58.0
