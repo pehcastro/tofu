@@ -1,6 +1,7 @@
 package replace
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 const (
 	metaVarChar = '$'
 	ellipsisLen = 3
+	layout      = " \t\r\n"
 )
 
 func First(source string, l lang.Lang, p pattern.Pattern, rewrite string) (string, bool, error) {
@@ -60,7 +62,7 @@ func Text(rewrite string, env *metavar.Env) (string, error) {
 		if !ok {
 			continue
 		}
-		text, indent, err := lookup(env, name, multi, rewrite[i:i+width])
+		text, indent, err := lookup(env, name, multi, rewrite[:i], rewrite[i:i+width], rewrite[i+width:])
 		if err != nil {
 			return "", err
 		}
@@ -103,7 +105,7 @@ func Tree(rewrite string, l lang.Lang, env *metavar.Env) (string, error) {
 	splice = func(n tree.Node) error {
 		if n.IsNamedLeaf() {
 			if v, ok := metavar.Extract(n.Text(), sigil); ok {
-				text, _, err := lookup(env, v.Name, v.IsEllipsis(), strings.ReplaceAll(n.Text(), string(sigil), string(metaVarChar)))
+				text, _, err := lookup(env, v.Name, v.IsEllipsis(), source[:n.Start()], strings.ReplaceAll(n.Text(), string(sigil), string(metaVarChar)), source[n.End():])
 				if err != nil {
 					return err
 				}
@@ -127,7 +129,7 @@ func Tree(rewrite string, l lang.Lang, env *metavar.Env) (string, error) {
 	return out.String(), nil
 }
 
-func lookup(env *metavar.Env, name string, multi bool, spelled string) (string, int, error) {
+func lookup(env *metavar.Env, name string, multi bool, before, spelled, after string) (string, int, error) {
 	if text, ok := env.Transformed(name); ok && !multi {
 		return text, 0, nil
 	}
@@ -142,8 +144,14 @@ func lookup(env *metavar.Env, name string, multi bool, spelled string) (string, 
 	if len(nodes) == 0 {
 		return "", 0, nil
 	}
-	source, start := nodes[0].Source(), nodes[0].Start()
-	text := string(source[start:nodes[len(nodes)-1].End()])
+	source, start, end := nodes[0].Source(), nodes[0].Start(), nodes[len(nodes)-1].End()
+	if kept := bytes.TrimRight(source[:start], layout); len(kept) > 0 && strings.HasSuffix(before, string(kept[len(kept)-1])) {
+		start = uint32(len(kept))
+	}
+	if kept := bytes.TrimLeft(source[end:], layout); len(kept) > 0 && strings.HasPrefix(after, string(kept[0])) {
+		end = uint32(len(source) - len(kept))
+	}
+	text := string(source[start:end])
 	if !strings.Contains(text, "\n") {
 		return text, 0, nil
 	}
