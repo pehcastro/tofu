@@ -153,12 +153,13 @@ func (r Record) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 	if runErr != nil {
 		return refused(strings.Join(args.Command, " ") + " failed, " + runErr.Error() + ":\n" + shown), nil
 	}
+	command := string(args.Mode) + " " + args.Name + ": " + strings.Join(args.Command, " ")
 	if args.Mode == replay {
 		answered := 0
 		for _, n := range recorded.served {
 			answered += n
 		}
-		return contract.Result{Content: shown + fmt.Sprintf("record: answered %d requests from the %d recorded in %s\n", answered, len(recorded.exchanges), file), Command: Name}, nil
+		return contract.Result{Content: shown + fmt.Sprintf("record: answered %d requests from the %d recorded in %s\n", answered, len(recorded.exchanges), file), Command: command}, nil
 	}
 	body, err := json.MarshalIndent(recorded.exchanges, "", "  ")
 	if err == nil {
@@ -175,7 +176,7 @@ func (r Record) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 	for _, e := range recorded.exchanges {
 		fmt.Fprintf(&saved, "%s %s %d, %d bytes\n", e.Method, e.URL, e.Status, len(e.Body))
 	}
-	return contract.Result{Content: shown + saved.String(), Command: Name}, nil
+	return contract.Result{Content: shown + saved.String(), Command: command}, nil
 }
 
 func (r Record) folder(ctx context.Context) (string, error) {

@@ -81,7 +81,7 @@ func (f Format) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 		}
 	}
 	if len(paths) == 0 {
-		return contract.Result{Content: "format: no file to format from " + from + ". name the files in paths\n", Command: Name}, nil
+		return contract.Result{Content: "format: no file to format from " + from + ". name the files in paths\n", Command: from}, nil
 	}
 	var said strings.Builder
 	formatted, failed := 0, false
@@ -100,7 +100,7 @@ func (f Format) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 	if failed {
 		return contract.Failure(content), nil
 	}
-	return contract.Result{Content: content, Command: Name}, nil
+	return contract.Result{Content: content, Command: strings.Join(paths, " ")}, nil
 }
 
 func (f Format) touched(ctx context.Context) ([]string, string, error) {

@@ -2,6 +2,7 @@ package codemod
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -101,6 +102,7 @@ func (c Codemod) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 	if len(args.Paths) > 0 {
 		paths = args.Paths
 	}
+	command := cmp.Or(strings.TrimSpace(args.Pattern), "rule") + " under " + strings.Join(paths, " ")
 	for i, path := range paths {
 		resolved, err := c.root.Resolve(path)
 		if err != nil {
@@ -126,7 +128,9 @@ func (c Codemod) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 		}
 		found[i].Sites = slices.SortedFunc(slices.Values(append(file.Sites, captures...)), func(a, b catgrep.Site) int { return a.Start - b.Start })
 	}
-	return c.report(ctx, args, found)
+	result, err := c.report(ctx, args, found)
+	result.Command = command
+	return result, err
 }
 
 func (c Codemod) report(ctx context.Context, args arguments, found []catgrep.File) (contract.Result, error) {

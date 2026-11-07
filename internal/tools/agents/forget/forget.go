@@ -154,5 +154,5 @@ func (Forget) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 		"cache_cost: about %d tokens from message %d on are written to the cache again on your next request rather than read\n"+
 		"kept_summary: each dropped result is one line naming its call; the next request reads about %d tokens of messages from the cache, the prefix up to the breakpoint, plus the tool definitions\n",
 		len(lines), breakpoint, said.String(), freed, w.tokens(w.held[w.breakpoint:])-freed, w.breakpoint+1, w.tokens(w.held[:w.breakpoint]))
-	return contract.Result{Content: summary, Command: Name + " " + strings.Join(args.Calls, " ")}, nil
+	return contract.Result{Content: summary, Command: strings.Join(args.Calls, " ")}, nil
 }

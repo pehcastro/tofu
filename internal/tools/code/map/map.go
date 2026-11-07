@@ -139,7 +139,7 @@ func (m Map) Run(_ context.Context, raw json.RawMessage) (contract.Result, error
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("map: %w", err)
 	}
-	command := "map under " + listed.Under
+	command := listed.Under
 	if len(listed.Files) == 0 {
 		return contract.Result{Content: glob.WithNote("map: no files under "+listed.Under, listed.Note), Command: command}, nil
 	}

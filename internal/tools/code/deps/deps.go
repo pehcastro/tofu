@@ -95,12 +95,13 @@ func (d Deps) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 	if err != nil {
 		return refused(string(args.Mode), err.Error()), nil
 	}
+	var result contract.Result
 	switch args.Mode {
 	case add, upgrade:
 		if args.Package == "" {
 			return refused(string(args.Mode), "name the package"), nil
 		}
-		return d.change(ctx, e, args.Mode, args.Package, args.Version, args.AcceptAdvisories), nil
+		result = d.change(ctx, e, args.Mode, args.Package, args.Version, args.AcceptAdvisories)
 	case why:
 		if args.Package == "" {
 			return refused(string(args.Mode), "name the package"), nil
@@ -110,11 +111,14 @@ func (d Deps) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 		if err != nil {
 			return refused("why "+args.Package, strings.Join(command, " ")+": "+err.Error()+"\n"+out), nil
 		}
-		return contract.Result{Content: "deps why " + args.Package + ": " + strings.Join(command, " ") + "\n" + out, Command: Name}, nil
+		result = contract.Result{Content: "deps why " + args.Package + ": " + strings.Join(command, " ") + "\n" + out}
 	case outdated:
-		return d.outdated(ctx, e), nil
+		result = d.outdated(ctx, e)
+	default:
+		return refused(string(args.Mode), "mode must be add, upgrade, why or outdated"), nil
 	}
-	return refused(string(args.Mode), "mode must be add, upgrade, why or outdated"), nil
+	result.Command = strings.TrimSpace(string(args.Mode) + " " + args.Package)
+	return result, nil
 }
 
 func refused(asked, said string) contract.Result {
@@ -153,7 +157,7 @@ func (d Deps) change(ctx context.Context, e ecosystem, m mode, pkg, version stri
 	case !found:
 		return unwritten(errors.New(e.registry() + " has no " + pkg + "@" + cmp.Or(version, "latest")))
 	case to.version == from:
-		return contract.Result{Content: "deps " + asked + ": already at " + from + ", nothing to do\n", Command: Name}
+		return contract.Result{Content: "deps " + asked + ": already at " + from + ", nothing to do\n"}
 	}
 	license, err := d.licensed(ctx, e, pkg, to)
 	if err != nil {
@@ -254,7 +258,7 @@ func (d Deps) write(ctx context.Context, e ecosystem, command []string, said *st
 		return contract.Failure(fmt.Sprintf("%s%s failed, %v. put back as they were: %s\n%s", said, ran, runErr, contract.Listed(changed), out))
 	}
 	fmt.Fprintf(said, "ran: %s\nlockfile_changed: %s\n", ran, contract.Listed(changed))
-	return contract.Result{Content: said.String(), Command: Name}
+	return contract.Result{Content: said.String()}
 }
 
 func (d Deps) run(ctx context.Context, e ecosystem, command []string) (string, error) {
@@ -290,7 +294,7 @@ func (d Deps) outdated(ctx context.Context, e ecosystem) contract.Result {
 		}
 	}
 	if len(direct) == 0 {
-		return contract.Result{Content: fmt.Sprintf("deps outdated: no direct dependency in %s, %d marked indirect\n", e.lockfiles()[0], len(listed)), Command: Name}
+		return contract.Result{Content: fmt.Sprintf("deps outdated: no direct dependency in %s, %d marked indirect\n", e.lockfiles()[0], len(listed))}
 	}
 	advised := map[string][]string{}
 	if len(pinned) > 0 {
@@ -321,5 +325,5 @@ func (d Deps) outdated(ctx context.Context, e ecosystem) contract.Result {
 			fmt.Fprintf(&said, "  advisories on %s: %s\n", dep.version, strings.Join(ids, " "))
 		}
 	}
-	return contract.Result{Content: fmt.Sprintf("deps outdated: %d of %d direct dependencies have a newer release (%s, osv.dev)\n", newer, len(direct), e.registry()) + said.String(), Command: Name}
+	return contract.Result{Content: fmt.Sprintf("deps outdated: %d of %d direct dependencies have a newer release (%s, osv.dev)\n", newer, len(direct), e.registry()) + said.String()}
 }

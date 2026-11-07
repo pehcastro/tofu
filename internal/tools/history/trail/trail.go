@@ -78,6 +78,7 @@ func (t Trail) Run(ctx context.Context, raw json.RawMessage) (contract.Result, e
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("trail: arguments are not the expected shape: %w", err)
 	}
+	command := strings.TrimSpace(string(cmp.Or(args.Mode, find)) + " " + cmp.Or(strings.TrimSpace(args.Anchor), args.Line, strings.Join(args.IDs, " ")))
 	timed, cancel := context.WithTimeout(ctx, konst.ShadowSnapshotTimeoutMillis*time.Millisecond)
 	defer cancel()
 	turns, err := ended(timed, t.Store)
@@ -85,7 +86,7 @@ func (t Trail) Run(ctx context.Context, raw json.RawMessage) (contract.Result, e
 		return contract.Result{}, fmt.Errorf("trail: %w", err)
 	}
 	if len(turns) == 0 {
-		return contract.Result{Content: "no ended turn has been recorded in the shadow store at " + t.Store.Dir() + " yet\n", Command: Name}, nil
+		return contract.Result{Content: "no ended turn has been recorded in the shadow store at " + t.Store.Dir() + " yet\n", Command: command}, nil
 	}
 	var said string
 	switch args.Mode {
@@ -104,7 +105,7 @@ func (t Trail) Run(ctx context.Context, raw json.RawMessage) (contract.Result, e
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("trail %s: %w", cmp.Or(args.Mode, find), err)
 	}
-	return contract.Result{Content: said, Command: Name + " " + string(cmp.Or(args.Mode, find))}, nil
+	return contract.Result{Content: said, Command: command}, nil
 }
 
 func (t Trail) handle(id string) string {

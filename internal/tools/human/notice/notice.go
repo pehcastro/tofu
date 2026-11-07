@@ -66,5 +66,5 @@ func (h HeadsUp) Run(_ context.Context, raw json.RawMessage) (contract.Result, e
 	default:
 		return contract.Result{}, fmt.Errorf("heads_up: level %q is neither %s nor %s, so nothing was shown", args.Level, info, warn)
 	}
-	return contract.Result{Content: "shown to the person; the turn goes on", Command: Name + " " + args.Level + " " + line}, nil
+	return contract.Result{Content: "shown to the person; the turn goes on", Command: args.Level + " " + line}, nil
 }

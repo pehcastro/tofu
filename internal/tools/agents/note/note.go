@@ -133,7 +133,7 @@ func (Note) Run(ctx context.Context, raw json.RawMessage) (contract.Result, erro
 	case args.Done != nil:
 		return n.done(*args.Done)
 	}
-	return contract.Result{Content: n.listed(), Command: Name + " list"}, nil
+	return contract.Result{Content: n.listed(), Command: "list"}, nil
 }
 
 func (n *Notes) add(text string) (contract.Result, error) {
@@ -145,9 +145,8 @@ func (n *Notes) add(text string) (contract.Result, error) {
 	case len(text) > konst.NoteBytes:
 		return contract.Result{}, fmt.Errorf("note: the text is %d bytes, over the %d a note holds; shorten it, so nothing was kept", len(text), konst.NoteBytes)
 	}
-	command := Name + " " + text
 	if at := slices.IndexFunc(n.held, func(note kept) bool { return note.text == text }); at >= 0 {
-		return contract.Result{Content: fmt.Sprintf("already kept as note %d", n.held[at].id), Command: command}, nil
+		return contract.Result{Content: fmt.Sprintf("already kept as note %d", n.held[at].id), Command: text}, nil
 	}
 	if len(n.held) >= konst.NotesMost {
 		return contract.Result{}, fmt.Errorf("note: %d notes are kept, the most there can be, so this one was refused and nothing was dropped; the oldest is %d: %s. mark one done first",
@@ -156,7 +155,7 @@ func (n *Notes) add(text string) (contract.Result, error) {
 	n.held = append(n.held, kept{id: n.next, text: text})
 	n.next++
 	n.changed = true
-	return contract.Result{Content: fmt.Sprintf("kept as note %d; your next request carries it", n.next-1), Command: command}, nil
+	return contract.Result{Content: fmt.Sprintf("kept as note %d; your next request carries it", n.next-1), Command: text}, nil
 }
 
 func (n *Notes) done(id int) (contract.Result, error) {
@@ -167,5 +166,5 @@ func (n *Notes) done(id int) (contract.Result, error) {
 	said := fmt.Sprintf("note %d done; your next request no longer carries it: %s", id, n.held[at].text)
 	n.held = slices.Delete(n.held, at, at+1)
 	n.changed = true
-	return contract.Result{Content: said, Command: Name + " done " + strconv.Itoa(id)}, nil
+	return contract.Result{Content: said, Command: "done " + strconv.Itoa(id)}, nil
 }

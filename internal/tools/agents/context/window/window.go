@@ -122,7 +122,7 @@ func (w Window) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 		return contract.Result{}, fmt.Errorf("context: %w", err)
 	}
 	if asked.Header.ID == "" {
-		return contract.Result{Content: "no session is recorded in this project yet, so nothing fills a window: 0 tokens used\n", Command: Name}, nil
+		return contract.Result{Content: "no session is recorded in this project yet, so nothing fills a window: 0 tokens used\n", Command: "session " + cmp.Or(args.Session, session.HeadHandle)}, nil
 	}
 	estimate, err := recall.LoadConfig()
 	if err != nil {
@@ -237,5 +237,5 @@ func (w Window) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 	for _, line := range stale[:min(len(stale), konst.ContextStaleShown)] {
 		said.WriteString(line + "\n")
 	}
-	return contract.Result{Content: said.String(), Command: Name}, nil
+	return contract.Result{Content: said.String(), Command: "session " + asked.Handle}, nil
 }

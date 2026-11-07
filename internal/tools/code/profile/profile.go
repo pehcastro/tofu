@@ -116,7 +116,7 @@ func (p Profile) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 	if len(taken) == 0 {
 		return refused(ran + " finished before the profiler took a sample: profile a test or command that runs longer"), nil
 	}
-	return contract.Result{Content: p.render(ran, args.Kind, taken, u), Command: Name}, nil
+	return contract.Result{Content: p.render(ran, args.Kind, taken, u), Command: string(args.Kind) + " " + ran}, nil
 }
 
 func refused(said string) contract.Result {

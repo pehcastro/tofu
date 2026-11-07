@@ -1,6 +1,7 @@
 package bisect
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -63,6 +64,7 @@ func (b Bisect) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("bisect: arguments are not the expected shape: %w", err)
 	}
+	command := strings.TrimSpace(fmt.Sprintf("check %s %s", args.Kind, cmp.Or(args.Name, strings.Join(args.Command, " "))))
 	timed, cancel := context.WithTimeout(ctx, konst.ShadowSnapshotTimeoutMillis*time.Millisecond)
 	defer cancel()
 	recorded, err := b.store.Recorded(timed, konst.ShadowTurnsKept)
@@ -71,7 +73,7 @@ func (b Bisect) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 	}
 	turns := slices.DeleteFunc(recorded, func(one shadow.Recorded) bool { return !one.Ended() })
 	if len(turns) == 0 {
-		return contract.Result{Content: "no ended turn has been recorded in the shadow store at " + b.store.Dir() + " yet, so there is nothing to bisect\n", Command: Name}, nil
+		return contract.Result{Content: "no ended turn has been recorded in the shadow store at " + b.store.Dir() + " yet, so there is nothing to bisect\n", Command: command}, nil
 	}
 	first := slices.IndexFunc(turns, func(one shadow.Recorded) bool { return one.Session == turns[len(turns)-1].Session })
 	if args.Since != "" {
@@ -130,7 +132,7 @@ func (b Bisect) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 		case at == 0 && answer.Outcome == whatif.Failed:
 			return contract.Failure(report("bisect stopped: the check already fails "+labelOf(at)+", so no turn since broke it", answer)), nil
 		case at == len(suspects) && answer.Outcome == whatif.Passed:
-			return contract.Result{Content: report(fmt.Sprintf("no culprit: the check passes after every one of the %d turns since the anchor", len(suspects)), answer), Command: Name}, nil
+			return contract.Result{Content: report(fmt.Sprintf("no culprit: the check passes after every one of the %d turns since the anchor", len(suspects)), answer), Command: command}, nil
 		case answer.Outcome == whatif.Failed:
 			bad, failing = at, answer
 		default:
@@ -160,7 +162,7 @@ func (b Bisect) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 	if len(culprit.Changes) == 0 {
 		out.WriteString("\n  the turn changed no file, so the break came from outside any recorded turn while it ran")
 	}
-	return contract.Result{Content: report(out.String()+"\ndiff:\n"+strings.Join(diffs, "\n"), failing), Command: Name}, nil
+	return contract.Result{Content: report(out.String()+"\ndiff:\n"+strings.Join(diffs, "\n"), failing), Command: command}, nil
 }
 
 func (b Bisect) stateAt(ctx context.Context, commit string, paths []string) (map[string]string, []string, error) {

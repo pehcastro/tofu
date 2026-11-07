@@ -102,7 +102,7 @@ func (d Done) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 	}
 	reads := readAll(ctx, args.Lines, plan.EarlierCalls(ctx))
 	if len(reads) == 0 {
-		return contract.Result{Content: "done: 0 lines, since none was given and no plan item carries a check\n", Command: Name}, nil
+		return contract.Result{Content: "done: 0 lines, since none was given and no plan item carries a check\n", Command: "0 lines"}, nil
 	}
 	if err := d.confirm(ctx, reads); err != nil {
 		for i := range reads {
@@ -121,7 +121,7 @@ func (d Done) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 	if count[No] > 0 {
 		said.WriteString("the turn does not end while a line reads no: fix it, run its check again, and call done with the new call id\n")
 	}
-	return contract.Result{Content: head + said.String(), Command: Name}, nil
+	return contract.Result{Content: head + said.String(), Command: fmt.Sprintf("%d lines", len(reads))}, nil
 }
 
 func Unmet(ctx context.Context, messages []core.Message) []string {

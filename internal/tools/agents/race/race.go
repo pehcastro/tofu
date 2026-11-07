@@ -136,6 +136,7 @@ func (r Race) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 		return contract.Result{}, fmt.Errorf("race: keep %q is neither first nor all", args.Keep)
 	}
 	keepsAll := args.Keep == keepAll
+	command := fmt.Sprintf("%d briefs, check %s", len(args.Briefs), args.Kind)
 	racing, stop := context.WithCancel(ctx)
 	defer stop()
 	trees, copies := make([]string, len(args.Briefs)), make([]map[string][32]byte, len(args.Briefs))
@@ -187,14 +188,14 @@ func (r Race) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 			return contract.Failure("race: runs passed and were not kept for a pick, so nothing was applied: " + err.Error() + out.String() + "\n"), nil
 		}
 		head := fmt.Sprintf("race %s: every run ran to its check and none was applied; to apply one call race with race %q and pick set to its run number", id, id)
-		return contract.Result{Content: head + out.String() + "\n", Command: Name + " " + string(args.Kind)}, nil
+		return contract.Result{Content: head + out.String() + "\n", Command: command}, nil
 	}
 	won := runs[winner]
 	if err := r.apply(won.edit); err != nil {
 		return contract.Failure("race: run " + strconv.Itoa(winner+1) + " passed and was not applied: " + err.Error() + out.String() + "\n"), nil
 	}
 	head := fmt.Sprintf("race: run %d of %d passed first and was applied to the working tree, files changed: %d; the other runs never touched it", winner+1, len(runs), len(won.Changed)+len(won.Deleted))
-	return contract.Result{Content: head + out.String() + "\ndiff:\n" + won.diff + "\n", Command: Name + " " + string(args.Kind)}, nil
+	return contract.Result{Content: head + out.String() + "\ndiff:\n" + won.diff + "\n", Command: command}, nil
 }
 
 func (r Race) enter(ctx context.Context, tree, brief string, copied map[string][32]byte, check whatif.Check) run {
@@ -354,7 +355,7 @@ func (r Race) pick(id string, at int) (contract.Result, error) {
 		return contract.Failure("race: run " + strconv.Itoa(at) + " of race " + id + " was not applied: " + err.Error() + "\n"), nil
 	}
 	_ = os.RemoveAll(dir)
-	return contract.Result{Content: fmt.Sprintf("race %s: run %d was applied to the working tree, files changed: %d\n", id, at, len(chosen.Changed)+len(chosen.Deleted)), Command: Name + " pick"}, nil
+	return contract.Result{Content: fmt.Sprintf("race %s: run %d was applied to the working tree, files changed: %d\n", id, at, len(chosen.Changed)+len(chosen.Deleted)), Command: fmt.Sprintf("pick run %d of %s", at, id)}, nil
 }
 
 func (r Race) apply(won edit) error {

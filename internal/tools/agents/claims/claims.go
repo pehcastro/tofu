@@ -105,7 +105,7 @@ func (c Claims) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 		}
 	}
 	if len(parts) == 0 {
-		return contract.Result{Content: "0 claims: the report holds no sentence\n", Command: Name}, nil
+		return contract.Result{Content: "0 claims: the report holds no sentence\n", Command: "empty report"}, nil
 	}
 	unchecked := max(0, len(parts)-konst.ClaimsPartsChecked)
 	parts = parts[:len(parts)-unchecked]
@@ -220,7 +220,7 @@ func (c Claims) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 	if unchecked > 0 {
 		fmt.Fprintf(&said, "%d parts past the first %d are not checked\n", unchecked, konst.ClaimsPartsChecked)
 	}
-	return contract.Result{Content: said.String(), Command: Name}, nil
+	return contract.Result{Content: said.String(), Command: "report against session " + cmp.Or(asked.Handle, "none")}, nil
 }
 
 func (c Claims) questions() (question.Set, []question.Field, error) {

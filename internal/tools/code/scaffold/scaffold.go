@@ -103,7 +103,7 @@ func (s Scaffold) Run(_ context.Context, raw json.RawMessage) (contract.Result, 
 		return contract.Result{}, fmt.Errorf("scaffold: wrote %s: %w", relative, err)
 	}
 	head := fmt.Sprintf("scaffold: %s %s like %s, wrote %s\n", kind, args.Name, filepath.ToSlash(like), relative)
-	return contract.Result{Content: head + summary(stem, pairs, counts) + patch.Unified(relative, "", after)}, nil
+	return contract.Result{Content: head + summary(stem, pairs, counts) + patch.Unified(relative, "", after), Command: relative}, nil
 }
 
 func createOnly(path, data string, perm fs.FileMode) error {

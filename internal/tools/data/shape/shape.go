@@ -128,7 +128,7 @@ func (s Shape) Run(_ context.Context, raw json.RawMessage) (contract.Result, err
 	}
 	r := renderer{lang: lang, names: map[string]bool{}}
 	typed := r.typeOf(subject, name)
-	return contract.Result{Content: "shape: " + lang.String() + " " + picked + "; " + from + " holds " + holds + ", typed " + typed + "\n\n" + r.render(), Command: Name}, nil
+	return contract.Result{Content: "shape: " + lang.String() + " " + picked + "; " + from + " holds " + holds + ", typed " + typed + "\n\n" + r.render(), Command: from}, nil
 }
 
 func refused(said string) contract.Result {

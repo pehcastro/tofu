@@ -55,7 +55,7 @@ func (Env) Definition() core.Tool {
 
 func (e Env) Run(ctx context.Context, _ json.RawMessage) (contract.Result, error) {
 	dir := string(e.root)
-	var blockers, unknowns []string
+	var blockers, unknowns, manifests []string
 	var toolchains strings.Builder
 	chains := declaredToolchains(dir)
 	if len(chains) == 0 {
@@ -69,6 +69,7 @@ func (e Env) Run(ctx context.Context, _ json.RawMessage) (contract.Result, error
 			want = "unknown (" + chain.wantErr.Error() + ")"
 		}
 		fmt.Fprintf(&toolchains, "%s: want %s from %s, ", chain.name, want, chain.source)
+		manifests = append(manifests, chain.source)
 		have, found, located := probe(ctx, dir, chain)
 		switch {
 		case !located:
@@ -103,7 +104,7 @@ func (e Env) Run(ctx context.Context, _ json.RawMessage) (contract.Result, error
 	if len(unknowns) > 0 {
 		verdict += "; version unknown: " + strings.Join(unknowns, ", ")
 	}
-	return contract.Result{Content: verdict + "\n" + toolchains.String() + keys}, nil
+	return contract.Result{Content: verdict + "\n" + toolchains.String() + keys, Command: cmp.Or(strings.Join(manifests, ", "), ".")}, nil
 }
 
 func declaredToolchains(dir string) []declared {

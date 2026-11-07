@@ -81,7 +81,7 @@ func (b Budget) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 		return contract.Result{}, fmt.Errorf("budget: %w", err)
 	}
 	if asked.Header.ID == "" {
-		return contract.Result{Content: "no session is recorded in this project yet: 0 calls, 0 weighted tokens, 0 USD\n", Command: Name}, nil
+		return contract.Result{Content: "no session is recorded in this project yet: 0 calls, 0 weighted tokens, 0 USD\n", Command: "session " + cmp.Or(args.Session, session.HeadHandle)}, nil
 	}
 	whole, err := b.Drain(asked.Header.ID)
 	if err != nil {
@@ -114,5 +114,5 @@ func (b Budget) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 		fmt.Fprintf(&said, "  %s (%s): %s, peak context %d, %s\n", run.Name, run.Type, spent(run.Spend), run.PeakContext,
 			timing(asked.Events, func(event session.Event) bool { return event.Agent == run.Name }))
 	}
-	return contract.Result{Content: said.String(), Command: Name}, nil
+	return contract.Result{Content: said.String(), Command: "session " + asked.Handle}, nil
 }

@@ -75,7 +75,12 @@ func (c Changes) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 			return contract.Result{}, errors.New("changes: of parent reads the turn that spawned this one, and no turn spawned this one")
 		}
 	}
+	command := "last ended turn"
+	if args.Turns > 1 {
+		command = fmt.Sprintf("last %d ended turns", args.Turns)
+	}
 	if inTurn && args.Turns == 0 {
+		command = cmp.Or(args.Of, "this") + " turn"
 		var live shadow.Changed
 		live, err = started.Live(timed)
 		turns = []shadow.Changed{live}
@@ -86,7 +91,7 @@ func (c Changes) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 		return contract.Result{}, fmt.Errorf("changes: %w", err)
 	}
 	if len(turns) == 0 {
-		return contract.Result{Content: "no turn has been recorded in the shadow store at " + c.Store.Dir() + " yet\n", Command: Name}, nil
+		return contract.Result{Content: "no turn has been recorded in the shadow store at " + c.Store.Dir() + " yet\n", Command: command}, nil
 	}
 	var said strings.Builder
 	for _, turn := range turns {
@@ -125,5 +130,5 @@ func (c Changes) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 			said.WriteString("  outside owns: " + cmp.Or(strings.Join(outside, ", "), "none") + "\n")
 		}
 	}
-	return contract.Result{Content: said.String(), Command: Name}, nil
+	return contract.Result{Content: said.String(), Command: command}, nil
 }
