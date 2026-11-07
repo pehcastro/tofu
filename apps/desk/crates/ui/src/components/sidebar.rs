@@ -13,6 +13,7 @@ use gpui::{
 use crate::component::{control, icon};
 use crate::components::avatar::spinner;
 use crate::components::card::inner_card;
+use crate::components::chip::tabular;
 use crate::components::glyph::Glyph;
 use crate::components::list::{HoverList, bare_row};
 use crate::components::overlay::{Align, MenuIcon, MenuItem, Placement, Side, context_menu};
@@ -31,10 +32,15 @@ use crate::theme::{ColorToken, Theme};
 
 const SIDEBAR_PAD_X: f32 = 8.0;
 const SIDEBAR_PAD_TOP: f32 = 2.0;
+const TOOLS_PAD_TOP: f32 = SIDEBAR_PAD_TOP + 3.0;
 pub const SIDEBAR_COLUMN: f32 = SIDEBAR_WIDTH + 2.0 * SIDEBAR_PAD_X;
 const SIDEBAR_PAD_BOTTOM: f32 = 10.0;
 const CARD_GAP: f32 = 8.0;
 const CARD_PAD: f32 = 6.0;
+pub const CONTENT_LEFT: f32 = SIDEBAR_PAD_X + CARD_PAD + ROW_PAD_X;
+pub const CONTENT_RIGHT: f32 = SIDEBAR_COLUMN - CONTENT_LEFT;
+const PROJECTS_PAD_BOTTOM: f32 = 2.0 * GROUP_PAD_BOTTOM;
+const FOLDED_CHEVRON_INK: f32 = 3.0;
 const CARD_ROW_GAP: f32 = 3.0;
 const CAPTION_PAD_TOP: f32 = 30.0;
 const ACTIVE_PAD_TOP: f32 = 4.0;
@@ -46,7 +52,6 @@ const WATCHING_RING: f32 = WATCHING_DOT + 2.0;
 const WATCHING_HALO: f32 = 0.25;
 const WATCHING_GAP: f32 = 6.0;
 const INACTIVE_GAP: f32 = 6.0;
-const INACTIVE_INDENT: f32 = 8.0;
 const SESSION_STRIDE: f32 = LINE_WHO + 2.0 * ROW_PAD_Y + CARD_ROW_GAP;
 const INACTIVE_ROWS_SHOWN: usize = 6;
 const INACTIVE_MAX_H: f32 = INACTIVE_ROWS_SHOWN as f32 * SESSION_STRIDE - CARD_ROW_GAP;
@@ -416,7 +421,12 @@ impl Sidebar {
             .map(|more| self.more_item(more));
         let list = HoverList::within(
             "tools",
-            div().flex().flex_col().flex_none().pt(px(SIDEBAR_PAD_TOP)),
+            div()
+                .flex()
+                .flex_col()
+                .flex_none()
+                .px(px(CARD_PAD))
+                .pt(px(TOOLS_PAD_TOP)),
             ink(theme, HOVER),
             Corners::all(px(RADIUS_ROW)),
             theme,
@@ -458,7 +468,6 @@ impl Sidebar {
                 .size(px(SPINNER))
                 .flex()
                 .items_center()
-                .justify_center()
                 .child(state_mark(
                     place.key("spin"),
                     state,
@@ -498,9 +507,6 @@ impl Sidebar {
             .editing
             .take_if(|(project, at, _)| *project == place.project && *at == place.at);
         let session_row = row((place.key("row"), place.name()), false, alpha, theme)
-            .when(matches!(place.at, SessionAt::Inactive(_)), |row| {
-                row.child(div().flex_none().w(px(INACTIVE_INDENT)))
-            })
             .child(mark)
             .child(match editing {
                 Some((_, _, field)) => div().flex_1().min_w_0().overflow_hidden().child(field),
@@ -525,15 +531,7 @@ impl Sidebar {
                             }),
                     ),
             })
-            .when_some(age, |row, age| {
-                row.child(
-                    div()
-                        .flex_none()
-                        .text_size(px(FONT_CAP2))
-                        .text_color(ink(theme, T3))
-                        .child(age),
-                )
-            })
+            .when_some(age, |row, age| row.child(figure(age.into(), theme)))
             .on_click(self.picked(SidebarPick::Open(place.project, place.at)));
         let on_pick = self.on_pick.clone();
         let menu: &'static [MenuRow] = match place.live {
@@ -638,6 +636,7 @@ fn add_button(
 ) -> Stateful<Div> {
     named_stop(control(id, label, theme), stop, theme)
         .size(px(NEW_SESSION))
+        .mr(px(-(NEW_SESSION - ICON_SMALL) / 2.0))
         .rounded(px(RADIUS_BADGE))
         .child(icon(Icon::Plus, ICON_SMALL, ink(theme, T3)))
 }
@@ -676,11 +675,12 @@ fn gap(rows: usize) -> Option<Div> {
     })
 }
 
-fn word(text: SharedString, theme: &Theme) -> Div {
+fn figure(text: SharedString, theme: &Theme) -> Div {
     div()
         .flex_none()
-        .text_size(px(FONT_CAP))
-        .text_color(ink(theme, T3))
+        .text_size(px(FONT_CAP2))
+        .font_features(tabular())
+        .text_color(theme.color(ColorToken::TextMuted))
         .child(text)
 }
 
@@ -710,6 +710,8 @@ impl RenderOnce for Sidebar {
             .on_click(self.picked(SidebarPick::Settings));
         let tools = self.tools_block(&theme);
         let heading = caption("Projects", &theme)
+            .px(px(CARD_PAD + ROW_PAD_X))
+            .pb(px(PROJECTS_PAD_BOTTOM))
             .pt(px(match tools {
                 Some(_) => CAPTION_PAD_TOP,
                 None => SIDEBAR_PAD_TOP,
@@ -813,9 +815,14 @@ impl RenderOnce for Sidebar {
                 &theme,
             )
             .mt(px(INACTIVE_GAP))
-            .child(chevron(inactive_open, &theme))
-            .child(div().flex_1().child("Inactive"))
-            .child(word(sessions.inactive.len().to_string().into(), &theme))
+            .child(
+                div()
+                    .flex_none()
+                    .ml(px(-FOLDED_CHEVRON_INK))
+                    .child(chevron(inactive_open, &theme)),
+            )
+            .child(div().flex_1().ml(px(FOLDED_CHEVRON_INK)).child("Inactive"))
+            .child(figure(sessions.inactive.len().to_string().into(), &theme))
             .on_click(move |_, _, cx| {
                 toggle.update(cx, |open, cx| {
                     *open = !*open;
@@ -867,7 +874,11 @@ impl RenderOnce for Sidebar {
                     .track_scroll(&scroll)
                     .children(cards)
                     .child(div().flex_1())
-                    .child(list("settings-row".into(), &theme).item(settings)),
+                    .child(
+                        div()
+                            .px(px(CARD_PAD))
+                            .child(list("settings-row".into(), &theme).item(settings)),
+                    ),
             )
     }
 }

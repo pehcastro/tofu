@@ -19,6 +19,7 @@ use crate::components::list::{row, separator};
 use crate::components::logo::{Brand, logo};
 use crate::components::overlay::{Align, Placement, Popover, Side, toggles_on_press};
 use crate::components::paint::{glyph, ink};
+use crate::components::sidebar::CONTENT_LEFT;
 use crate::components::size::{
     CAPTION_TEXT, CHIP_FILL, FONT_BODY, FONT_SMALL, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y,
     RADIUS_CHIP_SMALL, ROW_GAP, ROW_PAD_X, T1, T2, T3,
@@ -71,6 +72,7 @@ const BAR_RADIUS: f32 = 3.0;
 const BAR_TRACK: f32 = 0.08;
 const BAR_FILL: f32 = 0.6;
 const HELD_OPACITY: f32 = 0.7;
+const STATUS_ITEM_PAD_X: f32 = 8.0;
 
 #[derive(Clone)]
 pub struct Branch {
@@ -941,7 +943,8 @@ impl RenderOnce for StatusBar {
             .flex()
             .items_center()
             .gap_0p5()
-            .px_2p5()
+            .pl(px(CONTENT_LEFT - STATUS_ITEM_PAD_X))
+            .pr_2p5()
             .child(branch)
             .child(session)
             .child(

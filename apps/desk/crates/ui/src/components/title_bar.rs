@@ -13,6 +13,7 @@ use crate::components::chip::mono;
 use crate::components::glyph::Glyph;
 use crate::components::overlay::{Align, Placement, Popover, Side, toggles_on_press};
 use crate::components::paint::{focus_ring, glyph, ink};
+use crate::components::sidebar::{CONTENT_LEFT, CONTENT_RIGHT};
 use crate::components::size::{FONT_SMALL, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y, T3};
 use crate::components::tooltip::{Edge, tooltip};
 use crate::icon::Icon;
@@ -505,6 +506,7 @@ impl RenderOnce for TitleBar {
             offset: POP_OFFSET,
         };
         let column = title.tabs_x.max(SIDEBAR_CLOSED_WIDTH + TITLE_GAP) - TITLE_GAP;
+        let icon_inset = (CONTROL - ICON) / 2.0;
         let (theme_glyph, theme_tip) = match theme.mode() {
             Mode::Dark => (Glyph::Sun, TO_LIGHT),
             Mode::Light => (Glyph::Moon, TO_DARK),
@@ -577,8 +579,8 @@ impl RenderOnce for TitleBar {
                 .flex()
                 .items_center()
                 .gap_1()
-                .pl_2p5()
-                .pr_2()
+                .pl(px(CONTENT_LEFT - icon_inset))
+                .pr(px((column - CONTENT_RIGHT - icon_inset).max(0.0)))
                 .child(
                     named_stop(
                         icon_button("sidebar-toggle", Icon::Sidebar, "Toggle sidebar", &theme),
