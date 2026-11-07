@@ -33,7 +33,7 @@ func First(source string, l lang.Lang, p pattern.Pattern, rewrite string) (strin
 	if !ok {
 		end = found.Node.End()
 	}
-	return source[:start] + reindent(text, 0, indentAt(source[:start])) + source[end:], true, nil
+	return source[:start] + Reindent(text, 0, IndentAt(source[:start])) + source[end:], true, nil
 }
 
 func Text(rewrite string, env *metavar.Env) (string, error) {
@@ -52,7 +52,7 @@ func Text(rewrite string, env *metavar.Env) (string, error) {
 			return "", err
 		}
 		out.WriteString(rewrite[last:i])
-		out.WriteString(reindent(text, indent, indentAt(rewrite[:i])))
+		out.WriteString(Reindent(text, indent, IndentAt(rewrite[:i])))
 		last = i + width
 		i = last - 1
 	}
@@ -115,6 +115,9 @@ func Tree(rewrite string, l lang.Lang, env *metavar.Env) (string, error) {
 }
 
 func lookup(env *metavar.Env, name string, multi bool, spelled string) (string, int, error) {
+	if text, ok := env.Transformed(name); ok && !multi {
+		return text, 0, nil
+	}
 	nodes, ok := env.Multi(name)
 	if !multi {
 		node, found := env.Single(name)
@@ -131,5 +134,5 @@ func lookup(env *metavar.Env, name string, multi bool, spelled string) (string, 
 	if !strings.Contains(text, "\n") {
 		return text, 0, nil
 	}
-	return text, indentAt(source[:start]), nil
+	return text, IndentAt(source[:start]), nil
 }

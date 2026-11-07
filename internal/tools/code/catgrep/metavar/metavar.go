@@ -69,16 +69,17 @@ func validName(name string) bool {
 func (v Var) IsEllipsis() bool { return v.Kind == Multiple || v.Kind == MultiCapture }
 
 type Env struct {
-	single map[string]tree.Node
-	multi  map[string][]tree.Node
+	single      map[string]tree.Node
+	multi       map[string][]tree.Node
+	transformed map[string]string
 }
 
 func NewEnv() *Env {
-	return &Env{single: map[string]tree.Node{}, multi: map[string][]tree.Node{}}
+	return &Env{single: map[string]tree.Node{}, multi: map[string][]tree.Node{}, transformed: map[string]string{}}
 }
 
 func (e *Env) Clone() *Env {
-	return &Env{single: maps.Clone(e.single), multi: maps.Clone(e.multi)}
+	return &Env{single: maps.Clone(e.single), multi: maps.Clone(e.multi), transformed: maps.Clone(e.transformed)}
 }
 
 func (e *Env) Insert(name string, node tree.Node) bool {
@@ -97,6 +98,8 @@ func (e *Env) InsertMulti(name string, nodes []tree.Node) bool {
 	return true
 }
 
+func (e *Env) InsertTransformed(name, text string) { e.transformed[name] = text }
+
 func (e *Env) Single(name string) (tree.Node, bool) {
 	node, ok := e.single[name]
 	return node, ok
@@ -107,13 +110,18 @@ func (e *Env) Multi(name string) ([]tree.Node, bool) {
 	return nodes, ok
 }
 
+func (e *Env) Transformed(name string) (string, bool) {
+	text, ok := e.transformed[name]
+	return text, ok
+}
+
 func sameNamed(bound, nodes []tree.Node) bool {
 	unnamed := func(n tree.Node) bool { return !n.IsNamed() }
 	return slices.EqualFunc(slices.DeleteFunc(slices.Clone(bound), unnamed), slices.DeleteFunc(slices.Clone(nodes), unnamed), sameTree)
 }
 
 func (e *Env) Texts() map[string]string {
-	texts := map[string]string{}
+	texts := maps.Clone(e.transformed)
 	for name, node := range e.single {
 		texts[name] = node.Text()
 	}

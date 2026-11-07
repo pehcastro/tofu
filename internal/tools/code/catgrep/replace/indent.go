@@ -6,7 +6,7 @@ import (
 	"tofu/internal/konst"
 )
 
-func indentAt[T ~string | ~[]byte](prefix T) int {
+func IndentAt[T ~string | ~[]byte](prefix T) int {
 	lookback := max(len(prefix), konst.CodemodIndentLookbackBytes) - konst.CodemodIndentLookbackBytes
 	indent := 0
 	for i := len(prefix) - 1; i >= lookback; i-- {
@@ -25,7 +25,7 @@ func indentAt[T ~string | ~[]byte](prefix T) int {
 	return 0
 }
 
-func reindent(text string, from, to int) string {
+func Reindent(text string, from, to int) string {
 	if from == to || !strings.Contains(text, "\n") {
 		return text
 	}
