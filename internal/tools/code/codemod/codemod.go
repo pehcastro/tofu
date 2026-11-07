@@ -7,16 +7,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go/format"
+	"go/parser"
+	"go/token"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
-
-	"golang.org/x/tools/imports"
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
@@ -30,8 +31,8 @@ import (
 )
 
 type change struct {
-	path  string
-	after []byte
+	path, relative string
+	before, after  []byte
 }
 
 type arguments struct {
@@ -126,7 +127,7 @@ func (c Codemod) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 		if err != nil {
 			return contract.Failure("codemod: " + file.Path + ": " + err.Error()), nil
 		}
-		found[i].Sites = slices.SortedFunc(slices.Values(append(file.Sites, captures...)), func(a, b catgrep.Site) int { return a.Start - b.Start })
+		found[i].Sites = slices.SortedStableFunc(slices.Values(append(file.Sites, captures...)), func(a, b catgrep.Site) int { return a.Start - b.Start })
 	}
 	result, err := c.report(ctx, args, found)
 	result.Command = command
@@ -148,32 +149,37 @@ func (c Codemod) report(ctx context.Context, args arguments, found []catgrep.Fil
 	if args.Apply && args.Expect != nil && *args.Expect != matches {
 		return contract.Failure(fmt.Sprintf("codemod: expected %d matches and found %d, so nothing was written. preview again and apply with the new count", *args.Expect, matches)), nil
 	}
-	var listing, diffs strings.Builder
-	shown := 0
-	changes := make([]change, 0, len(found))
-	for _, file := range found {
-		relative, _ := filepath.Rel(string(c.root), file.Path)
-		relative = filepath.ToSlash(relative)
-		for _, s := range file.Sites {
-			if shown++; shown <= konst.CodemodSitesShown {
-				fmt.Fprintf(&listing, "%s:%d %s -> %s\n", relative, s.Line, firstLine(s.Before), firstLine(s.After))
-			}
-		}
-		before, err := os.ReadFile(file.Path)
-		if err != nil {
-			return contract.Result{}, fmt.Errorf("codemod: %w", err)
-		}
-		after, err := rewritten(file.Path, before, file.Sites)
+	changes, failures := make([]change, len(found)), make([]error, len(found))
+	var group sync.WaitGroup
+	for i, file := range found {
+		group.Go(func() { changes[i], failures[i] = c.rewritten(file) })
+	}
+	group.Wait()
+	for _, err := range failures {
 		if err != nil {
 			return contract.Failure("codemod: " + err.Error() + ". nothing written"), nil
 		}
-		if diffs.Len() < konst.CodemodDiffBytes {
-			diffs.WriteString(patch.Unified(relative, string(before), string(after)))
+	}
+	var listing, diffs strings.Builder
+	shown := 0
+	for i, file := range found {
+		for _, s := range file.Sites {
+			if shown++; shown <= konst.CodemodSitesShown {
+				fmt.Fprintf(&listing, "%s:%d %s -> %s\n", changes[i].relative, s.Line, firstLine(s.Before), firstLine(s.After))
+			}
 		}
-		changes = append(changes, change{path: file.Path, after: after})
 	}
 	if shown > konst.CodemodSitesShown {
 		fmt.Fprintf(&listing, "%d more matches not listed\n", shown-konst.CodemodSitesShown)
+	}
+	missing := ""
+	if args.Apply {
+		missing = fixImports(ctx, string(c.root), changes)
+	}
+	for _, file := range changes {
+		if diffs.Len() < konst.CodemodDiffBytes {
+			diffs.WriteString(patch.Unified(file.relative, string(file.before), string(file.after)))
+		}
 	}
 	diff := diffs.String()
 	if len(diff) > konst.CodemodDiffBytes {
@@ -193,36 +199,38 @@ func (c Codemod) report(ctx context.Context, args arguments, found []catgrep.Fil
 			return contract.Result{}, fmt.Errorf("codemod: wrote %s: %w", file.path, err)
 		}
 	}
-	return contract.Result{Content: head + ". applied\n" + listing.String() + diff + c.checked(ctx, args.Lang, changes)}, nil
+	return contract.Result{Content: head + ". applied\n" + listing.String() + diff + missing + c.checked(ctx, args.Lang, changes)}, nil
 }
 
-func rewritten(path string, before []byte, sites []catgrep.Site) ([]byte, error) {
+func (c Codemod) rewritten(file catgrep.File) (change, error) {
+	relative, _ := filepath.Rel(string(c.root), file.Path)
+	before, err := os.ReadFile(file.Path)
+	if err != nil {
+		return change{}, err
+	}
 	var after bytes.Buffer
 	at := 0
-	for _, s := range sites {
+	for _, s := range file.Sites {
+		if s.Start < at {
+			continue
+		}
 		after.Write(before[at:s.Start])
 		after.WriteString(s.After)
 		at = s.End
 	}
 	after.Write(before[at:])
-	if filepath.Ext(path) != ".go" {
-		return after.Bytes(), nil
+	done := change{path: file.Path, relative: filepath.ToSlash(relative), before: before, after: after.Bytes()}
+	if filepath.Ext(file.Path) != ".go" {
+		return done, nil
 	}
-	clean, err := format.Source(before)
-	if err != nil {
-		return after.Bytes(), nil
+	_, err = parser.ParseFile(token.NewFileSet(), file.Path, done.after, parser.SkipObjectResolution)
+	if err == nil {
+		return done, nil
 	}
-	if _, err := format.Source(after.Bytes()); err != nil {
-		return nil, fmt.Errorf("the rewrite leaves %s as code that does not parse: %w", path, err)
+	if _, broken := parser.ParseFile(token.NewFileSet(), file.Path, before, parser.SkipObjectResolution); broken != nil {
+		return done, nil
 	}
-	if !bytes.Equal(clean, before) {
-		return after.Bytes(), nil
-	}
-	fixed, err := imports.Process(path, after.Bytes(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("fixing the imports of %s after the rewrite: %w", path, err)
-	}
-	return fixed, nil
+	return change{}, fmt.Errorf("the rewrite leaves %s as code that does not parse: %w", file.Path, err)
 }
 
 func (c Codemod) checked(ctx context.Context, lang string, changes []change) string {
@@ -230,8 +238,8 @@ func (c Codemod) checked(ctx context.Context, lang string, changes []change) str
 	case "go":
 		packages := []string{}
 		for _, file := range changes {
-			relative, _ := filepath.Rel(string(c.root), filepath.Dir(file.path))
-			pkg := "./" + filepath.ToSlash(relative)
+			relative := path.Dir(file.relative)
+			pkg := "./" + relative
 			if relative == "." {
 				pkg = "."
 			}
