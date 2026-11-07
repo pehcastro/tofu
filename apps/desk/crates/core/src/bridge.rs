@@ -137,10 +137,17 @@ fn sentence_case(message: &str) -> String {
 }
 
 const TURN_RUNNING: &str = "a turn is running";
+const TURN_NAMED: (&str, &str) = ("turn ", " is running");
 
 impl BridgeError {
     pub fn turn_running(&self) -> bool {
-        matches!(self, BridgeError::Refused(refusal) if refusal.code == -32000 && refusal.message.starts_with(TURN_RUNNING))
+        let BridgeError::Refused(refusal) = self else {
+            return false;
+        };
+        let said = refusal.message.split(':').next().unwrap_or_default();
+        refusal.code == -32000
+            && (said.starts_with(TURN_RUNNING)
+                || (said.starts_with(TURN_NAMED.0) && said.ends_with(TURN_NAMED.1)))
     }
 }
 

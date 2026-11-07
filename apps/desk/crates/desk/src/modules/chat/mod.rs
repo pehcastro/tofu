@@ -48,7 +48,7 @@ use gpui::{
     Window, actions, div, prelude::*, px,
 };
 
-use cassette::{Replay, Step};
+use cassette::{Answered, Flow, Played, Replay, Step};
 use feed::{Feed, Seat};
 use head::SessionHead;
 use items::{Entry, Item};
@@ -135,6 +135,7 @@ enum Link {
     Ready(Bridge),
     Gone,
     Recorded(Replay),
+    Flow(Flow),
     Fed,
 }
 
@@ -238,6 +239,47 @@ impl Page {
     }
 }
 
+fn settle_agents(store: &mut Store) {
+    let Store {
+        sessions,
+        open,
+        trace,
+        ..
+    } = store;
+    let Some(id) = open.as_ref() else {
+        return;
+    };
+    let runs = trace
+        .read
+        .as_ref()
+        .filter(|read| &read.value.session == id)
+        .map_or(&[][..], |read| read.value.agents.as_slice());
+    if let Some(session) = sessions.get_mut(id) {
+        session.settle_runs(runs);
+    }
+}
+
+fn covered(landed: &[Notification], live: &Notification) -> bool {
+    use Notification as N;
+    landed.iter().any(|line| match (line, live) {
+        (N::MessageUser(was), N::MessageUser(now)) => {
+            (&was.session, &was.turn, &was.agent, &was.text)
+                == (&now.session, &now.turn, &now.agent, &now.text)
+        }
+        (N::MessageCompleted(was), N::MessageCompleted(now)) => {
+            (&was.session, &was.turn, &was.agent, &was.text)
+                == (&now.session, &now.turn, &now.agent, &now.text)
+        }
+        (N::TurnStarted(was), N::TurnStarted(now)) => {
+            (&was.session, &was.turn) == (&now.session, &now.turn)
+        }
+        (N::TurnCompleted(was), N::TurnCompleted(now)) => {
+            (&was.session, &was.turn) == (&now.session, &now.turn)
+        }
+        (was, now) => was == now,
+    })
+}
+
 #[derive(Clone, Copy, Debug)]
 enum Paging {
     Older,
@@ -336,15 +378,21 @@ impl History {
     }
 
     fn settle_live(&mut self, landed: &[Notification]) {
-        let Some(cut) = self.live.iter().rposition(|line| landed.contains(line)) else {
+        let Some(cut) = self.live.iter().rposition(|line| covered(landed, line)) else {
             return;
         };
         let mut at = 0;
         self.live.retain(|line| {
-            let covered = at <= cut
-                && (landed.contains(line) || matches!(line, Notification::MessageDelta(_)));
+            let streamed = matches!(
+                line,
+                Notification::MessageStarted(_)
+                    | Notification::MessageDelta(_)
+                    | Notification::MessageReset(_)
+                    | Notification::ThinkingDelta(_)
+            );
+            let settled = at <= cut && (streamed || covered(landed, line));
             at += 1;
-            !covered
+            !settled
         });
     }
 
@@ -445,6 +493,7 @@ pub struct Chat {
     _files: Option<Task<()>>,
     _signed: Option<Task<()>>,
     reopening: Option<Instant>,
+    watching: Option<String>,
     history: Option<History>,
     heard: Option<i64>,
     painting: Option<(String, Instant)>,
@@ -510,9 +559,9 @@ pub fn open(board: Option<&str>, window: &mut Window, cx: &mut App) -> Result<An
                 .into())
         }
         Some(recorded) if recorded.ends_with(RECORDED) => {
-            let replay = Replay::once(Path::new(recorded))?;
+            let flow = Flow::read(Path::new(recorded))?;
             Ok(cx
-                .new(|cx| Chat::new(Link::Recorded(replay), store, window, cx))
+                .new(|cx| Chat::new(Link::Flow(flow), store, window, cx))
                 .into())
         }
         Some(other) => Err(format!(
@@ -790,6 +839,7 @@ impl Chat {
             _files: None,
             _signed: None,
             reopening: None,
+            watching: None,
             history: None,
             heard: None,
             painting: None,
@@ -1163,7 +1213,7 @@ impl Chat {
         let live = history
             .live
             .iter()
-            .filter(|live| newest.is_none_or(|lines| !lines.contains(live)));
+            .filter(|live| newest.is_none_or(|lines| !covered(lines, live)));
         let mut pages: Vec<Vec<Event>> = history
             .pages
             .iter()
@@ -1205,6 +1255,7 @@ impl Chat {
                     .filter(|event| store.apply_batch(slice::from_ref(event)).is_err())
                     .count();
                 eprintln!("desk: chat newest page given to the shared store, {refused} refused");
+                settle_agents(store);
                 cx.notify();
             });
         }
@@ -1315,6 +1366,7 @@ impl Chat {
             None => self.restart(cx),
         }
         self.problem = None;
+        self.watching = None;
         self.parted = Parted::Joined;
         if let Some(row) = self
             .rows
@@ -1330,6 +1382,11 @@ impl Chat {
         self.history = session.clone().map(|id| History::new(id, asked));
         self.tell_head(cx);
         self.ask_page(Paging::Older, cx);
+        self.join(session, asked, cx);
+        cx.notify();
+    }
+
+    fn join(&mut self, session: Option<String>, asked: Instant, cx: &mut Context<Self>) {
         let wanted = session.clone().unwrap_or_default();
         eprintln!("desk: session.open asked for {wanted}");
         let params = SessionOpenParams {
@@ -1339,38 +1396,57 @@ impl Chat {
             ..SessionOpenParams::default()
         };
         self.request_typed::<request::SessionOpen>(&params, cx, move |chat, reply, cx| {
-            let opened = match reply {
-                Ok(opened) => opened,
-                Err(error) if error.turn_running() => {
-                    return eprintln!("desk: session.open waits, a turn is running: {error}");
-                }
-                Err(error) => {
-                    eprintln!("desk: session.open {wanted} failed: {error:?}");
-                    return chat.fail(error.to_string(), cx);
-                }
-            };
-            eprintln!(
-                "desk: session attach {} with {} members, fresh {}, in {} ms",
-                opened.session,
-                opened.members.len(),
-                opened.fresh,
-                asked.elapsed().as_millis()
-            );
-            if let Some(at) = chat.reopening.take() {
-                eprintln!(
-                    "desk: tofu restarted, session {} back in {} ms",
-                    opened.session,
-                    at.elapsed().as_millis()
-                );
-            }
-            chat.ask_shells(cx);
-            chat.opened(opened, asked, cx);
-            chat.refresh(cx);
-            chat.relist(cx);
-            chat.reread_context(cx);
-            chat.reread_info(cx);
+            chat.open_answered(wanted, reply, asked, cx);
         });
-        cx.notify();
+    }
+
+    fn open_answered(
+        &mut self,
+        wanted: String,
+        reply: Result<SessionOpenResult, BridgeError>,
+        asked: Instant,
+        cx: &mut Context<Self>,
+    ) {
+        let opened = match reply {
+            Ok(opened) => opened,
+            Err(error) if error.turn_running() && !wanted.is_empty() => {
+                eprintln!(
+                    "desk: session.open {wanted} refused while its turn runs ({error}), the desk watches it working and opens it again when the turn ends"
+                );
+                self.watching = Some(wanted.clone());
+                self.set_opening(Opening::Open(wanted), cx);
+                self.ask_shells(cx);
+                self.want_trace(cx);
+                return self.refresh(cx);
+            }
+            Err(error) if error.turn_running() => {
+                return eprintln!("desk: session.open waits, a turn is running: {error}");
+            }
+            Err(error) => {
+                eprintln!("desk: session.open {wanted} failed: {error:?}");
+                return self.fail(error.to_string(), cx);
+            }
+        };
+        eprintln!(
+            "desk: session attach {} with {} members, fresh {}, in {} ms",
+            opened.session,
+            opened.members.len(),
+            opened.fresh,
+            asked.elapsed().as_millis()
+        );
+        if let Some(at) = self.reopening.take() {
+            eprintln!(
+                "desk: tofu restarted, session {} back in {} ms",
+                opened.session,
+                at.elapsed().as_millis()
+            );
+        }
+        self.ask_shells(cx);
+        self.opened(opened, asked, cx);
+        self.refresh(cx);
+        self.relist(cx);
+        self.reread_context(cx);
+        self.reread_info(cx);
     }
 
     pub fn problem(&self) -> Option<&SharedString> {
@@ -1606,8 +1682,12 @@ impl Chat {
         if let Some(gap) = gap {
             self.catch_up(&gap, cx);
         }
-        self.store.update(cx, |_, cx| cx.notify());
-        if let (Link::Recorded(_) | Link::Fed, Opening::Closed) = (&self.link, &self.opening)
+        self.store.update(cx, |store, cx| {
+            settle_agents(store);
+            cx.notify();
+        });
+        if let (Link::Recorded(_) | Link::Flow(_) | Link::Fed, Opening::Closed) =
+            (&self.link, &self.opening)
             && let Some(id) = self.store.read(cx).sessions.keys().next().cloned()
         {
             self.want_trace(cx);
@@ -1799,6 +1879,14 @@ impl Chat {
             }
             Event::Notification(Notification::TurnCompleted(completed)) => {
                 self.said(completed, cx);
+                if self.watching.as_ref() == Some(&completed.session) {
+                    self.watching = None;
+                    eprintln!(
+                        "desk: turn {} ended, session.open {} is asked again",
+                        completed.turn, completed.session
+                    );
+                    self.join(Some(completed.session.clone()), Instant::now(), cx);
+                }
                 cx.emit(Touched);
                 if self.open_id() == Some(completed.session.as_str()) {
                     self.reread_context(cx);
@@ -1958,7 +2046,8 @@ impl Chat {
             .as_ref()
             .is_some_and(|shown| shown.asking.waiting());
         let open = self.running(cx).is_some();
-        let session = self.store.read(cx).open_session();
+        let store = self.store.read(cx);
+        let session = store.open_session();
         let sub_agents = session.map_or(0, items::sub_agents);
         let lead_busy = open
             && !session.is_some_and(|session| {
@@ -2174,13 +2263,17 @@ impl Chat {
     ) where
         R::Result: 'static,
     {
-        let Link::Ready(_) = &self.link else {
-            return then(
-                self,
-                Err("tofu is not running, so nothing was sent".to_owned()),
-                cx,
-            );
-        };
+        match &self.link {
+            Link::Ready(_) => {}
+            Link::Flow(_) => return eprintln!("desk: {} is answered by the flow", R::METHOD),
+            Link::Starting | Link::Gone | Link::Recorded(_) | Link::Fed => {
+                return then(
+                    self,
+                    Err("tofu is not running, so nothing was sent".to_owned()),
+                    cx,
+                );
+            }
+        }
         self.request_typed::<R>(params, cx, |chat, reply, cx| {
             let reply = reply.map_err(|error| {
                 eprintln!("desk: {} failed: {error:?}", R::METHOD);
@@ -2198,8 +2291,12 @@ impl Chat {
     ) where
         R::Result: 'static,
     {
-        let Link::Ready(bridge) = &self.link else {
-            return then(self, Err(BridgeError::Closed), cx);
+        let bridge = match &self.link {
+            Link::Ready(bridge) => bridge,
+            Link::Flow(_) => return eprintln!("desk: {} is answered by the flow", R::METHOD),
+            Link::Starting | Link::Gone | Link::Recorded(_) | Link::Fed => {
+                return then(self, Err(BridgeError::Closed), cx);
+            }
         };
         let pending = match bridge.request::<R>(params) {
             Ok(pending) => pending,
@@ -2242,7 +2339,9 @@ impl Chat {
     fn state_now(&mut self, state: &SessionState, cx: &mut Context<Self>) {
         if let Err(error) = self.store.update(cx, |store, cx| {
             cx.notify();
-            store.state_now(state)
+            let said = store.state_now(state);
+            settle_agents(store);
+            said
         }) {
             eprintln!("desk: the store refused session.state from tofu: {error}");
         }
@@ -2782,6 +2881,7 @@ impl Chat {
             }
             chat.store.update(cx, |store, cx| {
                 slot(store).answered(answer);
+                settle_agents(store);
                 cx.notify();
             });
             chat.ask_due(cx);
@@ -2993,19 +3093,96 @@ impl Chat {
     }
 
     fn frame(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let Link::Recorded(replay) = &mut self.link else {
+        let played = match &mut self.link {
+            Link::Recorded(replay) => {
+                window.request_animation_frame();
+                match replay.step() {
+                    Ok(Step::Feed(event)) => self.take(&[event], cx),
+                    Ok(Step::Restart) => self.restart(cx),
+                    Ok(Step::Report) => cx.quit(),
+                    Err(error) => eprintln!("desk: the cassette has a bad line, skipped: {error}"),
+                }
+                return;
+            }
+            Link::Flow(flow) => flow.next(),
+            Link::Starting | Link::Ready(_) | Link::Gone | Link::Fed => return,
+        };
+        let Some(played) = played else {
             return;
         };
-        if replay.played() {
-            return;
-        }
         window.request_animation_frame();
-        match replay.step() {
-            Ok(Step::Feed(event)) => self.take(&[event], cx),
-            Ok(Step::Restart) => self.restart(cx),
-            Ok(Step::Report) => cx.quit(),
-            Err(error) => eprintln!("desk: the cassette has a bad line, skipped: {error}"),
+        match played {
+            Ok(Played::Event(event)) => self.take(&[event], cx),
+            Ok(Played::Answer(answer)) => self.answered(answer, cx),
+            Err(error) => eprintln!("desk: the flow has a bad line, skipped: {error}"),
         }
+        if matches!(&self.link, Link::Flow(flow) if flow.done()) {
+            self.verdict();
+        }
+    }
+
+    fn answered(&mut self, answer: Answered, cx: &mut Context<Self>) {
+        let session = answer.params["session"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        eprintln!("desk: the flow answers {} for {session}", answer.method);
+        fn shaped<T: serde::de::DeserializeOwned>(
+            value: serde_json::Value,
+        ) -> Result<T, BridgeError> {
+            serde_json::from_value(value).map_err(BridgeError::Shape)
+        }
+        let reply = answer.reply.map_err(BridgeError::Refused);
+        match answer.method.as_str() {
+            request::SessionOpen::METHOD => {
+                self.open_session(Some(session.clone()), cx);
+                self.open_answered(session, reply.and_then(shaped), Instant::now(), cx);
+            }
+            request::SessionHistory::METHOD => match reply.and_then(shaped) {
+                Ok(page) => {
+                    let from = self
+                        .history
+                        .as_ref()
+                        .filter(|history| !history.pages.is_empty())
+                        .map(|history| history.held().end);
+                    let landed = Page::decode(page, &session, (None, from));
+                    self.paged(&session, landed, cx);
+                }
+                Err(error) => eprintln!("desk: the flow's session.history is unreadable: {error}"),
+            },
+            request::SessionTrace::METHOD => match reply.and_then(shaped) {
+                Ok(trace) => self.store.update(cx, |store, cx| {
+                    store.trace.answered(Ok(Read::now(trace)));
+                    settle_agents(store);
+                    cx.notify();
+                }),
+                Err(error) => eprintln!("desk: the flow's session.trace is unreadable: {error}"),
+            },
+            other => eprintln!("desk: the flow answers {other}, which the chat never asks"),
+        }
+    }
+
+    fn verdict(&self) {
+        let said: Vec<&SharedString> = self
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                Item::You { text, .. } => Some(text),
+                _ => None,
+            })
+            .collect();
+        let twice = said
+            .iter()
+            .enumerate()
+            .filter(|(at, text)| said.iter().take(*at).any(|earlier| earlier == *text))
+            .count();
+        let pass = twice == 0 && self.problem.is_none();
+        eprintln!(
+            "desk: flow played: {} You bubbles, {twice} drawn twice, error bar {}: {}",
+            said.len(),
+            self.problem.as_deref().unwrap_or("none"),
+            if pass { "PASS" } else { "FAIL" }
+        );
     }
 }
 
@@ -3231,7 +3408,7 @@ impl Render for Chat {
         };
         let meter = match &self.link {
             Link::Recorded(replay) => Some(replay.meter()),
-            Link::Starting | Link::Ready(_) | Link::Gone | Link::Fed => None,
+            Link::Starting | Link::Ready(_) | Link::Gone | Link::Flow(_) | Link::Fed => None,
         };
         div()
             .track_focus(&self.focus)

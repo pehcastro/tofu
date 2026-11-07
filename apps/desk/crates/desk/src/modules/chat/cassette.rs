@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 
 use desk_core::bridge::Event;
-use desk_core::protocol::{Notification, RequestId, ServerRequest};
+use desk_core::protocol::{Notification, Refusal, RequestId, ServerRequest};
 use gpui::{IntoElement, Styled, canvas};
 use serde_json::Value;
 
@@ -21,9 +21,71 @@ pub enum Step {
 pub struct Replay {
     lines: Vec<String>,
     next: usize,
-    looped: bool,
     started: Rc<Cell<Option<Instant>>>,
     samples: Rc<RefCell<Vec<Duration>>>,
+}
+
+pub struct Answered {
+    pub method: String,
+    pub params: Value,
+    pub reply: Result<Value, Refusal>,
+}
+
+pub enum Played {
+    Event(Event),
+    Answer(Answered),
+}
+
+pub struct Flow {
+    lines: Vec<String>,
+    next: usize,
+}
+
+fn lines(path: &Path) -> Result<Vec<String>, String> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|error| format!("the chat cannot read {}: {error}", path.display()))?;
+    Ok(text
+        .lines()
+        .filter(|line| !line.trim().is_empty())
+        .map(str::to_owned)
+        .collect())
+}
+
+fn played(line: &str) -> Result<Played, String> {
+    let raw: Value = serde_json::from_str(line).map_err(|error| error.to_string())?;
+    let reply = match (raw.get("result"), raw.get("error")) {
+        (None, None) => return event(line).map(Played::Event),
+        (_, Some(error)) => Err(serde_json::from_value::<Refusal>(error.clone())
+            .map_err(|error| format!("a recorded refusal: {error}"))?),
+        (Some(result), None) => Ok(result.clone()),
+    };
+    let method = raw["method"]
+        .as_str()
+        .ok_or_else(|| format!("a recorded answer names no method: {line}"))?;
+    Ok(Played::Answer(Answered {
+        method: method.to_owned(),
+        params: raw.get("params").cloned().unwrap_or(Value::Null),
+        reply,
+    }))
+}
+
+impl Flow {
+    pub fn read(path: &Path) -> Result<Flow, String> {
+        Ok(Flow {
+            lines: lines(path)?,
+            next: 0,
+        })
+    }
+
+    pub fn done(&self) -> bool {
+        self.next >= self.lines.len()
+    }
+
+    pub fn next(&mut self) -> Option<Result<Played, String>> {
+        let line = self.lines.get(self.next)?;
+        self.next += 1;
+        Some(played(line))
+    }
 }
 
 fn event(line: &str) -> Result<Event, String> {
@@ -63,38 +125,16 @@ fn report(samples: &[Duration]) {
 
 impl Replay {
     pub fn read() -> Result<Replay, String> {
-        Replay::from(
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CASSETTE),
-            true,
-        )
-    }
-
-    pub fn once(path: &Path) -> Result<Replay, String> {
-        Replay::from(path, false)
-    }
-
-    pub fn played(&self) -> bool {
-        !self.looped && self.next >= self.lines.len()
-    }
-
-    fn from(path: &Path, looped: bool) -> Result<Replay, String> {
-        let text = std::fs::read_to_string(path)
-            .map_err(|error| format!("the chat cannot read {}: {error}", path.display()))?;
         Ok(Replay {
-            lines: text
-                .lines()
-                .filter(|line| !line.trim().is_empty())
-                .map(str::to_owned)
-                .collect(),
+            lines: lines(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(CASSETTE))?,
             next: 0,
-            looped,
             started: Rc::default(),
             samples: Rc::default(),
         })
     }
 
     pub fn step(&mut self) -> Result<Step, String> {
-        if self.looped && self.samples.borrow().len() >= WARMUP + FRAMES {
+        if self.samples.borrow().len() >= WARMUP + FRAMES {
             report(&self.samples.borrow());
             return Ok(Step::Report);
         }

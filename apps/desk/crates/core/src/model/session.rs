@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use super::ModelError;
+use crate::protocol::session::AgentRun;
 use crate::protocol::{
     AccountStateChanged, AgentNow, AgentState, ApprovalRequest, CronState, DecisionMade, FileEdit,
     FileEditOp, GroupSummary, Member, MessageImage, ModelPick, Notification, Origin, OriginKind,
@@ -457,6 +458,49 @@ impl Session {
             agent.tokens = live.tokens;
         }
         Ok(())
+    }
+
+    pub fn settle_runs(&mut self, runs: &[AgentRun]) {
+        let live = |state: &AgentState| {
+            matches!(
+                state,
+                AgentState::Working
+                    | AgentState::InReview
+                    | AgentState::Reopened
+                    | AgentState::WaitingAnswer
+            )
+        };
+        let Session {
+            agents,
+            running,
+            tools,
+            ..
+        } = self;
+        for (instance, agent) in agents.iter_mut() {
+            if !live(&agent.state) || running.get(instance).is_some_and(live) {
+                continue;
+            }
+            let Some(run) = runs.iter().find(|run| &run.agent == instance) else {
+                continue;
+            };
+            let state = serde_json::from_value(serde_json::Value::from(run.status.as_str()));
+            let (
+                Some(ended_at),
+                Ok(state @ (AgentState::Finished | AgentState::Errored | AgentState::Parked)),
+            ) = (run.ended_at.as_deref(), state)
+            else {
+                continue;
+            };
+            let worked_after = tools
+                .values()
+                .filter(|tool| tool.agent.as_ref() == Some(instance))
+                .filter_map(|tool| tool.started_at.as_deref())
+                .chain(agent.started_at.as_deref())
+                .any(|seen| earlier(ended_at, seen));
+            if !worked_after {
+                agent.state = state;
+            }
+        }
     }
 
     fn held(&self, instance: &str, state: AgentState) -> AgentState {
