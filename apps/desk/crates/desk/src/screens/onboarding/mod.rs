@@ -287,25 +287,21 @@ impl Onboarding {
     }
 
     fn read_listed(&mut self, folders: Vec<PathBuf>, started: Instant, cx: &mut Context<Self>) {
-        let (sender, arrived) = flume::unbounded();
-        for folder in folders {
-            let sender = sender.clone();
-            thread::spawn(move || sender.send(project::listed(folder)).ok());
-        }
-        drop(sender);
         cx.spawn(async move |this, cx| {
-            let mut read = 0;
-            while let Ok(listed) = arrived.recv_async().await {
-                read += usize::from(listed.sessions.is_some());
-                let landed = this.update(cx, |this, cx| {
-                    this.projects.listed.push(listed);
-                    cx.notify();
-                });
-                if let Err(error) = landed {
-                    return eprintln!(
-                        "desk: onboarding closed before its projects were read: {error}"
-                    );
-                }
+            let listed = cx
+                .background_executor()
+                .spawn(async move { project::listed(folders) })
+                .await;
+            let read = listed
+                .iter()
+                .filter(|listed| listed.sessions.is_some())
+                .count();
+            let landed = this.update(cx, |this, cx| {
+                this.projects.listed.extend(listed);
+                cx.notify();
+            });
+            if let Err(error) = landed {
+                return eprintln!("desk: onboarding closed before its projects were read: {error}");
             }
             eprintln!(
                 "desk: onboarding project-filled {} ms",

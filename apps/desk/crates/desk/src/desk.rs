@@ -7,7 +7,7 @@ use crate::modules::chat::Find;
 ))]
 use crate::modules::chat::SettingsMoved;
 #[cfg(feature = "screen-work")]
-use crate::modules::chat::{Listed, TofuStopped, Touched};
+use crate::modules::chat::{Chat, Listed, TofuStopped, Touched};
 use crate::pick;
 #[cfg(feature = "screen-work")]
 use crate::project;
@@ -78,8 +78,6 @@ use desk_ui::components::overlay::context_menu;
 use desk_ui::components::overlay::{MenuButton, MenuItem, toast};
 use desk_ui::components::paint::{SpinLayer, ink, ring};
 use desk_ui::components::palette::{Palette, PaletteEntry, PaletteItem};
-#[cfg(feature = "screen-work")]
-use desk_ui::components::sheet::Sheet;
 use desk_ui::components::sidebar::{
     Project, SIDEBAR_COLUMN, Sidebar, SidebarPick, TOOLS_SHOWN, Tool, ToolMove, more_placement,
     more_row,
@@ -542,9 +540,9 @@ struct Held {
 #[cfg(feature = "screen-work")]
 #[derive(Default)]
 struct Projects {
-    switching: Option<(PathBuf, Option<Opening>)>,
-    confirming: bool,
     sessions: Vec<Rc<SessionColumns>>,
+    joined: Vec<Option<Joined>>,
+    fresh: bool,
     renaming: Option<Renaming>,
     refused: Option<Option<SharedString>>,
     restored: bool,
@@ -559,6 +557,13 @@ struct Projects {
     _saving: Option<Task<()>>,
     _ages: Option<Task<()>>,
     _recents: Option<Task<()>>,
+    _known: Option<Task<()>>,
+}
+
+#[cfg(feature = "screen-work")]
+struct Joined {
+    work: Entity<Work>,
+    _watch: [gpui::Subscription; 3],
 }
 
 #[cfg(feature = "screen-work")]
@@ -1276,7 +1281,7 @@ impl Desk {
             eprintln!("desk: intro resumes {session} in {}", folder.display());
             let from = intro.read(cx).chat().clone();
             self.projects.named = None;
-            self.switch_now(folder, None, window, cx);
+            self.switch(folder, None, window, cx);
             self.parked
                 .retain(|parked| !matches!(parked.body, Body::Whole(_)));
             self.tabbed.retain(|name| !WHOLE_SCREENS.contains(name));
@@ -2197,11 +2202,6 @@ impl Desk {
     pub fn sign_in(&mut self, source: &str, _: &mut Context<Self>) {
         eprintln!("desk: sign in {source}: this build has no work screen to run tofu");
     }
-
-    #[cfg(not(feature = "screen-work"))]
-    fn switch_sheet(&self, _: &mut Context<Self>) -> Option<AnyElement> {
-        None
-    }
 }
 
 #[cfg(feature = "screen-work")]
@@ -2224,10 +2224,6 @@ impl Desk {
                 desk_core::boardy::MANAGEMENT
             )
         })
-    }
-
-    pub fn modal(&self) -> bool {
-        self.projects.confirming
     }
 
     fn restart_tofu(&mut self, cx: &mut Context<Self>) {
@@ -2272,10 +2268,58 @@ impl Desk {
         }
         self.hidden = !visible;
         eprintln!("desk: window {}", if visible { "shown" } else { "hidden" });
-        if let Some(work) = self.work() {
-            let chat = work.read(cx).chat().clone();
-            chat.update(cx, |chat, cx| chat.set_visible(visible, cx));
+        let selected = selected_project(cx);
+        let chats: Vec<(bool, Entity<Chat>)> = (0..self.projects.joined.len())
+            .filter_map(|at| Some((Some(at) == selected, self.joined_chat(at, cx)?)))
+            .collect();
+        for (shown, chat) in chats {
+            chat.update(cx, |chat, cx| chat.set_visible(visible && shown, cx));
         }
+    }
+
+    pub fn modal(&self) -> bool {
+        false
+    }
+
+    fn joined_work(&self, at: usize) -> Option<&Entity<Work>> {
+        self.projects
+            .joined
+            .get(at)?
+            .as_ref()
+            .map(|joined| &joined.work)
+    }
+
+    fn joined_chat(&self, at: usize, cx: &App) -> Option<Entity<Chat>> {
+        Some(self.joined_work(at)?.read(cx).chat().clone())
+    }
+
+    fn grow(&mut self, cx: &App) {
+        let open = cx
+            .try_global::<ProjectTable>()
+            .map_or(0, |table| table.0.rows().len());
+        self.projects.sessions.resize_with(open, Rc::default);
+        self.projects.joined.resize_with(open, || None);
+    }
+
+    fn join(&mut self, at: usize, work: &Entity<Work>, cx: &mut Context<Self>) {
+        if self.joined_work(at) == Some(work) {
+            return;
+        }
+        let chat = work.read(cx).chat().clone();
+        let store = chat.read(cx).store().clone();
+        let joined = Joined {
+            work: work.clone(),
+            _watch: [
+                cx.subscribe(&chat, move |desk, _, _: &Listed, cx| desk.relist(at, cx)),
+                cx.observe(&chat, move |desk, _, cx| desk.track_running(at, cx)),
+                cx.observe(&store, move |desk, _, cx| desk.track_running(at, cx)),
+            ],
+        };
+        if let Some(slot) = self.projects.joined.get_mut(at) {
+            *slot = Some(joined);
+        }
+        let open = self.projects.joined.iter().flatten().count();
+        eprintln!("desk: project {at} joined, {open} tofu serve children");
     }
 
     pub fn work(&self) -> Option<&Entity<Work>> {
@@ -2645,13 +2689,15 @@ impl Desk {
                 window,
                 |desk, _, expanded: &work::Expanded, window, cx| desk.expand(expanded, window, cx),
             ),
-            cx.subscribe(&chat, |desk, _, _: &Listed, cx| {
+            cx.subscribe(&chat, |desk, chat, _: &Listed, cx| {
                 #[cfg(feature = "screen-boardy")]
                 if desk.gate.is_none() {
                     desk.reread_gate(cx);
                 }
-                desk.relist(cx);
-                desk.track_running(cx);
+                if std::mem::take(&mut desk.projects.fresh) {
+                    eprintln!("desk: tofu is up, so the asked new session opens");
+                    chat.update(cx, |chat, cx| chat.open_session(None, cx));
+                }
                 desk.restore_session(cx);
                 cx.notify();
             }),
@@ -2675,21 +2721,20 @@ impl Desk {
             cx.subscribe(&chat, |desk, _, moved: &BoardyMoved, cx| {
                 desk.boardy_moved(&moved.0, cx)
             }),
-            cx.observe(&chat, |desk, _, cx| {
-                desk.track_running(cx);
-                cx.notify();
-            }),
+            cx.observe(&chat, |_, _, cx| cx.notify()),
             cx.observe(work, |_, _, cx| cx.notify()),
-            cx.observe(&store, |desk, _, cx| {
-                desk.track_running(cx);
-                cx.notify();
-            }),
+            cx.observe(&store, |_, _, cx| cx.notify()),
         ];
         let projects = &mut cx.default_global::<ProjectTable>().0;
         projects.open(folder.clone());
         let open = projects.rows().len();
+        let at = projects.selected_at();
         eprintln!("desk: projects {open} open");
-        self.projects.sessions.resize_with(open, Rc::default);
+        self.grow(cx);
+        if let Some(at) = at {
+            self.join(at, work, cx);
+        }
+        self.reread_known(cx);
         self.reread_recents(Some(folder.clone()), cx);
         if let Some(saving) = self.projects._saving.take() {
             saving.detach();
@@ -2699,6 +2744,7 @@ impl Desk {
         self.projects.family = None;
         self.projects.resumed = None;
         self.projects.stopped = None;
+        self.projects.fresh = false;
         let reading = folder;
         self.projects._reading = Some(cx.spawn_in(window, async move |desk, cx| {
             let read = cx
@@ -2942,18 +2988,72 @@ impl Desk {
         cx.notify();
     }
 
-    fn relist(&mut self, cx: &mut Context<Self>) {
-        let Some(at) = selected_project(cx) else {
+    fn relist(&mut self, at: usize, cx: &mut Context<Self>) {
+        let Some(work) = self.joined_work(at) else {
             return;
         };
-        let Some(chat) = self.work().map(|work| work.read(cx).chat().read(cx)) else {
-            return;
-        };
+        let chat = work.read(cx).chat().read(cx);
         let Some(sessions) = self.projects.sessions.get_mut(at) else {
             return;
         };
         *sessions = Rc::new(project::columns(chat.rows(), sessions));
+        self.track_running(at, cx);
         self.tick_ages(cx);
+        cx.notify();
+    }
+
+    fn reread_known(&mut self, cx: &mut Context<Self>) {
+        if self.projects.joined.iter().all(Option::is_some) {
+            self.projects._known = None;
+            return;
+        }
+        self.projects._known = Some(cx.spawn(async move |desk, cx| {
+            let read = cx
+                .background_executor()
+                .spawn(async { project::known() })
+                .await;
+            let filled = desk.update(cx, |desk, cx| match read {
+                Ok(known) => desk.fill_cards(&known, cx),
+                Err(error) => eprintln!("desk: project cards keep their sessions: {error}"),
+            });
+            if let Err(error) = filled {
+                eprintln!("desk: tofu projects answered after the desk closed: {error}");
+            }
+        }));
+    }
+
+    fn fill_cards(&mut self, known: &[project::Known], cx: &mut Context<Self>) {
+        let Some(table) = cx.try_global::<ProjectTable>() else {
+            return;
+        };
+        let mut found: Vec<Option<&[desk_core::sessions::SessionRow]>> =
+            vec![None; table.0.rows().len()];
+        for project in known {
+            if let Some(slot) = table
+                .0
+                .find(&project.folder)
+                .and_then(|at| found.get_mut(at))
+            {
+                *slot = Some(&project.sessions);
+            }
+        }
+        let mut filled = 0;
+        for (at, rows) in found.into_iter().enumerate() {
+            if self.joined_work(at).is_some() {
+                continue;
+            }
+            let Some(sessions) = self.projects.sessions.get_mut(at) else {
+                continue;
+            };
+            *sessions = Rc::new(project::columns(rows.unwrap_or_default(), sessions));
+            filled += 1;
+        }
+        eprintln!(
+            "desk: tofu projects knows {} projects, filled {filled} unjoined cards",
+            known.len()
+        );
+        self.tick_ages(cx);
+        cx.notify();
     }
 
     fn tick_ages(&mut self, cx: &mut Context<Self>) {
@@ -2984,11 +3084,8 @@ impl Desk {
         }));
     }
 
-    fn track_running(&mut self, cx: &mut Context<Self>) {
-        let Some(work) = self.work().cloned() else {
-            return;
-        };
-        let Some(at) = selected_project(cx) else {
+    fn track_running(&mut self, at: usize, cx: &mut Context<Self>) {
+        let Some(work) = self.joined_work(at).cloned() else {
             return;
         };
         let chat = work.read(cx).chat().read(cx);
@@ -3012,6 +3109,9 @@ impl Desk {
                 .collect();
             eprintln!("desk: active {}", active.join(" "));
             cx.notify();
+        }
+        if Some(at) != selected_project(cx) {
+            return;
         }
         if let Some(before) = self.projects.refused.take() {
             match problem {
@@ -3374,7 +3474,7 @@ impl Desk {
                     .map(|(folder, _)| folder.clone());
                 let opened = desk.update(cx, |desk, cx| match (*picked, folder) {
                     (0, _) => desk.prompt_folder(window, cx),
-                    (_, Some(folder)) => desk.switch(folder, None, window, cx),
+                    (_, Some(folder)) => desk.add_project(folder, window, cx),
                     (picked, None) => eprintln!("desk: projects menu row {picked} is no folder"),
                 });
                 if let Err(error) = opened {
@@ -3407,10 +3507,35 @@ impl Desk {
             let Some(folder) = folder else {
                 return eprintln!("desk: no folder was picked");
             };
-            this.update_in(cx, |desk, window, cx| desk.switch(folder, None, window, cx))
+            this.update_in(cx, |desk, window, cx| desk.add_project(folder, window, cx))
                 .ok();
         })
         .detach();
+    }
+
+    fn add_project(&mut self, folder: PathBuf, window: &mut Window, cx: &mut Context<Self>) {
+        let table = &mut cx.default_global::<ProjectTable>().0;
+        if table.find(&folder).is_some() {
+            let open = table.rows().len();
+            return eprintln!(
+                "desk: {} is already open, projects {open} open",
+                folder.display()
+            );
+        }
+        let Some(kept) = table.folder().map(Path::to_path_buf) else {
+            return self.switch(folder, None, window, cx);
+        };
+        table.open(folder.clone());
+        table.open(kept);
+        eprintln!(
+            "desk: added {}, projects {} open, selection stays",
+            folder.display(),
+            table.rows().len()
+        );
+        self.grow(cx);
+        self.reread_recents(Some(folder), cx);
+        self.reread_known(cx);
+        cx.notify();
     }
 
     fn switch(
@@ -3420,36 +3545,41 @@ impl Desk {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let table = cx.try_global::<ProjectTable>().map(|table| &table.0);
-        let at = table.and_then(|table| table.find(&folder));
-        if at.is_some() && at == table.and_then(|table| table.selected_at()) {
-            let open = table.map_or(0, |table| table.rows().len());
-            eprintln!("desk: {} is already open", folder.display());
-            return eprintln!("desk: projects {open} open");
-        }
-        let busy = self
-            .work()
-            .is_some_and(|work| work.read(cx).chat().read(cx).busy(cx));
-        if busy {
-            eprintln!("desk: a turn is running, so the switch asks first");
-            self.projects.switching = Some((folder, opening));
-            self.projects.confirming = true;
-            return cx.notify();
-        }
-        self.switch_now(folder, opening, window, cx);
-    }
-
-    fn switch_now(
-        &mut self,
-        folder: PathBuf,
-        opening: Option<Opening>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let work = match work::open_in(folder.clone(), window, cx) {
-            Ok(work) => work,
-            Err(error) => return eprintln!("desk: {} did not open: {error}", folder.display()),
+        let at = cx
+            .try_global::<ProjectTable>()
+            .and_then(|table| table.0.find(&folder));
+        let joined = at.and_then(|at| self.joined_work(at)).cloned();
+        let reused = joined.is_some();
+        let work = match joined {
+            Some(work) => work,
+            None => match work::open_in(folder.clone(), window, cx) {
+                Ok(work) => work,
+                Err(error) => {
+                    return eprintln!("desk: {} did not open: {error}", folder.display());
+                }
+            },
         };
+        let left = self
+            .work()
+            .filter(|left| **left != work)
+            .map(|left| left.read(cx).chat().clone());
+        if let Some(left) = left
+            && !self.hidden
+        {
+            left.update(cx, |chat, cx| chat.set_visible(false, cx));
+        }
+        if reused && !self.hidden {
+            let chat = work.read(cx).chat().clone();
+            chat.update(cx, |chat, cx| chat.set_visible(true, cx));
+        }
+        eprintln!(
+            "desk: switch to {}, {}",
+            folder.display(),
+            match reused {
+                true => "its tofu serve is already running",
+                false => "it starts its own tofu serve",
+            }
+        );
         self.parked
             .retain(|parked| !matches!(parked.body, Body::Work(_)));
         let next = Shown {
@@ -3465,43 +3595,14 @@ impl Desk {
         match &opening {
             None => return,
             Some(Opening::Session(id)) => self.projects.restoring = Some(id.clone()),
-            Some(Opening::Fresh) => {
+            Some(Opening::Fresh) if reused => {
                 let chat = work.read(cx).chat().clone();
                 chat.update(cx, |chat, cx| chat.open_session(None, cx));
             }
+            Some(Opening::Fresh) => self.projects.fresh = true,
         }
         self.projects.resumed = opening;
         self.restore_session(cx);
-    }
-
-    fn switch_sheet(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
-        let (folder, _) = self.projects.switching.as_ref()?;
-        let cancel = cx.listener(|desk, _: &(), _, cx| {
-            eprintln!("desk: switch cancelled");
-            desk.projects.confirming = false;
-            cx.notify();
-        });
-        let confirm = cx.listener(|desk, _: &(), window, cx| {
-            desk.projects.confirming = false;
-            if let Some((folder, opening)) = desk.projects.switching.clone() {
-                desk.switch_now(folder, opening, window, cx);
-            }
-        });
-        Some(
-            Sheet::new(
-                "switch-project",
-                format!("Switch to {}?", project::name(folder)),
-            )
-            .open(self.projects.confirming)
-            .on_cancel(move |window, cx| cancel(&(), window, cx))
-            .on_confirm(move |window, cx| confirm(&(), window, cx))
-            .child(
-                div().child(
-                    "A turn is running here. Switching stops this tofu, and the turn with it.",
-                ),
-            )
-            .into_any_element(),
-        )
     }
 }
 
@@ -3562,7 +3663,6 @@ impl Render for Desk {
         let whole = matches!(self.shown.body, Body::Whole(_));
         let content = self.content(&theme, cx);
         let content = timed("screen", content).into_any_element();
-        let sheet = self.switch_sheet(cx);
         let bar = self.chrome(Part::Title, cx);
         let bleeds = whole && self.shown.name == INTRO_SCREEN;
         let (above, over) = match bleeds {
@@ -3613,7 +3713,6 @@ impl Render for Desk {
             .child(self.spinners.clone())
             .when(bleeds, |root| root.overflow_hidden())
             .child(timed("palette", self.palette.clone()))
-            .children(sheet)
             .children(toast_layer);
         #[cfg(feature = "profiler")]
         let root = root.children(desk_perf::overlay(cx));

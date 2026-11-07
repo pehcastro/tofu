@@ -4,8 +4,8 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
-#[cfg(feature = "screen-onboarding")]
-use std::process::{Child, Command, Output, Stdio};
+#[cfg(any(feature = "screen-work", feature = "screen-onboarding"))]
+use std::process::{Child, Command, Stdio};
 use std::time::{Duration, SystemTime};
 
 use desk_core::git::{Git, GitBinary, State};
@@ -14,6 +14,8 @@ use desk_core::model::{StatusState, Statuses};
 use desk_core::sessions::{SessionRow, age_changes_in};
 use desk_tiling::Store as Layouts;
 use desk_ui::components::sidebar::{SessionColumns, SessionState};
+#[cfg(any(feature = "screen-work", feature = "screen-onboarding"))]
+use serde::Deserialize;
 use serde_json::{Value, json};
 
 const RECENTS: &str = "recents.json";
@@ -23,7 +25,7 @@ const MOST_RECENT: usize = 8;
 const TOFU_VARIABLE: &str = "DESK_TOFU";
 #[cfg(feature = "screen-onboarding")]
 const SHORT_HASH: usize = 7;
-#[cfg(all(windows, feature = "screen-onboarding"))]
+#[cfg(all(windows, any(feature = "screen-work", feature = "screen-onboarding")))]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 pub struct Head {
@@ -61,7 +63,10 @@ pub fn opened_beside() -> Vec<PathBuf> {
         .filter_map(|folder| match std::path::absolute(&folder) {
             Ok(folder) if folder.is_dir() => Some(folder),
             _ => {
-                eprintln!("desk: the folder argument {} is not a folder", folder.display());
+                eprintln!(
+                    "desk: the folder argument {} is not a folder",
+                    folder.display()
+                );
                 None
             }
         })
@@ -373,28 +378,120 @@ pub struct Listed {
 }
 
 #[cfg(feature = "screen-onboarding")]
-pub fn listed(folder: PathBuf) -> Listed {
-    let missing = !folder.is_dir();
-    let read = match missing {
-        true => Err("the folder is missing".to_owned()),
-        false => list_sessions(&tofu(), &folder)
-            .and_then(Child::wait_with_output)
-            .map_err(|error| error.to_string())
-            .and_then(activity),
-    };
-    let sessions = match read {
-        Ok(sessions) => Some(sessions),
-        Err(error) => {
-            eprintln!("desk: sessions in {}: {error}", folder.display());
-            None
-        }
-    };
-    Listed {
-        branch: branch(&folder),
-        missing,
-        sessions,
-        folder,
+pub fn listed(folders: Vec<PathBuf>) -> Vec<Listed> {
+    let mut table = desk_core::model::Projects::default();
+    for folder in folders {
+        table.open(folder);
     }
+    let read = known();
+    let mut sessions = vec![read.is_ok().then_some(0); table.rows().len()];
+    match &read {
+        Ok(known) => {
+            for project in known {
+                if let Some(count) = table
+                    .find(&project.folder)
+                    .and_then(|at| sessions.get_mut(at))
+                {
+                    *count = Some(project.sessions.len());
+                }
+            }
+        }
+        Err(error) => eprintln!("desk: sessions: {error}"),
+    }
+    table
+        .rows()
+        .iter()
+        .zip(sessions)
+        .map(|(row, sessions)| Listed {
+            branch: branch(&row.folder),
+            missing: !row.folder.is_dir(),
+            sessions,
+            folder: row.folder.clone(),
+        })
+        .collect()
+}
+
+#[cfg(any(feature = "screen-work", feature = "screen-onboarding"))]
+pub struct Known {
+    pub folder: PathBuf,
+    pub sessions: Vec<SessionRow>,
+}
+
+#[cfg(any(feature = "screen-work", feature = "screen-onboarding"))]
+#[derive(Deserialize)]
+struct KnownReport {
+    data: KnownProjects,
+}
+
+#[cfg(any(feature = "screen-work", feature = "screen-onboarding"))]
+#[derive(Deserialize)]
+struct KnownProjects {
+    projects: Vec<KnownProject>,
+}
+
+#[cfg(any(feature = "screen-work", feature = "screen-onboarding"))]
+#[derive(Deserialize)]
+struct KnownProject {
+    path: PathBuf,
+    sessions: Vec<KnownSession>,
+}
+
+#[cfg(any(feature = "screen-work", feature = "screen-onboarding"))]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct KnownSession {
+    id: String,
+    #[serde(default)]
+    name: Option<String>,
+    handle: String,
+    last_at: String,
+    working: bool,
+}
+
+#[cfg(any(feature = "screen-work", feature = "screen-onboarding"))]
+pub fn known() -> Result<Vec<Known>, String> {
+    let mut command = Command::new(tofu());
+    command
+        .args(["projects", "--json"])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    std::os::windows::process::CommandExt::creation_flags(&mut command, CREATE_NO_WINDOW);
+    eprintln!("desk: tofu projects --json");
+    let output = command
+        .spawn()
+        .and_then(Child::wait_with_output)
+        .map_err(|error| format!("tofu projects: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "tofu projects: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    let report: KnownReport = serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("tofu projects printed no data.projects: {error}"))?;
+    Ok(report
+        .data
+        .projects
+        .into_iter()
+        .map(|project| Known {
+            folder: project.path,
+            sessions: project
+                .sessions
+                .into_iter()
+                .map(|session| SessionRow {
+                    id: session.id,
+                    name: session.name,
+                    handle: session.handle,
+                    at: session.last_at.clone(),
+                    last_at: Some(session.last_at),
+                    running: session.working,
+                    ..SessionRow::default()
+                })
+                .collect(),
+        })
+        .collect())
 }
 
 #[cfg(feature = "screen-onboarding")]
@@ -422,32 +519,4 @@ fn branch(folder: &Path) -> Option<String> {
         ),
         None => head.get(..SHORT_HASH).map(str::to_owned),
     }
-}
-
-#[cfg(feature = "screen-onboarding")]
-fn list_sessions(tofu: &Path, folder: &Path) -> io::Result<Child> {
-    let mut command = Command::new(tofu);
-    command
-        .args(["session", "list", "--json"])
-        .current_dir(folder)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    #[cfg(windows)]
-    std::os::windows::process::CommandExt::creation_flags(&mut command, CREATE_NO_WINDOW);
-    command.spawn()
-}
-
-#[cfg(feature = "screen-onboarding")]
-fn activity(output: Output) -> Result<usize, String> {
-    if !output.status.success() {
-        return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
-    }
-    let listing: Value =
-        serde_json::from_slice(&output.stdout).map_err(|error| error.to_string())?;
-    let sessions = listing
-        .pointer("/data/sessions")
-        .and_then(Value::as_array)
-        .ok_or("tofu session list printed no data.sessions")?;
-    Ok(sessions.len())
 }
