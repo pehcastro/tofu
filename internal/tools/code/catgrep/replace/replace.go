@@ -24,16 +24,29 @@ func First(source string, l lang.Lang, p pattern.Pattern, rewrite string) (strin
 	if !ok {
 		return source, false, nil
 	}
-	text, err := Text(rewrite, found.Env)
+	edit, err := MakeEdit(p, found, rewrite)
 	if err != nil {
 		return "", false, err
+	}
+	return source[:edit.Start] + edit.Text + source[edit.End:], true, nil
+}
+
+type Edit struct {
+	Start, End uint32
+	Text       string
+}
+
+func MakeEdit(p pattern.Pattern, found pattern.Match, rewrite string) (Edit, error) {
+	text, err := Text(rewrite, found.Env)
+	if err != nil {
+		return Edit{}, err
 	}
 	start := found.Node.Start()
 	end, ok := p.MatchEnd(found.Node)
 	if !ok {
 		end = found.Node.End()
 	}
-	return source[:start] + Reindent(text, 0, IndentAt(source[:start])) + source[end:], true, nil
+	return Edit{Start: start, End: end, Text: Reindent(text, 0, IndentAt(found.Node.Source()[:start]))}, nil
 }
 
 func Text(rewrite string, env *metavar.Env) (string, error) {

@@ -21,7 +21,7 @@ func render(rows, untouched []outcome, began time.Time, m machine) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# bench tools/change: codemod against edit, %s\n\n", day)
 	fmt.Fprintf(&b, "Machine: %s. Date: %s. Dev build: %s. ", host, began.Format("2006-01-02 15:04"), version(m.exe, "version"))
-	for _, tool := range [][]string{{"ast-grep", "--version"}, {"go", "version"}, {"node", "--version"}, {"tsc", "--version"}, {"python", "--version"}, {"cargo", "--version"}} {
+	for _, tool := range [][]string{{"go", "version"}, {"node", "--version"}, {"tsc", "--version"}, {"python", "--version"}, {"cargo", "--version"}} {
 		fmt.Fprintf(&b, "%s: %s. ", tool[0], version(tool[0], tool[1:]...))
 	}
 	b.WriteString("Credential: none, no model call, no network (GOPROXY=off, cargo --offline). Every arm: one run, no warm-up, a fresh copy of the fixture and a fresh HOME under " + m.scratch + "/<dir>. ")

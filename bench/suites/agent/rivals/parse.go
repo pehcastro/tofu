@@ -320,6 +320,9 @@ func codexRollout(thread string, t *transcript) (string, int) {
 }
 
 func ompKind(name string) string {
+	if strings.HasSuffix(name, "grep") {
+		return "search"
+	}
 	switch name {
 	case "read":
 		return "read"
@@ -327,7 +330,7 @@ func ompKind(name string) string {
 		return "edit"
 	case "write":
 		return "write"
-	case "grep", "find", "glob", "search", "ast_grep", "lsp":
+	case "find", "glob", "search", "lsp":
 		return "search"
 	case "bash":
 		return "bash"

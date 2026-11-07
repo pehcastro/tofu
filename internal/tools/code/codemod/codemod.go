@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"go/format"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,27 +14,16 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/tools/imports"
+
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	platformfs "tofu/internal/platform/fs"
+	"tofu/internal/tools/code/catgrep"
 	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit/patch"
 )
-
-const astGrepInstall = "npm install --global @ast-grep/cli, cargo install ast-grep --locked, pip install ast-grep-cli, or brew install ast-grep on macOS"
-
-type site struct {
-	start, end int
-	line       int
-	before     string
-	after      string
-}
-
-type fileSites struct {
-	path  string
-	sites []site
-}
 
 type change struct {
 	path  string
@@ -63,12 +53,11 @@ func (Codemod) Definition() core.Tool {
 		Name: "codemod",
 		Description: "rewrites one code shape everywhere it appears, matched on the syntax tree rather than the text, so a string or a comment that looks the same is never touched. " +
 			"use it instead of edit with replace_all, or one edit per site, when the same change repeats. " +
-			"pattern and rewrite are ast-grep patterns: $NAME matches one node, $$$NAME any run of nodes such as call arguments or statements, $_ and $$$ match without capturing, " +
-			"and a name used twice must match the same code. every name in rewrite must be captured in pattern. lang is the language, go, ts, tsx, js, rust, python and others. " +
+			"pattern and rewrite are code in lang with meta variables: $NAME matches one node, $$$NAME any run of nodes such as call arguments or statements, $_ and $$$ match without capturing, " +
+			"and a name used twice must match the same code. every name in rewrite must be captured in pattern. lang is one of " + catgrep.Languages + ". " +
 			"paths are files or directories under the working directory, all of it when left out. " +
 			"the first call previews: every match with its line and a diff, nothing written. apply true writes those same sites, " +
-			"refuses when expect is given and the match count differs from it, and returns the checker's errors after the write. " +
-			"go works without anything installed; every other language needs ast-grep on PATH",
+			"refuses when expect is given and the match count differs from it, and returns the checker's errors after the write",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -89,13 +78,14 @@ func (c Codemod) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("codemod: arguments are not the expected shape: %w", err)
 	}
-	args.Lang = strings.ToLower(strings.TrimSpace(args.Lang))
-	if args.Lang == "golang" {
-		args.Lang = "go"
-	}
-	if strings.TrimSpace(args.Pattern) == "" || args.Lang == "" {
+	if strings.TrimSpace(args.Pattern) == "" || strings.TrimSpace(args.Lang) == "" {
 		return contract.Failure("codemod: pattern and lang are required"), nil
 	}
+	l, err := catgrep.LangNamed(args.Lang)
+	if err != nil {
+		return contract.Failure("codemod: " + err.Error()), nil
+	}
+	args.Lang = l.String()
 	paths := []string{"."}
 	if len(args.Paths) > 0 {
 		paths = args.Paths
@@ -109,42 +99,20 @@ func (c Codemod) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 	}
 	ctx, cancel := context.WithTimeout(ctx, konst.CodemodRunMillis*time.Millisecond)
 	defer cancel()
-	var (
-		found  []fileSites
-		engine string
-		err    error
-	)
-	switch binary, lookErr := exec.LookPath("ast-grep"); {
-	case lookErr == nil:
-		engine = "ast-grep"
-		found, err = astGrepSites(ctx, binary, string(c.root), args, paths)
-	case args.Lang == "go":
-		var unparsed []string
-		found, unparsed, err = goSites(args.Pattern, args.Rewrite, paths)
-		engine = "go/ast, as ast-grep is not on PATH"
-		for i, path := range unparsed {
-			relative, _ := filepath.Rel(string(c.root), path)
-			unparsed[i] = filepath.ToSlash(relative)
-		}
-		if len(unparsed) > 0 {
-			engine += ", skipping what does not parse: " + strings.Join(unparsed, ", ")
-		}
-	default:
-		return contract.Failure("codemod: ast-grep is not on PATH, and lang " + args.Lang + " needs it. install it with " + astGrepInstall + ", then call codemod again. lang go works without it"), nil
-	}
+	found, err := catgrep.Rewrite(ctx, args.Pattern, args.Rewrite, l, paths)
 	if err != nil {
 		return contract.Failure("codemod: " + err.Error()), nil
 	}
-	return c.report(ctx, args, engine, found)
+	return c.report(ctx, args, found)
 }
 
-func (c Codemod) report(ctx context.Context, args arguments, engine string, found []fileSites) (contract.Result, error) {
+func (c Codemod) report(ctx context.Context, args arguments, found []catgrep.File) (contract.Result, error) {
 	matches := 0
 	for _, file := range found {
-		matches += len(file.sites)
+		matches += len(file.Sites)
 	}
 	if matches == 0 {
-		return contract.Result{Content: fmt.Sprintf("codemod: 0 matches for %s in lang %s, through %s. nothing written", args.Pattern, args.Lang, engine)}, nil
+		return contract.Result{Content: fmt.Sprintf("codemod: 0 matches for %s in lang %s. nothing written", args.Pattern, args.Lang)}, nil
 	}
 	if args.Apply && args.Expect != nil && *args.Expect != matches {
 		return contract.Failure(fmt.Sprintf("codemod: expected %d matches and found %d, so nothing was written. preview again and apply with the new count", *args.Expect, matches)), nil
@@ -153,25 +121,25 @@ func (c Codemod) report(ctx context.Context, args arguments, engine string, foun
 	shown := 0
 	changes := make([]change, 0, len(found))
 	for _, file := range found {
-		relative, _ := filepath.Rel(string(c.root), file.path)
+		relative, _ := filepath.Rel(string(c.root), file.Path)
 		relative = filepath.ToSlash(relative)
-		for _, s := range file.sites {
+		for _, s := range file.Sites {
 			if shown++; shown <= konst.CodemodSitesShown {
-				fmt.Fprintf(&listing, "%s:%d %s -> %s\n", relative, s.line, firstLine(s.before), firstLine(s.after))
+				fmt.Fprintf(&listing, "%s:%d %s -> %s\n", relative, s.Line, firstLine(s.Before), firstLine(s.After))
 			}
 		}
-		before, err := os.ReadFile(file.path)
+		before, err := os.ReadFile(file.Path)
 		if err != nil {
 			return contract.Result{}, fmt.Errorf("codemod: %w", err)
 		}
-		after, err := rewritten(file.path, before, file.sites)
+		after, err := rewritten(file.Path, before, file.Sites)
 		if err != nil {
 			return contract.Failure("codemod: " + err.Error() + ". nothing written"), nil
 		}
 		if diffs.Len() < konst.CodemodDiffBytes {
 			diffs.WriteString(patch.Unified(relative, string(before), string(after)))
 		}
-		changes = append(changes, change{path: file.path, after: after})
+		changes = append(changes, change{path: file.Path, after: after})
 	}
 	if shown > konst.CodemodSitesShown {
 		fmt.Fprintf(&listing, "%d more matches not listed\n", shown-konst.CodemodSitesShown)
@@ -180,7 +148,7 @@ func (c Codemod) report(ctx context.Context, args arguments, engine string, foun
 	if len(diff) > konst.CodemodDiffBytes {
 		diff = diff[:konst.CodemodDiffBytes] + "\n... diff cut at " + fmt.Sprint(konst.CodemodDiffBytes) + " bytes\n"
 	}
-	head := fmt.Sprintf("codemod: %s in %s, through %s", counted(matches, "match", "matches"), counted(len(found), "file", "files"), engine)
+	head := fmt.Sprintf("codemod: %s in %s", counted(matches, "match", "matches"), counted(len(found), "file", "files"))
 	if !args.Apply {
 		apply := fmt.Sprintf("to write these sites: the same call with \"apply\": true, \"expect\": %d\n", matches)
 		return contract.Result{Content: head + ". preview, nothing written\n" + listing.String() + diff + apply}, nil
@@ -197,22 +165,33 @@ func (c Codemod) report(ctx context.Context, args arguments, engine string, foun
 	return contract.Result{Content: head + ". applied\n" + listing.String() + diff + c.checked(ctx, args.Lang, changes)}, nil
 }
 
-func rewritten(path string, before []byte, sites []site) ([]byte, error) {
+func rewritten(path string, before []byte, sites []catgrep.Site) ([]byte, error) {
 	var after bytes.Buffer
 	at := 0
 	for _, s := range sites {
-		if s.start < at || s.end > len(before) {
-			return nil, fmt.Errorf("two matches overlap in %s, near line %d: narrow the pattern", path, s.line)
-		}
-		after.Write(before[at:s.start])
-		after.WriteString(s.after)
-		at = s.end
+		after.Write(before[at:s.Start])
+		after.WriteString(s.After)
+		at = s.End
 	}
 	after.Write(before[at:])
 	if filepath.Ext(path) != ".go" {
 		return after.Bytes(), nil
 	}
-	return goFormatted(path, before, after.Bytes())
+	clean, err := format.Source(before)
+	if err != nil {
+		return after.Bytes(), nil
+	}
+	if _, err := format.Source(after.Bytes()); err != nil {
+		return nil, fmt.Errorf("the rewrite leaves %s as code that does not parse: %w", path, err)
+	}
+	if !bytes.Equal(clean, before) {
+		return after.Bytes(), nil
+	}
+	fixed, err := imports.Process(path, after.Bytes(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("fixing the imports of %s after the rewrite: %w", path, err)
+	}
+	return fixed, nil
 }
 
 func (c Codemod) checked(ctx context.Context, lang string, changes []change) string {
@@ -242,7 +221,7 @@ func (c Codemod) checked(ctx context.Context, lang string, changes []change) str
 			return "checker: " + command + " found errors:\n" + clipped(string(out))
 		}
 		return "checker: " + command + " did not run: " + err.Error() + "\n"
-	case "ts", "tsx", "typescript":
+	case "typescript", "tsx":
 		var cold *checkers.Typecheckers
 		result, err := cold.Check(ctx, string(c.root))
 		if err != nil {

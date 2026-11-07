@@ -94,7 +94,7 @@ func main() {
 	dev := flag.String("dev", "", "a tofu built from the current tree")
 	fixtures := flag.String("fixtures", "bench/suites/tools/fixtures", "the fixture projects, copied fresh for every arm")
 	scratch := flag.String("scratch", "", "a directory each arm gets a fresh project copy and a fresh HOME under")
-	servers := flag.String("servers", "", "directories put first on PATH for ast-grep and tsc, in this system's list form")
+	servers := flag.String("servers", "", "directories put first on PATH for tsc, in this system's list form")
 	out := flag.String("out", "", "the report file, otherwise standard output")
 	flag.Parse()
 	if *dev == "" || *scratch == "" {

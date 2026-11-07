@@ -121,6 +121,8 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 | `internal/tools/code/symbols/` | the symbols tool, Go symbols included |
 | `internal/tools/code/typecheck/` `checkers/` | the typecheck tool; `checkers/` runs tsc, vue-tsc and svelte-check from `package.json` |
 | `internal/tools/code/test/` | the test tool and its runner |
+| `internal/tools/code/codemod/` | the codemod tool: preview, apply, gofmt on Go output, the checker after a write |
+| `internal/tools/code/catgrep/` | structural search and rewrite on the syntax tree for go, typescript, tsx, python and rust: walk, parse, match, rewrite; `lang/` `tree/` `metavar/` `pattern/` `replace/` |
 | `internal/tools/shell/bash/sift/` | reads shell output and keeps what the model needs |
 | `internal/tools/shell/jobs/` | the shell tool: background jobs |
 | `internal/tools/shell/process/` | the process under a shell: resolve, hold, kill, log, output, console, process tree, ports |
