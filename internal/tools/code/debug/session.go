@@ -250,8 +250,11 @@ func (s *session) refused(ctx context.Context, path string, line int, message st
 			near = append(near, s.shown(path)+":"+strconv.Itoa(statement))
 		}
 	}
-	if len(near) == 0 {
+	switch len(near) {
+	case 0:
 		return errors.New(said + "no line within " + strconv.Itoa(konst.DebugStatementProbeLines) + " of it holds a statement, and the program has not run")
+	case 1:
+		return errors.New(said + "the nearest line with a statement is " + near[0] + ", and the program has not run")
 	}
 	return errors.New(said + "the nearest lines with a statement are " + strings.Join(near, " and ") + ", and the program has not run")
 }

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/scratch"
 	"tofu/internal/tools/code/dap"
 	"tofu/internal/tools/contract"
 )
@@ -40,33 +41,46 @@ type Debug struct {
 type language struct {
 	name    string
 	adapter dap.Adapter
-	launch  func(root string, test bool, words []string) map[string]any
+	launch  func(root string, test bool, words []string) (map[string]any, error)
 }
 
 func delve() language {
 	return language{name: "go", adapter: dap.Adapter{Program: "dlv", Args: []string{"dap"}, Install: "go install github.com/go-delve/delve/cmd/dlv@latest", Listens: true},
-		launch: func(root string, test bool, words []string) map[string]any {
-			if test {
-				launch := map[string]any{"mode": "test", "program": root, "outputMode": "remote"}
-				if len(words) > 0 {
-					launch["args"] = []string{"-test.run", "^(" + strings.Join(words, "|") + ")$"}
-				}
-				return launch
+		launch: func(root string, test bool, words []string) (map[string]any, error) {
+			scratchRoot, err := scratch.ScratchRootAt(root)
+			if err != nil {
+				return nil, fmt.Errorf("dlv builds the program into this project's scratchpad, and finding it failed: %w", err)
 			}
-			return map[string]any{"mode": "debug", "program": filepath.Join(root, words[0]), "args": words[1:], "cwd": root, "outputMode": "remote"}
+			builds := filepath.Join(scratchRoot, scratch.ScratchCache, "dlv")
+			if err := os.MkdirAll(builds, 0o755); err != nil {
+				return nil, err
+			}
+			built, err := os.MkdirTemp(builds, "build-")
+			if err != nil {
+				return nil, err
+			}
+			output := filepath.Join(built, "__debug_bin")
+			if !test {
+				return map[string]any{"mode": "debug", "program": filepath.Join(root, words[0]), "args": words[1:], "cwd": root, "outputMode": "remote", "output": output}, nil
+			}
+			launch := map[string]any{"mode": "test", "program": root, "outputMode": "remote", "output": output}
+			if len(words) > 0 {
+				launch["args"] = []string{"-test.run", "^(" + strings.Join(words, "|") + ")$"}
+			}
+			return launch, nil
 		}}
 }
 
 func debugpy() language {
 	return language{name: "python", adapter: dap.Adapter{Program: "python", Args: []string{"-m", "debugpy.adapter"}, Install: "python -m pip install debugpy", Probe: []string{"-c", "import debugpy"}},
-		launch: func(root string, test bool, words []string) map[string]any {
+		launch: func(root string, test bool, words []string) (map[string]any, error) {
 			launch := map[string]any{"cwd": root, "console": "internalConsole", "justMyCode": true}
 			if test {
 				launch["module"], launch["args"] = "unittest", words
-				return launch
+				return launch, nil
 			}
 			launch["program"], launch["args"] = filepath.Join(root, words[0]), words[1:]
-			return launch
+			return launch, nil
 		}}
 }
 
@@ -200,7 +214,11 @@ func (d *Debug) start(ctx context.Context, target string) (string, error) {
 	if err != nil {
 		return said, err
 	}
-	s, err := open(ctx, d.limits, string(d.root), chosen, chosen.launch(string(d.root), test, words))
+	launch, err := chosen.launch(string(d.root), test, words)
+	if err != nil {
+		return said, err
+	}
+	s, err := open(ctx, d.limits, string(d.root), chosen, launch)
 	if err != nil {
 		return said, err
 	}
