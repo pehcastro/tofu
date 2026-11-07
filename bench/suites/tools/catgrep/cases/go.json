@@ -1,0 +1,10 @@
+{"language": "go",
+"cases": [
+  {"language": "go", "kind": "match", "pattern": "print($A)", "source": "print(123)", "origin": "language/src/go.rs:16"},
+  {"language": "go", "kind": "match", "pattern": "print('123')", "source": "print('123')", "origin": "language/src/go.rs:17"},
+  {"language": "go", "kind": "non_match", "pattern": "print('123')", "source": "print('456')", "origin": "language/src/go.rs:18"},
+  {"language": "go", "kind": "non_match", "pattern": "'123'", "source": "'456'", "origin": "language/src/go.rs:19"},
+  {"language": "go", "kind": "match", "pattern": "$A = 0", "source": "a = 0", "origin": "language/src/go.rs:24"},
+  {"language": "go", "kind": "match", "pattern": "func $A($$$) $B { $$$ }", "source": "\nfunc plus(a int, b int) int {\n  return a + b\n}", "origin": "language/src/go.rs:25"},
+  {"language": "go", "kind": "replace", "pattern": "defer func() { $$$BODY }()", "source": "\nfunc intSeq() {\n  defer func()  {\n      i++\n  }()\n}", "rewrite": "func b() { $$$BODY}", "expected": "\nfunc intSeq() {\n  func b() { i++\n  }\n}", "origin": "language/src/go.rs:41"}
+]}

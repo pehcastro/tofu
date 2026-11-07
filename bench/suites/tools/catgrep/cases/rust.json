@@ -1,0 +1,14 @@
+{"language": "rust",
+"cases": [
+  {"language": "rust", "kind": "match", "pattern": "Some($A)", "source": "fn test() { Some(123) }", "origin": "language/src/rust.rs:17"},
+  {"language": "rust", "kind": "match", "pattern": "\nmatch $A {\n  Some($B) => $B,\n  None => $C,\n}", "source": "fn test() {\npatterns = match config.include.clone() {\n  Some(patterns) => patterns,\n  None => Vec::from([cwd\n      .join(\"**/*.toml\")\n      .normalize()\n      .to_string_lossy()\n      .into_owned()]),\n};\n}", "origin": "language/src/rust.rs:18"},
+  {"language": "rust", "kind": "match", "pattern": "foo(\"meaning\");", "source": "fn t() { foo(\"meaning\");}", "origin": "language/src/rust.rs:42"},
+  {"language": "rust", "kind": "non_match", "pattern": "foo(\"meaning\");", "source": "fn t() { foo(\"service\");}", "origin": "language/src/rust.rs:43"},
+  {"language": "rust", "kind": "match", "pattern": "|$A, $B|", "source": "let w = v.into_iter().reduce(|x, y| x + y);", "origin": "language/src/rust.rs:49"},
+  {"language": "rust", "kind": "match", "pattern": "|$$A, $$B|", "source": "let w = v.into_iter().reduce(|x, _| x + x);", "origin": "language/src/rust.rs:50"},
+  {"language": "rust", "kind": "match", "pattern": "let ($$X, $$Y) = $$$T;", "source": "let (_, y) = (1, 2);", "origin": "language/src/rust.rs:51"},
+  {"language": "rust", "kind": "match", "pattern": "let ($X, $Y) = $$$T;", "source": "let (.., y) = (1,2,3,4,5,6,7,8,9,10);", "origin": "language/src/rust.rs:56"},
+  {"language": "rust", "kind": "match", "pattern": "$C { $$$A, ..$B};", "source": "User {\n    username: String::from(name),\n    ..DEFAULT_USER\n  };", "origin": "language/src/rust.rs:60"},
+  {"language": "rust", "kind": "replace", "pattern": "Some($A)", "source": "fn test() { Some(123) }", "rewrite": "Ok($A)", "expected": "fn test() { Ok(123) }", "origin": "language/src/rust.rs:75"},
+  {"language": "rust", "kind": "replace", "pattern": "match $A {\n  Some($B) => $B,\n  None => $C,\n}", "source": "\npatterns = match config.include.clone() {\n  Some(patterns) => patterns,\n  None => 123,\n}", "rewrite": "$A.unwrap_or($C)", "expected": "\npatterns = config.include.clone().unwrap_or(123)", "origin": "language/src/rust.rs:77"}
+]}

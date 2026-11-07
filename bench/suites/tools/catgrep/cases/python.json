@@ -1,0 +1,15 @@
+{"language": "python",
+"cases": [
+  {"language": "python", "kind": "match", "pattern": "print($A)", "source": "print(123)", "origin": "language/src/python.rs:16"},
+  {"language": "python", "kind": "match", "pattern": "print('123')", "source": "print('123')", "origin": "language/src/python.rs:17"},
+  {"language": "python", "kind": "non_match", "pattern": "print('123')", "source": "print('456')", "origin": "language/src/python.rs:18"},
+  {"language": "python", "kind": "non_match", "pattern": "'123'", "source": "'456'", "origin": "language/src/python.rs:19"},
+  {"language": "python", "kind": "non_match", "pattern": "getattr($O, \"__spec__\", None)", "source": "getattr(response, \"render\", None)", "origin": "language/src/python.rs:22"},
+  {"language": "python", "kind": "match", "pattern": "getattr($O, \"render\", None)", "source": "getattr(response, \"render\", None)", "origin": "language/src/python.rs:26"},
+  {"language": "python", "kind": "non_match", "pattern": "foo($$$1)", "source": "foo(a, b)", "origin": "language/src/python.rs:34"},
+  {"language": "python", "kind": "match", "pattern": "r'^[A-Za-z0-9_-]+\\$'", "source": "r'^[A-Za-z0-9_-]+\\$'", "origin": "language/src/python.rs:57"},
+  {"language": "python", "kind": "match", "pattern": "$A = 0", "source": "a = 0", "origin": "language/src/python.rs:62"},
+  {"language": "python", "kind": "match", "pattern": "\nmatch $A:\n  case $B:\n      $C\n  case [$D(0, 0)]:\n      $E\n  case [$D($F, $G)]:\n      $H\n  case [$D(0, $I), $D(0, $J)]:\n      $K\n  case _:\n      $L\n", "source": "\nmatch points:\n  case []:\n      print(\"No points\")\n  case [Point(0, 0)]:\n      print(\"The origin\")\n  case [Point(x, y)]:\n      print(f\"Single point {x}, {y}\")\n  case [Point(0, y1), Point(0, y2)]:\n      print(f\"Two on the Y axis at {y1}, {y2}\")\n  case _:\n      print(\"Something else\")\n", "origin": "language/src/python.rs:64"},
+  {"language": "python", "kind": "replace", "pattern": "\nif $FLAG:\n  $VAR = $POS\nelse:\n  $VAR = $NEG\n", "source": "\nif flag:\n  a = value_pos\nelse:\n  a = value_neg", "rewrite": "$VAR = $POS if $FLAG else $NEG", "expected": "\na = value_pos if flag else value_neg", "origin": "language/src/python.rs:101"},
+  {"language": "python", "kind": "replace", "pattern": "\ntry:\n  $A = open($B, $C)\n  $D = $A.read()\nexcept:\n  pass\nfinally:\n  $A.close()", "source": "\ntry:\n  f = open(file_path, \"r\")\n  file_content = f.read()\nexcept:\n  pass\nfinally:\n  f.close()", "rewrite": "\nwith open($B, $C) as $A:\n  $D = $A.open()", "expected": "\n\nwith open(file_path, \"r\") as f:\n  file_content = f.open()", "origin": "language/src/python.rs:117"}
+]}
