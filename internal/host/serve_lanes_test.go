@@ -4,12 +4,64 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
 
 	"tofu/internal/ui/statusline"
 )
+
+func TestServeJoinsTheSessionItsTurnRuns(t *testing.T) {
+	finish := make(chan struct{})
+	c, _, _ := serving(t, func(ctx context.Context, _ Pick, task string, live Live) {
+		if !strings.Contains(task, "long") {
+			live.Emit(Event{Kind: EventText, Text: "a short answer"})
+			return
+		}
+		live.Emit(Event{Kind: EventText, Text: "started the long job"})
+		select {
+		case <-finish:
+			live.Emit(Event{Kind: EventText, Text: "finished the long job"})
+			live.Emit(Event{Kind: EventDone, Status: StatusFinished})
+		case <-ctx.Done():
+		}
+	}, ServeConfig{Carry: func(id string) (Carry, error) { return Carry{Session: id}, nil }})
+	saying := func(text string) func(wireLine) bool {
+		return func(line wireLine) bool { return strings.Contains(string(line.Params), text) }
+	}
+	c.ask("1", "initialize", `{"client":"desk"}`)
+	c.answer("1", &InitializeResult{})
+	var other, running, joined SessionOpenResult
+	for at, into := range []*SessionOpenResult{&other, &running} {
+		id := strconv.Itoa(at + 2)
+		c.ask(id, "session.open", `{}`)
+		c.answer(id, into)
+		c.ask(id+"s", "turn.send", `{"session":"`+into.Session+`","text":"a short one"}`)
+		c.answer(id+"s", &TurnResult{})
+		c.until(func(line wireLine) bool { return line.Method == "turn.completed" }, "the short turn.completed")
+	}
+	c.ask("5", "turn.send", `{"session":"`+running.Session+`","text":"a long job"}`)
+	var turn TurnResult
+	c.answer("5", &turn)
+	c.until(saying("started the long job"), "the long turn's first text")
+
+	c.ask("6", "session.open", `{"session":"`+running.Session+`"}`)
+	c.answer("6", &joined)
+	if joined.Session != running.Session {
+		t.Errorf("session.open of the running session %s answered %s", running.Session, joined.Session)
+	}
+	c.ask("7", "session.open", `{"session":"`+other.Session+`"}`)
+	if line := c.until(func(line wireLine) bool { return string(line.ID) == `"7"` }, "the answer to 7"); line.Error == nil || !strings.Contains(line.Error.Message, "is running") {
+		t.Errorf("session.open of another session while %s runs answered %s %+v, want turnRunning", turn.Turn, line.Result, line.Error)
+	}
+	close(finish)
+	c.until(saying("finished the long job"), "the long turn's text after the join")
+	done := c.until(func(line wireLine) bool { return line.Method == "turn.completed" }, "the long turn.completed")
+	if !strings.Contains(string(done.Params), turn.Turn) || !strings.Contains(string(done.Params), `"finished"`) {
+		t.Errorf("the long turn ended %s, want %s finished", done.Params, turn.Turn)
+	}
+}
 
 func TestServeKeepsASessionRunningWhileAnotherOpens(t *testing.T) {
 	home, project := t.TempDir(), t.TempDir()

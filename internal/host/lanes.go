@@ -275,7 +275,7 @@ func (s *server) open(p SessionOpenParams) (any, error) {
 	}
 	focus, held := s.focus(), s.holding(p.Session)
 	switch {
-	case held != nil && held != focus:
+	case held != nil && (held != focus || held.running()):
 		return s.refocus(held, p)
 	case held == nil && s.Spawn != nil && focus.running():
 		h, release := s.Spawn()
