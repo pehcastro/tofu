@@ -14,15 +14,18 @@ use super::palette::PalettePage;
 
 const SIDEBAR_HEIGHT: f32 = 794.0;
 const MINUTE: u64 = 60;
-const ROWS: [(&str, SessionState, u64); 4] = [
+const DAY: u64 = 24 * 60 * MINUTE;
+const ROWS: [(&str, SessionState, u64); 10] = [
     ("clear-sable-eagle", SessionState::Running, 12 * MINUTE),
     ("fond-sandy-mink", SessionState::Stopped, 2 * 60 * MINUTE),
-    ("tidy-ochre-wren", SessionState::Failed, 24 * 60 * MINUTE),
-    (
-        "crisp-azure-swift",
-        SessionState::Stopped,
-        3 * 24 * 60 * MINUTE,
-    ),
+    ("tidy-ochre-wren", SessionState::Failed, DAY),
+    ("crisp-azure-swift", SessionState::Stopped, 3 * DAY),
+    ("brisk-olive-heron", SessionState::Stopped, 4 * DAY),
+    ("quiet-amber-lynx", SessionState::Stopped, 5 * DAY),
+    ("plain-slate-otter", SessionState::Failed, 6 * DAY),
+    ("warm-cedar-finch", SessionState::Stopped, 7 * DAY),
+    ("swift-coral-hare", SessionState::Stopped, 8 * DAY),
+    ("stark-ivory-crane", SessionState::Stopped, 9 * DAY),
 ];
 
 fn sessions() -> SessionColumns {
@@ -33,7 +36,7 @@ fn sessions() -> SessionColumns {
         sessions.push(name.into(), name.into(), last, state);
     }
     sessions.active = vec![0];
-    sessions.inactive = vec![1, 2, 3];
+    sessions.inactive = (1..10).collect();
     sessions
 }
 

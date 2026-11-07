@@ -17,6 +17,7 @@ use crate::components::glyph::Glyph;
 use crate::components::list::{HoverList, bare_row};
 use crate::components::overlay::{Align, MenuIcon, MenuItem, Placement, Side, context_menu};
 use crate::components::paint::{glyph, ink, tint};
+use crate::components::scroll::ScrollArea;
 use crate::components::size::{
     FONT_CAP, FONT_CAP2, GROUP_PAD_BOTTOM, HOVER, LINE_CAP, LINE_WHO, RADIUS_BADGE, RADIUS_ROW,
     ROW_PAD_X, ROW_PAD_Y, SPINNER, T2, T3,
@@ -33,8 +34,9 @@ const SIDEBAR_PAD_TOP: f32 = 2.0;
 pub const SIDEBAR_COLUMN: f32 = SIDEBAR_WIDTH + 2.0 * SIDEBAR_PAD_X;
 const SIDEBAR_PAD_BOTTOM: f32 = 10.0;
 const CARD_GAP: f32 = 8.0;
-const CARD_PAD: f32 = 4.0;
-const CAPTION_PAD_TOP: f32 = 16.0;
+const CARD_PAD: f32 = 6.0;
+const CARD_ROW_GAP: f32 = 3.0;
+const CAPTION_PAD_TOP: f32 = 30.0;
 const ACTIVE_PAD_TOP: f32 = 4.0;
 const NEW_SESSION: f32 = 16.0;
 const SESSION_GAP: f32 = 9.0;
@@ -45,9 +47,9 @@ const WATCHING_HALO: f32 = 0.25;
 const WATCHING_GAP: f32 = 6.0;
 const INACTIVE_GAP: f32 = 6.0;
 const INACTIVE_INDENT: f32 = 8.0;
-const SESSION_ROW: f32 = LINE_WHO + 2.0 * ROW_PAD_Y;
-const ABOVE_INACTIVE: f32 =
-    ACTIVE_PAD_TOP + LINE_CAP + GROUP_PAD_BOTTOM + INACTIVE_GAP + SESSION_ROW;
+const SESSION_STRIDE: f32 = LINE_WHO + 2.0 * ROW_PAD_Y + CARD_ROW_GAP;
+const INACTIVE_ROWS_SHOWN: usize = 6;
+const INACTIVE_MAX_H: f32 = INACTIVE_ROWS_SHOWN as f32 * SESSION_STRIDE - CARD_ROW_GAP;
 const OVERSCAN_ROWS: usize = 2;
 const NEW_SESSION_NAME: &str = "New session";
 const UUID_LENGTH: usize = 36;
@@ -648,10 +650,10 @@ pub fn open_project_button(theme: &Theme) -> Stateful<Div> {
     )
 }
 
-fn shown_rows(rows: usize, first: f32, scroll: &ScrollHandle, window: &Window) -> Range<usize> {
+fn shown_rows(rows: usize, scroll: &ScrollHandle) -> Range<usize> {
     let top = f32::from(-scroll.offset().y);
-    let bottom = top + f32::from(window.viewport_size().height);
-    let row_at = |y: f32| ((y - first) / SESSION_ROW).max(0.0) as usize;
+    let bottom = top + INACTIVE_MAX_H;
+    let row_at = |y: f32| (y / SESSION_STRIDE).max(0.0) as usize;
     let start = row_at(top).saturating_sub(OVERSCAN_ROWS).min(rows);
     let end = row_at(bottom)
         .saturating_add(OVERSCAN_ROWS + 1)
@@ -666,8 +668,12 @@ fn card_name(part: &'static str, project: usize) -> SharedString {
     }
 }
 
-fn gap(rows: usize) -> Div {
-    div().flex_none().h(px(rows as f32 * SESSION_ROW))
+fn gap(rows: usize) -> Option<Div> {
+    (rows > 0).then(|| {
+        div()
+            .flex_none()
+            .h(px(rows as f32 * SESSION_STRIDE - CARD_ROW_GAP))
+    })
 }
 
 fn word(text: SharedString, theme: &Theme) -> Div {
@@ -692,7 +698,7 @@ impl RenderOnce for Sidebar {
         let list = |id: ElementId, theme: &Theme| {
             HoverList::within(
                 id,
-                div().flex().flex_col().flex_none(),
+                div().flex().flex_col().flex_none().gap(px(CARD_ROW_GAP)),
                 ink(theme, HOVER),
                 Corners::all(px(RADIUS_ROW)),
                 theme,
@@ -710,7 +716,6 @@ impl RenderOnce for Sidebar {
             }))
             .children(self.adding.take());
         let now = SystemTime::now();
-        let mut top = 0.0;
         let mut cards = Vec::new();
         for (project_at, project) in std::mem::take(&mut self.projects).into_iter().enumerate() {
             let above = match project_at {
@@ -735,12 +740,11 @@ impl RenderOnce for Sidebar {
                     .truncate()
                     .child(project.name.clone()),
             )
+            .child(chevron(!project.folded, &theme))
             .on_click(self.picked(SidebarPick::Fold(project_at)));
             let card = inner_card(&theme).flex_none().mt(px(above)).p(px(CARD_PAD));
             let rows = list(ElementId::named_usize("project-rows", project_at), &theme).item(name);
-            top += above + CARD_PAD + SESSION_ROW;
             if project.folded {
-                top += CARD_PAD;
                 cards.push(card.child(rows));
                 continue;
             }
@@ -768,9 +772,18 @@ impl RenderOnce for Sidebar {
                 true => sessions.inactive.len(),
                 false => 0,
             };
-            let first = top + sessions.active.len() as f32 * SESSION_ROW + ABOVE_INACTIVE;
-            let drawn = shown_rows(total, first, &scroll, window);
-            top = first + total as f32 * SESSION_ROW;
+            let inner = window
+                .use_keyed_state(
+                    ElementId::NamedChild(
+                        Arc::new(self.id.clone()),
+                        card_name("inactive-scroll", project_at),
+                    ),
+                    cx,
+                    |_, _| ScrollHandle::new(),
+                )
+                .read(cx)
+                .clone();
+            let drawn = shown_rows(total, &inner);
             let live = self.selected == Some(project_at);
             let mut drawn_rows = |range: Range<usize>, at: fn(usize) -> SessionAt| {
                 range
@@ -809,16 +822,27 @@ impl RenderOnce for Sidebar {
                     cx.notify();
                 })
             });
-            top += CARD_PAD;
+            let mut folded_rows = list(ElementId::named_usize("inactive-rows", project_at), &theme);
+            if let Some(above) = gap(drawn.start) {
+                folded_rows = folded_rows.inert(above);
+            }
+            folded_rows = folded_rows.items(inactive);
+            if let Some(below) = gap(total.saturating_sub(drawn.end)) {
+                folded_rows = folded_rows.inert(below);
+            }
             cards.push(
-                card.child(
-                    rows.inert(active_caption)
-                        .items(active)
-                        .item(header)
-                        .inert(gap(drawn.start))
-                        .items(inactive)
-                        .inert(gap(total.saturating_sub(drawn.end))),
-                ),
+                card.flex()
+                    .flex_col()
+                    .gap(px(CARD_ROW_GAP))
+                    .child(rows.inert(active_caption).items(active).item(header))
+                    .when(total > 0, |card| {
+                        card.child(
+                            ScrollArea::new(card_name("inactive-area", project_at))
+                                .track(&inner)
+                                .max_h(INACTIVE_MAX_H)
+                                .child(folded_rows),
+                        )
+                    }),
             );
         }
         div()
