@@ -69,7 +69,7 @@ func nativeChecksFor(top, resolved, ext string, reach goReach) ([]NativeCheck, s
 	case ".rs":
 		manifest, found := contract.FindUp(dir, "Cargo.toml")
 		if found && inCrate(filepath.Dir(manifest), resolved) {
-			return []NativeCheck{{steps: [][]string{{"cargo", "check"}}, dir: filepath.Dir(manifest), parse: RustProblems}}, onPath("cargo", rustHint)
+			return []NativeCheck{{steps: [][]string{{"cargo", "check", "--all-targets"}}, dir: filepath.Dir(manifest), parse: RustProblems}}, onPath("cargo", rustHint)
 		}
 		files := []string{resolved}
 		if dir == resolved {

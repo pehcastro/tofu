@@ -13,6 +13,7 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode"
 
 	"golang.org/x/tools/imports"
 
@@ -20,6 +21,8 @@ import (
 	"tofu/internal/models/llm/core"
 	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/tools/code/catgrep"
+	"tofu/internal/tools/code/catgrep/lang"
+	"tofu/internal/tools/code/catgrep/tree"
 	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit/patch"
@@ -102,6 +105,13 @@ func (c Codemod) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 	found, err := catgrep.Rewrite(ctx, args.Pattern, args.Rewrite, l, paths)
 	if err != nil {
 		return contract.Failure("codemod: " + err.Error()), nil
+	}
+	for i, file := range found {
+		captures, err := formatCaptures(l, file)
+		if err != nil {
+			return contract.Failure("codemod: " + file.Path + ": " + err.Error()), nil
+		}
+		found[i].Sites = slices.SortedFunc(slices.Values(append(file.Sites, captures...)), func(a, b catgrep.Site) int { return a.Start - b.Start })
 	}
 	return c.report(ctx, args, found)
 }
@@ -221,7 +231,7 @@ func (c Codemod) checked(ctx context.Context, lang string, changes []change) str
 			return "checker: " + command + " found errors:\n" + clipped(string(out))
 		}
 		return "checker: " + command + " did not run: " + err.Error() + "\n"
-	case "typescript", "tsx":
+	case "typescript", "tsx", "rust", "python":
 		var cold *checkers.Typecheckers
 		result, err := cold.Check(ctx, string(c.root))
 		if err != nil {
@@ -230,6 +240,69 @@ func (c Codemod) checked(ctx context.Context, lang string, changes []change) str
 		return "checker: " + clipped(result.Content)
 	}
 	return "checker: none for lang " + lang + ". run its build or tests to check the change\n"
+}
+
+func formatCaptures(l lang.Lang, file catgrep.File) ([]catgrep.Site, error) {
+	if l != lang.Rust {
+		return nil, nil
+	}
+	var renames []catgrep.Site
+	for _, s := range file.Sites {
+		if s.Before != s.After && identifier(s.Before) && identifier(s.After) && !slices.ContainsFunc(renames, func(r catgrep.Site) bool { return r.Before == s.Before }) {
+			renames = append(renames, s)
+		}
+	}
+	if len(renames) == 0 {
+		return nil, nil
+	}
+	source, err := os.ReadFile(file.Path)
+	if err != nil {
+		return nil, err
+	}
+	root, err := tree.Parse(string(source), lang.Rust)
+	if err != nil {
+		return nil, err
+	}
+	formatMacros := []string{"format", "println", "print", "eprintln", "write", "writeln", "panic", "assert", "assert_eq", "assert_ne", "debug_assert", "debug_assert_eq", "debug_assert_ne", "format_args"}
+	var captures []catgrep.Site
+	for macro := range root.Node().PreOrder() {
+		called, named := macro.Field("macro")
+		if macro.Kind() != "macro_invocation" || !named || !slices.Contains(formatMacros, called.Text()[strings.LastIndex(called.Text(), ":")+1:]) {
+			continue
+		}
+		function := macro
+		for parent, ok := macro.Parent(); ok && function.Kind() != "function_item"; parent, ok = parent.Parent() {
+			function = parent
+		}
+		for _, r := range renames {
+			inFunction := slices.ContainsFunc(file.Sites, func(s catgrep.Site) bool {
+				return s.Before == r.Before && s.Start >= int(function.Start()) && s.End <= int(function.End())
+			})
+			if !inFunction {
+				continue
+			}
+			for literal := range macro.PreOrder() {
+				if literal.Kind() != "string_literal" && literal.Kind() != "raw_string_literal" {
+					continue
+				}
+				text := source[:literal.End()]
+				for at := int(literal.Start()); at < len(text)-1; at++ {
+					switch {
+					case text[at] != '{':
+					case text[at+1] == '{':
+						at++
+					case bytes.HasPrefix(text[at+1:], []byte(r.Before+"}")) || bytes.HasPrefix(text[at+1:], []byte(r.Before+":")):
+						captures = append(captures, catgrep.Site{Start: at + 1, End: at + 1 + len(r.Before), Line: bytes.Count(source[:at], []byte("\n")) + 1, Before: r.Before, After: r.After})
+					}
+				}
+			}
+		}
+	}
+	return captures, nil
+}
+
+func identifier(text string) bool {
+	return text != "" && !unicode.IsDigit(rune(text[0])) && !strings.ContainsFunc(text, func(r rune) bool { return r != '_' && !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 }
 
 func clipped(text string) string {
