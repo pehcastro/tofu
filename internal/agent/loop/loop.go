@@ -652,11 +652,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	stateCarried := func(fork *Fork, step int, beforeFork, begun []core.Message, tools []core.Tool, moved *Account) ([]core.Message, string) {
 		begun = withMemoryViewAtHead(begun, config.MemoryMessage())
-		if running := runningSubAgents(source().tools); len(running) > 0 {
+		if unended := unendedSubAgents(source().tools); len(unended) > 0 {
 			at := slices.IndexFunc(begun, func(message core.Message) bool {
 				return message.Origin.Source == core.SourceForkCarry && message.Content == fork.Carry.Text
 			})
-			fork.Carry = fork.Carry.WithSubAgents(running)
+			fork.Carry = fork.Carry.WithSubAgents(unended)
 			begun[at].Content = fork.Carry.Text
 		}
 		unreported := budget.Reported(0, recall.Occupancy{})
@@ -1790,8 +1790,8 @@ func (s skillLoading) Run(ctx context.Context, raw json.RawMessage) (contract.Re
 	return result, err
 }
 
-func runningSubAgents(tools []contract.Tool) []string {
-	var running []string
+func unendedSubAgents(tools []contract.Tool) []string {
+	var unended []string
 	for _, tool := range tools {
 		spawner, spawns := tool.(*SpawnTool)
 		if !spawns {
@@ -1808,11 +1808,11 @@ func runningSubAgents(tools []contract.Tool) []string {
 				held = "holds " + strings.Join(agent.Owns, " ")
 			}
 			mission, _, _ := strings.Cut(agent.Mission, "\n")
-			running = append(running, agent.ID+": "+cmp.Or(agent.Agent, "no definition")+", "+agent.State.String()+", "+held+
+			unended = append(unended, agent.ID+": "+cmp.Or(agent.Agent, "no definition")+", "+agent.State.String()+", "+held+
 				", ticket "+cmp.Or(agent.Ticket, "none")+": "+runeSafeHead(mission, konst.CarrySignpostBytes))
 		}
 	}
-	return running
+	return unended
 }
 
 func sessionStartMessages(source hook.SessionSource, added []hook.Context, at time.Time) []core.Message {

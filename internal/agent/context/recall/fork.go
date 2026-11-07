@@ -64,17 +64,17 @@ const carrySnapshots = "the last snapshot of each tab it worked in, as it came b
 
 const carryHeldTail = "its last steps follow this message word for word, as they were sent.\n"
 
-const carrySubAgents = "the sub-agents it spawned that were running when this fork began, each with its paths and ticket. message reaches each by its name, and subagents says what each does now:\n"
+const carrySubAgents = "the sub-agents it spawned that had not ended when this fork began, each with its state, paths and ticket: a working one runs on, and a parked one waits until a message resumes it. message reaches each by its name, and subagents says what each does now:\n"
 
-func (c Carry) WithSubAgents(running []string) Carry {
-	if len(running) == 0 {
+func (c Carry) WithSubAgents(unended []string) Carry {
+	if len(unended) == 0 {
 		return c
 	}
 	at := strings.Index(c.Text, carryLastWord)
 	if at < 0 {
 		at = strings.Index(c.Text, carryHeldTail)
 	}
-	c.Text, c.SubAgents = c.Text[:at]+carrySubAgents+strings.Join(running, "\n")+"\n"+c.Text[at:], running
+	c.Text, c.SubAgents = c.Text[:at]+carrySubAgents+strings.Join(unended, "\n")+"\n"+c.Text[at:], unended
 	return c
 }
 

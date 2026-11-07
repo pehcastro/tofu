@@ -616,24 +616,26 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 		}
 		return contract.Result{}, fmt.Errorf("spawn: %w", err)
 	}
+	neverStarted := func(err error) error {
+		t.roster.Release(subAgentID)
+		t.roster.Reached(subAgentID, subagents.Errored, err.Error())
+		return err
+	}
 	if args.Ticket != "" && t.base.Board != nil {
 		lead := t.speaker()
 		if _, err := t.base.TicketGrant(t.boardAs(t.base.Session, lead), args.Ticket, t.base.Session, subAgentID); err != nil {
-			t.roster.Release(subAgentID)
-			return contract.Result{}, fmt.Errorf("spawn: %w", err)
+			return contract.Result{}, neverStarted(fmt.Errorf("spawn: %w", err))
 		}
 		spawned := boardy.Event{Ticket: args.Ticket, Kind: boardy.Spawned, Actor: t.base.Session, Author: lead, Session: t.base.Session, Agent: subAgentID, Call: site.call,
 			Text: subAgentID + effortWords(effort) + ", " + agent.Mission, Brief: agent.Brief, Assignee: subAgentID, To: boardy.Doing, Effort: string(effort), Revision: revision}
 		if err := t.base.Board.Store.RecordTicket(spawned); err != nil {
-			t.roster.Release(subAgentID)
-			return contract.Result{}, fmt.Errorf("spawn: %s's spawn was not written to %s's thread: %w", subAgentID, args.Ticket, err)
+			return contract.Result{}, neverStarted(fmt.Errorf("spawn: %s's spawn was not written to %s's thread: %w", subAgentID, args.Ticket, err))
 		}
 	}
 
 	scratch, err := t.scratch(ctx, subAgentID)
 	if err != nil {
-		t.roster.Release(subAgentID)
-		return contract.Result{}, fmt.Errorf("spawn: %s's scratch folder was not made: %w", subAgentID, err)
+		return contract.Result{}, neverStarted(fmt.Errorf("spawn: %s's scratch folder was not made: %w", subAgentID, err))
 	}
 	timing.took("scratch")
 	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, askedEffort: effort, system: system, parts: parts,
