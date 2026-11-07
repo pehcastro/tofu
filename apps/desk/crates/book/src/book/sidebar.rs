@@ -1,8 +1,9 @@
 use std::rc::Rc;
 use std::time::{Duration, SystemTime};
 
+use desk_ui::components::glyph::Glyph;
 use desk_ui::components::sidebar::{
-    Project, SIDEBAR_COLUMN, SessionAt, SessionColumns, SessionState, Sidebar, SidebarPick,
+    Project, SIDEBAR_COLUMN, SessionAt, SessionColumns, SessionState, Sidebar, SidebarPick, Tool,
 };
 use desk_ui::theme::Theme;
 use gpui::{App, Context, Div, Window, div, prelude::*, px};
@@ -87,12 +88,27 @@ pub(super) fn sidebar_page(palette: &PalettePage, theme: &Theme, cx: &mut Contex
             .child(named(
                 "Sessions",
                 theme,
-                frame(Sidebar::new(
-                    "sidebar-notes",
-                    vec![notes.clone()],
-                    Some(0),
-                    told("notes-app", cx),
-                )),
+                frame(
+                    Sidebar::new(
+                        "sidebar-notes",
+                        vec![notes.clone()],
+                        Some(0),
+                        told("notes-app", cx),
+                    )
+                    .tools(
+                        vec![
+                            Tool {
+                                label: "Editor".into(),
+                                glyph: Glyph::Code,
+                            },
+                            Tool {
+                                label: "Boardy".into(),
+                                glyph: Glyph::Inbox,
+                            },
+                        ],
+                        div(),
+                    ),
+                ),
             ))
             .child(named(
                 "Empty project",

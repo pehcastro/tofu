@@ -14,7 +14,7 @@ use crate::component::{control, icon};
 use crate::components::avatar::spinner;
 use crate::components::glyph::Glyph;
 use crate::components::list::{HoverList, bare_row};
-use crate::components::overlay::{MenuIcon, MenuItem, context_menu};
+use crate::components::overlay::{Align, MenuIcon, MenuItem, Placement, Side, context_menu};
 use crate::components::paint::{glyph, ink, tint};
 use crate::components::size::{
     FONT_CAP, FONT_CAP2, FONT_CHAT, FONT_SMALL, GROUP_PAD_BOTTOM, HOVER, LINE_CAP, LINE_WHO,
@@ -54,6 +54,12 @@ const OVERSCAN_ROWS: usize = 2;
 const NEW_SESSION_NAME: &str = "New session";
 const UUID_LENGTH: usize = 36;
 const UUID_DASHES: [usize; 4] = [8, 13, 18, 23];
+pub const TOOLS_SHOWN: usize = 5;
+const TOOL_MOVES: [(&str, ToolMove); 3] = [
+    ("Move up", ToolMove::Up),
+    ("Move down", ToolMove::Down),
+    ("Remove", ToolMove::Remove),
+];
 
 pub fn unnamed(name: &str) -> bool {
     name.is_empty()
@@ -187,8 +193,23 @@ pub struct Project {
     pub sessions: Rc<SessionColumns>,
 }
 
+#[derive(Clone)]
+pub struct Tool {
+    pub label: SharedString,
+    pub glyph: Glyph,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ToolMove {
+    Up,
+    Down,
+    Remove,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SidebarPick {
+    Tool(usize),
+    MoveTool(usize, ToolMove),
     Fold(usize),
     NewSession(usize),
     Open(usize, SessionAt),
@@ -255,6 +276,8 @@ pub struct Sidebar {
     id: ElementId,
     projects: Vec<Project>,
     selected: Option<usize>,
+    tools: Vec<Tool>,
+    more: Option<AnyElement>,
     adding: Option<AnyElement>,
     editing: Option<(usize, SessionAt, AnyElement)>,
     on_pick: OnPick,
@@ -271,10 +294,18 @@ impl Sidebar {
             id: id.into(),
             projects,
             selected,
+            tools: Vec::new(),
+            more: None,
             adding: None,
             editing: None,
             on_pick: Rc::new(on_pick),
         }
+    }
+
+    pub fn tools(mut self, tools: Vec<Tool>, more: impl IntoElement) -> Self {
+        self.tools = tools;
+        self.more = Some(more.into_any_element());
+        self
     }
 
     pub fn adding(mut self, control: impl IntoElement) -> Self {
@@ -285,6 +316,115 @@ impl Sidebar {
     pub fn editing(mut self, project: usize, at: SessionAt, field: AnyElement) -> Self {
         self.editing = Some((project, at, field));
         self
+    }
+
+    fn tool_moves(&self, at: usize) -> Vec<MenuItem> {
+        let count = self.tools.len();
+        TOOL_MOVES
+            .iter()
+            .map(|&(label, step)| {
+                MenuItem::action(label).enabled(match step {
+                    ToolMove::Up => at > 0,
+                    ToolMove::Down => at + 1 < count,
+                    ToolMove::Remove => true,
+                })
+            })
+            .collect()
+    }
+
+    fn tool_row(&self, at: usize, tool: &Tool, theme: &Theme) -> Stateful<Div> {
+        let line = row(
+            (
+                ElementId::named_usize("tool", at),
+                SharedString::from(format!("tool-{at}")),
+            ),
+            false,
+            T2,
+            theme,
+        )
+        .child(tool_mark(tool.glyph, theme))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .truncate()
+                .child(tool.label.clone()),
+        )
+        .on_click(self.picked(SidebarPick::Tool(at)));
+        let on_pick = self.on_pick.clone();
+        div()
+            .id(ElementId::named_usize("tool-item", at))
+            .w_full()
+            .child(
+                context_menu(self.tool_moves(at))
+                    .id(ElementId::named_usize("tool-menu", at))
+                    .on_pick(move |ix, window, cx| match TOOL_MOVES.get(*ix) {
+                        Some(&(_, step)) => on_pick(&SidebarPick::MoveTool(at, step), window, cx),
+                        None => eprintln!("desk_ui: tool menu row {ix} is not in the menu"),
+                    })
+                    .child(line),
+            )
+    }
+
+    fn more_item(&self, more: AnyElement) -> Stateful<Div> {
+        let step = TOOL_MOVES.len() + 1;
+        let items = self
+            .tools
+            .iter()
+            .enumerate()
+            .skip(TOOLS_SHOWN)
+            .map(|(at, tool)| MenuItem::Submenu {
+                label: tool.label.clone(),
+                icon: Some(tool.glyph.into()),
+                items: self.tool_moves(at),
+            })
+            .collect();
+        let on_pick = self.on_pick.clone();
+        div().id("tools-more-item").w_full().child(
+            context_menu(items)
+                .id("tools-more-menu")
+                .on_pick(move |ix, window, cx| {
+                    let at = TOOLS_SHOWN + ix / step;
+                    match (ix % step)
+                        .checked_sub(1)
+                        .and_then(|row| TOOL_MOVES.get(row))
+                    {
+                        Some(&(_, moved)) => on_pick(&SidebarPick::MoveTool(at, moved), window, cx),
+                        None => eprintln!("desk_ui: more menu row {ix} is not a move"),
+                    }
+                })
+                .child(more),
+        )
+    }
+
+    fn tools_block(&mut self, theme: &Theme) -> Option<HoverList> {
+        if self.tools.is_empty() {
+            return None;
+        }
+        let rows: Vec<Stateful<Div>> = self
+            .tools
+            .iter()
+            .take(TOOLS_SHOWN)
+            .enumerate()
+            .map(|(at, tool)| self.tool_row(at, tool, theme))
+            .collect();
+        let more = self
+            .more
+            .take()
+            .filter(|_| self.tools.len() > TOOLS_SHOWN)
+            .map(|more| self.more_item(more));
+        let list = HoverList::within(
+            "tools",
+            div().flex().flex_col().flex_none().pt(px(SIDEBAR_PAD_TOP)),
+            ink(theme, HOVER),
+            Corners::all(px(RADIUS_ROW)),
+            theme,
+        )
+        .items(rows);
+        Some(match more {
+            Some(more) => list.item(more),
+            None => list,
+        })
     }
 
     fn picked(
@@ -431,6 +571,31 @@ fn state_mark(spin: ElementId, state: SessionState, reduced: bool, theme: &Theme
             icon(Icon::Close, SPINNER, theme.color(ColorToken::StatusDanger)).into_any_element()
         }
         SessionState::Unreported => div().into_any_element(),
+    }
+}
+
+fn tool_mark(mark: Glyph, theme: &Theme) -> Div {
+    div()
+        .flex_none()
+        .size(px(SPINNER))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(glyph(mark, SPINNER, ink(theme, T2)))
+}
+
+pub fn more_row(theme: &Theme) -> Stateful<Div> {
+    row(("tools-more", "tools-more"), false, T2, theme)
+        .child(tool_mark(Glyph::Ellipsis, theme))
+        .child(div().flex_1().min_w_0().truncate().child("More"))
+        .child(chevron(false, theme))
+}
+
+pub fn more_placement() -> Placement {
+    Placement {
+        side: Side::Right,
+        align: Align::Start,
+        offset: SIDEBAR_PAD_X,
     }
 }
 
@@ -594,8 +759,12 @@ impl RenderOnce for Sidebar {
             .child(glyph(Glyph::Settings, ICON_SMALL, ink(&theme, T2)))
             .child("Settings")
             .on_click(self.picked(SidebarPick::Settings));
+        let tools = self.tools_block(&theme);
         let heading = caption("Projects", &theme)
-            .pt(px(SIDEBAR_PAD_TOP))
+            .pt(px(match tools {
+                Some(_) => CAPTION_PAD_TOP,
+                None => SIDEBAR_PAD_TOP,
+            }))
             .children(self.adding.take());
         let now = SystemTime::now();
         let mut top = 0.0;
@@ -715,6 +884,7 @@ impl RenderOnce for Sidebar {
             .flex_col()
             .px(px(SIDEBAR_PAD_X))
             .pb(px(SIDEBAR_PAD_BOTTOM))
+            .children(tools)
             .child(heading)
             .child(
                 div()

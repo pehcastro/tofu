@@ -5,6 +5,7 @@ use std::io::{self, ErrorKind};
 use std::path::{Path, PathBuf};
 
 const LEGACY_FOLDER: &str = "tofu-desk";
+const TOOLS_FILE: &str = "sidebar-tools.json";
 const LEGACY_TO_CONFIG: [&str; 2] = ["theme", "terminal-shell"];
 const LEGACY_TO_STATE: [&str; 5] = [
     "layouts",
@@ -17,7 +18,14 @@ const LEGACY_TO_STATE: [&str; 5] = [
 #[derive(Debug)]
 pub enum HomeError {
     NoHome(&'static str),
-    Io { path: PathBuf, error: io::Error },
+    Io {
+        path: PathBuf,
+        error: io::Error,
+    },
+    Json {
+        path: PathBuf,
+        error: serde_json::Error,
+    },
 }
 
 impl fmt::Display for HomeError {
@@ -25,6 +33,9 @@ impl fmt::Display for HomeError {
         match self {
             HomeError::NoHome(name) => write!(f, "{name} is not set, so the desk has no home"),
             HomeError::Io { path, error } => write!(f, "{}: {error}", path.display()),
+            HomeError::Json { path, error } => {
+                write!(f, "{} is not a list of screens: {error}", path.display())
+            }
         }
     }
 }
@@ -33,6 +44,7 @@ impl std::error::Error for HomeError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             HomeError::Io { error, .. } => Some(error),
+            HomeError::Json { error, .. } => Some(error),
             HomeError::NoHome(_) => None,
         }
     }
@@ -99,6 +111,31 @@ impl Home {
             })?;
         }
         Ok(())
+    }
+
+    pub fn read_tools(&self) -> Result<Option<Vec<String>>, HomeError> {
+        let path = self.state.join(TOOLS_FILE);
+        let text = match fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(HomeError::Io { path, error }),
+        };
+        serde_json::from_str(&text)
+            .map(Some)
+            .map_err(|error| HomeError::Json { path, error })
+    }
+
+    pub fn write_tools(&self, names: &[&str]) -> Result<(), HomeError> {
+        let path = self.state.join(TOOLS_FILE);
+        let text = serde_json::to_string(names).map_err(|error| HomeError::Json {
+            path: path.clone(),
+            error,
+        })?;
+        fs::create_dir_all(&self.state).map_err(|error| HomeError::Io {
+            path: self.state.clone(),
+            error,
+        })?;
+        fs::write(&path, text).map_err(|error| HomeError::Io { path, error })
     }
 
     pub fn migrate(&self) -> Result<(), HomeError> {

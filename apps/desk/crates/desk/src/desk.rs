@@ -73,14 +73,17 @@ use desk_ui::components::glyph::Glyph;
 use desk_ui::components::keymap::editor_claims;
 #[cfg(feature = "screen-work")]
 use desk_ui::components::media_view::OpenMedia;
-use desk_ui::components::overlay::toast;
 #[cfg(feature = "screen-work")]
-use desk_ui::components::overlay::{MenuButton, MenuItem, context_menu};
+use desk_ui::components::overlay::context_menu;
+use desk_ui::components::overlay::{MenuButton, MenuItem, toast};
 use desk_ui::components::paint::{SpinLayer, ink, ring};
 use desk_ui::components::palette::{Palette, PaletteEntry, PaletteItem};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::sheet::Sheet;
-use desk_ui::components::sidebar::{Project, SIDEBAR_COLUMN, Sidebar, SidebarPick};
+use desk_ui::components::sidebar::{
+    Project, SIDEBAR_COLUMN, Sidebar, SidebarPick, TOOLS_SHOWN, Tool, ToolMove, more_placement,
+    more_row,
+};
 #[cfg(feature = "screen-work")]
 use desk_ui::components::sidebar::{SessionAt, SessionColumns, open_project_button, unnamed};
 use desk_ui::components::size::T2;
@@ -224,6 +227,96 @@ pub const SCREEN_MARKS: [ScreenMark; 15] = [
 
 pub fn screen_mark(name: &str) -> Option<&'static ScreenMark> {
     SCREEN_MARKS.iter().find(|mark| mark.name == name)
+}
+
+const DEFAULT_TOOLS: [&str; 2] = ["editor", "boardy"];
+
+#[derive(Default)]
+pub struct SidebarTools {
+    names: Vec<&'static str>,
+    _reading: Option<Task<()>>,
+    _saving: Option<Task<()>>,
+}
+
+impl gpui::Global for SidebarTools {}
+
+impl SidebarTools {
+    pub fn names(cx: &App) -> &[&'static str] {
+        cx.try_global::<SidebarTools>()
+            .map_or(&[], |tools| tools.names.as_slice())
+    }
+
+    fn load(known: Vec<&'static str>, cx: &mut App) {
+        if cx.has_global::<SidebarTools>() {
+            return;
+        }
+        let reading = cx.spawn(async move |cx| {
+            let read = cx
+                .background_executor()
+                .spawn(async { desk_core::home::Home::find()?.read_tools() })
+                .await;
+            let saved: Vec<String> = match read {
+                Ok(Some(saved)) => saved,
+                Ok(None) => DEFAULT_TOOLS.map(String::from).to_vec(),
+                Err(error) => {
+                    eprintln!("desk: tools start at editor,boardy: {error}");
+                    DEFAULT_TOOLS.map(String::from).to_vec()
+                }
+            };
+            let names: Vec<&'static str> = saved
+                .iter()
+                .filter_map(|name| known.iter().find(|known| *known == name).copied())
+                .collect();
+            cx.update(|cx| {
+                eprintln!("desk: tools {} read: {}", names.len(), names.join(","));
+                cx.default_global::<SidebarTools>().names = names;
+            });
+        });
+        cx.set_global(SidebarTools {
+            _reading: Some(reading),
+            ..SidebarTools::default()
+        });
+    }
+
+    #[cfg(feature = "screen-work")]
+    pub fn toggle(name: &'static str, cx: &mut App) {
+        if screen_mark(name).is_none() {
+            return eprintln!("desk: tools: {name} has no sidebar row");
+        }
+        Self::change(cx, |names| {
+            match names.iter().position(|known| *known == name) {
+                Some(at) => {
+                    names.remove(at);
+                }
+                None => names.push(name),
+            }
+        });
+    }
+
+    fn step(at: usize, step: ToolMove, cx: &mut App) {
+        Self::change(cx, |names| match step {
+            ToolMove::Up if at > 0 && at < names.len() => names.swap(at - 1, at),
+            ToolMove::Down if at + 1 < names.len() => names.swap(at, at + 1),
+            ToolMove::Remove if at < names.len() => {
+                names.remove(at);
+            }
+            _ => eprintln!("desk: tools: {step:?} does not apply to row {at}"),
+        });
+    }
+
+    fn change(cx: &mut App, edit: impl FnOnce(&mut Vec<&'static str>)) {
+        let tools = cx.default_global::<SidebarTools>();
+        edit(&mut tools.names);
+        let names = tools.names.clone();
+        eprintln!("desk: tools {} pinned: {}", names.len(), names.join(","));
+        let saving = cx.background_spawn(async move {
+            let wrote = desk_core::home::Home::find().and_then(|home| home.write_tools(&names));
+            if let Err(error) = wrote {
+                eprintln!("desk: tools were not saved: {error}");
+            }
+        });
+        cx.default_global::<SidebarTools>()._saving = Some(saving);
+    }
 }
 #[cfg(feature = "screen-work")]
 const MINUTES_PER_HOUR: i64 = 60;
@@ -403,6 +496,8 @@ pub struct Desk {
     github: Github,
     intro_shade: Shade,
     shell: Option<(WindowBackgroundAppearance, Rgba)>,
+    more_tools: Entity<MenuButton>,
+    _tools_watch: gpui::Subscription,
     #[cfg(feature = "screen-work")]
     projects: Projects,
     #[cfg(feature = "screen-work")]
@@ -421,6 +516,15 @@ pub struct Desk {
     menu_at: Option<Point<Pixels>>,
     #[cfg(feature = "screen-work")]
     gate: Option<Gate>,
+}
+
+#[cfg(feature = "screen-work")]
+#[derive(Clone, Copy)]
+enum ScreenAct {
+    Pin,
+    Lock,
+    Sidebar,
+    Close,
 }
 
 #[cfg(feature = "screen-work")]
@@ -907,6 +1011,29 @@ impl Desk {
             }])
             .collect();
         let named = named.then(|| name.clone());
+        SidebarTools::load(
+            screens
+                .iter()
+                .map(|screen| screen.name)
+                .filter(|name| screen_mark(name).is_some())
+                .collect(),
+            cx,
+        );
+        let more_tools = MenuButton::new("More".into(), Vec::new(), cx);
+        let opening = cx.weak_entity();
+        more_tools.update(cx, |menu, _| {
+            menu.trigger(|_, theme| more_row(theme));
+            menu.placement(more_placement());
+            menu.on_pick(move |ix, window, cx| {
+                let Some(name) = SidebarTools::names(cx).get(TOOLS_SHOWN + ix).copied() else {
+                    return eprintln!("desk: tools: more row {ix} is gone");
+                };
+                opening
+                    .update(cx, |desk, cx| desk.show(name, window, cx))
+                    .unwrap_or_else(|_| eprintln!("desk: the desk is gone"));
+            });
+        });
+        let tools_watch = cx.observe_global::<SidebarTools>(Self::list_more_tools);
         let palette = Palette::new(commands(&screens), window, cx);
         let picked = cx.listener(|desk, id: &SharedString, window, cx| {
             eprintln!("desk: palette picked {id}");
@@ -951,6 +1078,8 @@ impl Desk {
             github: Github::Asking,
             intro_shade: Shade::Dark,
             shell: None,
+            more_tools,
+            _tools_watch: tools_watch,
             #[cfg(feature = "screen-work")]
             projects: Projects {
                 named,
@@ -1335,18 +1464,11 @@ impl Desk {
                 cx,
             )
         });
-        let held = self
-            .menu_screen
-            .and_then(|name| self.held.iter().find(|held| held.name == name));
-        let (pinned, locked) = held.map_or((false, false), |held| (true, held.locked));
-        let items = [
-            Some(MenuItem::action(if pinned { "Unpin" } else { "Pin" }).icon(Glyph::Pin)),
-            Some(MenuItem::action(if locked { "Unlock" } else { "Lock" }).icon(Glyph::Lock)),
-            (!pinned).then(|| MenuItem::action("Close").icon(Icon::Close)),
-        ]
-        .into_iter()
-        .flatten()
-        .collect();
+        let items = self
+            .screen_menu_rows(cx)
+            .into_iter()
+            .map(|(item, _)| item)
+            .collect();
         Some(
             div()
                 .flex_1()
@@ -1378,33 +1500,75 @@ impl Desk {
     }
 
     #[cfg(feature = "screen-work")]
+    fn screen_menu_rows(&self, cx: &App) -> Vec<(MenuItem, ScreenAct)> {
+        let name = self.menu_screen;
+        let held = name.and_then(|name| self.held.iter().find(|held| held.name == name));
+        let (pinned, locked) = held.map_or((false, false), |held| (true, held.locked));
+        let listed = name
+            .filter(|name| screen_mark(name).is_some())
+            .map(|name| SidebarTools::names(cx).contains(&name));
+        [
+            Some((
+                MenuItem::action(if pinned { "Unpin" } else { "Pin" }).icon(Glyph::Pin),
+                ScreenAct::Pin,
+            )),
+            Some((
+                MenuItem::action(if locked { "Unlock" } else { "Lock" }).icon(Glyph::Lock),
+                ScreenAct::Lock,
+            )),
+            listed.map(|listed| {
+                let label = match listed {
+                    true => "Remove from sidebar",
+                    false => "Add to sidebar",
+                };
+                (
+                    MenuItem::action(label).icon(Icon::Sidebar),
+                    ScreenAct::Sidebar,
+                )
+            }),
+            (!pinned).then(|| {
+                (
+                    MenuItem::action("Close").icon(Icon::Close),
+                    ScreenAct::Close,
+                )
+            }),
+        ]
+        .into_iter()
+        .flatten()
+        .collect()
+    }
+
+    #[cfg(feature = "screen-work")]
     fn picked_screen(&mut self, pick: usize, window: &mut Window, cx: &mut Context<Self>) {
         let Some(name) = self.menu_screen else {
             return eprintln!("desk: the screen menu has no tab");
+        };
+        let Some(act) = self.screen_menu_rows(cx).get(pick).map(|(_, act)| *act) else {
+            return eprintln!("desk: screen menu has no item {pick}");
         };
         let at = self.held.iter().position(|held| held.name == name);
         let locked = at
             .and_then(|at| self.held.get(at))
             .is_some_and(|held| held.locked);
-        match (pick, at) {
-            (0, Some(at)) => {
+        match (act, at) {
+            (ScreenAct::Pin, Some(at)) => {
                 self.held.remove(at);
             }
-            (0, None) => self.held.push(Held {
+            (ScreenAct::Pin, None) => self.held.push(Held {
                 name,
                 locked: false,
             }),
-            (1, Some(at)) if locked => {
+            (ScreenAct::Lock, Some(at)) if locked => {
                 self.held.remove(at);
             }
-            (1, Some(at)) => {
+            (ScreenAct::Lock, Some(at)) => {
                 if let Some(held) = self.held.get_mut(at) {
                     held.locked = true;
                 }
             }
-            (1, None) => self.held.push(Held { name, locked: true }),
-            (2, None) => return self.close_screen(name, window, cx),
-            (pick, _) => return eprintln!("desk: screen menu has no item {pick}"),
+            (ScreenAct::Lock, None) => self.held.push(Held { name, locked: true }),
+            (ScreenAct::Sidebar, _) => return SidebarTools::toggle(name, cx),
+            (ScreenAct::Close, _) => return self.close_screen(name, window, cx),
         }
         let held = self.held.iter().find(|held| held.name == name);
         eprintln!(
@@ -1936,6 +2100,8 @@ impl Desk {
     ) {
         match pick {
             SidebarPick::Settings => self.show(SETTINGS, window, cx),
+            SidebarPick::Tool(at) => self.open_tool(*at, window, cx),
+            SidebarPick::MoveTool(at, step) => SidebarTools::step(*at, *step, cx),
             SidebarPick::Fold(_)
             | SidebarPick::NewSession(_)
             | SidebarPick::Open(..)
@@ -1946,8 +2112,34 @@ impl Desk {
         }
     }
 
+    fn list_more_tools(&mut self, cx: &mut Context<Self>) {
+        let items = SidebarTools::names(cx)
+            .iter()
+            .skip(TOOLS_SHOWN)
+            .filter_map(|name| screen_mark(name))
+            .map(|mark| MenuItem::action(mark.label).icon(mark.glyph))
+            .collect();
+        self.more_tools.update(cx, |menu, cx| menu.items(items, cx));
+        cx.notify();
+    }
+
+    fn open_tool(&mut self, at: usize, window: &mut Window, cx: &mut Context<Self>) {
+        match SidebarTools::names(cx).get(at).copied() {
+            Some(name) => self.show(name, window, cx),
+            None => eprintln!("desk: tools: row {at} is gone"),
+        }
+    }
+
     fn sidebar(&self, cx: &mut Context<Self>) -> Sidebar {
         let (projects, selected) = self.sidebar_projects(cx);
+        let tools = SidebarTools::names(cx)
+            .iter()
+            .filter_map(|name| screen_mark(name))
+            .map(|mark| Tool {
+                label: mark.label.into(),
+                glyph: mark.glyph,
+            })
+            .collect();
         let sidebar = Sidebar::new(
             "sidebar",
             projects,
@@ -1955,7 +2147,8 @@ impl Desk {
             cx.listener(|desk, pick: &SidebarPick, window, cx| {
                 desk.pick_from_sidebar(pick, window, cx)
             }),
-        );
+        )
+        .tools(tools, self.more_tools.clone());
         #[cfg(feature = "screen-work")]
         let sidebar = sidebar.adding(self.adding.clone());
         #[cfg(feature = "screen-work")]
@@ -2956,6 +3149,8 @@ impl Desk {
         let chat = self.work().map(|work| work.read(cx).chat().clone());
         match (*pick, chat) {
             (SidebarPick::Settings, _) => self.show(SETTINGS, window, cx),
+            (SidebarPick::Tool(at), _) => self.open_tool(at, window, cx),
+            (SidebarPick::MoveTool(at, step), _) => SidebarTools::step(at, step, cx),
             (SidebarPick::Fold(project), _) => {
                 if let Some(folded) = cx.default_global::<ProjectTable>().0.fold(project) {
                     eprintln!("desk: sidebar: project {project} folded {folded}");

@@ -20,7 +20,7 @@ use crate::components::card::{Header, header_action, inner_card, shell};
 use crate::components::chip::kbd;
 use crate::components::empty::{EmptyAction, EmptyHint, empty_state};
 use crate::components::glyph::Glyph;
-use crate::components::overlay::{MenuButton, MenuItem, menu_surface};
+use crate::components::overlay::{ContextMenu, MenuButton, MenuItem, context_menu, menu_surface};
 use crate::components::paint::{ink, tint};
 use crate::components::size::{
     CAPTION_TEXT, FONT_SMALL, HEADER, RADIUS_CHIP, RADIUS_CHIP_SMALL, RADIUS_ROW, T1,
@@ -49,6 +49,8 @@ pub type Title = Box<dyn Fn(TileId, &Module, TabMark, &App) -> Tab>;
 pub type Subtitle = Box<dyn Fn(TileId, &Module, &App) -> Option<AnyElement>>;
 pub type Settled = Box<dyn Fn(&[Workspace], usize, Rect)>;
 pub type Expand<V> = Box<dyn Fn(&Module, TileId, &str, &mut Window, &mut Context<V>)>;
+pub type InSidebar = Box<dyn Fn(&Module, &App) -> Option<bool>>;
+pub type ToggleSidebar<V> = Box<dyn Fn(&Module, &mut Window, &mut Context<V>)>;
 
 pub struct Host<V: 'static> {
     pub board: Lens<V>,
@@ -134,6 +136,9 @@ pub struct TilingBoard<V: 'static> {
     headed: Option<TileId>,
     slot: Option<(TileId, usize)>,
     closed: Vec<Closed>,
+    menu_tile: Option<TileId>,
+    menu_at: Option<Point<Pixels>>,
+    sidebar: Option<(InSidebar, ToggleSidebar<V>)>,
     host: Host<V>,
 }
 
@@ -192,8 +197,21 @@ impl<V: 'static> TilingBoard<V> {
             headed: None,
             slot: None,
             closed: Vec::new(),
+            menu_tile: None,
+            menu_at: None,
+            sidebar: None,
             host,
         }
+    }
+
+    pub fn sidebar(mut self, in_sidebar: InSidebar, toggle: ToggleSidebar<V>) -> Self {
+        self.sidebar = Some((in_sidebar, toggle));
+        self
+    }
+
+    fn in_sidebar(&self, module: &Module, cx: &App) -> Option<bool> {
+        let (in_sidebar, _) = self.sidebar.as_ref()?;
+        in_sidebar(module, cx)
     }
 
     pub fn workspaces(&self) -> &[Workspace] {
@@ -1150,6 +1168,7 @@ impl<V: 'static> TilingBoard<V> {
         let tile = stack.id;
         let active = stack.active;
         let single = stack.modules.len() == 1;
+        let module = stack.modules.get(active).cloned();
         let body = (self.host.body)(stack, solved, theme, cx);
         placed(shell(self.header(stack, theme, window, cx), theme), drawn)
             .flex_none()
@@ -1189,17 +1208,59 @@ impl<V: 'static> TilingBoard<V> {
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(move |view, event: &MouseDownEvent, _, cx| {
+                    let page = lens(view);
                     if event.modifiers.alt {
                         let grab = Grab::Placed {
                             tile,
                             index: active,
                         };
-                        lens(view).press(grab, event.position, cx);
+                        page.press(grab, event.position, cx);
                         cx.stop_propagation();
+                        return;
+                    }
+                    let header = page.local(event.position).1 < drawn.y + HEADER;
+                    let screen = module
+                        .as_ref()
+                        .and_then(|module| page.in_sidebar(module, cx));
+                    if header && screen.is_some() {
+                        page.menu_tile = Some(tile);
+                        page.menu_at = Some(event.position);
+                        cx.stop_propagation();
+                        cx.notify();
                     }
                 }),
             )
             .child(inner_card(theme).child(body))
+    }
+
+    fn header_menu(&mut self, cx: &mut Context<V>) -> Option<ContextMenu> {
+        let tile = self.menu_tile?;
+        let module = self
+            .current()
+            .and_then(|workspace| workspace.stack(tile))
+            .and_then(|stack| stack.modules.get(stack.active).cloned())?;
+        let listed = self.in_sidebar(&module, cx)?;
+        let lens = self.host.board;
+        let board = cx.entity().downgrade();
+        let item = match listed {
+            true => "Remove from sidebar",
+            false => "Add to sidebar",
+        };
+        Some(
+            context_menu(vec![MenuItem::action(item).icon(Icon::Sidebar)])
+                .id("tiling-header-menu")
+                .open_at(self.menu_at.take())
+                .absolute()
+                .on_pick(move |_, window, cx| {
+                    if let Some(view) = board.upgrade() {
+                        view.update(cx, |view, cx| {
+                            if let Some((_, toggle)) = &lens(view).sidebar {
+                                toggle(&module, window, cx)
+                            }
+                        });
+                    }
+                }),
+        )
     }
 
     fn corner(&self, corner: Corner, index: usize, cx: &mut Context<V>) -> Stateful<Div> {
@@ -1512,6 +1573,7 @@ impl<V: 'static> TilingBoard<V> {
             .enumerate()
             .map(|(index, corner)| self.corner(corner, index, cx))
             .collect();
+        let header_menu = self.header_menu(cx);
         let entity = cx.entity().downgrade();
         let measure = canvas(
             move |bounds, _, cx| {
@@ -1536,6 +1598,7 @@ impl<V: 'static> TilingBoard<V> {
             .children(dividers)
             .children(corners)
             .children(self.drag_overlay(theme))
+            .children(header_menu)
             .when(solved.is_empty(), |board| {
                 board.child(div().absolute().size_full().child(self.empty(theme, cx)))
             });

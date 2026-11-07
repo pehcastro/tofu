@@ -29,7 +29,7 @@ use gpui::{
 };
 
 use crate::desk::viewer::Viewer;
-use crate::desk::{SCREEN_MARKS, ScreenGroup, ScreenMark, screen_mark};
+use crate::desk::{SCREEN_MARKS, ScreenGroup, ScreenMark, SidebarTools, screen_mark};
 use crate::modules::chat::cassette::{Replay, Step};
 use crate::modules::chat::{self, Chat, ChatMirror, Find};
 use crate::modules::file_edits::{self, FileEdits};
@@ -342,6 +342,16 @@ fn build(
                 origin: (0.0, 0.0),
                 below: 0.0,
             },
+        )
+        .sidebar(
+            Box::new(|module, cx| {
+                let name = module_screen(module)?;
+                Some(SidebarTools::names(cx).contains(&name))
+            }),
+            Box::new(|module, _, cx| match module_screen(module) {
+                Some(name) => SidebarTools::toggle(name, cx),
+                None => eprintln!("desk: work: {} has no screen", module.name()),
+            }),
         );
         let find = FindBar::new(window, cx);
         let (searcher, jumper) = (cx.weak_entity(), cx.weak_entity());
@@ -657,6 +667,21 @@ fn body(
             |_, _, _| {},
         )
         .into_any_element(),
+    }
+}
+
+fn module_screen(module: &Module) -> Option<&'static str> {
+    match module {
+        Module::Editor => Some("editor"),
+        Module::SourceControl => Some("git"),
+        Module::Chat
+        | Module::SubAgents
+        | Module::FileEdits
+        | Module::Shells
+        | Module::Terminal
+        | Module::Browser
+        | Module::Viewer
+        | Module::Plugin(_) => None,
     }
 }
 
