@@ -3211,18 +3211,18 @@ impl Chat {
     }
 
     fn verdict(&self) {
-        let said: Vec<&SharedString> = self
+        let said: Vec<&str> = self
             .items
             .iter()
             .filter_map(|item| match item {
-                Item::You { text, .. } => Some(text),
+                Item::You { text, .. } => Some(text.as_ref()),
                 _ => None,
             })
             .collect();
         let twice = said
             .iter()
             .enumerate()
-            .filter(|(at, text)| said.iter().take(*at).any(|earlier| earlier == *text))
+            .filter(|(at, text)| said.iter().take(*at).any(|earlier| text.contains(earlier)))
             .count();
         let pass = twice == 0 && self.problem.is_none();
         eprintln!(
