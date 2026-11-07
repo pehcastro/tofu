@@ -4,6 +4,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use desk_core::control::Control;
 use desk_core::sessions::age;
 use gpui::{
     AnyElement, App, ClickEvent, Corners, Div, ElementId, FontWeight, ScrollHandle, SharedString,
@@ -216,6 +217,7 @@ pub enum SidebarPick {
     Rename(usize, SessionAt),
     CopyId(usize, SessionAt),
     Settings,
+    Palette,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -760,11 +762,30 @@ impl RenderOnce for Sidebar {
             .child("Settings")
             .on_click(self.picked(SidebarPick::Settings));
         let tools = self.tools_block(&theme);
+        let search = tooltip(
+            "sidebar-search-tip",
+            named_stop(
+                control("palette", "Command palette", &theme),
+                "palette",
+                &theme,
+            )
+            .size(px(NEW_SESSION))
+            .rounded(px(RADIUS_BADGE))
+            .child(icon(Icon::Search, ICON_SMALL, ink(&theme, T3)))
+            .on_click(self.picked(SidebarPick::Palette)),
+            Edge::Frame,
+            Control::Palette.label(),
+            &theme,
+            window,
+            cx,
+        );
         let heading = caption("Projects", &theme)
+            .gap_1()
             .pt(px(match tools {
                 Some(_) => CAPTION_PAD_TOP,
                 None => SIDEBAR_PAD_TOP,
             }))
+            .child(search)
             .children(self.adding.take());
         let now = SystemTime::now();
         let mut top = 0.0;

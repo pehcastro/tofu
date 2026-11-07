@@ -40,7 +40,6 @@ const SESSIONS_HEIGHT: f32 = 300.0;
 fn board_title(open: Option<TitlePop>) -> Title {
     Title {
         sidebar_open: true,
-        palette_keys: "Ctrl K".into(),
         github: Github::SignedIn(GithubUser {
             login: "pehcastro".into(),
             name: Some("Luiz".into()),
@@ -85,7 +84,6 @@ fn each_state() -> Project {
 fn empty_title(open: Option<TitlePop>) -> Title {
     Title {
         sidebar_open: true,
-        palette_keys: "Ctrl K".into(),
         github: Github::SignedOut,
         keys: WindowKeys::Shown,
         open,

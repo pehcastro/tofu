@@ -139,7 +139,6 @@ pub fn title_bar(
 ) -> TitleBar {
     let title = Title {
         sidebar_open,
-        palette_keys: Control::Palette.label().into(),
         github,
         keys: WindowKeys::Live,
         open: None,
@@ -151,7 +150,6 @@ pub fn title_bar(
         tabs,
         cx.listener(|desk, pick: &TitlePick, window, cx| match pick {
             TitlePick::Sidebar => desk.toggle_sidebar(cx),
-            TitlePick::Palette => desk.open_palette(window, cx),
             TitlePick::NewWorkspace => desk.tell(Control::NewWorkspace, cx),
             TitlePick::Theme => desk.toggle_theme(window, cx),
             TitlePick::Close => desk.close_window(window, cx),

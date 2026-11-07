@@ -19,7 +19,7 @@ use crate::icon::Icon;
 use crate::live::ActiveTheme;
 use crate::metrics::{
     CAPTION_WIDTH, CONTROL, ICON, ICON_SMALL, RADIUS_CAPTION, RADIUS_CONTROL, RADIUS_TAB,
-    SIDEBAR_CLOSED_WIDTH, TAB_HEIGHT, TEXT, TITLE_BAR_HEIGHT,
+    SIDEBAR_CLOSED_WIDTH, TAB_HEIGHT, TITLE_BAR_HEIGHT,
 };
 use crate::theme::{ColorToken, Mode, Theme};
 
@@ -65,7 +65,6 @@ pub fn focused_name(window: &Window) -> Option<SharedString> {
 pub enum TitlePick {
     Sidebar,
     NewWorkspace,
-    Palette,
     Theme,
     Close,
 }
@@ -119,7 +118,6 @@ impl Github {
 #[derive(Clone)]
 pub struct Title {
     pub sidebar_open: bool,
-    pub palette_keys: SharedString,
     pub github: Github,
     pub keys: WindowKeys,
     pub open: Option<TitlePop>,
@@ -576,26 +574,6 @@ impl RenderOnce for TitleBar {
                 }),
         )
         .child(tabs)
-        .child(
-            named_stop(
-                control("palette", "Command palette", &theme),
-                "palette",
-                &theme,
-            )
-            .occlude()
-            .h(px(CONTROL))
-            .px_2p5()
-            .gap_2()
-            .rounded(px(RADIUS_TAB))
-            .child(icon(Icon::Search, ICON_SMALL, tab))
-            .child(
-                div()
-                    .text_size(px(TEXT))
-                    .text_color(theme.color(ColorToken::TextMuted))
-                    .child(title.palette_keys.clone()),
-            )
-            .on_click(self.picked(TitlePick::Palette)),
-        )
         .child(switch_theme)
         .child(
             Popover::new("title-account-pop", account)

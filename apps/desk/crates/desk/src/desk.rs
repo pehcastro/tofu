@@ -2100,6 +2100,10 @@ impl Desk {
     ) {
         match pick {
             SidebarPick::Settings => self.show(SETTINGS, window, cx),
+            SidebarPick::Palette => {
+                eprintln!("desk: palette opened from sidebar");
+                self.open_palette(window, cx)
+            }
             SidebarPick::Tool(at) => self.open_tool(*at, window, cx),
             SidebarPick::MoveTool(at, step) => SidebarTools::step(*at, *step, cx),
             SidebarPick::Fold(_)
@@ -3149,6 +3153,10 @@ impl Desk {
         let chat = self.work().map(|work| work.read(cx).chat().clone());
         match (*pick, chat) {
             (SidebarPick::Settings, _) => self.show(SETTINGS, window, cx),
+            (SidebarPick::Palette, _) => {
+                eprintln!("desk: palette opened from sidebar");
+                self.open_palette(window, cx)
+            }
             (SidebarPick::Tool(at), _) => self.open_tool(at, window, cx),
             (SidebarPick::MoveTool(at, step), _) => SidebarTools::step(at, step, cx),
             (SidebarPick::Fold(project), _) => {
