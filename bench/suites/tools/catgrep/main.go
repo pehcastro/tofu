@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"maps"
@@ -11,19 +12,32 @@ import (
 	"strings"
 
 	"tofu/internal/tools/code/catgrep/lang"
+	"tofu/internal/tools/code/catgrep/metavar"
 	"tofu/internal/tools/code/catgrep/pattern"
+	"tofu/internal/tools/code/catgrep/replace"
 	"tofu/internal/tools/code/catgrep/tree"
 )
 
 type corpusCase struct {
-	Language   string            `json:"language"`
-	Kind       string            `json:"kind"`
-	Pattern    string            `json:"pattern"`
-	Source     string            `json:"source"`
-	Strictness string            `json:"strictness"`
-	Env        map[string]string `json:"env"`
-	End        *uint32           `json:"end"`
-	Origin     string            `json:"origin"`
+	Language    string            `json:"language"`
+	Kind        string            `json:"kind"`
+	Pattern     string            `json:"pattern"`
+	Source      string            `json:"source"`
+	Strictness  string            `json:"strictness"`
+	Env         map[string]string `json:"env"`
+	End         *uint32           `json:"end"`
+	Origin      string            `json:"origin"`
+	Rewrite     string            `json:"rewrite"`
+	RewriteForm string            `json:"rewrite_form"`
+	Vars        []boundVar        `json:"vars"`
+	Expected    string            `json:"expected"`
+	Result      string            `json:"result"`
+}
+
+type boundVar struct {
+	Name   string `json:"name"`
+	Source string `json:"source"`
+	Multi  bool   `json:"multi"`
 }
 
 type corpus struct {
@@ -35,12 +49,13 @@ func main() {
 	only := flag.String("only", "match", "match, replace, template or rule")
 	cases := flag.String("cases", filepath.Join("bench", "suites", "tools", "catgrep", "cases"), "the corpus directory")
 	scratch := flag.String("scratch", filepath.Join(os.TempDir(), "catgrep"), "where each run copies the corpus")
+	show := flag.String("show", "", "print the source and the result of the case with this origin")
 	flag.Parse()
 	switch *only {
-	case "replace", "template", "rule":
+	case "rule":
 		fmt.Printf("%s: not ported yet\n", *only)
 		return
-	case "match":
+	case "match", "replace", "template":
 	default:
 		fmt.Fprintf(os.Stderr, "-only %q is not one of match, replace, template, rule\n", *only)
 		os.Exit(2)
@@ -50,9 +65,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Printf("catgrep match corpus, read from %s\n\n", run)
+	fmt.Printf("catgrep %s corpus, read from %s\n\n", *only, run)
 	for _, l := range []lang.Lang{lang.Go, lang.Python, lang.Rust, lang.Tsx} {
-		if err := report(filepath.Join(run, l.String()+".json"), l); err != nil {
+		if err := report(filepath.Join(run, l.String()+".json"), l, *only, *show); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -83,7 +98,7 @@ func copyCorpus(from, scratch string) (string, error) {
 	return run, nil
 }
 
-func report(path string, l lang.Lang) error {
+func report(path string, l lang.Lang, only, show string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
@@ -95,13 +110,20 @@ func report(path string, l lang.Lang) error {
 	var failures []string
 	total := 0
 	for _, tc := range c.Cases {
-		if tc.Kind != "match" && tc.Kind != "non_match" {
+		if strings.TrimPrefix(tc.Kind, "non_") != only {
 			continue
 		}
 		total++
-		if reason := check(tc, l); reason != "" {
-			failures = append(failures, fmt.Sprintf("  FAIL %s %s %q: %s", tc.Origin, tc.Kind, tc.Pattern, reason))
+		got, reason := check(tc, l)
+		if reason != "" {
+			failures = append(failures, fmt.Sprintf("  FAIL %s %s %q %q: %s", tc.Origin, tc.Kind, tc.Pattern, tc.Rewrite, reason))
 		}
+		if tc.Origin == show {
+			fmt.Printf("%s\nsource:\n%s\nrewrite:\n%s\nresult:\n%s\n\n", tc.Origin, tc.Source, tc.Rewrite, got)
+		}
+	}
+	if total == 0 {
+		return nil
 	}
 	fmt.Printf("%-7s %d/%d passed\n", c.Language, total-len(failures), total)
 	for _, f := range failures {
@@ -110,7 +132,73 @@ func report(path string, l lang.Lang) error {
 	return nil
 }
 
-func check(tc corpusCase, l lang.Lang) string {
+func check(tc corpusCase, l lang.Lang) (string, string) {
+	var got string
+	var err error
+	switch tc.Kind {
+	case "match", "non_match":
+		return "", checkMatch(tc, l)
+	case "replace":
+		got, err = replaced(tc, l)
+	case "template":
+		got, err = templated(tc, l)
+	default:
+		return "", fmt.Sprintf("kind %q is not one of match, non_match, replace, template", tc.Kind)
+	}
+	if err != nil {
+		return "", err.Error()
+	}
+	if got != tc.Expected {
+		return got, fmt.Sprintf("got %q, want %q", got, tc.Expected)
+	}
+	return got, ""
+}
+
+func replaced(tc corpusCase, l lang.Lang) (string, error) {
+	p, err := pattern.New(tc.Pattern, l)
+	if err != nil {
+		return "", err
+	}
+	out, ok, err := replace.First(tc.Source, l, p, tc.Rewrite)
+	if err != nil {
+		return "", err
+	}
+	if !ok {
+		return "", errors.New("no node matched")
+	}
+	if tc.Result != "root_text" {
+		return out, nil
+	}
+	root, err := tree.Parse(out, l)
+	if err != nil {
+		return "", err
+	}
+	return root.Node().Text(), nil
+}
+
+func templated(tc corpusCase, l lang.Lang) (string, error) {
+	env := metavar.NewEnv()
+	for _, v := range tc.Vars {
+		root, err := tree.Parse(v.Source, l)
+		if err != nil {
+			return "", err
+		}
+		if v.Multi {
+			env.InsertMulti(v.Name, root.Node().Children())
+		} else {
+			env.Insert(v.Name, root.Node())
+		}
+	}
+	switch tc.RewriteForm {
+	case "text":
+		return replace.Text(tc.Rewrite, env)
+	case "tree":
+		return replace.Tree(tc.Rewrite, l, env)
+	}
+	return "", fmt.Errorf("rewrite_form %q is not one of text, tree", tc.RewriteForm)
+}
+
+func checkMatch(tc corpusCase, l lang.Lang) string {
 	p, err := pattern.New(tc.Pattern, l)
 	if err != nil {
 		return err.Error()

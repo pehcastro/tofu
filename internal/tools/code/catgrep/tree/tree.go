@@ -48,7 +48,11 @@ func (n Node) IsLeaf() bool { return n.inner.ChildCount() == 0 }
 
 func (n Node) IsNamedLeaf() bool { return n.inner.NamedChildCount() == 0 }
 
+func (n Node) Start() uint32 { return n.inner.StartByte() }
+
 func (n Node) End() uint32 { return n.inner.EndByte() }
+
+func (n Node) Source() []byte { return n.root.source }
 
 func (n Node) Text() string { return n.inner.Text(n.root.source) }
 

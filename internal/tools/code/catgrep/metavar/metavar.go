@@ -97,6 +97,16 @@ func (e *Env) InsertMulti(name string, nodes []tree.Node) bool {
 	return true
 }
 
+func (e *Env) Single(name string) (tree.Node, bool) {
+	node, ok := e.single[name]
+	return node, ok
+}
+
+func (e *Env) Multi(name string) ([]tree.Node, bool) {
+	nodes, ok := e.multi[name]
+	return nodes, ok
+}
+
 func sameNamed(bound, nodes []tree.Node) bool {
 	unnamed := func(n tree.Node) bool { return !n.IsNamed() }
 	return slices.EqualFunc(slices.DeleteFunc(slices.Clone(bound), unnamed), slices.DeleteFunc(slices.Clone(nodes), unnamed), sameTree)
