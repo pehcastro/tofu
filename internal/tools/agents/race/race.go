@@ -16,13 +16,20 @@ import (
 	"time"
 
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/scratch"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit/patch"
 	"tofu/internal/tools/scratch/overlay"
 	"tofu/internal/tools/scratch/whatif"
 )
 
-const Name = "race"
+const (
+	Name        = "race"
+	keptFolder  = "races"
+	keepFirst   = "first"
+	keepAll     = "all"
+	keptRunFile = "run-%d.json"
+)
 
 type Ran struct {
 	Model        string
@@ -38,6 +45,7 @@ type Entrant func(ctx context.Context, dir, brief string) (Ran, error)
 type Limits struct {
 	Whatif  whatif.Limits
 	Entrant time.Duration
+	Kept    time.Duration
 	Fewest  int
 	Most    int
 }
@@ -65,37 +73,55 @@ func (r Race) Definition() core.Tool {
 			"pick whatif to try one or two small edits, and edit for one fix. " +
 			"the sub-agents run on the person's model with no sub-agents of their own. " +
 			"check, path, name and command take whatif's shape and judge each run's edits on the real project through whatif's overlay as soon as the run ends. " +
-			"the first run whose check passes is applied to the working tree and the rest are stopped and never touch it. " +
-			"returns every run's outcome, its cost, its requests and its check digest, and the winner's diff. when no run passes nothing is applied and the tree is byte for byte as it was",
-		Parameters: map[string]any{"type": "object", "required": []string{"briefs", "check"}, "properties": map[string]any{
+			"keep says what happens once a run passes, and it follows the person's words. keep all whenever the person wants the approaches compared or wants one of them kept by a rule, the smaller, simpler, faster or cleaner one: every brief runs to its check, nothing is applied, and every run's outcome, check, size and diff come back with a race id; compare them by the person's rule, then call race again with only race set to that id and pick set to the chosen run's number, which applies that run alone. " +
+			"keep first, the default, only when any passing approach will do: the first run whose check passes is applied to the working tree and the rest are stopped before their checks, so they cannot be compared; it returns every run's outcome, its cost, its requests and its check digest, and the winner's diff. " +
+			"when no run passes nothing is applied and the tree is byte for byte as it was",
+		Parameters: map[string]any{"type": "object", "properties": map[string]any{
 			"briefs":  map[string]any{"type": "array", "items": text, "minItems": r.limits.Fewest, "maxItems": r.limits.Most},
 			"check":   map[string]any{"type": "string", "enum": []string{string(whatif.Build), string(whatif.Test), string(whatif.Command)}},
 			"path":    text,
 			"name":    text,
 			"command": map[string]any{"type": "array", "items": text},
+			"keep":    map[string]any{"type": "string", "enum": []string{keepFirst, keepAll}},
+			"race":    text,
+			"pick":    map[string]any{"type": "integer", "minimum": 1},
 		}},
 	}
 }
 
+type edit struct {
+	Changed map[string]string
+	Deleted []string
+	Was     map[string][32]byte
+	diff    string
+	added   int
+	removed int
+}
+
 type run struct {
+	edit
 	ran     Ran
 	err     error
-	copied  map[string][32]byte
-	changed map[string]string
-	deleted []string
-	diff    string
 	answer  whatif.Answer
 	checked bool
 	stopped bool
 }
 
+func (one run) passed() bool { return one.checked && one.answer.Outcome == whatif.Passed }
+
 func (r Race) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		whatif.Check
 		Briefs []string `json:"briefs"`
+		Keep   string   `json:"keep"`
+		Race   string   `json:"race"`
+		Pick   int      `json:"pick"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("race: arguments are not the expected shape: %w", err)
+	}
+	if args.Race != "" || args.Pick != 0 {
+		return r.pick(args.Race, args.Pick)
 	}
 	switch {
 	case len(args.Briefs) < r.limits.Fewest || len(args.Briefs) > r.limits.Most:
@@ -106,7 +132,10 @@ func (r Race) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 		return contract.Result{}, fmt.Errorf("race: check %q is none of build, test or command", args.Kind)
 	case args.Kind == whatif.Command && len(args.Command) == 0:
 		return contract.Result{}, errors.New("race: check command needs command, the program and its arguments as a list")
+	case !slices.Contains([]string{"", keepFirst, keepAll}, args.Keep):
+		return contract.Result{}, fmt.Errorf("race: keep %q is neither first nor all", args.Keep)
 	}
+	keepsAll := args.Keep == keepAll
 	racing, stop := context.WithCancel(ctx)
 	defer stop()
 	trees, copies := make([]string, len(args.Briefs)), make([]map[string][32]byte, len(args.Briefs))
@@ -134,7 +163,7 @@ func (r Race) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 	for range args.Briefs {
 		at := <-done
 		runs[at].stopped = winner >= 0 && !runs[at].checked
-		if winner < 0 && runs[at].checked && runs[at].answer.Outcome == whatif.Passed {
+		if !keepsAll && winner < 0 && runs[at].passed() {
 			winner = at
 			stop()
 		}
@@ -145,15 +174,26 @@ func (r Race) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 		if one.checked {
 			fmt.Fprintf(&out, "\n  check: %s\n  check sha256: %s", strings.ReplaceAll(one.answer.Digest, "\n", "\n  "), one.answer.Hash)
 		}
+		if keepsAll && one.diff != "" {
+			fmt.Fprintf(&out, "\n  size: %d files, %d lines added, %d removed\n  diff:\n%s", len(one.Changed)+len(one.Deleted), one.added, one.removed, one.diff)
+		}
 	}
-	if winner < 0 {
+	if !slices.ContainsFunc(runs, run.passed) {
 		return contract.Failure("race: no run passed the check, so nothing was applied and the working tree was not changed" + out.String() + "\n"), nil
 	}
+	if keepsAll {
+		id, err := r.keep(runs)
+		if err != nil {
+			return contract.Failure("race: runs passed and were not kept for a pick, so nothing was applied: " + err.Error() + out.String() + "\n"), nil
+		}
+		head := fmt.Sprintf("race %s: every run ran to its check and none was applied; to apply one call race with race %q and pick set to its run number", id, id)
+		return contract.Result{Content: head + out.String() + "\n", Command: Name + " " + string(args.Kind)}, nil
+	}
 	won := runs[winner]
-	if err := r.apply(won); err != nil {
+	if err := r.apply(won.edit); err != nil {
 		return contract.Failure("race: run " + strconv.Itoa(winner+1) + " passed and was not applied: " + err.Error() + out.String() + "\n"), nil
 	}
-	head := fmt.Sprintf("race: run %d of %d passed first and was applied to the working tree, files changed: %d; the other runs never touched it", winner+1, len(runs), len(won.changed)+len(won.deleted))
+	head := fmt.Sprintf("race: run %d of %d passed first and was applied to the working tree, files changed: %d; the other runs never touched it", winner+1, len(runs), len(won.Changed)+len(won.Deleted))
 	return contract.Result{Content: head + out.String() + "\ndiff:\n" + won.diff + "\n", Command: Name + " " + string(args.Kind)}, nil
 }
 
@@ -161,15 +201,15 @@ func (r Race) enter(ctx context.Context, tree, brief string, copied map[string][
 	entering, cancel := context.WithTimeout(ctx, r.limits.Entrant)
 	defer cancel()
 	ran, err := r.entrant(entering, tree, brief)
-	one := run{ran: ran, err: err, copied: copied}
+	one := run{ran: ran, err: err}
 	if err != nil || ctx.Err() != nil {
 		return one
 	}
-	one.changed, one.deleted, one.diff, one.err = changes(tree, string(r.root), copied)
-	if one.err != nil || len(one.changed)+len(one.deleted) == 0 {
+	one.edit, one.err = changes(tree, string(r.root), copied)
+	if one.err != nil || len(one.Changed)+len(one.Deleted) == 0 {
 		return one
 	}
-	one.answer, one.err = whatif.Try(ctx, r.root, one.changed, check, r.limits.Whatif, one.deleted...)
+	one.answer, one.err = whatif.Try(ctx, r.root, one.Changed, check, r.limits.Whatif, one.Deleted...)
 	one.checked = one.err == nil && ctx.Err() == nil
 	return one
 }
@@ -214,10 +254,10 @@ func hashes(tree string) (map[string][32]byte, error) {
 	return held, err
 }
 
-func changes(tree, root string, copied map[string][32]byte) (map[string]string, []string, string, error) {
+func changes(tree, root string, copied map[string][32]byte) (edit, error) {
 	now, err := hashes(tree)
 	if err != nil {
-		return nil, nil, "", err
+		return edit{}, err
 	}
 	paths := slices.Collect(maps.Keys(now))
 	for rel := range copied {
@@ -225,8 +265,8 @@ func changes(tree, root string, copied map[string][32]byte) (map[string]string, 
 			paths = append(paths, rel)
 		}
 	}
-	changed := map[string]string{}
-	var deleted, diffs []string
+	made := edit{Changed: map[string]string{}, Was: map[string][32]byte{}}
+	var diffs []string
 	for _, rel := range slices.Sorted(slices.Values(paths)) {
 		was, existed := copied[rel]
 		is, kept := now[rel]
@@ -235,33 +275,100 @@ func changes(tree, root string, copied map[string][32]byte) (map[string]string, 
 		}
 		var prior, body []byte
 		if existed {
+			made.Was[rel] = was
 			prior, _ = os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
 		}
 		if kept {
 			if body, err = os.ReadFile(filepath.Join(tree, filepath.FromSlash(rel))); err != nil {
-				return nil, nil, "", err
+				return edit{}, err
 			}
-			changed[rel] = string(body)
+			made.Changed[rel] = string(body)
 		} else {
-			deleted = append(deleted, rel)
+			made.Deleted = append(made.Deleted, rel)
+		}
+		for _, hunk := range patch.Hunks(string(prior), string(body)) {
+			made.added, made.removed = made.added+len(hunk.Added), made.removed+len(hunk.Removed)
 		}
 		diffs = append(diffs, patch.Unified(rel, string(prior), string(body)))
 	}
-	return changed, deleted, strings.Join(diffs, "\n"), nil
+	made.diff = strings.Join(diffs, "\n")
+	return made, nil
 }
 
-func (r Race) apply(won run) error {
-	for _, rel := range slices.Concat(slices.Sorted(maps.Keys(won.changed)), won.deleted) {
-		body, err := os.ReadFile(filepath.Join(string(r.root), filepath.FromSlash(rel)))
-		was, existed := won.copied[rel]
-		switch {
-		case existed && (err != nil || sha256.Sum256(body) != was):
-			return fmt.Errorf("%s changed in the working tree while the race ran, so nothing was written", rel)
-		case !existed && !errors.Is(err, fs.ErrNotExist):
-			return fmt.Errorf("%s appeared in the working tree while the race ran, so nothing was written", rel)
+func (r Race) keptRoot() (string, error) {
+	scratchRoot, err := scratch.ScratchRootAt(string(r.root))
+	return filepath.Join(scratchRoot, keptFolder), err
+}
+
+func (r Race) keep(runs []run) (string, error) {
+	parent, err := r.keptRoot()
+	if err == nil {
+		err = os.MkdirAll(parent, 0o755)
+	}
+	if err != nil {
+		return "", err
+	}
+	entries, _ := os.ReadDir(parent)
+	for _, entry := range entries {
+		if info, err := entry.Info(); err == nil && time.Since(info.ModTime()) > r.limits.Kept {
+			_ = os.RemoveAll(filepath.Join(parent, entry.Name()))
 		}
 	}
-	for rel, body := range won.changed {
+	dir, err := os.MkdirTemp(parent, "")
+	if err != nil {
+		return "", err
+	}
+	for i, one := range runs {
+		if !one.passed() {
+			continue
+		}
+		body, err := json.Marshal(one.edit)
+		if err == nil {
+			err = os.WriteFile(filepath.Join(dir, fmt.Sprintf(keptRunFile, i+1)), body, 0o644)
+		}
+		if err != nil {
+			return "", errors.Join(err, os.RemoveAll(dir))
+		}
+	}
+	return filepath.Base(dir), nil
+}
+
+func (r Race) pick(id string, at int) (contract.Result, error) {
+	parent, err := r.keptRoot()
+	if err != nil {
+		return contract.Result{}, err
+	}
+	if id == "" || filepath.Base(id) != id || at < 1 {
+		return contract.Result{}, fmt.Errorf("race: pick needs race, the id a keep all race returned, and pick, a run number from 1; got race %q and pick %d", id, at)
+	}
+	dir := filepath.Join(parent, id)
+	body, err := os.ReadFile(filepath.Join(dir, fmt.Sprintf(keptRunFile, at)))
+	if err != nil {
+		return contract.Failure(fmt.Sprintf("race: race %s has no kept run %d, so nothing was applied; only a run that passed is kept, a race is gone once one of its runs is picked, and one unpicked for %s is swept\n", id, at, r.limits.Kept)), nil
+	}
+	var chosen edit
+	if err := json.Unmarshal(body, &chosen); err != nil {
+		return contract.Result{}, fmt.Errorf("race: race %s run %d is not readable: %w", id, at, err)
+	}
+	if err := r.apply(chosen); err != nil {
+		return contract.Failure("race: run " + strconv.Itoa(at) + " of race " + id + " was not applied: " + err.Error() + "\n"), nil
+	}
+	_ = os.RemoveAll(dir)
+	return contract.Result{Content: fmt.Sprintf("race %s: run %d was applied to the working tree, files changed: %d\n", id, at, len(chosen.Changed)+len(chosen.Deleted)), Command: Name + " pick"}, nil
+}
+
+func (r Race) apply(won edit) error {
+	for _, rel := range slices.Concat(slices.Sorted(maps.Keys(won.Changed)), won.Deleted) {
+		body, err := os.ReadFile(filepath.Join(string(r.root), filepath.FromSlash(rel)))
+		was, existed := won.Was[rel]
+		switch {
+		case existed && (err != nil || sha256.Sum256(body) != was):
+			return fmt.Errorf("%s changed in the working tree since the race ran, so nothing was written", rel)
+		case !existed && !errors.Is(err, fs.ErrNotExist):
+			return fmt.Errorf("%s appeared in the working tree since the race ran, so nothing was written", rel)
+		}
+	}
+	for rel, body := range won.Changed {
 		path := filepath.Join(string(r.root), filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return err
@@ -270,7 +377,7 @@ func (r Race) apply(won run) error {
 			return err
 		}
 	}
-	for _, rel := range won.deleted {
+	for _, rel := range won.Deleted {
 		if err := os.Remove(filepath.Join(string(r.root), filepath.FromSlash(rel))); err != nil {
 			return err
 		}

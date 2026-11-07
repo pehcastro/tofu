@@ -704,6 +704,7 @@ const (
 	OverlayStaleMinutes = 10
 	RaceBriefsFewest    = 2
 	RaceBriefsMost      = 3
+	RaceKeptMinutes     = 60
 )
 
 const (

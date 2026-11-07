@@ -23,6 +23,7 @@ func newRaceTool(dir string) (contract.Tool, error) {
 		Entrant: konst.SubAgentWallClockSeconds * time.Second,
 		Fewest:  konst.RaceBriefsFewest,
 		Most:    konst.RaceBriefsMost,
+		Kept:    konst.RaceKeptMinutes * time.Minute,
 	}
 	open := wireOpener()
 	return race.New(dir, limits, func(ctx context.Context, tree, brief string) (race.Ran, error) {
