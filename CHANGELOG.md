@@ -24,7 +24,7 @@ Tools that hand the model the answer rather than the log, in Go, Rust, Python an
 - `bisect` finds the turn whose edits broke a check by replaying the project as each turn left it, and the working tree never changes.
 - `whatif` applies edits to copies of the files and runs a build, a test or a command on them, and the working tree never changes.
 - `race` runs rival briefs as sub-agents, each in its own copy of the project, and applies the first whose check passes.
-- `codemod` rewrites one code shape everywhere on the syntax tree in every language cat-grep parses, inside the binary with nothing to install, and previews every site and the diff before `apply` writes them.
+- `codemod` rewrites one code shape everywhere on the syntax tree in 47 languages, the script code of Svelte, Vue and PHP pages included, inside the binary with nothing to install, and previews every site and the diff before `apply` writes them; a Rust rename also renames the name inside a format string, and `cargo check` after it checks the test code too. A `rule` in place of `pattern` matches by `kind`, `regex`, `inside`, `has`, `not`, `all` and `any`, so a rename can skip the text inside strings.
 - `scaffold` writes a new file shaped like a named sibling, with the sibling's name replaced in every case form, in the contents and the file name.
 - `format` runs the project's own formatter, gofmt, rustfmt, prettier or ruff, over the files named or the files this turn changed, and nothing else.
 - `deps` adds and upgrades Go, npm, cargo and uv dependencies after reading the license, size and known advisories, refuses a version with an advisory, and answers `why` and `outdated`.

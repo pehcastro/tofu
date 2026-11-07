@@ -16,6 +16,7 @@ import (
 	"tofu/internal/tools/code/catgrep/lang"
 	"tofu/internal/tools/code/catgrep/pattern"
 	"tofu/internal/tools/code/catgrep/replace"
+	"tofu/internal/tools/code/catgrep/rule"
 	"tofu/internal/tools/code/catgrep/tree"
 )
 
@@ -38,42 +39,23 @@ func LangNamed(name string) (lang.Lang, error) {
 	return 0, fmt.Errorf("lang %q is not one cat-grep parses: use one of %s", name, lang.Listing())
 }
 
+type editor func(n tree.Node) (replace.Edit, bool, error)
+
 func Rewrite(ctx context.Context, src, rewrite string, l lang.Lang, paths []string) ([]File, error) {
 	p, err := pattern.New(src, l)
 	if err != nil {
 		return nil, err
 	}
-	files, err := Files(l, paths)
-	if err != nil {
-		return nil, err
-	}
-	searched := make([]File, len(files))
-	failures := make([]error, len(files))
-	var next atomic.Int64
-	var workers sync.WaitGroup
-	for range runtime.GOMAXPROCS(0) {
-		workers.Go(func() {
-			for i := int(next.Add(1) - 1); i < len(files) && ctx.Err() == nil; i = int(next.Add(1) - 1) {
-				searched[i].Path = files[i]
-				searched[i].Sites, failures[i] = rewriteFile(files[i], l, p, rewrite)
-			}
-		})
-	}
-	workers.Wait()
-	if ctx.Err() != nil {
-		return nil, fmt.Errorf("stopped after %d ms with files left to search: narrow paths", konst.CodemodRunMillis)
-	}
-	var found []File
-	for i, file := range searched {
-		if failures[i] != nil {
-			return nil, fmt.Errorf("%s: %w", file.Path, failures[i])
+	found, err := search(ctx, l, paths, func(n tree.Node) (replace.Edit, bool, error) {
+		env, matched := p.Match(n)
+		if !matched {
+			return replace.Edit{}, false, nil
 		}
-		if len(file.Sites) > 0 {
-			found = append(found, file)
-		}
-	}
-	if len(found) > 0 {
-		return found, nil
+		edit, err := replace.MakeEdit(p, pattern.Match{Node: n, Env: env}, rewrite)
+		return edit, true, err
+	})
+	if err != nil || len(found) > 0 {
+		return found, err
 	}
 	parsed, err := lang.Parse([]byte(l.PreprocessPattern(src)), l)
 	if err != nil {
@@ -94,7 +76,56 @@ func Rewrite(ctx context.Context, src, rewrite string, l lang.Lang, paths []stri
 	return nil, fmt.Errorf("pattern has an error: at line %d column %d it %s as %s, and it matched nothing. write it as code that parses on its own", fault.At.Row+1, column+1, problem, l)
 }
 
-func rewriteFile(path string, l lang.Lang, p pattern.Pattern, rewrite string) ([]Site, error) {
+func RewriteRule(ctx context.Context, raw []byte, rewrite string, l lang.Lang, paths []string) ([]File, error) {
+	r, err := rule.New(raw, l)
+	if err != nil {
+		return nil, err
+	}
+	return search(ctx, l, paths, func(n tree.Node) (replace.Edit, bool, error) {
+		env, matched := r.Match(n)
+		if !matched {
+			return replace.Edit{}, false, nil
+		}
+		text, err := replace.Text(rewrite, env)
+		indent := replace.IndentAt(n.Source()[:n.Start()])
+		return replace.Edit{Start: n.Start(), End: n.End(), Text: replace.Reindent(text, 0, indent)}, true, err
+	})
+}
+
+func search(ctx context.Context, l lang.Lang, paths []string, edit editor) ([]File, error) {
+	files, err := Files(l, paths)
+	if err != nil {
+		return nil, err
+	}
+	searched := make([]File, len(files))
+	failures := make([]error, len(files))
+	var next atomic.Int64
+	var workers sync.WaitGroup
+	for range runtime.GOMAXPROCS(0) {
+		workers.Go(func() {
+			for i := int(next.Add(1) - 1); i < len(files) && ctx.Err() == nil; i = int(next.Add(1) - 1) {
+				searched[i].Path = files[i]
+				searched[i].Sites, failures[i] = rewriteFile(files[i], l, edit)
+			}
+		})
+	}
+	workers.Wait()
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("stopped after %d ms with files left to search: narrow paths", konst.CodemodRunMillis)
+	}
+	var found []File
+	for i, file := range searched {
+		if failures[i] != nil {
+			return nil, fmt.Errorf("%s: %w", file.Path, failures[i])
+		}
+		if len(file.Sites) > 0 {
+			found = append(found, file)
+		}
+	}
+	return found, nil
+}
+
+func rewriteFile(path string, l lang.Lang, edit editor) ([]Site, error) {
 	source, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -115,7 +146,10 @@ func rewriteFile(path string, l lang.Lang, p pattern.Pattern, rewrite string) ([
 	for len(pending) > 0 {
 		node := pending[len(pending)-1]
 		pending = pending[:len(pending)-1]
-		env, matched := p.Match(node)
+		made, matched, err := edit(node)
+		if err != nil {
+			return nil, err
+		}
 		if !matched {
 			children := node.Children()
 			for i := len(children) - 1; i >= 0; i-- {
@@ -123,16 +157,12 @@ func rewriteFile(path string, l lang.Lang, p pattern.Pattern, rewrite string) ([
 			}
 			continue
 		}
-		edit, err := replace.MakeEdit(p, pattern.Match{Node: node, Env: env}, rewrite)
-		if err != nil {
-			return nil, err
-		}
 		sites = append(sites, Site{
-			Start:  int(edit.Start),
-			End:    int(edit.End),
-			Line:   bytes.Count(source[:edit.Start], []byte("\n")) + 1,
-			Before: string(source[edit.Start:edit.End]),
-			After:  edit.Text,
+			Start:  int(made.Start),
+			End:    int(made.End),
+			Line:   bytes.Count(source[:made.Start], []byte("\n")) + 1,
+			Before: string(source[made.Start:made.End]),
+			After:  made.Text,
 		})
 	}
 	return sites, nil

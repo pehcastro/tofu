@@ -34,12 +34,13 @@ type change struct {
 }
 
 type arguments struct {
-	Pattern string   `json:"pattern"`
-	Rewrite string   `json:"rewrite"`
-	Lang    string   `json:"lang"`
-	Paths   []string `json:"paths"`
-	Apply   bool     `json:"apply"`
-	Expect  *int     `json:"expect"`
+	Pattern string          `json:"pattern"`
+	Rule    json.RawMessage `json:"rule"`
+	Rewrite string          `json:"rewrite"`
+	Lang    string          `json:"lang"`
+	Paths   []string        `json:"paths"`
+	Apply   bool            `json:"apply"`
+	Expect  *int            `json:"expect"`
 }
 
 type Codemod struct{ root contract.Root }
@@ -60,18 +61,22 @@ func (Codemod) Definition() core.Tool {
 			"and a name used twice must match the same code. every name in rewrite must be captured in pattern. lang is one of " + catgrep.Languages + ". " +
 			"paths are files or directories under the working directory, all of it when left out. " +
 			"the first call previews: every match with its line and a diff, nothing written. apply true writes those same sites, " +
-			"refuses when expect is given and the match count differs from it, and returns the checker's errors after the write",
+			"refuses when expect is given and the match count differs from it, and returns the checker's errors after the write. " +
+			"give rule instead of pattern to match on more than one condition: an object whose keys are pattern, kind (a node kind of lang), regex (over the node text), " +
+			"all and any (lists of rules), not (a rule), inside and has (a rule plus stopBy: neighbor, the default, end, or a rule to stop at, and field: a field name of lang). " +
+			"the matched node is replaced whole by rewrite. a name outside strings: {\"pattern\": \"old\", \"not\": {\"inside\": {\"kind\": \"string\", \"stopBy\": \"end\"}}}",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"pattern": map[string]any{"type": "string"},
+				"rule":    map[string]any{"type": "object"},
 				"rewrite": map[string]any{"type": "string"},
 				"lang":    map[string]any{"type": "string"},
 				"paths":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 				"apply":   map[string]any{"type": "boolean"},
 				"expect":  map[string]any{"type": "integer"},
 			},
-			"required": []string{"pattern", "rewrite", "lang"},
+			"required": []string{"rewrite", "lang"},
 		},
 	}
 }
@@ -81,8 +86,9 @@ func (c Codemod) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("codemod: arguments are not the expected shape: %w", err)
 	}
-	if strings.TrimSpace(args.Pattern) == "" || strings.TrimSpace(args.Lang) == "" {
-		return contract.Failure("codemod: pattern and lang are required"), nil
+	hasPattern, hasRule := strings.TrimSpace(args.Pattern) != "", len(args.Rule) > 0
+	if hasPattern == hasRule || strings.TrimSpace(args.Lang) == "" {
+		return contract.Failure("codemod: lang and one of pattern or rule are required"), nil
 	}
 	l, err := catgrep.LangNamed(args.Lang)
 	if err != nil {
@@ -102,7 +108,12 @@ func (c Codemod) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 	}
 	ctx, cancel := context.WithTimeout(ctx, konst.CodemodRunMillis*time.Millisecond)
 	defer cancel()
-	found, err := catgrep.Rewrite(ctx, args.Pattern, args.Rewrite, l, paths)
+	var found []catgrep.File
+	if hasRule {
+		found, err = catgrep.RewriteRule(ctx, args.Rule, args.Rewrite, l, paths)
+	} else {
+		found, err = catgrep.Rewrite(ctx, args.Pattern, args.Rewrite, l, paths)
+	}
 	if err != nil {
 		return contract.Failure("codemod: " + err.Error()), nil
 	}
@@ -122,7 +133,11 @@ func (c Codemod) report(ctx context.Context, args arguments, found []catgrep.Fil
 		matches += len(file.Sites)
 	}
 	if matches == 0 {
-		return contract.Result{Content: fmt.Sprintf("codemod: 0 matches for %s in lang %s. nothing written", args.Pattern, args.Lang)}, nil
+		searched := args.Pattern
+		if len(args.Rule) > 0 {
+			searched = "rule " + string(args.Rule)
+		}
+		return contract.Result{Content: fmt.Sprintf("codemod: 0 matches for %s in lang %s. nothing written", searched, args.Lang)}, nil
 	}
 	if args.Apply && args.Expect != nil && *args.Expect != matches {
 		return contract.Failure(fmt.Sprintf("codemod: expected %d matches and found %d, so nothing was written. preview again and apply with the new count", *args.Expect, matches)), nil

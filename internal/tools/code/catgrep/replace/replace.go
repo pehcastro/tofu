@@ -96,9 +96,9 @@ func Tree(rewrite string, l lang.Lang, env *metavar.Env) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	sigil := []rune(l.PreprocessPattern("$A"))[0]
+	sigil := l.Sigil()
 	var out strings.Builder
-	at := uint32(0)
+	at := uint32(len(l.PreprocessPattern("")))
 	var splice func(n tree.Node) error
 	splice = func(n tree.Node) error {
 		if n.IsNamedLeaf() {
