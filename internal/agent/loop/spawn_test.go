@@ -45,7 +45,7 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	base := []contract.Tool{reader, writer, namedTool("edit"), namedTool("typecheck"), namedTool("test"), namedTool("browser_tabs"), namedTool("browser_observe"), namedTool("browser_act"), namedTool("browser_motion"), namedTool("fetch"), namedTool("glob"), namedTool("search"), namedTool("symbols"), namedTool("bash")}
+	base := []contract.Tool{reader, writer, namedTool("edit"), namedTool("typecheck"), namedTool("test"), namedTool("browser_tabs"), namedTool("browser_observe"), namedTool("browser_act"), namedTool("browser_motion"), namedTool("fetch"), namedTool("glob"), namedTool("search"), namedTool("symbols"), namedTool("codemod"), namedTool("scaffold"), namedTool("format"), namedTool("deps"), namedTool("bash")}
 	var names []string
 	for _, tool := range base {
 		names = append(names, tool.Name())
@@ -57,15 +57,16 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 			t.Errorf("%s loads %d references, cuts %q, gates on %q; want four references, none cut, and the gate %s", definition.Name, len(definition.References), definition.Cut, definition.Gate, gate)
 		}
 	}
+	dev := "read write edit typecheck test glob search symbols codemod scaffold format deps bash reference"
 	for agent, want := range map[string]string{
 		"browser":  "browser_tabs browser_observe browser_act browser_motion",
 		"research": "read write fetch glob search symbols bash reference",
-		"ts-dev":   "read write edit typecheck test glob search symbols bash reference",
-		"rust-dev": "read write edit glob search symbols bash reference",
-		"go-dev":   "read write edit glob search symbols bash reference",
-		"py-dev":   "read write edit glob search symbols bash reference",
+		"ts-dev":   dev,
+		"rust-dev": dev,
+		"go-dev":   dev,
+		"py-dev":   dev,
 		"qa":       "read write typecheck test glob search symbols bash reference",
-		"":         "read write edit typecheck test browser_tabs browser_observe browser_act browser_motion fetch glob search symbols bash spawn message subagents",
+		"":         "read write edit typecheck test browser_tabs browser_observe browser_act browser_motion fetch glob search symbols codemod scaffold format deps bash spawn message subagents",
 	} {
 		model := &stubModel{decisions: []core.Decision{claimDecision("did the piece")}}
 		config := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(base...), Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096,
@@ -388,7 +389,7 @@ func TestTheLeadHasTheSpawnResultBeforeTheSubAgentsFirstRequestIsAnswered(t *tes
 }
 
 func TestRustDevCarriesTheGpuiReferencesOnlyWhereItsOwnsReachGpuiCe(t *testing.T) {
-	found := subagents.Definitions(subagents.Scan{Library: library.Files(), Tools: []string{"read", "write", "edit", "glob", "search", "symbols", "bash", "skill"}})
+	found := subagents.Definitions(subagents.Scan{Library: library.Files(), Tools: []string{"read", "write", "edit", "typecheck", "test", "glob", "search", "symbols", "bash", "skill", "codemod", "scaffold", "format", "deps"}})
 	for _, c := range []struct {
 		manifest, owns string
 		gpui           bool
@@ -428,7 +429,7 @@ func TestRustDevCarriesTheGpuiReferencesOnlyWhereItsOwnsReachGpuiCe(t *testing.T
 }
 
 func TestASpawnWithNoOwnsStartsAndItsWriteEditAndNestedSpawnAreRefused(t *testing.T) {
-	names := []string{"read", "write", "edit", "typecheck", "test", "glob", "search", "symbols", "bash", "spawn", "skill"}
+	names := []string{"read", "write", "edit", "typecheck", "test", "glob", "search", "symbols", "bash", "spawn", "skill", "codemod", "scaffold", "format", "deps"}
 	found := subagents.Definitions(subagents.Scan{Library: library.Files(), Tools: names})
 	for spawned, nested := range map[string]string{
 		`{"agent":"ts-dev","task":"run ping and report"}`: `unknown tool "spawn"`,
