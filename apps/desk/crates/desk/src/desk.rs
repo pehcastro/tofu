@@ -83,7 +83,9 @@ use desk_ui::components::sidebar::{
     more_row,
 };
 #[cfg(feature = "screen-work")]
-use desk_ui::components::sidebar::{SessionAt, SessionColumns, open_project_button, unnamed};
+use desk_ui::components::sidebar::{
+    SessionAt, SessionColumns, SessionState, open_project_button, unnamed,
+};
 use desk_ui::components::size::T2;
 #[cfg(feature = "screen-work")]
 use desk_ui::components::status_bar::{
@@ -130,6 +132,39 @@ mod tofu_stopped;
 pub const WINDOW_TITLE: &str = "Tofu Desk";
 #[cfg(feature = "screen-work")]
 const RECENTS_FROM: usize = 2;
+
+#[cfg(feature = "screen-work")]
+fn pin_unlisted(sessions: &mut SessionColumns, open: Option<SharedString>) {
+    while sessions.id.len() > sessions.listed
+        && let Some(last) = sessions.id.last()
+        && Some(last) != open.as_ref()
+        && !sessions
+            .active
+            .iter()
+            .any(|at| usize::try_from(*at).is_ok_and(|at| at + 1 == sessions.id.len()))
+    {
+        sessions.id.pop();
+        sessions.name.pop();
+        sessions.last_at.pop();
+        sessions.state.pop();
+    }
+    let Some(id) = open else {
+        return;
+    };
+    let column = match sessions.find(&id) {
+        Some(at) if usize::try_from(at).is_ok_and(|at| at < sessions.listed) => return,
+        Some(at) => at,
+        None => sessions.push(id, SharedString::default(), None, SessionState::Unreported),
+    };
+    if let Some(state) = usize::try_from(column)
+        .ok()
+        .and_then(|at| sessions.state.get_mut(at))
+    {
+        *state = SessionState::Unreported;
+    }
+    sessions.active.retain(|known| *known != column);
+    sessions.active.insert(0, column);
+}
 
 #[cfg(feature = "screen-work")]
 fn selected_project(cx: &App) -> Option<usize> {
@@ -3096,18 +3131,30 @@ impl Desk {
             running: &running(store),
             statuses: &store.statuses,
         };
+        let unlisted = chat
+            .open_id()
+            .filter(|_| Some(at) == selected_project(cx))
+            .map(SharedString::from);
         let Some(sessions) = self.projects.sessions.get_mut(at) else {
             return;
         };
         let sessions = Rc::make_mut(sessions);
-        if project::keep_active(sessions, &live) {
+        let before = sessions.active.clone();
+        project::keep_active(sessions, &live);
+        pin_unlisted(sessions, unlisted);
+        if sessions.active != before {
             let active: Vec<&str> = sessions
                 .active
                 .iter()
                 .filter_map(|at| sessions.id.get(usize::try_from(*at).ok()?))
                 .map(SharedString::as_ref)
                 .collect();
-            eprintln!("desk: active {}", active.join(" "));
+            eprintln!(
+                "desk: project {at} active {}, {} columns for {} listed",
+                active.join(" "),
+                sessions.id.len(),
+                sessions.listed
+            );
             cx.notify();
         }
         if Some(at) != selected_project(cx) {
@@ -3592,6 +3639,9 @@ impl Desk {
         }
         work.focus_handle(cx).focus(window, cx);
         self.adopt(folder, &work, window, cx);
+        for project in 0..self.projects.joined.len() {
+            self.track_running(project, cx);
+        }
         match &opening {
             None => return,
             Some(Opening::Session(id)) => self.projects.restoring = Some(id.clone()),
