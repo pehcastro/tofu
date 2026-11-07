@@ -9,7 +9,7 @@ references:
   - py-typing
 language: python
 model: inherit
-tools: read, glob, search, symbols, edit, typecheck, test, write, bash, skill
+tools: read, glob, search, symbols, edit, typecheck, test, write, bash, skill, codemod, scaffold, format, deps
 gate: ruff check, pytest
 ---
 
