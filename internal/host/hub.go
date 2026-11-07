@@ -321,7 +321,7 @@ func EnsureHub(project string) (HubStatus, error) {
 	return HubStatus{}, fmt.Errorf("the tofu host did not answer on %s within %s, its log is %s", place.socket, ready, place.log)
 }
 
-func joinHub(project, id string, kind MemberKind) (net.Conn, *json.Decoder, hubJoined, error) {
+func joinHub(project, id string, member Member) (net.Conn, *json.Decoder, hubJoined, error) {
 	status, err := EnsureHub(project)
 	if err != nil {
 		return nil, nil, hubJoined{HubStatus: status}, err
@@ -333,7 +333,7 @@ func joinHub(project, id string, kind MemberKind) (net.Conn, *json.Decoder, hubJ
 	_ = conn.SetDeadline(time.Now().Add(konst.HostJoinMillis * time.Millisecond))
 	lines := json.NewDecoder(conn)
 	var joined hubJoined
-	err = json.NewEncoder(conn).Encode(hubAsk{Ask: hubAskJoin, Session: id, Member: Member{Process: os.Getpid(), Kind: kind}})
+	err = json.NewEncoder(conn).Encode(hubAsk{Ask: hubAskJoin, Session: id, Member: member})
 	if err == nil {
 		err = lines.Decode(&joined)
 	}
@@ -676,7 +676,11 @@ func (h *hub) join(conn net.Conn, lines *json.Decoder, asked hubAsk) {
 	}
 	joined.Members, joined.Session = h.members.Load(), s.id
 	h.told(s)
-	if json.NewEncoder(conn).Encode(joined) == nil && errors.Is(s.host.seat(conn, io.MultiReader(lines.Buffered(), conn)), os.ErrDeadlineExceeded) {
+	sits := s.host.seat
+	if member.Kept {
+		sits = keptSeat
+	}
+	if json.NewEncoder(conn).Encode(joined) == nil && errors.Is(sits(conn, io.MultiReader(lines.Buffered(), conn)), os.ErrDeadlineExceeded) {
 		h.say(member.named() + " sent no heartbeat for " + hubBeatMissed.String() + ", so the host let it go")
 	}
 	h.leave(s, member)

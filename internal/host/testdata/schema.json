@@ -3409,6 +3409,9 @@
           "format": "date-time",
           "type": "string"
         },
+        "kept": {
+          "type": "boolean"
+        },
         "kind": {
           "enum": [
             "tui",
@@ -5736,6 +5739,9 @@
         "item": {
           "type": "string"
         },
+        "kept": {
+          "type": "boolean"
+        },
         "kind": {
           "type": "string"
         },
@@ -5987,6 +5993,9 @@
         },
         "id": {
           "type": "string"
+        },
+        "kept": {
+          "type": "boolean"
         },
         "kind": {
           "type": "string"
@@ -11680,6 +11689,60 @@
             },
             "params": {
               "$ref": "#/$defs/SessionCloseParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.keep"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
+              "const": "session.release"
+            },
+            "params": {
+              "$ref": "#/$defs/SessionParams"
             }
           },
           "required": [
@@ -18983,7 +19046,8 @@
     "boardy",
     "scratch",
     "sessions",
-    "takeover"
+    "takeover",
+    "keep"
   ],
   "x-notifications": {
     "account.state": {
@@ -19837,6 +19901,14 @@
         "$ref": "#/$defs/SessionInfo"
       }
     },
+    "session.keep": {
+      "params": {
+        "$ref": "#/$defs/SessionParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Ack"
+      }
+    },
     "session.list": {
       "params": {
         "$ref": "#/$defs/SessionListParams"
@@ -19851,6 +19923,14 @@
       },
       "result": {
         "$ref": "#/$defs/SessionOpenResult"
+      }
+    },
+    "session.release": {
+      "params": {
+        "$ref": "#/$defs/SessionParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Ack"
       }
     },
     "session.rename": {

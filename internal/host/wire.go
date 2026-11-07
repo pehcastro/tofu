@@ -918,6 +918,7 @@ type Member struct {
 	Process int        `json:"process"`
 	Kind    MemberKind `json:"kind"`
 	Joined  time.Time  `json:"joined"`
+	Kept    bool       `json:"kept,omitempty"`
 }
 
 type SessionMembers struct {
@@ -1007,6 +1008,7 @@ type SessionRow struct {
 	Outcome     string         `json:"outcome,omitempty"`
 	Expired     bool           `json:"expired"`
 	Open        bool           `json:"open"`
+	Kept        bool           `json:"kept,omitempty"`
 	Running     bool           `json:"running"`
 	Members     []Member       `json:"members,omitempty"`
 	Kind        string         `json:"kind"`
@@ -1345,6 +1347,8 @@ func requests() []method {
 		{name: "session.list", params: SessionListParams{}, result: SessionList{}},
 		{name: "session.open", params: SessionOpenParams{}, result: SessionOpenResult{}},
 		{name: "session.close", params: SessionCloseParams{}, result: Ack{}},
+		{name: "session.keep", params: SessionParams{}, result: Ack{}},
+		{name: "session.release", params: SessionParams{}, result: Ack{}},
 		{name: "session.state", params: NoParams{}, result: SessionState{}},
 		{name: "approval.list", params: NoParams{}, result: ApprovalList{}},
 		{name: "approval.revoke", params: ApprovalRevokeParams{}, result: StandingAnswer{}},
@@ -1432,7 +1436,7 @@ func requests() []method {
 
 func capabilities() []string {
 	return []string{"approvals", "revoke", "standing", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "fork", "branch", "history", "ledger",
-		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "drain", "accounts", "writes", "status", "mention", "boards", "side", "commands", "boardy", "scratch", "sessions", "takeover"}
+		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "drain", "accounts", "writes", "status", "mention", "boards", "side", "commands", "boardy", "scratch", "sessions", "takeover", "keep"}
 }
 
 const queryPrefix = "query."

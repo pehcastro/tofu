@@ -477,6 +477,75 @@ func (s *server) closeSession(p SessionCloseParams) (any, error) {
 	return Ack{OK: true}, nil
 }
 
+func (s *server) recorded(id, verb string) (session.Header, error) {
+	if id == "" {
+		return session.Header{}, &Refusal{Code: CodeBadParams, Message: verb + " names a session"}
+	}
+	store, err := session.OpenIn(s.Host.dir)
+	if err != nil {
+		return session.Header{}, err
+	}
+	header, err := store.Header(id)
+	if err != nil {
+		return session.Header{}, &Refusal{Code: CodeRefused, Message: "session " + strconv.Quote(id) + " is not recorded here, so " + verb + " did nothing: " + err.Error()}
+	}
+	return header, nil
+}
+
+func (s *server) keep(p SessionParams) (any, error) {
+	header, err := s.recorded(p.Session, "session.keep")
+	switch {
+	case err != nil:
+		return nil, err
+	case header.Ended():
+		return nil, &Refusal{Code: CodeRefused, Message: "session " + strconv.Quote(header.ID) + " ended, " + string(header.EndReason) + ", so session.keep joined nothing"}
+	case !s.Host.joins:
+		return nil, &Refusal{Code: CodeRefused, Message: "this tofu runs its sessions itself rather than in a tofu host, so session.keep has no host to keep " + strconv.Quote(header.ID) + " in"}
+	}
+	s.mu.Lock()
+	kept, kind := s.keeps[header.ID] != nil, memberOf(s.client)
+	s.mu.Unlock()
+	if kept {
+		return Ack{OK: true}, nil
+	}
+	conn, _, _, err := joinHub(s.Host.dir, header.ID, Member{Process: os.Getpid(), Kind: kind, Kept: true})
+	if err != nil {
+		return nil, err
+	}
+	keeper := &following{link: linked(conn)}
+	s.mu.Lock()
+	s.keeps[header.ID] = keeper
+	s.mu.Unlock()
+	safe.Go(s.report, "serve list", func() { s.keptListed(header.ID) })
+	safe.Go(s.report, "serve keep", func() {
+		keeper.beat()
+		keeper.leave()
+		s.mu.Lock()
+		if s.keeps[header.ID] == keeper {
+			delete(s.keeps, header.ID)
+		}
+		s.mu.Unlock()
+	})
+	return Ack{OK: true}, nil
+}
+
+func (s *server) releaseKept(p SessionParams) (any, error) {
+	header, err := s.recorded(p.Session, "session.release")
+	if err != nil {
+		return nil, err
+	}
+	s.mu.Lock()
+	keeper := s.keeps[header.ID]
+	delete(s.keeps, header.ID)
+	s.mu.Unlock()
+	if keeper == nil {
+		return nil, &Refusal{Code: CodeRefused, Message: "session " + strconv.Quote(header.ID) + " is not kept here, so session.release let nothing go"}
+	}
+	keeper.leave()
+	safe.Go(s.report, "serve list", func() { s.keptListed(header.ID) })
+	return Ack{OK: true}, nil
+}
+
 func (s *server) stopTurns(asked StopAsked, lanes ...*lane) bool {
 	for _, l := range lanes {
 		if l.running() {

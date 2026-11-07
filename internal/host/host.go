@@ -813,7 +813,7 @@ func SettleHeld(project, id string, pick Pick) (bool, error) {
 	if len(MembersOf(project)[id]) == 0 {
 		return false, nil
 	}
-	conn, lines, _, err := joinHub(project, id, MemberServe)
+	conn, lines, _, err := joinHub(project, id, Member{Process: os.Getpid(), Kind: MemberServe})
 	if err != nil {
 		return true, err
 	}

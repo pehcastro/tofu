@@ -3,6 +3,7 @@ package host
 import (
 	"cmp"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -113,7 +114,11 @@ func (s *server) listing(wanted SessionListParams) (SessionList, []*lane, error)
 		}
 	}
 	owners := make([]*lane, len(list.Sessions))
+	s.mu.Lock()
+	kept := maps.Clone(s.keeps)
+	s.mu.Unlock()
 	for index, row := range list.Sessions {
+		list.Sessions[index].Kept = kept[row.ID] != nil
 		running := row.Open && focus.running()
 		for at, l := range lanes {
 			if row.ID == ids[at] || families[at] != "" && row.Family == families[at] {
@@ -136,6 +141,15 @@ func (s *server) listed(l *lane) {
 	id := l.items.identity("", row.ID)
 	s.mu.Unlock()
 	s.box.push(merged("session.listed", row.ID, &SessionListed{Identity: id, SessionRow: row}))
+}
+
+func (s *server) keptListed(id string) {
+	list, _, err := s.listing(SessionListParams{})
+	at := slices.IndexFunc(list.Sessions, func(row SessionRow) bool { return row.ID == id })
+	if err != nil || at < 0 {
+		return
+	}
+	s.box.push(merged("session.listed", id, &SessionListed{Identity: Identity{Session: id, Item: id}, SessionRow: list.Sessions[at]}))
 }
 
 func sessionStamps(store *session.Store) map[string]time.Time {

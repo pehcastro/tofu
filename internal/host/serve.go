@@ -82,6 +82,7 @@ type server struct {
 	seen     settingsSeen
 	labels   map[string]string
 	lanes    atomic.Pointer[[]*lane]
+	keeps    map[string]*following
 	replays  string
 	walk     historyWalk
 }
@@ -155,7 +156,7 @@ func (w *historyWalk) linesOf(carry Carry, dir string) []outgoing {
 
 func Serve(cfg ServeConfig) error {
 	s := &server{ServeConfig: cfg, box: newOutbox(), shells: map[string]*watchedShell{}, items: newItems(cfg.Host.ID()),
-		status: statusFeed{board: statusline.Board{Now: time.Now}, acked: map[string]bool{}}, requota: make(chan struct{}, 1), accounts: map[string]AccountCondition{}, labels: map[string]string{}}
+		status: statusFeed{board: statusline.Board{Now: time.Now}, acked: map[string]bool{}}, requota: make(chan struct{}, 1), accounts: map[string]AccountCondition{}, labels: map[string]string{}, keeps: map[string]*following{}}
 	s.seen.files = readSettingsFiles(cfg.Dir)
 	if state, err := platformproject.ProjectStateDirAt(cfg.Dir); err == nil {
 		s.replays = filepath.Join(state, replayDir)
@@ -209,6 +210,11 @@ func Serve(cfg ServeConfig) error {
 			l.release()
 		}
 	}
+	s.mu.Lock()
+	for _, kept := range s.keeps {
+		kept.leave()
+	}
+	s.mu.Unlock()
 	s.box.close()
 	return errors.Join(err, <-written)
 }
@@ -334,6 +340,10 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		return result, err
 	case "session.close":
 		return handle(raw, s.closeSession)
+	case "session.keep":
+		return handle(raw, s.keep)
+	case "session.release":
+		return handle(raw, s.releaseKept)
 	case "session.rename":
 		return handle(raw, s.rename)
 	case "session.branch":

@@ -342,6 +342,19 @@ func (h *Host) serveSeat(a *audience, s *seat, in io.Reader) error {
 	}
 }
 
+func keptSeat(conn net.Conn, in io.Reader) error {
+	asks := json.NewDecoder(in)
+	for {
+		var ask followAsk
+		if err := asks.Decode(&ask); err != nil {
+			return err
+		}
+		if ask.Op == followBeat {
+			_ = conn.SetReadDeadline(time.Now().Add(hubBeatMissed))
+		}
+	}
+}
+
 func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 	var ask followAsk
 	if err := json.Unmarshal(raw, &ask); err != nil {
@@ -475,7 +488,7 @@ func (h *Host) join(id string) (*following, error) {
 	h.mu.Lock()
 	kind := h.member
 	h.mu.Unlock()
-	conn, lines, hub, err := joinHub(h.dir, id, kind)
+	conn, lines, hub, err := joinHub(h.dir, id, Member{Process: os.Getpid(), Kind: kind})
 	if err != nil {
 		return nil, err
 	}
