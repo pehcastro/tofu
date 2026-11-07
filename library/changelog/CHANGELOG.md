@@ -20,7 +20,7 @@ Tools that hand the model the answer rather than the log, in Go, Rust, Python an
 - `env` says whether the project is ready here: each toolchain it declares, wanted against found, and each key `.env.example` names, set or missing, never its value.
 - `changes` lists what a turn changed, each file with lines added and removed and the calls that named it, read from a shadow store tofu commits at every turn's start and end, never from the project's git; `turns` lists the last ended turns.
 - `checkpoint` saves the project under a label, `diff` shows what going back would do, and `back` restores only the files this session changed since, keeping what somebody else changed.
-- `trail` finds the turns an anchor names, a quote, a message, a time, a ticket, a commit or a path, with who changed each file and how to put it back; `owner_of` names who wrote a line, and `restore` writes a turn's files back.
+- `trail` finds the turns an anchor names, a quote, a message, a time, a ticket, a commit or a path, with who changed each file and how to put it back; `owner_of` names who wrote a line, and `restore` undoes a turn's edits, keeping what later turns changed in the same file and refusing only where they changed the same lines.
 - `bisect` finds the turn whose edits broke a check by replaying the project as each turn left it, and the working tree never changes.
 - `whatif` applies edits to copies of the files and runs a build, a test or a command on them, and the working tree never changes.
 - `race` runs rival briefs as sub-agents, each in its own copy of the project, and applies the first whose check passes.
@@ -77,7 +77,7 @@ Tools that hand the model the answer rather than the log, in Go, Rust, Python an
 - `glob` on a root that does not exist says so instead of crashing.
 - `whatif` tries edits that create new files, and checks a new package in a copy of the tree.
 - `symbols` mode `impact` in TypeScript finds the tests that reach a declaration through another function.
-- `claims` reads a later passing call over an earlier failure.
+- `claims` reads a later passing call over an earlier failure, a failing call about one test does not contradict a sentence about another, and a run limited to one test does not show that all tests pass.
 - A patch whose hunks' context lines meet applies as one hunk.
 
 ## 0.5.21 - 2026-11-05
