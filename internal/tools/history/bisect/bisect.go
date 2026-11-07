@@ -13,6 +13,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit/patch"
 	"tofu/internal/tools/history/shadow"
@@ -22,14 +23,15 @@ import (
 const Name = "bisect"
 
 type Bisect struct {
-	store  shadow.Store
-	root   contract.Root
-	limits whatif.Limits
+	store    shadow.Store
+	sessions *session.Store
+	root     contract.Root
+	limits   whatif.Limits
 }
 
-func New(dir string, store shadow.Store, limits whatif.Limits) (Bisect, error) {
+func New(dir string, store shadow.Store, sessions *session.Store, limits whatif.Limits) (Bisect, error) {
 	root, err := contract.NewRoot(dir)
-	return Bisect{store: store, root: root, limits: limits}, err
+	return Bisect{store: store, sessions: sessions, root: root, limits: limits}, err
 }
 
 func (Bisect) Name() string { return Name }
@@ -144,8 +146,12 @@ func (b Bisect) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 		at = (good + bad) / 2
 	}
 	culprit := suspects[bad-1]
+	named := culprit.Session
+	if identity, err := b.sessions.Identity(culprit.Session); err == nil {
+		named = identity.Handle()
+	}
 	var out strings.Builder
-	fmt.Fprintf(&out, "culprit: turn %s, %d of %d since the anchor, session %s, agent %s", culprit.ID, bad, len(suspects), culprit.Session, culprit.Agent)
+	fmt.Fprintf(&out, "culprit: turn %s, %d of %d since the anchor, session %s, agent %s", culprit.ID, bad, len(suspects), named, culprit.Agent)
 	var diffs []string
 	for _, change := range culprit.Changes {
 		fmt.Fprintf(&out, "\n  %s changed by calls %s", change.Path, contract.Listed(change.By))
