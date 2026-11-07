@@ -50,8 +50,8 @@ func (Trail) Definition() core.Tool {
 		Name: Name,
 		Description: "finds what happened around an anchor and how to put it back, read from the shadow store tofu commits at every turn's start and end and from the session record, never from the project's own git history alone. " +
 			"mode find takes an anchor: a quote from a message, a message number in the newest session, a time, a ticket id, a commit, or a path, and returns the turns it names with every file each changed, " +
-			"who changed it (session, turn, the calls that named it, the agent and who spawned it), the project commit that holds the result if any, the restore step for each change, and every conflict: a file changed again after that turn. " +
-			"mode restore takes ids from find and puts each file back to what it was before that turn, refusing the whole call and naming the file when any file changed since; dry_run says what it would write and writes nothing. " +
+			"who changed it (session, turn, the calls that named it, the agent and who spawned it), the project commit that holds the result if any, the restore step for each change, and every file changed again after that turn. " +
+			"mode restore takes ids from find and undoes each turn's change to each file: a file nothing changed since goes back whole, and a text file later turns or the person also changed is merged three ways, keeping their changes, while a change that touches the same lines refuses the whole call naming the file and the lines; dry_run says what it would write and writes nothing. " +
 			"mode owner_of takes line as path:number and names the session, turn and message behind that line of the file as it is now, or says it was changed outside any recorded turn. " +
 			fmt.Sprintf("only ended turns are listed, at most %d per answer, newest kept.", konst.ChangesTurnsShown),
 		Parameters: map[string]any{
@@ -239,7 +239,7 @@ func (t Trail) find(ctx context.Context, turns []shadow.Recorded, anchor string)
 			out.WriteString("  changed no file\n")
 		}
 	}
-	fmt.Fprintf(&out, "restore, with mode restore and these ids:\n  %s\nconflicts:\n  %s\n", cmp.Or(strings.Join(restores, "\n  "), "none"), cmp.Or(strings.Join(conflicts, "\n  "), "none"))
+	fmt.Fprintf(&out, "restore, with mode restore and these ids:\n  %s\nchanged since, which restore merges, refusing only where the same lines changed:\n  %s\n", cmp.Or(strings.Join(restores, "\n  "), "none"), cmp.Or(strings.Join(conflicts, "\n  "), "none"))
 	return out.String(), nil
 }
 
@@ -282,32 +282,49 @@ func (t Trail) restore(ctx context.Context, turns []shadow.Recorded, ids []strin
 		steps = append(steps, picked{at, turns[at].Changes[which]})
 	}
 	slices.SortStableFunc(steps, func(a, b picked) int { return b.at - a.at })
-	expected := map[string]string{}
-	var refused, planned []string
+	files := map[string]*pending{}
+	var order, refused, planned []string
 	for _, step := range steps {
-		if _, known := expected[step.Path]; !known {
+		at, known := files[step.Path]
+		if !known {
 			current, err := now(ctx, t.Store, step.Path)
 			if err != nil {
 				return "", err
 			}
-			expected[step.Path] = current
+			at = &pending{blob: current}
+			files[step.Path], order = at, append(order, step.Path)
 		}
-		if expected[step.Path] != step.ToBlob {
-			refused = append(refused, fmt.Sprintf("%s is %s now, and turn %s left it %s", step.Path, short(expected[step.Path]), turns[step.at].ID, short(step.ToBlob)))
+		id := changeID(turns[step.at], step.Change)
+		if at.blob == step.ToBlob {
+			*at = pending{blob: step.FromBlob, mode: step.FromMode, planned: true}
+			planned = append(planned, id)
 			continue
 		}
-		expected[step.Path] = step.FromBlob
-		planned = append(planned, changeID(turns[step.at], step.Change))
+		clashes, err := t.merge(ctx, at, step.Change)
+		if err != nil {
+			return "", err
+		}
+		if len(clashes) > 0 {
+			refused = append(refused, step.Path+" from turn "+turns[step.at].ID+": "+strings.Join(clashes, "; "))
+			continue
+		}
+		planned = append(planned, id+", keeping the later changes to it")
 	}
 	if len(refused) > 0 {
-		return "", fmt.Errorf("refused, and nothing was written, because a file changed since: %s", strings.Join(refused, "; "))
+		return "", fmt.Errorf("refused, and nothing was written: %s", strings.Join(refused, "; "))
 	}
 	if dryRun {
 		return "dry run, nothing written: restore would put back " + strings.Join(planned, ", ") + "\n", nil
 	}
-	for _, step := range steps {
-		if err := t.Store.Restore(ctx, step.Change); err != nil {
-			return "", fmt.Errorf("%s: %w", step.Path, err)
+	for _, name := range order {
+		at := files[name]
+		if at.merged != nil {
+			if _, err := t.Store.Git(ctx, *at.merged, "hash-object", "-w", "--stdin"); err != nil {
+				return "", fmt.Errorf("%s: %w", name, err)
+			}
+		}
+		if err := t.Store.Restore(ctx, shadow.Change{Path: name, FromMode: at.mode, FromBlob: at.blob}); err != nil {
+			return "", fmt.Errorf("%s: %w", name, err)
 		}
 	}
 	return "restored " + strings.Join(planned, ", ") + "\n", nil
