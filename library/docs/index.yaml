@@ -434,6 +434,14 @@
   do: tofu tool test '{"path":"."}' --dir .
   check: tofu tool list --dir .
   topic: tools
+- ask: check a report against the calls the session made
+  do: tofu tool claims '{"report":"All tests pass."}' --dir . --session head
+  check: tofu tool list --dir .
+  topic: tools
+- ask: which tools does the review agent get
+  do: tofu tool list --agent review
+  check: tofu tool list --dir .
+  topic: tools
 - ask: typecheck go, rust or python code
   do: tofu tool typecheck '{"path":"."}' --dir .
   check: tofu tool list --dir .

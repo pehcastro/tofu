@@ -1,7 +1,7 @@
 ---
 topic: tools
 title: What the tools return
-summary: what read, edit, write, symbols, map, api, search, bash, shell, typecheck, test, plan, fetch, web_search, history, env, http, record, profile, shape, db, context, budget, forget, note, digest, spawn, race, ask_person and heads_up give the model, and how to see it for yourself
+summary: what read, edit, write, symbols, map, api, search, bash, shell, typecheck, test, plan, fetch, web_search, history, env, http, record, profile, shape, db, context, budget, forget, note, digest, done, claims, the review agent, spawn, race, ask_person and heads_up give the model, and how to see it for yourself
 verbs: tool
 ---
 
@@ -206,6 +206,38 @@ cache_cost: about 458 tokens from message 3 on are written to the cache again on
 kept_summary: each dropped result is one line naming its call; the next request reads about 11313 tokens of messages from the cache, the prefix up to the breakpoint, plus the tool definitions
 ```
 
+## Checking its own work
+
+- `done` takes the task's acceptance lines, each with `call`, the
+  `[tool#abc12]` reference or call id of the call that checked it. A line
+  reads `yes` when that call exited 0, or a `test` call passed, and Jev
+  reads the call as checking that line; `no` when the call failed; and
+  `not_checked` with no call, an unknown reference, a call that ran no
+  command, or a passing call that does not check what the line says. A
+  plan item with a `check` is read as a line too.
+- Once the model calls `done`, the turn does not end while a line reads
+  no: it gets one grace turn to fix it and call `done` again, and a turn
+  that still reads no ends with a warning naming the line. The lead is
+  told to call `done` before it ends a turn whose task states acceptance
+  lines. With Jev unreachable or no classifier bound, a line that would
+  read yes reads `not_checked` and says why.
+- `claims` takes a report and Jev reads each sentence: a fact a call could
+  show reads `shown` with the call id, `not_shown`, or `contradicted` with
+  the call whose output says it is false. The first 20 sentences are
+  checked against the latest 40 calls. A report with no sentence says `0
+  claims`.
+- `review` is a read-only sub-agent the lead spawns with the task. It reads
+  the turn's changes through `changes`, in a fresh context, and returns
+  findings with a `path:line` range and a kind: `bug`, `unused`,
+  `untested`, `off_task` or `comment`, ending with `findings: N`.
+
+```text
+done: 2 lines, 1 yes, 1 no, 0 not_checked
+  yes         cassette_1_1 exit 0, jev reads 0.93 that it checks this line, against 0.50: the total test passes
+  no          cassette_1_2 exit 1: the broken package passes its tests
+the turn does not end while a line reads no: fix it, run its check again, and call done with the new call id
+```
+
 ## Delegation and the person
 
 - `spawn` with `estimate` set to `true` returns the median USD, model calls
@@ -250,6 +282,9 @@ shown to the person; the turn goes on
 - `tofu tool heads_up '{"level":"info","line":"the full test run takes about two minutes"}' --dir .`
   prints the line the person would see.
 - `tofu docs asking` says how the lead's questions reach you.
+- `tofu tool claims '{"report":"All tests pass."}' --dir . --session head`
+  checks a report against the newest session's calls.
+- `tofu tool list --agent review` lists the review agent's read-only tools.
 - `tofu tool test '{"path":"."}' --dir .` runs the tests of one package.
 - `tofu tool typecheck '{"path":"broken"}' --dir .` checks one directory.
 - `tofu tool read '{"path":"order.go","at":"Total"}' --dir .` reads around
