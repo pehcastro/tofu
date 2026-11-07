@@ -10,8 +10,6 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
-## 0.5.22 - unreleased
-
 Tools that hand the model the answer rather than the log, in Go, Rust, Python and TypeScript, and `tofu tool` to run any of them by hand.
 
 ### Added
