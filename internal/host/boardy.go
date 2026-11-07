@@ -5,7 +5,6 @@ import (
 	"path/filepath"
 
 	"tofu/internal/platform/fs"
-	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/settings"
 )
@@ -99,23 +98,25 @@ func (s *server) boardy(method string, raw json.RawMessage) (any, error) {
 	return boardyRule(api, method, raw)
 }
 
-func (s *server) watchBoardy(quit <-chan struct{}) {
+func (s *server) boardsScan() (scan func(), heard func(boardy.Writing)) {
 	store, err := boardy.OpenStore(s.Dir)
 	if err != nil {
-		return
+		return func() {}, func(boardy.Writing) {}
 	}
-	told := make(chan boardy.Writing)
-	safe.Go(s.report, "serve boardy told", func() {
-		s.hear(quit, TopicBoardy, func(writing boardy.Writing) {
-			select {
-			case told <- writing:
-			case <-quit:
-			}
-		})
-	})
-	boardy.NewWatcher(store.Dir).Watch(quit, servePoll, told, func(change boardy.Changed) {
-		s.box.push(notify(boardyPrefix+"changed", change))
-	})
+	watcher, by := boardy.NewWatcher(store.Dir), ""
+	scan = func() {
+		for _, change := range watcher.Scan() {
+			change.By = by
+			s.box.push(notify(boardyPrefix+"changed", change))
+		}
+	}
+	return scan, func(writing boardy.Writing) {
+		by = writing.By
+		if writing.Done {
+			scan()
+			by = ""
+		}
+	}
 }
 
 func BoardyWriting(project, by string) (done func()) {

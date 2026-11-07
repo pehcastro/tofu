@@ -53,6 +53,7 @@ const (
 	hubLogCap        = 1 << 20
 	hubLogKept       = ".1"
 	servePoll        = konst.ServeShellPollMillis * time.Millisecond
+	serveHiddenPoll  = hubBeat
 )
 
 const (
@@ -525,41 +526,49 @@ func Writing(project string, topic WriteTopic, by string) (done func()) {
 	return func() { _ = conn.Close() }
 }
 
-func (s *server) hear(quit <-chan struct{}, topic WriteTopic, heard func(boardy.Writing)) {
+func (s *server) hear(quit <-chan struct{}, topic WriteTopic) (<-chan boardy.Writing, chan<- struct{}) {
+	told, redial := make(chan boardy.Writing), make(chan struct{}, 1)
 	place, err := placeOf(s.Dir)
 	if err != nil {
-		return
+		return told, redial
 	}
-	tick := time.NewTicker(servePoll)
-	defer tick.Stop()
-	for {
-		if conn, err := dialHub(place.socket); err == nil {
-			hungUp := make(chan struct{})
-			safe.Go(s.report, "serve "+string(topic)+" hang up", func() {
-				select {
-				case <-quit:
-				case <-hungUp:
-				}
-				_ = conn.Close()
-			})
-			if json.NewEncoder(conn).Encode(hubAsk{Ask: hubAskHear, Topic: topic}) == nil {
-				for lines := json.NewDecoder(conn); ; {
-					var writing boardy.Writing
-					if lines.Decode(&writing) != nil {
-						break
-					}
-					heard(writing)
-				}
-			}
-			close(hungUp)
-			heard(boardy.Writing{Done: true})
-		}
+	heard := func(writing boardy.Writing) {
 		select {
+		case told <- writing:
 		case <-quit:
-			return
-		case <-tick.C:
 		}
 	}
+	safe.Go(s.report, "serve "+string(topic)+" told", func() {
+		for {
+			if conn, err := dialHub(place.socket); err == nil {
+				hungUp := make(chan struct{})
+				safe.Go(s.report, "serve "+string(topic)+" hang up", func() {
+					select {
+					case <-quit:
+					case <-hungUp:
+					}
+					_ = conn.Close()
+				})
+				if json.NewEncoder(conn).Encode(hubAsk{Ask: hubAskHear, Topic: topic}) == nil {
+					for lines := json.NewDecoder(conn); ; {
+						var writing boardy.Writing
+						if lines.Decode(&writing) != nil {
+							break
+						}
+						heard(writing)
+					}
+				}
+				close(hungUp)
+				heard(boardy.Writing{Done: true})
+			}
+			select {
+			case <-quit:
+				return
+			case <-redial:
+			}
+		}
+	})
+	return told, redial
 }
 
 type hearers struct {

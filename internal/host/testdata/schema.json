@@ -936,6 +936,18 @@
       ],
       "type": "object"
     },
+    "ClientVisibleParams": {
+      "additionalProperties": false,
+      "properties": {
+        "visible": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "visible"
+      ],
+      "type": "object"
+    },
     "CommandList": {
       "additionalProperties": false,
       "properties": {
@@ -11766,6 +11778,33 @@
               "const": "2.0"
             },
             "method": {
+              "const": "client.visible"
+            },
+            "params": {
+              "$ref": "#/$defs/ClientVisibleParams"
+            }
+          },
+          "required": [
+            "id",
+            "jsonrpc",
+            "method",
+            "params"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": [
+                "string",
+                "integer"
+              ]
+            },
+            "jsonrpc": {
+              "const": "2.0"
+            },
+            "method": {
               "const": "session.state"
             },
             "params": {
@@ -19047,7 +19086,9 @@
     "scratch",
     "sessions",
     "takeover",
-    "keep"
+    "keep",
+    "visible",
+    "noQuota"
   ],
   "x-notifications": {
     "account.state": {
@@ -19435,6 +19476,14 @@
       },
       "result": {
         "$ref": "#/$defs/boardy.TriageAnswer"
+      }
+    },
+    "client.visible": {
+      "params": {
+        "$ref": "#/$defs/ClientVisibleParams"
+      },
+      "result": {
+        "$ref": "#/$defs/Ack"
       }
     },
     "cron.command": {

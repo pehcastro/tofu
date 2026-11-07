@@ -839,6 +839,10 @@ type InitializeParams struct {
 	Capabilities []string `json:"capabilities"`
 }
 
+type ClientVisibleParams struct {
+	Visible *bool `json:"visible"`
+}
+
 type InitializeResult struct {
 	Protocol     string   `json:"protocol"`
 	Tofu         string   `json:"tofu"`
@@ -1349,6 +1353,7 @@ func requests() []method {
 		{name: "session.close", params: SessionCloseParams{}, result: Ack{}},
 		{name: "session.keep", params: SessionParams{}, result: Ack{}},
 		{name: "session.release", params: SessionParams{}, result: Ack{}},
+		{name: "client.visible", params: ClientVisibleParams{}, result: Ack{}},
 		{name: "session.state", params: NoParams{}, result: SessionState{}},
 		{name: "approval.list", params: NoParams{}, result: ApprovalList{}},
 		{name: "approval.revoke", params: ApprovalRevokeParams{}, result: StandingAnswer{}},
@@ -1436,7 +1441,7 @@ func requests() []method {
 
 func capabilities() []string {
 	return []string{"approvals", "revoke", "standing", "questions", "resync", "shells", "queries", "cron", "rename", "list", "listed", "state", "set", "wires", "images", "lead", "unsteer", "sendNow", "run", "compact", "fork", "branch", "history", "ledger",
-		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "drain", "accounts", "writes", "status", "mention", "boards", "side", "commands", "boardy", "scratch", "sessions", "takeover", "keep"}
+		"typed", "memory", "reload", "hooks", "learn", "docs", "changelog", "update", "doctor", "setup", "key", "logout", "info", "find", "trace", "drain", "accounts", "writes", "status", "mention", "boards", "side", "commands", "boardy", "scratch", "sessions", "takeover", "keep", "visible", "noQuota"}
 }
 
 const queryPrefix = "query."

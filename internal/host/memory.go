@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"tofu/internal/agent/loop"
-	"tofu/internal/konst"
 	"tofu/internal/store/memory/entries"
 	memtree "tofu/internal/store/memory/tree"
 	"tofu/internal/store/session"
@@ -89,24 +88,17 @@ func memoryStamps(shelves []entries.Shelf) map[string]memoryStamp {
 	return stamps
 }
 
-func (s *server) watchMemory(quit <-chan struct{}) {
+func (s *server) memoryScan() func() {
 	placed, err := entries.Placed(s.Dir)
 	if err != nil {
-		return
+		return func() {}
 	}
 	shelves := placed.Shelves()
 	seen := memoryStamps(shelves)
-	every := time.NewTicker(konst.ServeShellPollMillis * time.Millisecond)
-	defer every.Stop()
 	changed := func(file string, stamp memoryStamp) {
 		s.box.push(merged("memory.changed", file, &MemoryChanged{Scope: stamp.scope, File: file}))
 	}
-	for {
-		select {
-		case <-quit:
-			return
-		case <-every.C:
-		}
+	return func() {
 		now := memoryStamps(shelves)
 		for file, stamp := range now {
 			if seen[file] != stamp {

@@ -78,6 +78,8 @@ type server struct {
 	probed   time.Time
 	retryAt  time.Time
 	requota  chan struct{}
+	noQuota  atomic.Bool
+	sight    chan bool
 	accounts map[string]AccountCondition
 	seen     settingsSeen
 	labels   map[string]string
@@ -156,7 +158,7 @@ func (w *historyWalk) linesOf(carry Carry, dir string) []outgoing {
 
 func Serve(cfg ServeConfig) error {
 	s := &server{ServeConfig: cfg, box: newOutbox(), shells: map[string]*watchedShell{}, items: newItems(cfg.Host.ID()),
-		status: statusFeed{board: statusline.Board{Now: time.Now}, acked: map[string]bool{}}, requota: make(chan struct{}, 1), accounts: map[string]AccountCondition{}, labels: map[string]string{}, keeps: map[string]*following{}}
+		status: statusFeed{board: statusline.Board{Now: time.Now}, acked: map[string]bool{}}, requota: make(chan struct{}, 1), sight: make(chan bool, 1), accounts: map[string]AccountCondition{}, labels: map[string]string{}, keeps: map[string]*following{}}
 	s.seen.files = readSettingsFiles(cfg.Dir)
 	if state, err := platformproject.ProjectStateDirAt(cfg.Dir); err == nil {
 		s.replays = filepath.Join(state, replayDir)
@@ -173,13 +175,9 @@ func Serve(cfg ServeConfig) error {
 	watch := func(unit string, watcher func(quit <-chan struct{})) {
 		workers.Go(func() { safe.Loop(s.report, unit, quit, func() { watcher(quit) }) })
 	}
-	watch("serve shells", s.watchShells)
+	watch("serve project", s.watchProject)
 	watch("serve quota", s.pollQuota)
-	watch("serve boardy", s.watchBoardy)
 	watch("serve boardy hooks", s.tickBoardy)
-	watch("serve settings", s.watchSettings)
-	watch("serve memory", s.watchMemory)
-	watch("serve sessions", s.watchSessions)
 	safe.Fatal(s.report, "serve read", func(died error) { read <- died }, func() { read <- s.read() })
 	var err error
 	select {
@@ -344,6 +342,8 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, s.keep)
 	case "session.release":
 		return handle(raw, s.releaseKept)
+	case "client.visible":
+		return handle(raw, s.visible)
 	case "session.rename":
 		return handle(raw, s.rename)
 	case "session.branch":
@@ -435,6 +435,7 @@ func (s *server) initialize(p InitializeParams) (any, error) {
 	s.mu.Lock()
 	s.client, s.ready, s.answers = p.Client, true, slices.Contains(p.Capabilities, "questions")
 	s.takeover = slices.Contains(p.Capabilities, "takeover") && s.Shells != nil
+	s.noQuota.Store(slices.Contains(p.Capabilities, "noQuota"))
 	if s.Shells != nil {
 		s.Shells.Terminals.Store(s.takeover)
 	}
@@ -1111,7 +1112,7 @@ func (s *server) publish(event Event) {
 }
 
 func (s *server) quota() {
-	if s.Quota == nil {
+	if s.Quota == nil || s.noQuota.Load() {
 		return
 	}
 	windows := append([]QuotaWindow{}, s.Quota()...)
@@ -1233,22 +1234,75 @@ func (s *server) follow(name string, watched *watchedShell, mask func(string) st
 	return err
 }
 
-func (s *server) watchShells(quit <-chan struct{}) {
-	if s.Shells == nil {
-		return
+func (s *server) visible(p ClientVisibleParams) (any, error) {
+	if p.Visible == nil {
+		return nil, &Refusal{Code: CodeBadParams, Message: "client.visible says visible, true or false, and this one said neither, so the child stays as it was"}
 	}
-	every := time.NewTicker(konst.ServeShellPollMillis * time.Millisecond)
+	s.box.show(*p.Visible)
+	select {
+	case <-s.sight:
+	default:
+	}
+	s.sight <- *p.Visible
+	return Ack{OK: true}, nil
+}
+
+func (s *server) watchProject(quit <-chan struct{}) {
+	var scans []func()
+	var wrote <-chan struct{}
+	if s.Shells != nil {
+		wrote = s.Shells.Wrote()
+		s.scanShells(true)
+		defer s.scanShells(false)
+		scans = append(scans, func() { s.scanShells(false) })
+	}
+	sessions := s.sessionsScan()
+	boards, boardsHeard := s.boardsScan()
+	scans = append(scans, s.settingsScan(), boards, s.memoryScan())
+	settingsTold, settingsRedial := s.hear(quit, TopicSettings)
+	boardsTold, boardsRedial := s.hear(quit, TopicBoardy)
+	visible := true
+	every := time.NewTicker(servePoll)
 	defer every.Stop()
-	s.scanShells(true)
 	for {
 		select {
 		case <-quit:
-			s.scanShells(false)
 			return
+		case visible = <-s.sight:
+			period := serveHiddenPoll
+			if visible {
+				period = servePoll
+			}
+			every.Reset(period)
+		case <-wrote:
+			if visible {
+				s.sendHeldRaw()
+			}
+			continue
+		case writing := <-settingsTold:
+			if visible {
+				s.settingsWriting(writing)
+			}
+			continue
+		case writing := <-boardsTold:
+			if visible {
+				boardsHeard(writing)
+			}
+			continue
 		case <-every.C:
-			s.scanShells(false)
-		case <-s.Shells.Wrote():
-			s.sendHeldRaw()
+		}
+		sessions()
+		if !visible {
+			continue
+		}
+		for _, scan := range scans {
+			scan()
+		}
+		for _, redial := range []chan<- struct{}{settingsRedial, boardsRedial} {
+			select {
+			case redial <- struct{}{}:
+			default:
+			}
 		}
 	}
 }

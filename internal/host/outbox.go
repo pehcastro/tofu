@@ -61,6 +61,8 @@ type outbox struct {
 	more   *sync.Cond
 	queue  []outgoing
 	closed bool
+	hidden bool
+	missed []Resync
 }
 
 func newOutbox() *outbox {
@@ -73,6 +75,15 @@ func (o *outbox) push(out outgoing) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	if o.closed {
+		return
+	}
+	if o.hidden && out.msg.ID == nil && out.msg.Method != "session.listed" && out.msg.Method != "session.updated" {
+		lost := lostOf(out)
+		if at := slices.IndexFunc(o.missed, func(missed Resync) bool { return missed.Session == lost.Session }); at >= 0 {
+			o.missed[at].Dropped++
+			return
+		}
+		o.missed = append(o.missed, Resync{Identity: lost, Dropped: 1})
 		return
 	}
 	defer o.more.Signal()
@@ -93,12 +104,29 @@ func (o *outbox) push(out outgoing) {
 		o.queue[at].msg.Params.(*Resync).Dropped++
 		return
 	}
+	o.queue = append(o.queue, kept(resyncMethod, &Resync{Identity: lostOf(out), Dropped: 1}))
+}
+
+func lostOf(out outgoing) Identity {
 	var lost Identity
 	if identified, numbered := out.msg.Params.(stamped); numbered {
 		lost = identified.about()
 	}
 	lost.Item, lost.Agent = resyncMethod, ""
-	o.queue = append(o.queue, kept(resyncMethod, &Resync{Identity: lost, Dropped: 1}))
+	return lost
+}
+
+func (o *outbox) show(visible bool) {
+	o.mu.Lock()
+	o.hidden = !visible
+	var missed []Resync
+	if visible {
+		missed, o.missed = o.missed, nil
+	}
+	o.mu.Unlock()
+	for _, lost := range missed {
+		o.push(kept(resyncMethod, &lost))
+	}
 }
 
 func (o *outbox) take() (next outgoing, more, open bool) {

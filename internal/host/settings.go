@@ -9,12 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"time"
 
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/catalog"
 	platformfs "tofu/internal/platform/fs"
-	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/settings"
 	shipped "tofu/library"
@@ -197,20 +195,12 @@ func (s *server) settingsWriting(writing boardy.Writing) {
 	}
 }
 
-func (s *server) watchSettings(quit <-chan struct{}) {
-	safe.Go(s.report, "serve settings told", func() { s.hear(quit, TopicSettings, s.settingsWriting) })
+func (s *server) settingsScan() func() {
 	files, assigned := ConfigSeen(s.Dir), readAgentModels(s.Dir)
-	every := time.NewTicker(servePoll)
-	defer every.Stop()
-	for {
-		select {
-		case <-quit:
-			return
-		case <-every.C:
-			s.settingsMoved()
-			s.sessionSettingsMoved()
-			files, assigned = s.modelsMoved(files, assigned)
-		}
+	return func() {
+		s.settingsMoved()
+		s.sessionSettingsMoved()
+		files, assigned = s.modelsMoved(files, assigned)
 	}
 }
 

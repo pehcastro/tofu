@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"tofu/internal/agent/loop"
-	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/platform/clipboard"
 	"tofu/internal/platform/credential"
@@ -163,20 +162,13 @@ func sessionStamps(store *session.Store) map[string]time.Time {
 	return stamps
 }
 
-func (s *server) watchSessions(quit <-chan struct{}) {
+func (s *server) sessionsScan() func() {
 	store, err := session.OpenIn(s.Host.dir)
 	if err != nil {
-		return
+		return func() {}
 	}
 	seen := sessionStamps(store)
-	every := time.NewTicker(konst.ServeShellPollMillis * time.Millisecond)
-	defer every.Stop()
-	for {
-		select {
-		case <-quit:
-			return
-		case <-every.C:
-		}
+	return func() {
 		now, read := sessionStamps(store), store.ReadOnce()
 		newest := map[string]Event{}
 		for id, stamp := range now {
