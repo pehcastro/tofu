@@ -34,7 +34,15 @@ func HeadTree(repo string) (string, []string, error) {
 	if err != nil {
 		return "", nil, err
 	}
-	dirty, err := uncommitted(repo, "*.go", ":(exclude)"+deskArea+"/")
+	changed, err := gitOut(repo, "", "status", "--porcelain", "--untracked-files=all", "--", ":(exclude)"+deskArea+"/")
+	var dirty []string
+	for _, line := range strings.Split(changed, "\n") {
+		path, untracked := strings.CutPrefix(line, "?? ")
+		built := strings.HasSuffix(path, ".go") || slices.ContainsFunc(fs.GoRoots(), func(root string) bool { return strings.HasPrefix(path, root+"/") })
+		if len(line) > 3 && (!untracked || built) {
+			dirty = append(dirty, line[3:])
+		}
+	}
 	return tree, dirty, err
 }
 

@@ -75,7 +75,7 @@ func run() (bool, error) {
 		return false, err
 	}
 	if len(dirty) > 0 {
-		fmt.Printf("no stamp will be written: %d uncommitted Go files, and a stamp is keyed by HEAD's tree; run in a clean clone of HEAD\n", len(dirty))
+		fmt.Printf("no stamp will be written: uncommitted %s, and a stamp is keyed by HEAD's tree; run in a clean clone of HEAD\n", strings.Join(dirty, ", "))
 	}
 	head, _ := exec.Command("git", "-C", r.repo, "rev-parse", "--short", "HEAD").Output()
 	machine, _ := os.Hostname()
@@ -234,7 +234,7 @@ func (r runner) rerun(pkg string, tests []string) (bool, []string) {
 func stamp(repo, tree, head string, passed int, failures []failure) (bool, error) {
 	after, dirty, err := guard.HeadTree(repo)
 	if err != nil || after != tree || len(dirty) > 0 {
-		fmt.Printf("no stamp: the run was not on a clean HEAD from start to end: tree %s then %s, %d uncommitted Go files\n", tree, after, len(dirty))
+		fmt.Printf("no stamp: the run was not on a clean HEAD from start to end: tree %s then %s, uncommitted %q\n", tree, after, dirty)
 		return false, err
 	}
 	lines := []string{"tree " + tree, "head " + head, "date " + time.Now().Format(time.RFC3339), fmt.Sprintf("vet and test pass, %d packages", passed)}

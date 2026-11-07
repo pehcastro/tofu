@@ -79,7 +79,7 @@ func run(only, src string, keep bool) (bool, error) {
 			fmt.Println(line)
 		}
 		if len(each.dirty) > 0 {
-			fmt.Printf("no %s stamp will be written: %d uncommitted files under its tree, and a stamp is keyed by HEAD's tree; run in a clean clone of HEAD\n", each.kind, len(each.dirty))
+			fmt.Printf("no %s stamp will be written: uncommitted %s, and a stamp is keyed by HEAD's tree; run in a clean clone of HEAD\n", each.kind, strings.Join(each.dirty, ", "))
 		}
 		if each.held != "" {
 			fmt.Printf("no %s stamp will be written: %s\n", each.kind, each.held)
@@ -213,7 +213,7 @@ func (k stamping) settle(repo, head string, stamped bool, rows []row) (bool, err
 	}
 	after, dirty, err := k.read(repo)
 	if err != nil || after != k.tree || len(k.dirty)+len(dirty) > 0 {
-		fmt.Printf("no %s stamp: the run was not on a clean HEAD from start to end: tree %s then %s, %d uncommitted files then %d\n", k.kind, k.tree, after, len(k.dirty), len(dirty))
+		fmt.Printf("no %s stamp: the run was not on a clean HEAD from start to end: tree %s then %s, uncommitted %q then %q\n", k.kind, k.tree, after, k.dirty, dirty)
 		return true, err
 	}
 	lines := append([]string{"tree " + k.tree, "head " + head, "date " + time.Now().Format(time.RFC3339)}, k.lines...)
