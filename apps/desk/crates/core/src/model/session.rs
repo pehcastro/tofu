@@ -646,6 +646,15 @@ impl Session {
                         digest: None,
                     },
                 );
+                if let Some(sent) = self.messages.last_mut().filter(|m| {
+                    m.agent.is_none()
+                        && m.role == Role::User
+                        && m.turn != e.turn
+                        && !e.task.is_empty()
+                        && m.text == e.task
+                }) {
+                    sent.turn.clone_from(&e.turn);
+                }
             }
             N::TurnAccount(e) => {
                 self.turns
@@ -695,31 +704,12 @@ impl Session {
                     (None, true) => String::new(),
                     (None, false) => e.text.clone(),
                 };
-                let mut images = attached(&e.images)?;
-                let asked = self.turns.get(&e.turn).filter(|turn| {
-                    role == Role::User
-                        && e.agent.is_none()
-                        && !turn.task.is_empty()
-                        && !self
-                            .messages
-                            .iter()
-                            .any(|m| m.turn == e.turn && m.agent.is_none() && m.role == Role::User)
-                });
-                let text = match asked {
-                    Some(turn) => {
-                        if images.is_empty() {
-                            images.clone_from(&turn.images);
-                        }
-                        turn.task.clone()
-                    }
-                    None => text,
-                };
                 self.messages.push(Message {
                     turn: e.turn.clone(),
                     agent: e.agent.clone(),
                     role,
                     text,
-                    images,
+                    images: attached(&e.images)?,
                     complete: true,
                     at: e.sent_at.clone(),
                 });
