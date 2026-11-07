@@ -438,6 +438,26 @@
   do: tofu tool claims '{"report":"All tests pass."}' --dir . --session head
   check: tofu tool list --dir .
   topic: tools
+- ask: what did the last few turns change
+  do: tofu tool changes '{"turns":4}' --dir .
+  check: tofu tool list --dir .
+  topic: turn-history
+- ask: which turn made this change, and put it back
+  do: tofu tool trail '{"mode":"find","anchor":"handling fee"}' --dir .
+  check: tofu tool list --dir .
+  topic: turn-history
+- ask: who wrote this line
+  do: tofu tool trail '{"mode":"owner_of","line":"order.go:11"}' --dir .
+  check: tofu tool list --dir .
+  topic: turn-history
+- ask: which turn broke the tests
+  do: tofu tool bisect '{"check":"test","name":"TestTotal"}' --dir .
+  check: tofu tool list --dir .
+  topic: turn-history
+- ask: try an edit without changing my files
+  do: tofu docs turn-history
+  check: tofu tool list --dir .
+  topic: turn-history
 - ask: which tools does the review agent get
   do: tofu tool list --agent review
   check: tofu tool list --dir .

@@ -158,7 +158,7 @@ so. Each check is a row in the decision ledger.
 `review` is a sub-agent the lead spawns before you see the work. It is
 given the task and the turn's changes and nothing else, so it judges the
 change by what it does rather than by the author's reasoning. It calls the
-`changes` tool on the turn that spawned it, reads every changed file whole,
+[`changes`](/docs/tools/history#changes) tool on the turn that spawned it, reads every changed file whole,
 searches for the callers, and reports only what this change introduced.
 
 Its tools are read-only. `tofu tool list --agent review` prints them:

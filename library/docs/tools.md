@@ -1,7 +1,7 @@
 ---
 topic: tools
 title: What the tools return
-summary: what read, edit, write, symbols, map, api, search, bash, shell, typecheck, test, plan, fetch, web_search, history, env, http, record, profile, shape, db, context, budget, forget, note, digest, done, claims, the review agent, spawn, race, ask_person and heads_up give the model, and how to see it for yourself
+summary: what each tool gives the model, grouped by job, which page says more about each group, and how to see a result for yourself
 verbs: tool
 ---
 
@@ -13,295 +13,61 @@ result is shaped to be the answer rather than a log: counts and
 date a page states. `tofu tool <name> '<json>' --dir .` runs any of them
 by hand and prints the exact text the model would read.
 
-## Checks
+Each group has a page of its own:
 
-- `test` runs one package, crate or file and returns pass, fail and skip
-  counts, each failure with its `path:line` and got against want, and the
-  skipped tests by name. `go.mod` picks `go test`, `Cargo.toml` picks
-  `cargo test`, a Python project picks `pytest` when it declares it and
-  `unittest` when not, and `package.json` picks Vitest, kept warm. A path
-  with no tests says `0 tests found`.
-- `test` with `repeat` runs one test several times and says `real` when
-  every run fails, `flaky` when some do, and `passes` when none do.
-  `changed` runs the tests of every file the turn changed, and every test
-  that reaches a changed declaration through `symbols impact`, in another
-  file or package.
-- `typecheck` runs `go build` then `go vet` for Go, `cargo check` for Rust,
-  `pyright` or `mypy` for Python, and `tsc`, `vue-tsc` or `svelte-check`
-  for TypeScript, and returns the error count and each error as
-  `path:line`. A checker missing from `PATH` is named with its install
-  command.
-- `typecheck` with `explain` runs nothing: it takes the text of a failure
-  and returns each error with five lines of code around it and the
-  declarations it names, the same error at many places folded into one.
+- `tofu docs tools-checks`: `test`, `typecheck`, `read`, `write`, `edit`,
+  `bash` and `shell`, which run the project's checks, read and change its
+  files, and run its commands.
+- `tofu docs tools-code`: `symbols`, `map` and `api`, which say where a
+  name is declared and who calls it, what a change reaches, which files
+  matter for a task, and what a dependency looks like at its pinned
+  version.
+- `tofu docs tools-work`: `plan`, `history`, `fetch`, `web_search`, `env`,
+  `http`, `record`, `profile`, `shape`, `db`, `spawn`, `race`,
+  `ask_person` and `heads_up`, which organize the work, read the web and
+  the machine, and reach sub-agents and the person.
+- `tofu docs tools-context`: `context`, `budget`, `forget`, `note`,
+  `digest`, `done`, `claims` and the review agent, which let the model
+  look after its own window and check its own work.
+- `tofu docs turn-history`: `changes`, `trail`, `bisect`, `checkpoint` and
+  `whatif`, which say what each turn changed, find the turn that broke a
+  check, and put back one turn's edits while keeping the rest.
 
-```text
-test: go test -json -count=1 . in C:\work\shop\go, 1629 ms
-go test: 1 passed, 1 failed, 1 skipped
-FAIL TestDiscounted order_test.go:17: got 650, want 675
-skipped: TestShipping
-```
+What the model reads is what it pays for, so every result is shaped before
+the model sees it: keys are redacted, a `bash` result is sifted when a
+classifier is set up, and a result over 32 KB is stored whole, the model
+getting a handle and the first and last part to read further with
+`artifact_fetch`.
 
-## Code intelligence
+## Where it lives
 
-- `symbols` says where a name is declared and every place that calls it,
-  in Go, Rust, TypeScript and Python. Go is resolved through `go/types`;
-  the rest through `rust-analyzer`, `typescript-language-server` and
-  `pyright-langserver`, which follow an import alias. tofu starts a server
-  when a call needs it and stops it after 5 minutes idle or when tofu
-  exits, and never installs one: a missing server is named with its
-  install command and the answer is matched on the name alone.
-- `symbols` with mode `impact` lists every caller of one declaration by
-  kind, `call`, `impl`, `embed`, `test` or `ref`, the tests that reach it
-  and the packages.
-- `symbols` with mode `rename` and `to` previews a diff per file and the
-  errors the rename would add, and writes only with `apply` true. A clash
-  with a name already declared in that scope is refused and nothing is
-  written.
-- `map` ranks the files that matter for a `task`, each with its top
-  declarations and their line numbers, in a token `budget`, 1,000 when
-  left out, and says what did not fit. `search` orders its files by the
-  same rank and says how many matching lines the page cut.
-- `api` reads a dependency's signature and doc at the pinned version, from
-  the module cache, `node_modules`, the cargo registry or `site-packages`,
-  never the network. A package the project does not hold is named with the
-  command that adds it.
+Every call runs in the working directory and is recorded in the session,
+under `~/.tofu/projects/<project>/`. Walking tools skip `node_modules`,
+`.git`, `.tofu` and what `.gitignore` excludes.
 
-```text
-rename total to amount, resolved by rust-analyzer: 2 sites in 2 files
---- src/lib.rs
-+++ src/lib.rs
-@@ -9,7 +9,7 @@
- 
- impl Order {
-     pub fn total(&self) -> u32 {
--        pr::total(self.quantity, self.unit_cents)
-+        pr::amount(self.quantity, self.unit_cents)
-     }
- 
-     pub fn discounted(&self) -> u32 {
---- src/pricing.rs
-+++ src/pricing.rs
-@@ -1,3 +1,3 @@
--pub fn total(quantity: u32, unit_cents: u32) -> u32 {
-+pub fn amount(quantity: u32, unit_cents: u32) -> u32 {
-     quantity * unit_cents
- }
-new errors: none
-preview: nothing was written. call again with apply true to write it
-```
+## Change it
 
-## Files
+You don't call tools; you change what the model gets:
 
-- `write` and `edit` on a `.go`, `.rs`, `.py`, `.ts` or `.tsx` file end
-  with the errors that file's checker finds, or `0 errors`.
-- An `edit` that would leave a Go file unable to parse is refused with the
-  parser's line, and nothing is written.
-- `edit` with `symbol` replaces one whole declaration in a `.go`, `.rs`,
-  `.ts`, `.tsx` or `.py` file, or with `insert` `before` or `after` adds
-  code beside it. A name the file doesn't declare is refused with the
-  closest names it does.
-- `read` with `at`, a line number or a declared name such as
-  `Order.Total`, reads about 100 lines around it and states the range. A
-  name the file doesn't declare is refused with the closest names it does.
-- A second `read` of the same lines of an unchanged file answers with one
-  line, `order.go: unchanged since your read at step 1, whose result is
-  still above`, whatever ran between. Once the file changes, or `forget` or
-  a compaction drops the earlier result, the next read is whole.
+- `readBeforeEdit`, on by default, refuses `write` and `edit` on a file
+  the session hasn't read.
+- `browser`, `drive`, `read` or `off`, decides the browser tools.
+- An agent file's `tools:` line limits a sub-agent to the tools it names.
 
-## Shell
+    tofu settings set readBeforeEdit false
 
-- `bash` folds the output of `go test`, `go build`, `go vet`, `cargo test`,
-  `cargo check`, `pytest`, `unittest` and `pyright --outputjson`: a passing
-  run is one line, a failure keeps its name, `path:line`, got and want, and
-  a build error keeps its `path:line` and message. Any other command prints
-  as it always did.
-- `bash` ends with `bash: changed on disk under the project:` and the paths
-  a command changed, and with nothing when it changed none.
-- `shell wait` with `for` returns once a kept shell is ready: a line
-  matching a regular expression, `port:3000`, `file:dist/app.js`, or an
-  `http://` address answering 200. It answers `met`, `after_ms` and the
-  matched line, or `met` false with the last 5 lines.
-- `shell logs` folds what a shell printed into templates with counts, and a
-  later `shell logs` prints only `new_since_last_call`.
+## Check it
 
-## Work and web
+    tofu tool list --dir .
+    tofu agents
 
-- A `plan` item may carry a `check`, a command or an acceptance line.
-  `done` on that item needs `call`, the id of the earlier tool call in the
-  session that ran the check, and is refused without one or with an id no
-  earlier call has.
-- `history` is one tool with a `mode`: `quote` for a `[quote#...]`
-  reference you wrote, `zoom` and `recall` over the memory views, and
-  `lookup` for a call a fork's carry names.
-- `fetch` puts `date: published 2024-03-06`, `modified ...`, or `date: none
-  stated` under its header. `web_search` puts each result's date beside its
-  title when the provider gives one.
+The first names every tool a run offers the lead; the second prints each
+sub-agent's tools on a line of its own. `tofu docs tool` says how `tofu
+tool` itself works.
 
-## Environment, observe and data
+## Undo it
 
-- `env` says `ready` or `not ready`, each toolchain the project declares
-  with the version wanted and the one on `PATH`, and each key
-  `.env.example` names as set or missing. It never prints a value.
-- `shell` with `op` `ports` gives one JSON line per port: `pid`, `command`,
-  the kept shell and `started_by` as `this_session`, `other_session` or
-  `outside`, or `free`. It never kills, and it needs a running session.
-- `http` calls a server on this machine only, found from the kept shell
-  that listens or from `port`, and returns the status, the time, the
-  headers worth reading and the body. A JSON array comes back as its first
-  3 items and the type of every item.
-- `record` with `start` saves the plain http a command makes, through a
-  proxy only that command sees, and `replay` answers the same command from
-  the recording with the server down. `https` is not intercepted.
-- `profile` runs `go test` with one package, `node` or `python` under a
-  profiler and returns the ten costliest functions with `flat`, `cum` and
-  `path:line`, then the hottest call path.
-- `shape` prints the type of a JSON sample in the project's language,
-  with every field that is optional or a union marked and the item it
-  first happens in.
-- `db` reads SQLite or Postgres read only: the schema with no `query`, or
-  the first 20 rows and the count of one statement. The connection comes
-  from a key in `.env`, `DATABASE_URL` by default, and is never printed.
+    tofu settings set readBeforeEdit true
 
-```text
-not ready: 1 of 2 env keys not set
-toolchains:
-go: want 1.22 from go.mod, have 1.25.7
-env keys from .env.example:
-ORDER_API_URL: set in .env
-ORDER_DB_PATH: missing from .env
-```
-
-## The agent's own context
-
-- `context` reports what fills the model's own window: tokens used
-  against the ceiling as the last request measured them, the window by
-  kind, the biggest results with their call ids, and every file read that
-  changed on disk since.
-- `budget` reports calls, weighted tokens, USD and model and wall time for
-  the turn, the session, the lead and each sub-agent, counted as `tofu
-  session drain` counts them.
-- `forget` drops results the model names by call id, each left as one
-  line, and says the tokens freed and the cache cost. Only a result after
-  the last cache breakpoint can go; an older one is refused and nothing is
-  dropped. A dropped `read` makes the next read of that file whole.
-- When a request passes 70% of the context ceiling, the lead is told the
-  largest result `forget` can still drop and that its next reply is the
-  only one that can drop it, once each time the line is crossed.
-- `note` keeps one line of at most 500 bytes word for word through every
-  fork and compaction, up to 20 notes; `done` drops one by id. Every later
-  request carries the list.
-- `digest` answers one question about one recorded result with the model
-  `modelTier.dumb` names, quoting each line it cites, with the cost last.
-  With `modelTier.dumb` unset it is refused and names the setting.
-- `forget` and `note` run only inside a turn. `history` in mode `lookup`
-  brings back whole a result `forget` dropped, and an old name such as
-  `quote` is refused with the `history` call to make instead.
-
-```text
-dropped: 1 results after the last cache breakpoint, at message 2, the end of what the request before your last one sent
-  toolu_016dDgYohpxMbAqVVCcTEKjJ read build.log: 11192 tokens
-tokens_freed: 11156
-cache_cost: about 458 tokens from message 3 on are written to the cache again on your next request rather than read
-kept_summary: each dropped result is one line naming its call; the next request reads about 11313 tokens of messages from the cache, the prefix up to the breakpoint, plus the tool definitions
-```
-
-## Checking its own work
-
-- `done` takes the task's acceptance lines, each with `call`, the
-  `[tool#abc12]` reference or call id of the call that checked it. A line
-  reads `yes` when that call exited 0, or a `test` call passed, and Jev
-  reads the call as checking that line; `no` when the call failed; and
-  `not_checked` with no call, an unknown reference, a call that ran no
-  command, or a passing call that does not check what the line says. A
-  plan item with a `check` is read as a line too.
-- Once the model calls `done`, the turn does not end while a line reads
-  no: it gets one grace turn to fix it and call `done` again, and a turn
-  that still reads no ends with a warning naming the line. The lead is
-  told to call `done` before it ends a turn whose task states acceptance
-  lines. With Jev unreachable or no classifier bound, a line that would
-  read yes reads `not_checked` and says why.
-- `claims` takes a report and Jev reads each sentence: a fact a call could
-  show reads `shown` with the call id, `not_shown`, or `contradicted` with
-  the call whose output says it is false. The first 20 sentences are
-  checked against the latest 40 calls. A report with no sentence says `0
-  claims`.
-- `review` is a read-only sub-agent the lead spawns with the task. It reads
-  the turn's changes through `changes`, in a fresh context, and returns
-  findings with a `path:line` range and a kind: `bug`, `unused`,
-  `untested`, `off_task` or `comment`, ending with `findings: N`.
-
-```text
-done: 2 lines, 1 yes, 1 no, 0 not_checked
-  yes         cassette_1_1 exit 0, jev reads 0.93 that it checks this line, against 0.50: the total test passes
-  no          cassette_1_2 exit 1: the broken package passes its tests
-the turn does not end while a line reads no: fix it, run its check again, and call done with the new call id
-```
-
-## Delegation and the person
-
-- `spawn` with `estimate` set to `true` returns the median USD, model calls
-  and wall time of the last 20 finished runs of that agent type in this
-  project, and starts nothing. Every real spawn names the same medians. A
-  project with none says `no history: go-dev has no finished run recorded
-  in this project, so there is no estimate. nothing was started`; when no
-  run recorded a cost it says `no cost recorded` in place of the USD.
-- `race` takes 2 to 3 `briefs`, one whole approach each, and a `check` of
-  `build`, `test` or `command`. Each brief runs on its own sub-agent in its
-  own copy of the project under the scratchpad. The first run whose check
-  passes is applied to the working tree and the rest are stopped; the
-  result lists each run's outcome, cost, requests and check, and the
-  winner's diff. When none passes the tree is byte for byte as it was. It
-  is for two or more whole approaches built and compared; `whatif` tries a
-  small edit and `edit` makes one fix.
-- `ask_person` options may carry a `preview`, as code, a diff or a text
-  screen. Options that carry one are shown side by side, each over its
-  preview, up to 14 rows; under 24 cells a column, they stack and the
-  focused one shows its preview. On such a question, a line typed in the
-  chat and then enter chooses the focused option and goes with it as
-  `note` in the answer.
-- `heads_up` shows one line on the person's screen, `heads up: ` at `info`
-  or `heads up, warning: ` at `warn`, and the turn goes on. The lead reads
-  `shown to the person; the turn goes on`. An empty line, a line break or
-  another level is refused and nothing is shown.
-
-```text
-tofu: heads up, warning: order_test.go fails before any change
-shown to the person; the turn goes on
-```
-
-## How to
-
-- `tofu tool context '{}' --dir . --session head` shows what fills the
-  newest session's window, as the model sees it.
-- `tofu tool budget '{}' --dir . --session head` shows what that session
-  cost.
-- `tofu settings set modelTier.dumb <source/model>` lets `digest` run.
-- `tofu tool spawn '{"estimate":true,"agent":"go-dev"}' --dir .` says what
-  a go-dev run usually costs here, and starts nothing.
-- `tofu tool heads_up '{"level":"info","line":"the full test run takes about two minutes"}' --dir .`
-  prints the line the person would see.
-- `tofu docs asking` says how the lead's questions reach you.
-- `tofu tool claims '{"report":"All tests pass."}' --dir . --session head`
-  checks a report against the newest session's calls.
-- `tofu tool list --agent review` lists the review agent's read-only tools.
-- `tofu tool test '{"path":"."}' --dir .` runs the tests of one package.
-- `tofu tool typecheck '{"path":"broken"}' --dir .` checks one directory.
-- `tofu tool read '{"path":"order.go","at":"Total"}' --dir .` reads around
-  a declaration.
-- `tofu tool symbols '{"name":"total"}' --dir .` says where `total` is
-  declared and who calls it.
-- `tofu tool symbols '{"name":"Order","mode":"impact"}' --dir .` says what
-  a change to `Order` reaches.
-- `tofu tool symbols '{"name":"total","path":"src/pricing.rs","mode":"rename","to":"amount"}' --dir .`
-  previews a rename and writes nothing.
-- `tofu tool map '{"task":"Discounted returns 650, want 675"}' --dir .`
-  ranks the files that matter for that task.
-- `tofu tool api '{"package":"github.com/pelletier/go-toml/v2","name":"NewDecoder"}' --dir .`
-  reads a dependency at the pinned version.
-- `tofu tool env '{}' --dir .` says what this project is missing here.
-- `tofu tool db '{"env":"ORDER_DB_PATH"}' --dir .` prints a database's
-  schema.
-- `tofu tool shape '{"path":"orders.json"}' --dir .` types a JSON file.
-- `tofu tool list --dir .` names every tool a run offers.
-- `tofu docs tool` says how `tofu tool` itself works.
+`/undo` puts back the files the last turn changed, whichever
+tool changed them.
