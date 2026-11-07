@@ -24,7 +24,7 @@ Tools that hand the model the answer rather than the log, in Go, Rust, Python an
 - `bisect` finds the turn whose edits broke a check by replaying the project as each turn left it, and the working tree never changes.
 - `whatif` applies edits to copies of the files and runs a build, a test or a command on them, and the working tree never changes.
 - `race` runs rival briefs as sub-agents, each in its own copy of the project, and applies the first whose check passes.
-- `codemod` rewrites one code shape everywhere on the syntax tree, through ast-grep or Go's own parser, and previews every site and the diff before `apply` writes them.
+- `codemod` rewrites one code shape everywhere on the syntax tree in every language cat-grep parses, inside the binary with nothing to install, and previews every site and the diff before `apply` writes them.
 - `scaffold` writes a new file shaped like a named sibling, with the sibling's name replaced in every case form, in the contents and the file name.
 - `format` runs the project's own formatter, gofmt, rustfmt, prettier or ruff, over the files named or the files this turn changed, and nothing else.
 - `deps` adds and upgrades Go, npm, cargo and uv dependencies after reading the license, size and known advisories, refuses a version with an advisory, and answers `why` and `outdated`.
@@ -46,6 +46,8 @@ Tools that hand the model the answer rather than the log, in Go, Rust, Python an
 - `heads_up` puts one line on the person's screen and the turn goes on.
 - The `review` sub-agent reads the changes a turn made, read only, in a fresh context, and reports findings.
 - `api` returns the signature and doc of a dependency's name at the version the project pins.
+- `tofu projects` lists every project and its sessions with no host running, and `--json` prints the same as data.
+- `tofu serve` answers `session.keep` and `session.release`: a kept session stays joined without its event stream, so switching away never stops its cron.
 - `tofu rules show <id>` prints what a rule says: its kind, domain, concern, where it came from, its text and its notes; an unknown id names the closest.
 
 ### Changed
@@ -79,6 +81,10 @@ Tools that hand the model the answer rather than the log, in Go, Rust, Python an
 - `symbols` mode `impact` in TypeScript finds the tests that reach a declaration through another function.
 - `claims` reads a later passing call over an earlier failure, a failing call about one test does not contradict a sentence about another, and a run limited to one test does not show that all tests pass.
 - A patch whose hunks' context lines meet applies as one hunk.
+- `debug` refuses a breakpoint dlv cannot set before the program runs, naming the nearest lines with a statement, and dlv builds its binary in the project's scratchpad, never in the project.
+- `bash` keeps what a test printed beside its failures, and rtk keeps its history under tofu's own config, out of the project.
+- A sub-agent whose spawn is refused before it starts reads errored, never running.
+- Reopening a session whose turn is running joins that turn.
 
 ## 0.5.21 - 2026-11-05
 

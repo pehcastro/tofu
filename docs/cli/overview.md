@@ -52,6 +52,7 @@ tofu session transcript <name|id|head> [--from N] [--to N] [--md] [--json]
 tofu session find <name|id|head> [--tool T] [--command C] [--file F] [--text T] [--failed] [--agent A] [--since 2h|RFC3339] [--until 2h|RFC3339] [--json]
 tofu session drain [name|id|head] [--claude <transcript.jsonl>] [--json]
 tofu host ensure|status|stop|run [--dir PATH] [--json]
+tofu projects [--json]
 tofu session branch <name|id|head> --side [--preset read|notes|files | --owns GLOB,GLOB] [--seed summary|none] [--name NAME] [--model ID] [--effort LEVEL] [--at EVENT] [--json]
 tofu context [<name|id|head>] [--json]
 tofu shells list|log|stop|restart <name> [--json]
@@ -61,6 +62,9 @@ tofu shells list|log|stop|restart <name> [--json]
 the desk and `tofu serve` start it on demand and join it; `ensure` starts it
 when none answers, `status` prints it and its members, and `stop` ends it.
 See [Sessions](/docs/features/sessions).
+
+`tofu projects` lists every project tofu knows, the one opened last first,
+each with its sessions and whether one is working, and starts no host.
 
 `--temporary-project` registers a project tofu has not seen as temporary,
 `"temporary": true` in `~/.tofu/projects.json`. The first tofu started two
