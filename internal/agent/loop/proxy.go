@@ -24,6 +24,7 @@ const (
 	projectFilterFile = ".rtk/filters.toml"
 	proxyUseOff       = "off"
 	proxyUseRTK       = "rtk"
+	proxyHistoryVar   = "RTK_DB_PATH"
 )
 
 type CommandProxy struct {
@@ -100,7 +101,7 @@ func (p *CommandProxy) rewrite(ctx context.Context, call core.ToolCall) (json.Ra
 		row.Note = proxyUseRTK + " was asked to rewrite the command and could not: " + err.Error()
 		return call.Arguments, row
 	}
-	if rewritten == "" || rewritten == args.Command {
+	if rewritten == "" || rewritten == args.Command || runsTests(rewritten) {
 		return call.Arguments, row
 	}
 	if runtime.GOOS == "windows" && strings.ContainsAny(args.Command, "{}*?[") {
@@ -175,6 +176,21 @@ func refusedVerb(rewritten string) (string, string) {
 	return "", ""
 }
 
+func runsTests(rewritten string) bool {
+	fields := strings.Fields(rewritten)
+	for index, field := range fields[:max(len(fields)-1, 0)] {
+		if field != proxyUseRTK {
+			continue
+		}
+		verb := fields[index+1]
+		if slices.Contains([]string{"pytest", "jest", "vitest", "playwright", "rspec", "test"}, verb) ||
+			index+2 < len(fields) && fields[index+2] == "test" && slices.Contains([]string{"go", "cargo", "rake", "mvn", "gradlew", "dotnet"}, verb) {
+			return true
+		}
+	}
+	return false
+}
+
 func heldUntilExit(rewritten string) string {
 	fields := strings.Fields(rewritten)
 	for index, field := range fields[:max(len(fields)-1, 0)] {
@@ -182,10 +198,10 @@ func heldUntilExit(rewritten string) string {
 			continue
 		}
 		verb := fields[index+1]
-		if verb == "go" && index+2 < len(fields) && slices.Contains([]string{"test", "build", "run", "install", "generate", "vet"}, fields[index+2]) {
+		if verb == "go" && index+2 < len(fields) && slices.Contains([]string{"build", "run", "install", "generate", "vet"}, fields[index+2]) {
 			return verb + " " + fields[index+2]
 		}
-		if slices.Contains([]string{"cargo", "npm", "pnpm", "dotnet", "mvn", "gradlew", "pytest", "jest", "vitest", "playwright", "next", "rake", "rspec", "test", "pip", "docker", "golangci-lint", "lint", "mypy", "rubocop"}, verb) {
+		if slices.Contains([]string{"cargo", "npm", "pnpm", "dotnet", "mvn", "gradlew", "next", "rake", "pip", "docker", "golangci-lint", "lint", "mypy", "rubocop"}, verb) {
 			return verb
 		}
 	}

@@ -409,7 +409,11 @@ func TestARewriteWhoseFilterLosesOutputRunsTheCommandAsAsked(t *testing.T) {
 		{"ping -n 3 127.0.0.1", "U+FFFD", true},
 		{"tree", "not found", treeKept},
 		{"echo ping", "", false},
-		{"go test ./pkg/", "", false},
+		{"go test ./pkg/", "", true},
+		{"cargo test", "", true},
+		{"pytest -q", "", true},
+		{"go vet ./pkg/", "", false},
+		{"go build ./pkg/", "", false},
 	} {
 		asked, _ := json.Marshal(map[string]string{"command": row.command})
 		ran, proxied := proxy.rewrite(context.Background(), core.ToolCall{Name: bashToolName, Arguments: asked})
@@ -417,7 +421,7 @@ func TestARewriteWhoseFilterLosesOutputRunsTheCommandAsAsked(t *testing.T) {
 			t.Errorf("%q ran as %s, kept as asked %v, want %v", row.command, ran, kept, row.kept)
 			continue
 		}
-		if row.kept && (proxied.Ran != "" || !strings.Contains(proxied.Note, row.note)) {
+		if row.kept && (proxied.Ran != "" || !strings.Contains(proxied.Note, row.note) || row.note == "" && proxied.Note != "") {
 			t.Errorf("%q: the row says ran %q, note %q, want no run and a note naming %q", row.command, proxied.Ran, proxied.Note, row.note)
 		}
 		t.Logf("%q ran as %s, note %q", row.command, ran, proxied.Note)
@@ -433,14 +437,14 @@ func TestOutputOfACommandThatCanMoveToABackgroundShellIsNotHeldByRtk(t *testing.
 		arguments string
 		kept      bool
 	}{
-		{movable, `{"command":"go test ./pkg/"}`, true},
+		{movable, `{"command":"go build ./pkg/"}`, true},
 		{movable, `{"command":"cargo build -j 2"}`, true},
 		{movable, `{"command":"npm run build","timeout_ms":600000}`, true},
-		{movable, `{"command":"go test ./pkg/","timeout_ms":5000}`, false},
+		{movable, `{"command":"go build ./pkg/","timeout_ms":5000}`, false},
 		{movable, `{"command":"git status"}`, false},
 		{movable, `{"command":"go vet ./pkg/"}`, true},
 		{movable, `{"command":"go version"}`, false},
-		{context.Background(), `{"command":"go test ./pkg/"}`, false},
+		{context.Background(), `{"command":"go build ./pkg/"}`, false},
 	} {
 		ran, proxied := proxy.rewrite(row.ctx, core.ToolCall{Name: bashToolName, Arguments: json.RawMessage(row.arguments)})
 		if kept := string(ran) == row.arguments; kept != row.kept {
@@ -463,12 +467,30 @@ func TestAFilterThatLosesOutputIsFoundAnywhereInWhatRtkRewroteTo(t *testing.T) {
 		"cd x && rtk tree":         treeVerb,
 		"rtk grep ping src":        "",
 		"rtk go test ./pkg/":       "",
+		"rtk go vet ./pkg/":        "",
 		"rtk tsc --noEmit":         "tsc",
 		"rtk npx eslint .":         "npx",
 		"echo tsc && rtk go vet .": "",
 	} {
 		if verb, _ := refusedVerb(rewritten); verb != want {
 			t.Errorf("%q: refused %q, want %q", rewritten, verb, want)
+		}
+	}
+}
+
+func TestATestRunnerIsFoundAnywhereInWhatRtkRewroteTo(t *testing.T) {
+	for rewritten, want := range map[string]bool{
+		"rtk go test ./pkg/":               true,
+		"uv run rtk pytest -q":             true,
+		"cd x && rtk cargo test":           true,
+		"rtk git status && rtk vitest run": true,
+		"rtk go vet ./pkg/":                false,
+		"rtk cargo build":                  false,
+		"rtk grep test src":                false,
+		"echo go test && rtk git status":   false,
+	} {
+		if got := runsTests(rewritten); got != want {
+			t.Errorf("%q: runs tests %v, want %v", rewritten, got, want)
 		}
 	}
 }
@@ -516,13 +538,13 @@ func TestTheRewriteKeepsEveryFieldAndLeavesBackgroundPipedAndRedirectedCommandsA
 	fakeProxyOnPath(t)
 	proxy := proxyFrom(t, t.TempDir(), proxyOn)
 	for asked, want := range map[string]string{
-		`{"command":"go test ./pkg/","timeout_ms":5000,"check_port":0,"later":"kept"}`: `{"check_port":0,"command":"rtk go test ./pkg/","later":"kept","timeout_ms":5000}`,
-		`{"command":"go test ./pkg/ || true"}`:                                         `{"command":"rtk go test ./pkg/ || true"}`,
-		`{"command":"npm run dev","background":true}`:                                  `{"command":"npm run dev","background":true}`,
-		`{"command":"go test ./pkg/ | grep FAIL"}`:                                     `{"command":"go test ./pkg/ | grep FAIL"}`,
-		`{"command":"go test ./pkg/ > out.txt"}`:                                       `{"command":"go test ./pkg/ > out.txt"}`,
-		`{"command":"go test ./pkg/ >> out.txt"}`:                                      `{"command":"go test ./pkg/ >> out.txt"}`,
-		`{"command":"cargo test 2>&1"}`:                                                `{"command":"cargo test 2>&1"}`,
+		`{"command":"go vet ./pkg/","timeout_ms":5000,"check_port":0,"later":"kept"}`: `{"check_port":0,"command":"rtk go vet ./pkg/","later":"kept","timeout_ms":5000}`,
+		`{"command":"go vet ./pkg/ || true"}`:                                         `{"command":"rtk go vet ./pkg/ || true"}`,
+		`{"command":"npm run dev","background":true}`:                                 `{"command":"npm run dev","background":true}`,
+		`{"command":"go test ./pkg/ | grep FAIL"}`:                                    `{"command":"go test ./pkg/ | grep FAIL"}`,
+		`{"command":"go test ./pkg/ > out.txt"}`:                                      `{"command":"go test ./pkg/ > out.txt"}`,
+		`{"command":"go test ./pkg/ >> out.txt"}`:                                     `{"command":"go test ./pkg/ >> out.txt"}`,
+		`{"command":"cargo test 2>&1"}`:                                               `{"command":"cargo test 2>&1"}`,
 	} {
 		ran, row := proxy.rewrite(context.Background(), core.ToolCall{Name: bashToolName, Arguments: json.RawMessage(asked)})
 		if string(ran) != want {

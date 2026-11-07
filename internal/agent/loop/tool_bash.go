@@ -373,6 +373,9 @@ func (t *BashTool) command(lifetime, scope context.Context, command string) *exe
 	if actor := boardActor(scope); actor != "" {
 		env = append(env, subagents.SessionEnv+"="+actor)
 	}
+	if home, err := fs.HomeConfigDir(); err == nil && os.Getenv(proxyHistoryVar) == "" {
+		env = append(env, proxyHistoryVar+"="+filepath.Join(home, proxyUseRTK, "history.db"))
+	}
 	cmd := t.choice.Command(lifetime, string(t.root), command, env...)
 	cmd.WaitDelay = konst.BashWaitDelayMillis * time.Millisecond
 	return cmd

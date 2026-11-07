@@ -14,8 +14,9 @@ import (
 var droppedMiddle = fs.LazyRegexp(`[^\n]*\n\.\.\.\(\d+ bytes dropped here as they arrived\)\.\.\.\n[^\n]*(\n|$)`)
 
 type parser struct {
-	runner string
-	read   func(output string) checkers.TestRun
+	runner  string
+	read    func(output string) checkers.TestRun
+	printed func(lines []string) []string
 }
 
 func Fold(result Shell) (string, bool) {
@@ -23,12 +24,16 @@ func Fold(result Shell) (string, bool) {
 	if !found {
 		return "", false
 	}
-	run := known.read(droppedMiddle().ReplaceAllString(ansi.Strip(result.Stdout+result.Stderr), "\n"))
+	output := droppedMiddle().ReplaceAllString(ansi.Strip(result.Stdout+result.Stderr), "\n")
+	run := known.read(output)
 	if !run.Explains(result.ExitCode) {
 		return "", false
 	}
 	run.Runner = known.runner
 	folded := result.Note + run.Text()
+	if known.printed != nil {
+		folded += printedBlock(known.printed(strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n")))
+	}
 	if result.ExitCode != 0 {
 		folded += exitLine(result.ExitCode)
 	}
@@ -66,28 +71,30 @@ func parserFor(command string) (parser, bool) {
 		}
 	}
 	switch {
-	case program == "go" && slices.Contains([]string{"test", "vet", "build"}, verb):
-		return parser{"go " + verb, checkers.GoTest}, true
+	case program == "go" && verb == "test":
+		return parser{"go test", checkers.GoTest, goPrinted}, true
+	case program == "go" && slices.Contains([]string{"vet", "build"}, verb):
+		return parser{"go " + verb, checkers.GoTest, nil}, true
 	case program == "cargo" && verb == "test":
-		return parser{"cargo test", checkers.CargoTest}, true
+		return parser{"cargo test", checkers.CargoTest, nil}, true
 	case program == "cargo" && slices.Contains([]string{"check", "build", "clippy"}, verb):
-		return parser{"cargo " + verb, checkers.RustProblems}, true
+		return parser{"cargo " + verb, checkers.RustProblems, nil}, true
 	case program == "rustc":
-		return parser{"rustc", checkers.RustProblems}, true
+		return parser{"rustc", checkers.RustProblems, nil}, true
 	case program == "pytest" || program == "py.test":
-		return parser{"pytest", checkers.Pytest}, true
+		return parser{"pytest", checkers.Pytest, pytestPrinted}, true
 	case program == "pyright" || program == "mypy":
-		return parser{program, checkers.PythonProblems}, true
+		return parser{program, checkers.PythonProblems, nil}, true
 	case slices.Contains([]string{"python", "python3", "py"}, program):
 		at := slices.Index(words, "-m")
 		switch {
 		case at < 0 || at+1 == len(words):
 		case words[at+1] == "pytest":
-			return parser{"pytest", checkers.Pytest}, true
+			return parser{"pytest", checkers.Pytest, pytestPrinted}, true
 		case words[at+1] == "unittest":
-			return parser{"unittest", checkers.Unittest}, true
+			return parser{"unittest", checkers.Unittest, unittestPrinted}, true
 		case words[at+1] == "mypy":
-			return parser{"mypy", checkers.PythonProblems}, true
+			return parser{"mypy", checkers.PythonProblems, nil}, true
 		}
 	}
 	return parser{}, false
