@@ -40,12 +40,8 @@ fn told(
     what: &'static str,
     cx: &mut Context<Book>,
 ) -> impl Fn(&SidebarPick, &mut Window, &mut App) + 'static {
-    cx.listener(move |book, pick: &SidebarPick, window, cx| match pick {
-        SidebarPick::Project => book
-            .palette
-            .picker
-            .update(cx, |picker, cx| picker.open(window, cx)),
-        _ => book.tell(format!("Sidebar, {what}: {pick:?}"), cx),
+    cx.listener(move |book, pick: &SidebarPick, _, cx| {
+        book.tell(format!("Sidebar, {what}: {pick:?}"), cx)
     })
 }
 
@@ -54,6 +50,7 @@ pub(super) fn sidebar_page(palette: &PalettePage, theme: &Theme, cx: &mut Contex
         name: "notes-app".into(),
         branch: "main".into(),
         changed: 3,
+        folded: false,
         shown: Some(SessionAt::Active(0)),
         sessions: Rc::new(sessions()),
     };
@@ -61,8 +58,13 @@ pub(super) fn sidebar_page(palette: &PalettePage, theme: &Theme, cx: &mut Contex
         name: "hono-starter".into(),
         branch: "".into(),
         changed: 0,
+        folded: false,
         shown: None,
         sessions: Rc::default(),
+    };
+    let folded = Project {
+        folded: true,
+        ..fresh.clone()
     };
     let frame = |sidebar: Sidebar| {
         div()
@@ -75,10 +77,7 @@ pub(super) fn sidebar_page(palette: &PalettePage, theme: &Theme, cx: &mut Contex
         .flex_col()
         .gap_3()
         .child(label(
-            format!(
-                "The project row opens the projects menu: {}",
-                palette.readout
-            ),
+            format!("The projects palette: {}", palette.readout),
             theme,
         ))
         .child(palette.picker.clone());
@@ -90,7 +89,8 @@ pub(super) fn sidebar_page(palette: &PalettePage, theme: &Theme, cx: &mut Contex
                 theme,
                 frame(Sidebar::new(
                     "sidebar-notes",
-                    Some(notes),
+                    vec![notes.clone()],
+                    Some(0),
                     told("notes-app", cx),
                 )),
             ))
@@ -99,14 +99,30 @@ pub(super) fn sidebar_page(palette: &PalettePage, theme: &Theme, cx: &mut Contex
                 theme,
                 frame(Sidebar::new(
                     "sidebar-fresh",
-                    Some(fresh),
+                    vec![fresh],
+                    Some(0),
                     told("hono-starter", cx),
+                )),
+            ))
+            .child(named(
+                "Two projects, one folded",
+                theme,
+                frame(Sidebar::new(
+                    "sidebar-two",
+                    vec![notes, folded],
+                    Some(0),
+                    told("two projects", cx),
                 )),
             ))
             .child(named(
                 "No project",
                 theme,
-                frame(Sidebar::new("sidebar-empty", None, told("no project", cx))),
+                frame(Sidebar::new(
+                    "sidebar-empty",
+                    Vec::new(),
+                    None,
+                    told("no project", cx),
+                )),
             )),
     )
 }

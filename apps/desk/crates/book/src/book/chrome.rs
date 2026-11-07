@@ -76,6 +76,7 @@ fn each_state() -> Project {
         name: "notes-app".into(),
         branch: "main".into(),
         changed: 3,
+        folded: false,
         shown: Some(SessionAt::Active(0)),
         sessions: Rc::new(sessions),
     }
@@ -443,7 +444,8 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
                 .h(px(SESSIONS_HEIGHT))
                 .child(Sidebar::new(
                     "chrome-sidebar-states",
-                    Some(each_state()),
+                    vec![each_state()],
+                    Some(0),
                     cx.listener(|book, pick: &SidebarPick, _, cx| {
                         book.tell(format!("Sidebar: {pick:?}"), cx)
                     }),

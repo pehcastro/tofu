@@ -7,6 +7,7 @@ pub struct ProjectRow {
     pub branch: Arc<str>,
     pub changed: usize,
     pub ahead: u32,
+    pub folded: bool,
 }
 
 impl ProjectRow {
@@ -17,6 +18,7 @@ impl ProjectRow {
             branch: Arc::from(""),
             changed: 0,
             ahead: 0,
+            folded: false,
         }
     }
 }
@@ -26,6 +28,27 @@ pub fn project_name(folder: &Path) -> String {
         || folder.display().to_string(),
         |name| name.to_string_lossy().into_owned(),
     )
+}
+
+fn same_folder(one: &Path, two: &Path) -> bool {
+    let mut one = one.components();
+    let mut two = two.components();
+    loop {
+        match (one.next(), two.next()) {
+            (None, None) => return true,
+            (Some(a), Some(b)) => {
+                let (a, b) = (a.as_os_str(), b.as_os_str());
+                let same = match cfg!(windows) {
+                    true => a.eq_ignore_ascii_case(b),
+                    false => a == b,
+                };
+                if !same {
+                    return false;
+                }
+            }
+            _ => return false,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -39,44 +62,32 @@ impl Projects {
         &self.rows
     }
 
+    pub fn selected_at(&self) -> Option<usize> {
+        let at = usize::try_from(self.selected).ok()?;
+        (at < self.rows.len()).then_some(at)
+    }
+
     pub fn selected(&self) -> Option<&ProjectRow> {
-        self.rows.get(usize::try_from(self.selected).ok()?)
+        self.rows.get(self.selected_at()?)
     }
 
     pub fn folder(&self) -> Option<&Path> {
         self.selected().map(|row| row.folder.as_path())
     }
 
-    pub fn row_mut(&mut self, folder: &Path) -> Option<&mut ProjectRow> {
-        self.rows.iter_mut().find(|row| row.folder == folder)
+    pub fn find(&self, folder: &Path) -> Option<usize> {
+        self.rows
+            .iter()
+            .position(|row| same_folder(&row.folder, folder))
     }
 
-    pub fn recent(&mut self, folders: Vec<PathBuf>) {
-        let open = self.folder().map(Path::to_path_buf);
-        let mut known = std::mem::take(&mut self.rows);
-        self.rows = folders
-            .into_iter()
-            .map(
-                |folder| match known.iter().position(|row| row.folder == folder) {
-                    Some(at) => known.swap_remove(at),
-                    None => ProjectRow::new(folder),
-                },
-            )
-            .collect();
-        if let Some(open) = open {
-            self.select(open);
-        }
+    pub fn row_mut(&mut self, folder: &Path) -> Option<&mut ProjectRow> {
+        let at = self.find(folder)?;
+        self.rows.get_mut(at)
     }
 
     pub fn open(&mut self, folder: PathBuf) {
-        let row = self.select(folder);
-        row.branch = Arc::from("");
-        row.changed = 0;
-        row.ahead = 0;
-    }
-
-    fn select(&mut self, folder: PathBuf) -> &mut ProjectRow {
-        let at = match self.rows.iter().position(|row| row.folder == folder) {
+        let at = match self.find(&folder) {
             Some(at) => at,
             None => {
                 self.rows.push(ProjectRow::new(folder));
@@ -84,6 +95,11 @@ impl Projects {
             }
         };
         self.selected = u32::try_from(at).unwrap_or(u32::MAX);
-        &mut self.rows[at]
+    }
+
+    pub fn fold(&mut self, at: usize) -> Option<bool> {
+        let row = self.rows.get_mut(at)?;
+        row.folded = !row.folded;
+        Some(row.folded)
     }
 }

@@ -139,7 +139,7 @@ fn open_dir(
     Err("--dir needs the editor: rebuild with --features module-editor".to_owned())
 }
 
-const USAGE: &str = "usage: desk [<folder>] | [--screen <name> [--board <ID>] [--file <path>] [--dir <path>]] | [--install-plugin <folder>] | [--bench <scenario>]\n\
+const USAGE: &str = "usage: desk [<folder>...] | [--screen <name> [--board <ID>] [--file <path>] [--dir <path>]] | [--install-plugin <folder>] | [--bench <scenario>]\n\
 --install-plugin installs the plugin in <folder> and opens Settings > Plugins on its consent sheet\n\
 --bench drives one scenario, prints its frame times as one JSON line and quits: editor-scroll boardy-list theme-switch\n\
 DESK_PROFILE=<path> writes a Chrome trace of the run to <path> when the desk quits\n\
@@ -263,7 +263,7 @@ fn parse(args: &[String]) -> Result<Launch, Refused> {
             Ok(Launch::Bench(scenario, scenario.launch()?))
         }
         [] => Ok(Launch::Intro),
-        [folder] if !folder.starts_with("--") => Ok(Launch::Desk),
+        folders if folders.iter().all(|folder| !folder.starts_with("--")) => Ok(Launch::Desk),
         [flag, folder] if flag == "--install-plugin" => Ok(Launch::Screen(ScreenLaunch {
             open: screen("settings")?,
             name: "settings".to_owned(),

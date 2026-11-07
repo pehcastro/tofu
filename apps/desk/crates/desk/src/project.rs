@@ -1,35 +1,29 @@
 use std::cmp::Reverse;
 use std::env;
+use std::ffi::OsString;
 use std::fs;
 use std::io::{self, ErrorKind};
-use std::iter;
 use std::path::{Path, PathBuf};
+#[cfg(feature = "screen-onboarding")]
 use std::process::{Child, Command, Output, Stdio};
 use std::time::{Duration, SystemTime};
 
 use desk_core::git::{Git, GitBinary, State};
 pub use desk_core::model::project_name as name;
-use desk_core::model::{ProjectRow, StatusState, Statuses};
+use desk_core::model::{StatusState, Statuses};
 use desk_core::sessions::{SessionRow, age_changes_in};
 use desk_tiling::Store as Layouts;
-use desk_ui::components::glyph::Glyph;
-use desk_ui::components::palette::{
-    Palette, PaletteDetail, PaletteEntry, PaletteItem, PaletteMeta,
-};
 use desk_ui::components::sidebar::{SessionColumns, SessionState};
-use gpui::{App, Entity, Window};
 use serde_json::{Value, json};
 
 const RECENTS: &str = "recents.json";
 const PROJECT_VARIABLE: &str = "DESK_PROJECT";
 const STATE_VERSION: u64 = 1;
 const MOST_RECENT: usize = 8;
-pub const RECENT_ID: &str = "project.recent.";
-pub const OPEN_FOLDER_ID: &str = "project.open";
 const TOFU_VARIABLE: &str = "DESK_TOFU";
+#[cfg(feature = "screen-onboarding")]
 const SHORT_HASH: usize = 7;
-const MISSING: &str = "missing";
-#[cfg(windows)]
+#[cfg(all(windows, feature = "screen-onboarding"))]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 pub struct Head {
@@ -52,10 +46,31 @@ pub fn launched() -> Result<(PathBuf, &'static str), String> {
     }
 }
 
+fn folder_arguments() -> Vec<OsString> {
+    env::args_os()
+        .skip(1)
+        .take_while(|argument| !argument.to_string_lossy().starts_with("--"))
+        .collect()
+}
+
+pub fn opened_beside() -> Vec<PathBuf> {
+    let mut folders = folder_arguments();
+    folders.pop();
+    folders
+        .into_iter()
+        .filter_map(|folder| match std::path::absolute(&folder) {
+            Ok(folder) if folder.is_dir() => Some(folder),
+            _ => {
+                eprintln!("desk: the folder argument {} is not a folder", folder.display());
+                None
+            }
+        })
+        .collect()
+}
+
 pub fn chosen() -> Result<Option<(PathBuf, &'static str)>, String> {
-    let named = env::args_os()
-        .nth(1)
-        .filter(|argument| !argument.to_string_lossy().starts_with("--"))
+    let named = folder_arguments()
+        .pop()
         .map(|folder| (folder, "the folder argument"))
         .or_else(|| {
             env::var_os(PROJECT_VARIABLE)
@@ -206,12 +221,6 @@ pub fn remember(folder: &Path) -> Result<Vec<PathBuf>, String> {
     store(folders)
 }
 
-pub fn forget(folder: &Path) -> Result<Vec<PathBuf>, String> {
-    let mut folders = recents()?;
-    folders.retain(|known| known != folder);
-    store(folders)
-}
-
 pub fn head(folder: PathBuf) -> Head {
     let read = GitBinary::open(&folder).and_then(|git| {
         let branch = git.current_branch()?.unwrap_or_default();
@@ -252,7 +261,10 @@ pub fn switch(folder: &Path, branch: &str) -> Result<(), String> {
 pub const ACTIVE_FOR: Duration = Duration::from_secs(3600);
 
 pub fn columns(rows: &[SessionRow], was: &SessionColumns) -> SessionColumns {
-    let mut sessions = SessionColumns::default();
+    let mut sessions = SessionColumns {
+        listed: rows.len(),
+        ..SessionColumns::default()
+    };
     for row in rows {
         sessions.push(
             row.id.clone().into(),
@@ -275,7 +287,6 @@ pub fn columns(rows: &[SessionRow], was: &SessionColumns) -> SessionColumns {
 }
 
 pub struct Live<'a> {
-    pub listed: usize,
     pub busy: Option<&'a str>,
     pub running: &'a [&'a str],
     pub statuses: &'a Statuses,
@@ -300,7 +311,8 @@ pub fn keep_active(sessions: &mut SessionColumns, live: &Live) -> bool {
     let mut active = std::mem::take(&mut sessions.active);
     let before = active.clone();
     active.retain(|column| recent(*column));
-    let mut fresh: Vec<u32> = (0..u32::try_from(live.listed).unwrap_or(u32::MAX))
+    let listed = u32::try_from(sessions.listed).unwrap_or(u32::MAX);
+    let mut fresh: Vec<u32> = (0..listed)
         .chain(busy)
         .filter(|column| recent(*column) && !active.contains(column))
         .collect();
@@ -334,7 +346,6 @@ pub fn keep_active(sessions: &mut SessionColumns, live: &Live) -> bool {
             }
         };
     }
-    let listed = u32::try_from(live.listed).unwrap_or(u32::MAX);
     sessions.inactive = (0..listed)
         .filter(|column| !active.contains(column))
         .collect();
@@ -351,83 +362,6 @@ pub fn next_age(sessions: &SessionColumns, now: SystemTime) -> Option<Duration> 
         .filter_map(|last| now.duration_since(*last).ok())
         .map(age_changes_in)
         .min()
-}
-
-pub enum Picked {
-    OpenFolder,
-    Switch(PathBuf),
-    Forget(PathBuf),
-    Unknown,
-}
-
-pub fn picked(id: &str, projects: &[ProjectRow]) -> Picked {
-    if id == OPEN_FOLDER_ID {
-        return Picked::OpenFolder;
-    }
-    let folder = id
-        .strip_prefix(RECENT_ID)
-        .and_then(|at| at.parse::<usize>().ok())
-        .and_then(|at| projects.get(at))
-        .map(|row| &row.folder);
-    match folder {
-        Some(folder) if folder.is_dir() => Picked::Switch(folder.clone()),
-        Some(folder) => Picked::Forget(folder.clone()),
-        None => Picked::Unknown,
-    }
-}
-
-struct Recent {
-    at: usize,
-    folder: PathBuf,
-    branch: Option<String>,
-    current: bool,
-    missing: bool,
-    activity: Option<Activity>,
-}
-
-struct Activity {
-    sessions: usize,
-    last: Option<String>,
-}
-
-pub fn picker(
-    recents: &[PathBuf],
-    current: Option<&Path>,
-    window: &mut Window,
-    cx: &mut App,
-) -> Entity<Palette> {
-    let mut shown: Vec<Recent> = recents
-        .iter()
-        .enumerate()
-        .map(|(at, folder)| Recent {
-            at,
-            folder: folder.clone(),
-            branch: branch(folder),
-            current: current == Some(folder.as_path()),
-            missing: !folder.is_dir(),
-            activity: None,
-        })
-        .collect();
-    shown.sort_by_key(|recent| !recent.current);
-    let menu = Palette::detailed(entries(&shown), window, cx);
-    let marks = shown
-        .iter()
-        .map(|recent| (format!("{RECENT_ID}{}", recent.at).into(), Glyph::Code))
-        .chain(iter::once((OPEN_FOLDER_ID.into(), Glyph::Folder)))
-        .collect();
-    menu.update(cx, |menu, _| menu.marks(marks));
-    let filling = menu.downgrade();
-    cx.spawn(async move |cx| {
-        let shown = cx
-            .background_executor()
-            .spawn(async move { with_activity(shown) })
-            .await;
-        if let Err(error) = filling.update(cx, |menu, cx| menu.replace(entries(&shown), cx)) {
-            eprintln!("desk: projects menu closed before its sessions were read: {error}");
-        }
-    })
-    .detach();
-    menu
 }
 
 #[cfg(feature = "screen-onboarding")]
@@ -449,7 +383,7 @@ pub fn listed(folder: PathBuf) -> Listed {
             .and_then(activity),
     };
     let sessions = match read {
-        Ok(activity) => Some(activity.sessions),
+        Ok(sessions) => Some(sessions),
         Err(error) => {
             eprintln!("desk: sessions in {}: {error}", folder.display());
             None
@@ -463,57 +397,7 @@ pub fn listed(folder: PathBuf) -> Listed {
     }
 }
 
-fn entries(shown: &[Recent]) -> Vec<PaletteEntry> {
-    let recent = shown.iter().map(|recent| {
-        let mut meta: Vec<PaletteMeta> = Vec::new();
-        if recent.missing {
-            meta.push(PaletteMeta::Text(MISSING.into()));
-        }
-        meta.extend(
-            recent
-                .branch
-                .clone()
-                .map(|branch| PaletteMeta::Branch(branch.into())),
-        );
-        if let Some(activity) = &recent.activity {
-            meta.push(PaletteMeta::Text(
-                match activity.sessions {
-                    0 => "no sessions".to_owned(),
-                    1 => "1 session".to_owned(),
-                    count => format!("{count} sessions"),
-                }
-                .into(),
-            ));
-            meta.extend(
-                activity
-                    .last
-                    .clone()
-                    .map(|last| PaletteMeta::Text(last.into())),
-            );
-        }
-        let item = PaletteItem {
-            id: format!("{RECENT_ID}{}", recent.at).into(),
-            label: name(&recent.folder).into(),
-            group: "Recent projects".into(),
-            keys: None,
-        };
-        let detail = PaletteDetail {
-            below: recent.folder.display().to_string().into(),
-            meta,
-            checked: recent.current,
-            dim: recent.missing,
-        };
-        (item, Some(detail))
-    });
-    let open = PaletteItem {
-        id: OPEN_FOLDER_ID.into(),
-        label: "Open a folder".into(),
-        group: "Open".into(),
-        keys: None,
-    };
-    recent.chain(iter::once((open, None))).collect()
-}
-
+#[cfg(feature = "screen-onboarding")]
 fn branch(folder: &Path) -> Option<String> {
     let dot = folder.join(".git");
     let git_dir = match fs::read_to_string(&dot) {
@@ -540,28 +424,7 @@ fn branch(folder: &Path) -> Option<String> {
     }
 }
 
-fn with_activity(mut shown: Vec<Recent>) -> Vec<Recent> {
-    let tofu = tofu();
-    let listing: Vec<Option<io::Result<Child>>> = shown
-        .iter()
-        .map(|recent| (!recent.missing).then(|| list_sessions(&tofu, &recent.folder)))
-        .collect();
-    for (recent, child) in shown.iter_mut().zip(listing) {
-        let Some(child) = child else {
-            continue;
-        };
-        match child
-            .and_then(Child::wait_with_output)
-            .map_err(|error| error.to_string())
-            .and_then(activity)
-        {
-            Ok(activity) => recent.activity = Some(activity),
-            Err(error) => eprintln!("desk: sessions in {}: {error}", recent.folder.display()),
-        }
-    }
-    shown
-}
-
+#[cfg(feature = "screen-onboarding")]
 fn list_sessions(tofu: &Path, folder: &Path) -> io::Result<Child> {
     let mut command = Command::new(tofu);
     command
@@ -575,7 +438,8 @@ fn list_sessions(tofu: &Path, folder: &Path) -> io::Result<Child> {
     command.spawn()
 }
 
-fn activity(output: Output) -> Result<Activity, String> {
+#[cfg(feature = "screen-onboarding")]
+fn activity(output: Output) -> Result<usize, String> {
     if !output.status.success() {
         return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
     }
@@ -585,21 +449,5 @@ fn activity(output: Output) -> Result<Activity, String> {
         .pointer("/data/sessions")
         .and_then(Value::as_array)
         .ok_or("tofu session list printed no data.sessions")?;
-    let now = SystemTime::now();
-    let last = sessions
-        .iter()
-        .filter_map(|row| {
-            let row = SessionRow {
-                at: row.get("at")?.as_str()?.to_owned(),
-                last_at: row.get("lastAt").and_then(Value::as_str).map(str::to_owned),
-                ..SessionRow::default()
-            };
-            Some((row.since(now)?, row.age(now)?))
-        })
-        .min_by_key(|(since, _)| *since)
-        .map(|(_, age)| age);
-    Ok(Activity {
-        sessions: sessions.len(),
-        last,
-    })
+    Ok(sessions.len())
 }
