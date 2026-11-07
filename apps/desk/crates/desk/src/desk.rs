@@ -168,6 +168,8 @@ const EDITOR_SCREEN: &str = "editor";
 const BOARDY_SCREEN: &str = "boardy";
 #[cfg(feature = "screen-work")]
 const SAVE_AFTER: std::time::Duration = std::time::Duration::from_millis(500);
+#[cfg(feature = "screen-work")]
+const HIDDEN_AFTER: std::time::Duration = std::time::Duration::from_millis(300);
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum ScreenGroup {
     Top,
@@ -516,6 +518,10 @@ pub struct Desk {
     menu_at: Option<Point<Pixels>>,
     #[cfg(feature = "screen-work")]
     gate: Option<Gate>,
+    #[cfg(feature = "screen-work")]
+    hidden: bool,
+    #[cfg(feature = "screen-work")]
+    _hiding: Option<gpui::Task<()>>,
 }
 
 #[cfg(feature = "screen-work")]
@@ -1101,6 +1107,10 @@ impl Desk {
             menu_at: None,
             #[cfg(feature = "screen-work")]
             gate: None,
+            #[cfg(feature = "screen-work")]
+            hidden: false,
+            #[cfg(feature = "screen-work")]
+            _hiding: None,
         };
         #[cfg(feature = "screen-work")]
         {
@@ -1119,6 +1129,8 @@ impl Desk {
                 }
                 true
             });
+            cx.observe_window_activation(window, Self::activation_moved)
+                .detach();
         }
         #[cfg(feature = "screen-intro")]
         if let Body::Whole(view) = &desk.shown.body
@@ -2227,6 +2239,43 @@ impl Desk {
         };
         chat.update(cx, |chat, cx| chat.reconnect(stopped.session, cx));
         cx.notify();
+    }
+
+    #[cfg(feature = "screen-work")]
+    fn activation_moved(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if window.is_window_active() {
+            self._hiding = None;
+            return self.tell_visible(true, cx);
+        }
+        self._hiding = Some(cx.spawn_in(window, async move |desk, cx| {
+            cx.background_executor().timer(HIDDEN_AFTER).await;
+            let checked = desk.update_in(cx, |desk, window, cx| {
+                let shown = window.bounds();
+                let on_screen = cx
+                    .displays()
+                    .iter()
+                    .any(|display| display.bounds().intersects(&shown));
+                if !window.is_window_active() && !on_screen {
+                    desk.tell_visible(false, cx);
+                }
+            });
+            if let Err(error) = checked {
+                eprintln!("desk: the desk closed before its visibility was checked: {error}");
+            }
+        }));
+    }
+
+    #[cfg(feature = "screen-work")]
+    fn tell_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
+        if self.hidden != visible {
+            return;
+        }
+        self.hidden = !visible;
+        eprintln!("desk: window {}", if visible { "shown" } else { "hidden" });
+        if let Some(work) = self.work() {
+            let chat = work.read(cx).chat().clone();
+            chat.update(cx, |chat, cx| chat.set_visible(visible, cx));
+        }
     }
 
     pub fn work(&self) -> Option<&Entity<Work>> {

@@ -14,9 +14,30 @@ use serde_json::Value;
 
 use crate::limits;
 use crate::protocol::{
-    InitializeParams, InitializeResult, Notification, Refusal, Request, RequestId, ServerRequest,
-    request,
+    Ack, InitializeParams, InitializeResult, Notification, Refusal, Request, RequestId,
+    ServerRequest, SessionParams, request,
 };
+
+pub struct SessionKeep;
+
+impl Request for SessionKeep {
+    const METHOD: &'static str = "session.keep";
+    type Params = SessionParams;
+    type Result = Ack;
+}
+
+#[derive(Serialize)]
+pub struct ClientVisibleParams {
+    pub visible: bool,
+}
+
+pub struct ClientVisible;
+
+impl Request for ClientVisible {
+    const METHOD: &'static str = "client.visible";
+    type Params = ClientVisibleParams;
+    type Result = Ack;
+}
 
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -307,7 +328,9 @@ impl Bridge {
             .request::<request::Initialize>(&InitializeParams {
                 client: client.to_owned(),
                 versions: vec![needed.to_owned()],
-                capabilities: vec!["questions".to_owned(), "takeover".to_owned()],
+                capabilities: ["questions", "takeover", "keep", "visible"]
+                    .map(str::to_owned)
+                    .to_vec(),
             })?
             .wait();
         let refused = |detail: String| BridgeError::Protocol {

@@ -15,11 +15,14 @@ use std::rc::Rc;
 use std::time::{Duration, Instant};
 use std::{env, fs, iter, slice, thread};
 
-use desk_core::bridge::{Bridge, BridgeError, Event, Exit, serve_command};
+use desk_core::bridge::{
+    Bridge, BridgeError, ClientVisible, ClientVisibleParams, Event, Exit, SessionKeep,
+    serve_command,
+};
 use desk_core::model::{ModelError, PersonAsk, PersonKind, Role, Statuses, Store};
 use desk_core::protocol::turn::{PersonQuestion, PersonReply};
 use desk_core::protocol::{
-    Accounts, ApprovalAnswer, ApprovalRequest, ApprovalRequestDecisions, ApprovalRequestRisk,
+    Accounts, Ack, ApprovalAnswer, ApprovalRequest, ApprovalRequestDecisions, ApprovalRequestRisk,
     ApprovalRevokeParams, AttachedImage, ContextReport, CredentialReport, CronCommandParams,
     Decision, DecisionMade, InitializeResult, LedgerParams, ModelPick, ModelsQuery, NoParams,
     Notification, PROTOCOL, QuestionAnswer, QuestionOutcome, Request, RequestId, SessionAsking,
@@ -499,6 +502,7 @@ pub struct Chat {
     painting: Option<(String, Instant)>,
     landed: Option<Instant>,
     head: Entity<SessionHead>,
+    refused: Vec<&'static str>,
     _drain: Option<Task<()>>,
     _flash: Option<Task<()>>,
 }
@@ -845,6 +849,7 @@ impl Chat {
             painting: None,
             landed: None,
             head,
+            refused: Vec::new(),
             _drain: None,
             _flash: None,
         }
@@ -1361,6 +1366,12 @@ impl Chat {
         if session.is_some() && session.as_deref() == self.open_id() {
             return;
         }
+        if let Some(left) = self.open_id().map(str::to_owned) {
+            let params = SessionParams {
+                session: Some(left.clone()),
+            };
+            self.courtesy::<SessionKeep>(&params, left, cx);
+        }
         match self.running(cx) {
             Some((busy, _)) => self.step_aside(&busy, cx),
             None => self.restart(cx),
@@ -1384,6 +1395,43 @@ impl Chat {
         self.ask_page(Paging::Older, cx);
         self.join(session, asked, cx);
         cx.notify();
+    }
+
+    pub fn set_visible(&mut self, visible: bool, cx: &mut Context<Self>) {
+        let shown = self.shown_id().unwrap_or_default();
+        self.courtesy::<ClientVisible>(&ClientVisibleParams { visible }, shown, cx);
+        if visible && matches!(self.link, Link::Ready(_)) {
+            eprintln!(
+                "desk: shown again, resyncing the session list and {}",
+                self.shown_id().unwrap_or_default()
+            );
+            self.relist(cx);
+            self.ask_due(cx);
+        }
+    }
+
+    fn courtesy<R: Request<Result = Ack>>(
+        &mut self,
+        params: &R::Params,
+        about: String,
+        cx: &mut Context<Self>,
+    ) {
+        if self.refused.contains(&R::METHOD) {
+            return;
+        }
+        eprintln!("desk: {} asked for {about}", R::METHOD);
+        self.request_typed::<R>(params, cx, move |chat, reply, _| match reply {
+            Ok(ack) => eprintln!("desk: {} {about} acknowledged, ok {}", R::METHOD, ack.ok),
+            Err(BridgeError::Refused(refusal)) => {
+                eprintln!(
+                    "desk: tofu refused {}, the desk carries on without it: {}",
+                    R::METHOD,
+                    refusal.message
+                );
+                chat.refused.push(R::METHOD);
+            }
+            Err(error) => eprintln!("desk: {} {about} failed: {error}", R::METHOD),
+        });
     }
 
     fn join(&mut self, session: Option<String>, asked: Instant, cx: &mut Context<Self>) {
