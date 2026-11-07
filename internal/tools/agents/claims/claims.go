@@ -24,7 +24,7 @@ import (
 
 const (
 	Name         = "claims"
-	questionsRef = "claims@2"
+	questionsRef = "claims@3"
 	stateBuilder = "claims_state@1"
 	noEvidence   = "none"
 )
@@ -65,7 +65,10 @@ type checked struct {
 	verdict        Verdict
 }
 
-var partBreak = regexp.MustCompile(`[;!?\n]|\.(?:\s|$)`)
+var (
+	partBreak = regexp.MustCompile(`[;!?\n]|\.(?:\s|$)`)
+	word      = regexp.MustCompile(`[\pL\pN_]+`)
+)
 
 func (Claims) Name() string { return Name }
 
@@ -175,6 +178,16 @@ func (c Claims) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 		}) {
 			contradictedBy = -1
 		}
+		if shownBy >= 0 && contradictedBy >= 0 {
+			showing, contradicting := calls[shownBy], calls[contradictedBy]
+			shownNames, contradictedNames := namesOnly(part, showing, contradicting), namesOnly(part, contradicting, showing)
+			switch {
+			case shownNames && !contradictedNames:
+				contradictedBy = -1
+			case contradictedNames && !shownNames:
+				shownBy = -1
+			}
+		}
 		claim := checked{text: part, evidence: noEvidence, verdict: NotShown}
 		switch {
 		case contradictedBy > shownBy:
@@ -245,6 +258,13 @@ func callsOf(events []session.Event, keep int) []call {
 		calls[i].Name = "call_" + strconv.Itoa(i+1)
 	}
 	return calls
+}
+
+func namesOnly(part string, this, other call) bool {
+	these, others := word.FindAllString(strings.ToLower(this.Args), -1), word.FindAllString(strings.ToLower(other.Args), -1)
+	return slices.ContainsFunc(word.FindAllString(strings.ToLower(part), -1), func(named string) bool {
+		return slices.Contains(these, named) && !slices.Contains(others, named)
+	})
 }
 
 func tail(text string, bytes int) string {

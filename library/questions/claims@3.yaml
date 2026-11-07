@@ -1,6 +1,6 @@
 name: claims
 domain: general
-questions_version: 2
+questions_version: 3
 mode: enforced
 notes: >-
   asked by the claims tool, internal/tools/agents/claims, when an agent checks a
@@ -13,16 +13,16 @@ notes: >-
   each call after none. a part below claim_at is not a claim. evidence names
   the call that shows a claim true when it chose one at or above shown_at, and
   contradicts names the call that shows it false when it chose one at or above
-  contradicted_at. when both name a call, the later call wins: the claim reads
-  contradicted when the contradicting call ran after the evidence call, and
-  shown when the evidence call ran after it. when only one names a call, that
-  one decides, and when neither does the claim reads not_shown. an error or a
-  timeout checks nothing and says so. every threshold sits at the middle, an
-  uncalibrated prior until a labelled sample of reports moves it. version 2
-  turned contradicts from a noul into a choice over the calls: as a noul it
-  could not say which call refuted a claim, so an earlier failing test held it
-  near the middle against a later passing one, and nothing could tell a claim
-  that broke after it passed from one that passed after it broke.
+  contradicted_at. when both name a call, the call whose arguments name a word
+  of the part the other call's arguments do not decides; when neither or both
+  do, the later call wins: the claim reads contradicted when the contradicting
+  call ran after the evidence call, and shown when the evidence call ran after
+  it. when only one names a call, that one decides, and when neither does the
+  claim reads not_shown. an error or a timeout checks nothing and says so.
+  every threshold sits at the middle, an uncalibrated prior until a labelled
+  sample of reports moves it. version 3 scoped both choices to the tests a run
+  ran: under version 2 a passing go test -run of one test showed that all
+  tests pass, and a failing run of one test contradicted a part about another.
 
 thresholds:
   claim_at: 0.5
@@ -57,7 +57,10 @@ questions:
       one of them, named as in `calls`. Choose the call whose arguments and
       output show that the one part of `parts` named at the end is true. A call
       that only touches the same file or runs a different command does not
-      show it.
+      show it. A test run that exited 0 shows each test named in its
+      arguments passes, even when its output only says ok: a passing go test
+      -run TestParse shows TestParse passes. A run limited by -run or a test
+      name does not show that all tests or every test pass.
     escape: none
     options:
       - name: none
@@ -74,7 +77,10 @@ questions:
       test that failed when the part says tests pass, a build error when it
       says the build is clean, a nonzero exit code, an error, or output that
       says the opposite of the part. A call that only touches the same file or
-      runs a different command does not show it false.
+      runs a different command does not show it false. A test run that failed
+      shows false only a part about a test named in its arguments or about all
+      tests: a failing go test -run TestParse shows TestParse passes false and
+      does not show TestFormat passes false.
     escape: none
     options:
       - name: none
