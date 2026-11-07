@@ -410,9 +410,11 @@ func dryRun(opts wiring.RunOpts, selected models.Model, dir string, say func(str
 	warm := newWarmProcesses(browser.NewBrowserTabs(home))
 	defer warm.Close()
 	built, plan, err := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, contract.NewReadLedger()), warm, shell)
+	unstarted, err := unstartedIn(err)
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	sayUnstarted(unstarted, say)
 	built, _ = planAsOffered(selected, built, plan)
 	budget, err := wiring.ContextBudget(opts, selected)
 	if err != nil {
@@ -1213,46 +1215,86 @@ func assembleRunTools(dir, set string, ledger *contract.ReadLedger, warm *warmPr
 	}
 	plan := plantool.NewPlan()
 	full := append([]contract.Tool{readTool, writeTool, shell, plan, jobs.Shells{Seen: warm.seen}, projectTool, globTool, searchTool, symbolsTool.Serving(warm.servers), editTool.Reading(ledger).Checking(typecheckers).Ruling(rules), typecheckTool, testTool.Serving(warm.servers), githubTool}, verbTools...)
-	for _, construct := range leadToolConstructors() {
-		tool, err := construct(dir)
+	var unstarted unstartedTools
+	for _, lead := range leadToolConstructors() {
+		tool, err := lead.construct(dir)
 		if err != nil {
-			return nil, nil, err
+			unstarted = append(unstarted, unstartedTool{name: lead.name, err: err})
+			continue
 		}
 		full = append(full, tool)
 	}
-	return tools.NewMemo().Wrap(append(append(full, webTools...), browserTools...)), plan, nil
+	wrapped := tools.NewMemo().Wrap(append(append(full, webTools...), browserTools...))
+	if len(unstarted) > 0 {
+		return wrapped, plan, unstarted
+	}
+	return wrapped, plan, nil
 }
 
-func leadToolConstructors() []func(dir string) (contract.Tool, error) {
-	return []func(dir string) (contract.Tool, error){
-		envTool,
-		newChangesTool,
-		newCheckpointTool,
-		newTrailTool,
-		codemodTool,
-		newContextTool,
-		newBudgetTool,
-		newForgetTool,
-		newNoteTool,
-		newClaimsTool,
-		debugTool,
-		formatTool,
-		depsTool,
-		newScaffoldTool,
-		newShapeTool,
-		newDBTool,
-		newWhatifTool,
-		newBisectTool,
-		newRaceTool,
-		profileTool,
-		recordTool,
-		newHTTPTool,
-		newDoneTool,
-		newDigestTool,
-		newEvalTool,
-		newMutateTool,
-		newMapTool,
-		newAPITool,
+type unstartedTool struct {
+	name string
+	err  error
+}
+
+type unstartedTools []unstartedTool
+
+func (u unstartedTools) Error() string {
+	said := make([]string, len(u))
+	for i, one := range u {
+		said[i] = one.name + ": " + one.err.Error()
+	}
+	return strings.Join(said, "\n")
+}
+
+func unstartedIn(err error) (unstartedTools, error) {
+	var unstarted unstartedTools
+	if errors.As(err, &unstarted) {
+		return unstarted, nil
+	}
+	return nil, err
+}
+
+func sayUnstarted(unstarted unstartedTools, say func(string)) {
+	for _, one := range unstarted {
+		say(one.name + " did not start, so it is not offered: " + one.err.Error())
+	}
+}
+
+type leadTool struct {
+	name      string
+	construct func(dir string) (contract.Tool, error)
+}
+
+func leadToolConstructors() []leadTool {
+	return []leadTool{
+		{"env", envTool},
+		{"changes", newChangesTool},
+		{"checkpoint", newCheckpointTool},
+		{"trail", newTrailTool},
+		{"codemod", codemodTool},
+		{"context", newContextTool},
+		{"budget", newBudgetTool},
+		{"forget", newForgetTool},
+		{"note", newNoteTool},
+		{"claims", newClaimsTool},
+		{"debug", debugTool},
+		{"format", formatTool},
+		{"deps", depsTool},
+		{"scaffold", newScaffoldTool},
+		{"shape", newShapeTool},
+		{"db", newDBTool},
+		{"whatif", newWhatifTool},
+		{"bisect", newBisectTool},
+		{"race", newRaceTool},
+		{"profile", profileTool},
+		{"record", recordTool},
+		{"http", newHTTPTool},
+		{"done", newDoneTool},
+		{"digest", newDigestTool},
+		{"eval", newEvalTool},
+		{"mutate", newMutateTool},
+		{"map", newMapTool},
+		{"api", newAPITool},
 	}
 }
 

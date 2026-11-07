@@ -59,7 +59,7 @@ func discoverAgents() (subagents.Found, error) {
 
 func agentsIn(dir string) (subagents.Found, error) {
 	named, _, err := assembleRunTools(dir, toolSetFull, nil, nil, &loop.BashTool{})
-	if err != nil {
+	if _, err = unstartedIn(err); err != nil {
 		return subagents.Found{}, err
 	}
 	return scanSubAgents(dir, named), nil

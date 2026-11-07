@@ -148,7 +148,7 @@ func (m machine) build(tree string) (string, string, error) {
 		return "", "", err
 	}
 	text := string(body)
-	for _, constructor := range []string{"newContextTool", "newBudgetTool", "newForgetTool", "newNoteTool", "newDigestTool"} {
+	for _, constructor := range []string{`{"context", newContextTool}`, `{"budget", newBudgetTool}`, `{"forget", newForgetTool}`, `{"note", newNoteTool}`, `{"digest", newDigestTool}`} {
 		line := "\t\t" + constructor + ",\n"
 		if strings.Count(text, line) != 1 {
 			return "", "", fmt.Errorf("the off arm drops %s from leadToolConstructors in %s, and that line is there %d times, not once", constructor, source, strings.Count(text, line))

@@ -90,6 +90,9 @@ func toolVerb(args []string, out, errOut io.Writer) int {
 		for _, tool := range hand.config.OfferedTools() {
 			_, _ = fmt.Fprintln(out, tool.Name)
 		}
+		if len(hand.unstarted) > 0 {
+			_, _ = fmt.Fprintln(out, hand.unstarted.Error())
+		}
 		return output.ExitOK
 	}
 	if hand.siftErr != nil && (call.Name == "bash" || call.Name == loop.ShellToolName) {
@@ -118,11 +121,12 @@ func toolVerb(args []string, out, errOut io.Writer) int {
 }
 
 type handRun struct {
-	config  loop.Config
-	prompt  composedRun
-	board   leadForeseen
-	gateErr error
-	siftErr error
+	config    loop.Config
+	prompt    composedRun
+	board     leadForeseen
+	gateErr   error
+	siftErr   error
+	unstarted unstartedTools
 }
 
 func handConfig(opts wiring.RunOpts, recorded string, warm *warmProcesses, notify func(string)) (handRun, error) {
@@ -149,9 +153,10 @@ func handConfig(opts wiring.RunOpts, recorded string, warm *warmProcesses, notif
 		return hand, err
 	}
 	named, _, err := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, contract.NewReadLedger()), warm, shell)
-	if err != nil {
+	if hand.unstarted, err = unstartedIn(err); err != nil {
 		return hand, err
 	}
+	sayUnstarted(hand.unstarted, notify)
 	if hand.prompt, err = composeRun(opts, named, runtime{notify: notify, open: wiring.OpenWire}); err != nil {
 		return hand, err
 	}

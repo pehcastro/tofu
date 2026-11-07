@@ -561,6 +561,8 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 		}
 	}
 	built, plan, builtErr := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, hooks.Reads), e.warm, shell)
+	unstarted, builtErr := unstartedIn(builtErr)
+	sayUnstarted(unstarted, say)
 	sessions, sessionsErr := sessionstore.OpenIn(dir)
 	if err := cmp.Or(builtErr, sessionsErr); err != nil {
 		return started, err
