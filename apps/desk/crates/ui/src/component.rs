@@ -1,4 +1,6 @@
-use gpui::{Div, ElementId, FontWeight, Rgba, Stateful, Svg, div, prelude::*, px, svg};
+use gpui::{
+    Div, ElementId, FontWeight, Rgba, SharedString, Stateful, Svg, div, prelude::*, px, svg,
+};
 
 use crate::components::paint::pressed;
 use crate::icon::Icon;
@@ -13,7 +15,11 @@ pub fn icon(glyph: Icon, size: f32, color: Rgba) -> Svg {
         .text_color(color)
 }
 
-pub fn control(id: impl Into<ElementId>, label: &'static str, theme: &Theme) -> Stateful<Div> {
+pub fn control(
+    id: impl Into<ElementId>,
+    label: impl Into<SharedString>,
+    theme: &Theme,
+) -> Stateful<Div> {
     let hover = theme.color(ColorToken::StateHover);
     pressed(
         div()
@@ -35,14 +41,24 @@ pub fn icon_button(
     label: &'static str,
     theme: &Theme,
 ) -> Stateful<Div> {
+    wrapped_icon_button(id, glyph, label, theme, |icon| icon)
+}
+
+pub fn wrapped_icon_button<E: IntoElement>(
+    id: impl Into<ElementId>,
+    glyph: Icon,
+    label: impl Into<SharedString>,
+    theme: &Theme,
+    wrap: impl FnOnce(Svg) -> E,
+) -> Stateful<Div> {
     control(id, label, theme)
         .size(px(CONTROL))
         .rounded(px(RADIUS_CONTROL))
-        .child(icon(
+        .child(wrap(icon(
             glyph,
             crate::metrics::ICON,
             theme.color(ColorToken::TextIcon),
-        ))
+        )))
 }
 
 pub fn status_item(id: impl Into<ElementId>, label: &'static str, theme: &Theme) -> Stateful<Div> {

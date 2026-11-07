@@ -7,13 +7,13 @@ use gpui::{
     prelude::*, px,
 };
 
-use crate::component::{control, icon, icon_button};
+use crate::component::{control, icon, wrapped_icon_button};
 use crate::components::avatar::{Face, PersonSize, person_avatar};
 use crate::components::chip::mono;
 use crate::components::glyph::Glyph;
 use crate::components::overlay::{Align, Placement, Popover, Side, toggles_on_press};
 use crate::components::paint::{focus_ring, glyph, ink};
-use crate::components::sidebar::{CONTENT_LEFT, CONTENT_RIGHT};
+use crate::components::sidebar::{CONTENT_LEFT, CONTENT_RIGHT, LayoutEdge, probe};
 use crate::components::size::{FONT_SMALL, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y, T3};
 use crate::components::tooltip::{Edge, tooltip};
 use crate::icon::Icon;
@@ -529,7 +529,13 @@ impl RenderOnce for TitleBar {
             tooltip(
                 "title-search-tip",
                 named_stop(
-                    icon_button("palette", Icon::Search, "Command palette", &theme),
+                    wrapped_icon_button(
+                        "palette",
+                        Icon::Search,
+                        "Command palette",
+                        &theme,
+                        |icon| probe("palette", LayoutEdge::Right, icon),
+                    ),
                     "palette",
                     &theme,
                 )
@@ -583,7 +589,13 @@ impl RenderOnce for TitleBar {
                 .pr(px((column - CONTENT_RIGHT - icon_inset).max(0.0)))
                 .child(
                     named_stop(
-                        icon_button("sidebar-toggle", Icon::Sidebar, "Toggle sidebar", &theme),
+                        wrapped_icon_button(
+                            "sidebar-toggle",
+                            Icon::Sidebar,
+                            "Toggle sidebar",
+                            &theme,
+                            |icon| probe("sidebar-toggle", LayoutEdge::Left, icon),
+                        ),
                         "sidebar-toggle",
                         &theme,
                     )

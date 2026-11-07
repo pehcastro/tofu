@@ -1,7 +1,8 @@
+use std::collections::HashSet;
 use std::f32::consts::FRAC_PI_2;
 use std::ops::Range;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::SystemTime;
 
 use desk_core::sessions::age;
@@ -65,6 +66,50 @@ const TOOL_MOVES: [(&str, ToolMove); 3] = [
     ("Move down", ToolMove::Down),
     ("Remove", ToolMove::Remove),
 ];
+
+#[derive(Clone, Copy)]
+pub enum LayoutEdge {
+    Left,
+    Right,
+}
+
+fn layout_log() -> Option<&'static Mutex<HashSet<SharedString>>> {
+    static LOGGED: OnceLock<Option<Mutex<HashSet<SharedString>>>> = OnceLock::new();
+    LOGGED
+        .get_or_init(|| std::env::var_os("DESK_LAYOUT_LOG").map(|_| Mutex::new(HashSet::new())))
+        .as_ref()
+}
+
+pub fn probe(
+    name: impl Into<SharedString>,
+    edge: LayoutEdge,
+    child: impl IntoElement,
+) -> AnyElement {
+    let Some(logged) = layout_log() else {
+        return child.into_any_element();
+    };
+    let name = name.into();
+    div()
+        .flex_none()
+        .child(child)
+        .on_children_prepainted(move |bounds, _, _| {
+            let Some(bounds) = bounds.first() else {
+                return;
+            };
+            let Ok(mut logged) = logged.lock() else {
+                return;
+            };
+            if !logged.insert(name.clone()) {
+                return;
+            }
+            let (word, x) = match edge {
+                LayoutEdge::Left => ("left", bounds.left()),
+                LayoutEdge::Right => ("right", bounds.right()),
+            };
+            eprintln!("layout {name} edge={word} x={}", f32::from(x));
+        })
+        .into_any_element()
+}
 
 pub fn unnamed(name: &str) -> bool {
     name.is_empty()
@@ -348,7 +393,11 @@ impl Sidebar {
             T2,
             theme,
         )
-        .child(tool_mark(tool.glyph, theme))
+        .child(probe(
+            format!("tool-{}", tool.label.to_lowercase()),
+            LayoutEdge::Left,
+            tool_mark(tool.glyph, theme),
+        ))
         .child(
             div()
                 .flex_1()
@@ -616,7 +665,7 @@ fn row(
         .text_color(ink(theme, alpha))
 }
 
-fn caption(text: &'static str, theme: &Theme) -> Div {
+fn caption(text: impl IntoElement, theme: &Theme) -> Div {
     div()
         .flex()
         .items_center()
@@ -634,11 +683,15 @@ fn add_button(
     label: &'static str,
     theme: &Theme,
 ) -> Stateful<Div> {
-    named_stop(control(id, label, theme), stop, theme)
+    named_stop(control(id, label, theme), stop.clone(), theme)
         .size(px(NEW_SESSION))
         .mr(px(-(NEW_SESSION - ICON_SMALL) / 2.0))
         .rounded(px(RADIUS_BADGE))
-        .child(icon(Icon::Plus, ICON_SMALL, ink(theme, T3)))
+        .child(probe(
+            stop,
+            LayoutEdge::Right,
+            icon(Icon::Plus, ICON_SMALL, ink(theme, T3)),
+        ))
 }
 
 pub fn open_project_button(theme: &Theme) -> Stateful<Div> {
@@ -709,14 +762,17 @@ impl RenderOnce for Sidebar {
             .child("Settings")
             .on_click(self.picked(SidebarPick::Settings));
         let tools = self.tools_block(&theme);
-        let heading = caption("Projects", &theme)
-            .px(px(CARD_PAD + ROW_PAD_X))
-            .pb(px(PROJECTS_PAD_BOTTOM))
-            .pt(px(match tools {
-                Some(_) => CAPTION_PAD_TOP,
-                None => SIDEBAR_PAD_TOP,
-            }))
-            .children(self.adding.take());
+        let heading = caption(
+            probe("projects-caption", LayoutEdge::Left, "Projects"),
+            &theme,
+        )
+        .px(px(CARD_PAD + ROW_PAD_X))
+        .pb(px(PROJECTS_PAD_BOTTOM))
+        .pt(px(match tools {
+            Some(_) => CAPTION_PAD_TOP,
+            None => SIDEBAR_PAD_TOP,
+        }))
+        .children(self.adding.take());
         let now = SystemTime::now();
         let mut cards = Vec::new();
         for (project_at, project) in std::mem::take(&mut self.projects).into_iter().enumerate() {
@@ -735,14 +791,16 @@ impl RenderOnce for Sidebar {
             )
             .text_size(px(FONT_CAP))
             .font_weight(FontWeight::SEMIBOLD)
-            .child(
-                div()
-                    .flex_1()
-                    .min_w_0()
-                    .truncate()
-                    .child(project.name.clone()),
-            )
-            .child(chevron(!project.folded, &theme))
+            .child(div().flex_1().min_w_0().truncate().child(probe(
+                card_name("project-name", project_at),
+                LayoutEdge::Left,
+                project.name.clone(),
+            )))
+            .child(probe(
+                card_name("project-chevron", project_at),
+                LayoutEdge::Right,
+                chevron(!project.folded, &theme),
+            ))
             .on_click(self.picked(SidebarPick::Fold(project_at)));
             let card = inner_card(&theme).flex_none().mt(px(above)).p(px(CARD_PAD));
             let rows = list(ElementId::named_usize("project-rows", project_at), &theme).item(name);
@@ -822,7 +880,11 @@ impl RenderOnce for Sidebar {
                     .child(chevron(inactive_open, &theme)),
             )
             .child(div().flex_1().ml(px(FOLDED_CHEVRON_INK)).child("Inactive"))
-            .child(figure(sessions.inactive.len().to_string().into(), &theme))
+            .child(probe(
+                card_name("inactive-count", project_at),
+                LayoutEdge::Right,
+                figure(sessions.inactive.len().to_string().into(), &theme),
+            ))
             .on_click(move |_, _, cx| {
                 toggle.update(cx, |open, cx| {
                     *open = !*open;

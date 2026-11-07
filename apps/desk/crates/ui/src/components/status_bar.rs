@@ -19,7 +19,7 @@ use crate::components::list::{row, separator};
 use crate::components::logo::{Brand, logo};
 use crate::components::overlay::{Align, Placement, Popover, Side, toggles_on_press};
 use crate::components::paint::{glyph, ink};
-use crate::components::sidebar::CONTENT_LEFT;
+use crate::components::sidebar::{CONTENT_LEFT, LayoutEdge, probe};
 use crate::components::size::{
     CAPTION_TEXT, CHIP_FILL, FONT_BODY, FONT_SMALL, MENU_PAD, POPOVER_PAD_X, POPOVER_PAD_Y,
     RADIUS_CHIP_SMALL, ROW_GAP, ROW_PAD_X, T1, T2, T3,
@@ -317,10 +317,14 @@ impl StatusBar {
     fn branch(&self, theme: &Theme) -> AnyElement {
         let status = &self.status;
         let fill = |item: Stateful<Div>| {
-            item.child(icon(
-                Icon::Branch,
-                ICON_SMALL,
-                theme.color(ColorToken::TextStatus),
+            item.child(probe(
+                "branch-icon",
+                LayoutEdge::Left,
+                icon(
+                    Icon::Branch,
+                    ICON_SMALL,
+                    theme.color(ColorToken::TextStatus),
+                ),
             ))
             .map(|item| match &status.branch {
                 None => item.child(NO_BRANCH),
