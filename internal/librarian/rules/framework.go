@@ -171,6 +171,9 @@ func Frameworks(root string, paths []string) ([]string, error) {
 	slices.Sort(dirs)
 	listed := map[string]bool{}
 	for _, dir := range slices.Compact(dirs) {
+		if info, err := os.Stat(filepath.Join(root, dir)); err != nil || !info.IsDir() {
+			continue
+		}
 		for _, m := range manifests() {
 			at := filepath.Join(root, dir, m.file)
 			data, err := os.ReadFile(at)
