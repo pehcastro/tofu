@@ -470,6 +470,26 @@
   do: tofu tool debug '{"steps":["start test TestTill","trace orders.(*Till).Ring","stop"]}' --dir .
   check: tofu tool list --dir .
   topic: tools-debug
+- ask: rewrite one code shape everywhere without touching strings
+  do: tofu tool codemod '{"lang":"go","pattern":"t.Fatalf($$$ARGS)","rewrite":"t.Errorf($$$ARGS)"}' --dir .
+  check: tofu tool list --dir .
+  topic: tools-change
+- ask: make a new file shaped like an existing one
+  do: tofu tool scaffold '{"kind":"type","name":"Invoice","like":"order.go"}' --dir .
+  check: tofu tool list --dir .
+  topic: tools-change
+- ask: format only the files i changed
+  do: tofu tool format '{"paths":["label.go"]}' --dir .
+  check: tofu tool list --dir .
+  topic: tools-change
+- ask: add a dependency after checking its license and advisories
+  do: tofu tool deps '{"mode":"add","package":"github.com/google/uuid"}' --dir .
+  check: tofu tool list --dir .
+  topic: tools-change
+- ask: which dependencies have a newer release
+  do: tofu tool deps '{"mode":"outdated"}' --dir .
+  check: tofu tool list --dir .
+  topic: tools-change
 - ask: which tools does the review agent get
   do: tofu tool list --agent review
   check: tofu tool list --dir .

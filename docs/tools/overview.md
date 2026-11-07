@@ -13,11 +13,12 @@ Most tools are tofu's own Go code: `read`, `write`, `edit`, `glob`,
 `search`, `symbols`, `map`, `api`, `project_report`, `fetch`, `web_search`, `plan`, `env`,
 `http`, `record`, `shape`, `db`, `context`, `budget`, `forget`, `note`,
 `digest`, `done`, `claims`, `changes`, `trail`, `bisect`, `checkpoint`,
-`whatif`, the browser tools and the sub-agent tools.
+`whatif`, `codemod`, `scaffold`, the browser tools and the sub-agent tools.
 `profile` runs the project's own profiler. A few wrap a program: `bash` wraps your
 shell, `typecheck` and `test` wrap the project's own checkers and test
 runners for Go, Rust, Python and TypeScript, `debug` wraps `dlv` and
-`debugpy`, `github_pr_diff` wraps `gh`, and
+`debugpy`, `format` wraps rustfmt, prettier and ruff, `deps` wraps the
+package manager, `github_pr_diff` wraps `gh`, and
 the `tofu_*` verbs run the tofu binary.
 
 Every tool runs by hand with `tofu tool`, which prints the exact text the
@@ -30,6 +31,7 @@ model would receive. See [One tool call by hand](/docs/cli/tool).
 | [Shell](/docs/tools/shell) | bash, shell |
 | [Checks](/docs/tools/checks) | typecheck, test |
 | [Debug](/docs/tools/debug) | debug |
+| [Changing code](/docs/tools/change) | codemod, scaffold, format, deps |
 | [Web](/docs/tools/web) | web_search, fetch, github_pr_diff |
 | [Work](/docs/tools/work) | plan, settings, artifact_fetch, history, ask_person, heads_up, skill, tofu verbs |
 | [Sub-agents](/docs/tools/sub-agents) | spawn, race, message, subagents, ask |
