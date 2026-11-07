@@ -11,9 +11,7 @@ A session is one conversation with tofu: every message, tool call and sub-agent,
 
 A conversation keeps one name for its whole life, such as `tidy-moss-vole#12cp3.2`: the name, the family tag after `#`, and the generation after `.`. A fork to stay under the context budget, `/compact`, `/fork`, `/branch N` and a move to another account start the next generation, so the name stays and the number rises. `/branch N` carries every message before your Nth and leaves the line it left open, so `tofu session resume` takes either; `tofu session <name>` lists each generation with the kind that began it. `/new` starts a new family, and so does a side chat, which records where it branched. Hooks see the family id.
 
-Every message in the chat shows the id it was recorded under, such as `[message#9c2d40]`. Type that
-reference in a message and the lead quotes it, across forks and `--continue`. A fork carries every
-message you typed, word for word, and keeps the model you chose. A resumed session or sub-agent keeps its pictures and its model. A resumed session draws its chat across every earlier generation, so scrolling up reaches the first message, in the app and over `tofu serve`, and a long chat holds a window of its newest rows and reads the rest as you scroll.
+Every message in the chat shows the id it was recorded under, such as `[message#9c2d40]`. Type that reference in a message and the lead quotes it, across forks and `--continue`. A fork carries every message you typed, word for word, and keeps the model you chose. A resumed session or sub-agent keeps its pictures and its model. A resumed session draws its chat across every earlier generation, so scrolling up reaches the first message, in the app and over `tofu serve`, and a long chat holds a window of its newest rows and reads the rest as you scroll.
 
 Every session runs in the project's `tofu host`, one process per project. The terminal, the desk and `tofu serve` each join it as a member, so closing one window leaves the others working, and a prompt, Esc, a steer or an approval from any member runs in the host. The first window starts it, and it exits 5 s after its last member leaves; the last member leaving stops the session's turn and ends its shells. A member silent for 10 s is let go. A newer tofu joining an older host says so and runs on the older build until the last member leaves.
 
@@ -36,9 +34,7 @@ The host's socket is under `~/.tofu/h`, or on Windows a temp folder only you can
 
 None of this is written into the project. A session idle longer than `sessionStaleDays`, 90 days by default, is deleted when the host starts; `0` keeps every session. Opening a project moves what older versions kept in its `.tofu` once; a clash keeps the home's file (a `log/` day merges both).
 
-A folder from before this layout, named after the whole path (`C--code-shop`), is renamed to the new
-name, instantly, the first time `tofu`, `tofu session`, `tofu serve` or `tofu run` opens the project.
-If an older tofu holds a file in it, tofu says so in one line, reads the old folder, and retries.
+A folder from before this layout, named after the whole path (`C--code-shop`), is renamed to the new name, instantly, the first time `tofu`, `tofu session`, `tofu serve` or `tofu run` opens the project. If an older tofu holds a file in it, tofu says so in one line, reads the old folder, and retries.
 
 Move or rename a git repository and open it in its new place: tofu finds its folder by the git
 remote or the first commit, and offers to relink it. The app asks; `tofu serve` and `tofu run` print

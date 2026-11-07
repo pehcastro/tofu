@@ -7,10 +7,8 @@ verbs: serve
 
 ## What it is
 
-Every request `tofu serve --stdio` answers; `tofu docs serve` says how to start it, `tofu serve --schema`
-carries every field. Reads, reloads, the `session.*` and `memory.*` reads, `mention.resolve`, `shell.run`,
-`learn.scan`, `setup.check` and the logins answer out of order, so none holds `turn.stop`. Every request
-answers a typed result with no envelope, and a verb that fails errs with its problems.
+Every request `tofu serve --stdio` answers; `tofu docs serve` says how to start it, `tofu serve --schema` carries every field.
+Reads, reloads, the `session.*` and `memory.*` reads, `mention.resolve`, `shell.run`, `learn.scan`, `setup.check` and the logins answer out of order, so none holds `turn.stop`. Every request answers a typed result with no envelope, and a verb that fails errs with its problems.
 
 ## Where it lives
 
@@ -110,8 +108,7 @@ answers a typed result with no envelope, and a verb that fails errs with its pro
 
 ## Change it
 
-A `remember` ask (`tofu/requestApproval`, `scope` is Jev's pick) answers `remember_global`,
-`remember_user_local`, `remember_project` or `remember_project_local` as offered; `reject_*` keeps nothing, others err.
+A `remember` ask (`tofu/requestApproval`, `scope` is Jev's pick) answers `remember_global`, `remember_user_local`, `remember_project` or `remember_project_local` as offered; `reject_*` keeps nothing, others err.
 
 ## Check it
 
