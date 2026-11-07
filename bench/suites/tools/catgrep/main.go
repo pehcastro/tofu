@@ -15,6 +15,7 @@ import (
 	"tofu/internal/tools/code/catgrep/metavar"
 	"tofu/internal/tools/code/catgrep/pattern"
 	"tofu/internal/tools/code/catgrep/replace"
+	"tofu/internal/tools/code/catgrep/rule"
 	"tofu/internal/tools/code/catgrep/transform"
 	"tofu/internal/tools/code/catgrep/tree"
 )
@@ -23,9 +24,12 @@ type corpusCase struct {
 	Language    string                     `json:"language"`
 	Kind        string                     `json:"kind"`
 	Pattern     string                     `json:"pattern"`
+	Rule        json.RawMessage            `json:"rule"`
 	Source      string                     `json:"source"`
 	Strictness  string                     `json:"strictness"`
 	Env         map[string]string          `json:"env"`
+	Unbound     []string                   `json:"unbound"`
+	Found       []string                   `json:"found"`
 	End         *uint32                    `json:"end"`
 	Origin      string                     `json:"origin"`
 	Rewrite     string                     `json:"rewrite"`
@@ -58,10 +62,7 @@ func main() {
 	show := flag.String("show", "", "print the source and the result of the case with this origin")
 	flag.Parse()
 	switch *only {
-	case "rule":
-		fmt.Printf("%s: not ported yet\n", *only)
-		return
-	case "match", "replace", "template", "transform":
+	case "match", "replace", "template", "transform", "rule":
 	default:
 		fmt.Fprintf(os.Stderr, "-only %q is not one of match, replace, template, transform, rule\n", *only)
 		os.Exit(2)
@@ -74,8 +75,8 @@ func main() {
 	fmt.Printf("catgrep %s corpus, read from %s\n\n", *only, run)
 	corpora := []lang.Lang{lang.Go, lang.Python, lang.Rust, lang.Tsx}
 	file := func(l lang.Lang) string { return l.String() + ".json" }
-	if *only == "transform" {
-		corpora, file = []lang.Lang{lang.Tsx}, func(lang.Lang) string { return "transform.json" }
+	if *only == "transform" || *only == "rule" {
+		corpora, file = []lang.Lang{lang.Tsx}, func(lang.Lang) string { return *only + ".json" }
 	}
 	for _, l := range corpora {
 		if err := report(filepath.Join(run, file(l)), l, *only, *show); err != nil {
@@ -115,6 +116,8 @@ func family(kind string) string {
 		return "match"
 	case "split", "convert":
 		return "transform"
+	case "rule_non_match", "rule_all", "rule_error":
+		return "rule"
 	}
 	return kind
 }
@@ -137,7 +140,7 @@ func report(path string, l lang.Lang, only, show string) error {
 		total++
 		got, reason := check(tc, l)
 		if reason != "" {
-			failures = append(failures, fmt.Sprintf("  FAIL %s %s %q %q: %s", tc.Origin, tc.Kind, tc.Pattern, tc.Rewrite, reason))
+			failures = append(failures, fmt.Sprintf("  FAIL %s %s %q %q: %s", tc.Origin, tc.Kind, tc.Pattern+string(tc.Rule), tc.Rewrite, reason))
 		}
 		if tc.Origin == show {
 			fmt.Printf("%s\nsource:\n%s\nrewrite:\n%s\nresult:\n%s\n\n", tc.Origin, tc.Source, tc.Rewrite, got)
@@ -159,6 +162,8 @@ func check(tc corpusCase, l lang.Lang) (string, string) {
 	switch tc.Kind {
 	case "match", "non_match":
 		return "", checkMatch(tc, l)
+	case "rule", "rule_non_match", "rule_all", "rule_error":
+		return "", checkRule(tc, l)
 	case "transform":
 		return "", checkTransform(tc, l)
 	case "split":
@@ -178,7 +183,7 @@ func check(tc corpusCase, l lang.Lang) (string, string) {
 	case "template":
 		got, err = templated(tc, l)
 	default:
-		return "", fmt.Sprintf("kind %q is not one of match, non_match, replace, template, transform, split, convert", tc.Kind)
+		return "", fmt.Sprintf("kind %q is not one of match, non_match, rule, rule_non_match, rule_all, rule_error, replace, template, transform, split, convert", tc.Kind)
 	}
 	if err != nil {
 		return "", err.Error()
@@ -187,6 +192,62 @@ func check(tc corpusCase, l lang.Lang) (string, string) {
 		return got, fmt.Sprintf("got %q, want %q", got, tc.Expected)
 	}
 	return got, ""
+}
+
+func checkRule(tc corpusCase, l lang.Lang) string {
+	r, err := rule.New(tc.Rule, l)
+	if tc.Kind == "rule_error" {
+		if err == nil {
+			return fmt.Sprintf("no error, want one naming %q", tc.Error)
+		}
+		if !strings.Contains(err.Error(), tc.Error) {
+			return fmt.Sprintf("error %q does not name %q", err, tc.Error)
+		}
+		return ""
+	}
+	if err != nil {
+		return err.Error()
+	}
+	root, err := tree.Parse(tc.Source, l)
+	if err != nil {
+		return err.Error()
+	}
+	var found []string
+	var first *metavar.Env
+	for candidate := range root.Node().PreOrder() {
+		if env, ok := r.Match(candidate); ok {
+			if first == nil {
+				first = env
+			}
+			found = append(found, candidate.Text())
+		}
+	}
+	switch {
+	case tc.Kind == "rule_non_match" && len(found) > 0:
+		return fmt.Sprintf("matched %q", found[0])
+	case tc.Kind == "rule_non_match":
+		return ""
+	case tc.Kind == "rule_all" && !slices.Equal(found, tc.Found):
+		return fmt.Sprintf("found %q, want %q", found, tc.Found)
+	case tc.Kind == "rule_all":
+		return ""
+	case len(found) == 0:
+		return "no node matched; source tree " + strings.TrimSpace(root.Node().SExpr())
+	case tc.Expected != "" && found[0] != tc.Expected:
+		return fmt.Sprintf("first match %q, want %q", found[0], tc.Expected)
+	}
+	texts := first.Texts()
+	for _, name := range slices.Sorted(maps.Keys(tc.Env)) {
+		if texts[name] != tc.Env[name] {
+			return fmt.Sprintf("%s bound to %q, want %q", name, texts[name], tc.Env[name])
+		}
+	}
+	for _, name := range tc.Unbound {
+		if text, bound := texts[name]; bound {
+			return fmt.Sprintf("%s bound to %q, want unbound", name, text)
+		}
+	}
+	return ""
 }
 
 func checkTransform(tc corpusCase, l lang.Lang) string {
