@@ -4,7 +4,6 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::time::SystemTime;
 
-use desk_core::control::Control;
 use desk_core::sessions::age;
 use gpui::{
     AnyElement, App, ClickEvent, Corners, Div, ElementId, FontWeight, ScrollHandle, SharedString,
@@ -13,13 +12,14 @@ use gpui::{
 
 use crate::component::{control, icon};
 use crate::components::avatar::spinner;
+use crate::components::card::inner_card;
 use crate::components::glyph::Glyph;
 use crate::components::list::{HoverList, bare_row};
 use crate::components::overlay::{Align, MenuIcon, MenuItem, Placement, Side, context_menu};
 use crate::components::paint::{glyph, ink, tint};
 use crate::components::size::{
-    FONT_CAP, FONT_CAP2, FONT_CHAT, FONT_SMALL, GROUP_PAD_BOTTOM, HOVER, LINE_CAP, LINE_WHO,
-    RADIUS_BADGE, RADIUS_LIST, RADIUS_ROW, ROW_GAP, ROW_PAD_X, ROW_PAD_Y, SPINNER, T1, T2, T3,
+    FONT_CAP, FONT_CAP2, GROUP_PAD_BOTTOM, HOVER, LINE_CAP, LINE_WHO, RADIUS_BADGE, RADIUS_ROW,
+    ROW_PAD_X, ROW_PAD_Y, SPINNER, T2, T3,
 };
 use crate::components::title_bar::named_stop;
 use crate::components::tooltip::{Edge, tooltip};
@@ -32,13 +32,10 @@ const SIDEBAR_PAD_X: f32 = 8.0;
 const SIDEBAR_PAD_TOP: f32 = 2.0;
 pub const SIDEBAR_COLUMN: f32 = SIDEBAR_WIDTH + 2.0 * SIDEBAR_PAD_X;
 const SIDEBAR_PAD_BOTTOM: f32 = 10.0;
-const PICKER_PAD_Y: f32 = 8.0;
-const PICKER_MARK: f32 = 26.0;
-const PICKER_MARK_FILL: f32 = 0.1;
-const PICKER_NAME_LINE: f32 = 17.0;
-const CARD_HEAD: f32 = 2.0 * PICKER_PAD_Y + PICKER_NAME_LINE + LINE_CAP;
 const CARD_GAP: f32 = 8.0;
+const CARD_PAD: f32 = 4.0;
 const CAPTION_PAD_TOP: f32 = 16.0;
+const ACTIVE_PAD_TOP: f32 = 4.0;
 const NEW_SESSION: f32 = 16.0;
 const SESSION_GAP: f32 = 9.0;
 const SESSION_DOT: f32 = 4.0;
@@ -50,7 +47,7 @@ const INACTIVE_GAP: f32 = 6.0;
 const INACTIVE_INDENT: f32 = 8.0;
 const SESSION_ROW: f32 = LINE_WHO + 2.0 * ROW_PAD_Y;
 const ABOVE_INACTIVE: f32 =
-    CAPTION_PAD_TOP + LINE_CAP + GROUP_PAD_BOTTOM + INACTIVE_GAP + SESSION_ROW;
+    ACTIVE_PAD_TOP + LINE_CAP + GROUP_PAD_BOTTOM + INACTIVE_GAP + SESSION_ROW;
 const OVERSCAN_ROWS: usize = 2;
 const NEW_SESSION_NAME: &str = "New session";
 const UUID_LENGTH: usize = 36;
@@ -601,64 +598,6 @@ pub fn more_placement() -> Placement {
     }
 }
 
-fn line(height: f32, size: f32) -> Div {
-    div()
-        .min_w_0()
-        .truncate()
-        .line_height(px(height))
-        .text_size(px(size))
-}
-
-fn picker(
-    (id, stop): (ElementId, SharedString),
-    mark: AnyElement,
-    name: SharedString,
-    detail: SharedString,
-    open: bool,
-    theme: &Theme,
-) -> Stateful<Div> {
-    named_stop(control(id, "Project", theme), stop, theme)
-        .w_full()
-        .justify_start()
-        .gap(px(ROW_GAP))
-        .px(px(ROW_PAD_X))
-        .py(px(PICKER_PAD_Y))
-        .rounded(px(RADIUS_LIST))
-        .child(
-            div()
-                .flex_none()
-                .size(px(PICKER_MARK))
-                .flex()
-                .items_center()
-                .justify_center()
-                .rounded(px(RADIUS_ROW))
-                .bg(ink(theme, PICKER_MARK_FILL))
-                .text_size(px(FONT_SMALL))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(ink(theme, T1))
-                .child(mark),
-        )
-        .child(
-            div()
-                .flex_1()
-                .min_w_0()
-                .flex()
-                .flex_col()
-                .child(
-                    line(PICKER_NAME_LINE, FONT_CHAT)
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(ink(theme, T1))
-                        .child(name),
-                )
-                .child(
-                    line(LINE_CAP, FONT_SMALL)
-                        .text_color(ink(theme, T3))
-                        .child(detail),
-                ),
-        )
-        .child(chevron(open, theme))
-}
-
 fn chevron(open: bool, theme: &Theme) -> impl IntoElement {
     let turn = if open { 0.0 } else { -FRAC_PI_2 };
     glyph(Glyph::Chevron, ICON_SMALL, ink(theme, T3))
@@ -750,77 +689,59 @@ impl RenderOnce for Sidebar {
             )
             .read(cx)
             .clone();
-        let mut rows = HoverList::within(
-            "rows",
-            div().flex().flex_col().flex_grow(1.0).flex_shrink_0(),
-            ink(&theme, HOVER),
-            Corners::all(px(RADIUS_ROW)),
-            &theme,
-        );
+        let list = |id: ElementId, theme: &Theme| {
+            HoverList::within(
+                id,
+                div().flex().flex_col().flex_none(),
+                ink(theme, HOVER),
+                Corners::all(px(RADIUS_ROW)),
+                theme,
+            )
+        };
         let settings = row(("settings", "settings"), false, T2, &theme)
             .child(glyph(Glyph::Settings, ICON_SMALL, ink(&theme, T2)))
             .child("Settings")
             .on_click(self.picked(SidebarPick::Settings));
         let tools = self.tools_block(&theme);
-        let search = tooltip(
-            "sidebar-search-tip",
-            named_stop(
-                control("palette", "Command palette", &theme),
-                "palette",
-                &theme,
-            )
-            .size(px(NEW_SESSION))
-            .rounded(px(RADIUS_BADGE))
-            .child(icon(Icon::Search, ICON_SMALL, ink(&theme, T3)))
-            .on_click(self.picked(SidebarPick::Palette)),
-            Edge::Frame,
-            Control::Palette.label(),
-            &theme,
-            window,
-            cx,
-        );
         let heading = caption("Projects", &theme)
-            .gap_1()
             .pt(px(match tools {
                 Some(_) => CAPTION_PAD_TOP,
                 None => SIDEBAR_PAD_TOP,
             }))
-            .child(search)
             .children(self.adding.take());
         let now = SystemTime::now();
         let mut top = 0.0;
+        let mut cards = Vec::new();
         for (project_at, project) in std::mem::take(&mut self.projects).into_iter().enumerate() {
-            let letter: SharedString = project
-                .name
-                .chars()
-                .next()
-                .map(String::from)
-                .unwrap_or_default()
-                .into();
             let above = match project_at {
                 0 => 0.0,
                 _ => CARD_GAP,
             };
-            let head = picker(
+            let name = row(
                 (
                     ElementId::named_usize("project", project_at),
                     card_name("project", project_at),
                 ),
-                letter.into_any_element(),
-                project.name.clone(),
-                match project.branch.is_empty() {
-                    true => format!("{} changed", project.changed),
-                    false => format!("{} · {} changed", project.branch, project.changed),
-                }
-                .into(),
-                !project.folded,
+                false,
+                T2,
                 &theme,
             )
-            .mt(px(above))
+            .text_size(px(FONT_CAP))
+            .font_weight(FontWeight::SEMIBOLD)
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .truncate()
+                    .child(project.name.clone()),
+            )
             .on_click(self.picked(SidebarPick::Fold(project_at)));
-            rows = rows.inert(head);
-            top += above + CARD_HEAD;
+            let card = inner_card(&theme).flex_none().mt(px(above)).p(px(CARD_PAD));
+            let rows = list(ElementId::named_usize("project-rows", project_at), &theme).item(name);
+            top += above + CARD_PAD + SESSION_ROW;
             if project.folded {
+                top += CARD_PAD;
+                cards.push(card.child(rows));
                 continue;
             }
             let inactive_name = card_name("inactive", project_at);
@@ -840,7 +761,7 @@ impl RenderOnce for Sidebar {
             )
             .on_click(self.picked(SidebarPick::NewSession(project_at)));
             let active_caption = caption("Active", &theme)
-                .pt(px(CAPTION_PAD_TOP))
+                .pt(px(ACTIVE_PAD_TOP))
                 .child(new_session);
             let sessions = &project.sessions;
             let total = match inactive_open {
@@ -888,13 +809,17 @@ impl RenderOnce for Sidebar {
                     cx.notify();
                 })
             });
-            rows = rows
-                .inert(active_caption)
-                .items(active)
-                .item(header)
-                .inert(gap(drawn.start))
-                .items(inactive)
-                .inert(gap(total.saturating_sub(drawn.end)));
+            top += CARD_PAD;
+            cards.push(
+                card.child(
+                    rows.inert(active_caption)
+                        .items(active)
+                        .item(header)
+                        .inert(gap(drawn.start))
+                        .items(inactive)
+                        .inert(gap(total.saturating_sub(drawn.end))),
+                ),
+            );
         }
         div()
             .id(self.id.clone())
@@ -916,7 +841,9 @@ impl RenderOnce for Sidebar {
                     .flex_col()
                     .overflow_y_scroll()
                     .track_scroll(&scroll)
-                    .child(rows.inert(div().flex_1()).item(settings)),
+                    .children(cards)
+                    .child(div().flex_1())
+                    .child(list("settings-row".into(), &theme).item(settings)),
             )
     }
 }

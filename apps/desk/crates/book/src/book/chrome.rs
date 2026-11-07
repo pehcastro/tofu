@@ -16,6 +16,7 @@ use desk_ui::components::title_bar::{
     Github, GithubUser, Title, TitleBar, TitlePick, TitlePop, WindowKeys,
 };
 use desk_ui::icon::Icon;
+use desk_ui::metrics::SIDEBAR_CLOSED_WIDTH;
 use desk_ui::theme::Theme;
 use gpui::{App, Context, Div, IntoElement, Window, div, prelude::*, px};
 
@@ -497,6 +498,20 @@ pub(super) fn chrome_page(theme: &Theme, cx: &mut Context<Book>) -> Div {
                 "chrome-title-empty",
                 empty_title(None),
                 None,
+                picked_title(cx),
+            )),
+        ))
+        .child(named(
+            "Title bar, sidebar closed, no search beside the toggle",
+            theme,
+            frame(TitleBar::new(
+                "chrome-title-closed",
+                Title {
+                    sidebar_open: false,
+                    tabs_x: SIDEBAR_CLOSED_WIDTH,
+                    ..board_title(None)
+                },
+                Some(workspaces(theme, cx).into_any_element()),
                 picked_title(cx),
             )),
         ))

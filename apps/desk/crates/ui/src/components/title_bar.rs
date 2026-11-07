@@ -64,6 +64,7 @@ pub fn focused_name(window: &Window) -> Option<SharedString> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TitlePick {
     Sidebar,
+    Palette,
     NewWorkspace,
     Theme,
     Close,
@@ -522,6 +523,23 @@ impl RenderOnce for TitleBar {
             window,
             cx,
         );
+        let search = title.sidebar_open.then(|| {
+            tooltip(
+                "title-search-tip",
+                named_stop(
+                    icon_button("palette", Icon::Search, "Command palette", &theme),
+                    "palette",
+                    &theme,
+                )
+                .occlude()
+                .on_click(self.picked(TitlePick::Palette)),
+                Edge::Frame,
+                Control::Palette.label(),
+                &theme,
+                window,
+                cx,
+            )
+        });
         let account_tip = title
             .github
             .tip()
@@ -560,6 +578,7 @@ impl RenderOnce for TitleBar {
                 .items_center()
                 .gap_1()
                 .pl_2p5()
+                .pr_2()
                 .child(
                     named_stop(
                         icon_button("sidebar-toggle", Icon::Sidebar, "Toggle sidebar", &theme),
@@ -571,6 +590,9 @@ impl RenderOnce for TitleBar {
                 )
                 .when(title.sidebar_open, |name| {
                     name.child(product_name(self.marks.as_ref(), &theme).pl_1p5())
+                })
+                .when_some(search, |row, search| {
+                    row.child(div().flex_1()).child(search)
                 }),
         )
         .child(tabs)
