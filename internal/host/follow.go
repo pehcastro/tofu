@@ -327,6 +327,7 @@ func (h *Host) serveSeat(a *audience, s *seat, in io.Reader) error {
 	}()
 	asks := json.NewDecoder(in)
 	for {
+		_ = s.conn.SetReadDeadline(time.Now().Add(hubBeatMissed))
 		var raw json.RawMessage
 		if err := asks.Decode(&raw); err != nil {
 			line, _ := json.Marshal(followLine{Reply: &followReply{Refused: err.Error()}})
@@ -434,7 +435,6 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 	case followRoster:
 		reply.Agents = h.rosterRows()
 	case followBeat:
-		_ = s.conn.SetReadDeadline(time.Now().Add(hubBeatMissed))
 	case followHandFork:
 		var err error
 		if reply.Compacted, err = h.Fork(ask.Fork); err != nil {
