@@ -56,6 +56,16 @@ func (n Node) Source() []byte { return n.root.source }
 
 func (n Node) Text() string { return n.inner.Text(n.root.source) }
 
+func (n Node) Parent() (Node, bool) {
+	parent := n.inner.Parent()
+	return Node{inner: parent, root: n.root}, parent != nil
+}
+
+func (n Node) Field(name string) (Node, bool) {
+	child := n.inner.ChildByFieldName(name, n.root.tree.Language())
+	return Node{inner: child, root: n.root}, child != nil
+}
+
 func (n Node) Children() []Node {
 	inner := n.inner.Children()
 	children := make([]Node, len(inner))

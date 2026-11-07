@@ -10,6 +10,8 @@ import (
 	"tofu/internal/tools/code/catgrep/tree"
 )
 
+const phpOpenTag = "php_tag"
+
 type shape uint8
 
 const (
@@ -43,27 +45,28 @@ func New(src string, l lang.Lang) (Pattern, error) {
 	if err != nil {
 		return Pattern{}, fmt.Errorf("pattern %q does not parse as %s: %w", src, l, err)
 	}
-	goal := parsed.Node()
-	if len(goal.Children()) == 0 {
+	statements := parsed.Node().Children()
+	if len(statements) > 0 && statements[0].Kind() == phpOpenTag {
+		statements = statements[1:]
+	}
+	if len(statements) == 0 {
 		return Pattern{}, fmt.Errorf("pattern %q has no syntax node in %s", src, l)
 	}
-	if !isSingle(goal) {
+	if !single(statements) {
 		return Pattern{}, fmt.Errorf("pattern %q is more than one syntax node in %s", src, l)
 	}
-	for isSingle(goal) {
+	goal := statements[0]
+	for single(goal.Children()) {
 		goal = goal.Children()[0]
 	}
-	root := convert(goal, sigilOf(l))
+	root := convert(goal, l.Sigil())
 	if _, ok := ellipsisOf(&root); ok {
 		return Pattern{}, fmt.Errorf("pattern %q in %s is a lone multi meta variable: use $VAR or wrap $$$VAR in a larger pattern", src, l)
 	}
 	return Pattern{root: root, Strictness: Smart}, nil
 }
 
-func sigilOf(l lang.Lang) rune { return []rune(l.PreprocessPattern("$A"))[0] }
-
-func isSingle(n tree.Node) bool {
-	children := n.Children()
+func single(children []tree.Node) bool {
 	switch len(children) {
 	case 1:
 		return true
@@ -108,6 +111,10 @@ func (p Pattern) Match(candidate tree.Node) (*metavar.Env, bool) {
 		return nil, false
 	}
 	return env.env, true
+}
+
+func (p Pattern) MatchIn(candidate tree.Node, env *metavar.Env) bool {
+	return p.matchRoot(candidate, envBinder{env}) == matchedBoth
 }
 
 func (p Pattern) Find(root tree.Node) (Match, bool) {

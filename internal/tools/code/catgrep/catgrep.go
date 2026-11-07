@@ -7,7 +7,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"tofu/internal/konst"
 	"tofu/internal/tools/code/catgrep/lang"
@@ -16,7 +19,7 @@ import (
 	"tofu/internal/tools/code/catgrep/tree"
 )
 
-const Languages = "go, typescript (ts), tsx, python (py), rust (rs)"
+const Languages = "the language name or its file extension, such as go, ts, tsx, js, py, rs, php, java, cs, cpp, rb, swift, kt; a script or style inside an html, svelte or vue file is searched with js, ts or css"
 
 type Site struct {
 	Start, End, Line int
@@ -29,19 +32,10 @@ type File struct {
 }
 
 func LangNamed(name string) (lang.Lang, error) {
-	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "go", "golang":
-		return lang.Go, nil
-	case "ts", "typescript":
-		return lang.TypeScript, nil
-	case "tsx":
-		return lang.Tsx, nil
-	case "py", "python":
-		return lang.Python, nil
-	case "rs", "rust":
-		return lang.Rust, nil
+	if l, ok := lang.Named(name); ok {
+		return l, nil
 	}
-	return 0, fmt.Errorf("lang %q is not one cat-grep parses: use one of %s", name, Languages)
+	return 0, fmt.Errorf("lang %q is not one cat-grep parses: use one of %s", name, lang.Listing())
 }
 
 func Rewrite(ctx context.Context, src, rewrite string, l lang.Lang, paths []string) ([]File, error) {
@@ -49,25 +43,33 @@ func Rewrite(ctx context.Context, src, rewrite string, l lang.Lang, paths []stri
 	if err != nil {
 		return nil, err
 	}
-	files, err := walk(l, paths)
+	files, err := Files(l, paths)
 	if err != nil {
 		return nil, err
 	}
+	searched := make([]File, len(files))
+	failures := make([]error, len(files))
+	var next atomic.Int64
+	var workers sync.WaitGroup
+	for range runtime.GOMAXPROCS(0) {
+		workers.Go(func() {
+			for i := int(next.Add(1) - 1); i < len(files) && ctx.Err() == nil; i = int(next.Add(1) - 1) {
+				searched[i].Path = files[i]
+				searched[i].Sites, failures[i] = rewriteFile(files[i], l, p, rewrite)
+			}
+		})
+	}
+	workers.Wait()
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("stopped after %d ms with files left to search: narrow paths", konst.CodemodRunMillis)
+	}
 	var found []File
-	for _, path := range files {
-		if ctx.Err() != nil {
-			return nil, fmt.Errorf("stopped after %d ms with files left to search: narrow paths", konst.CodemodRunMillis)
+	for i, file := range searched {
+		if failures[i] != nil {
+			return nil, fmt.Errorf("%s: %w", file.Path, failures[i])
 		}
-		source, err := os.ReadFile(path)
-		if err != nil {
-			return nil, err
-		}
-		sites, err := rewriteFile(source, l, p, rewrite)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", path, err)
-		}
-		if len(sites) > 0 {
-			found = append(found, File{Path: path, Sites: sites})
+		if len(file.Sites) > 0 {
+			found = append(found, file)
 		}
 	}
 	if len(found) > 0 {
@@ -85,11 +87,26 @@ func Rewrite(ctx context.Context, src, rewrite string, l lang.Lang, paths []stri
 	if fault.Missing {
 		problem = "is missing a " + fault.Kind
 	}
-	return nil, fmt.Errorf("pattern has an error: at line %d column %d it %s as %s, and it matched nothing. write it as code that parses on its own", fault.At.Row+1, fault.At.Column+1, problem, l)
+	column := int(fault.At.Column)
+	if fault.At.Row == 0 {
+		column -= len(l.PreprocessPattern(""))
+	}
+	return nil, fmt.Errorf("pattern has an error: at line %d column %d it %s as %s, and it matched nothing. write it as code that parses on its own", fault.At.Row+1, column+1, problem, l)
 }
 
-func rewriteFile(source []byte, l lang.Lang, p pattern.Pattern, rewrite string) ([]Site, error) {
-	root, err := tree.Parse(string(source), l)
+func rewriteFile(path string, l lang.Lang, p pattern.Pattern, rewrite string) ([]Site, error) {
+	source, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	searched := source
+	if host, _ := lang.FromPath(path); host != l {
+		var scripted bool
+		if searched, scripted, err = lang.Scripts(source, host, l); err != nil || !scripted {
+			return nil, err
+		}
+	}
+	root, err := tree.Parse(string(searched), l)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +138,7 @@ func rewriteFile(source []byte, l lang.Lang, p pattern.Pattern, rewrite string) 
 	return sites, nil
 }
 
-func walk(l lang.Lang, roots []string) ([]string, error) {
+func Files(l lang.Lang, roots []string) ([]string, error) {
 	var files []string
 	for _, root := range roots {
 		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
@@ -133,7 +150,7 @@ func walk(l lang.Lang, roots []string) ([]string, error) {
 			switch {
 			case entry.IsDir() && path != root && (strings.HasPrefix(name, ".") || name == "vendor" || name == "testdata" || name == "node_modules"):
 				return filepath.SkipDir
-			case entry.IsDir() || !parsed || fileLang != l:
+			case entry.IsDir() || !parsed || fileLang != l && (!l.Embeddable() || !fileLang.HostsScripts()):
 				return nil
 			case len(files) == konst.CodemodFilesScanned:
 				return fmt.Errorf("more than %d %s files under paths: narrow paths", konst.CodemodFilesScanned, l)
