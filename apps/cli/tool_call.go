@@ -17,13 +17,16 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/wiring"
+	"tofu/internal/agent/hooks"
 	"tofu/internal/agent/loop"
+	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	platformfs "tofu/internal/platform/fs"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/tools/contract"
+	tools "tofu/internal/tools/registry"
 	"tofu/internal/tools/web/browser"
 )
 
@@ -79,10 +82,15 @@ func toolVerb(args []string, out, errOut io.Writer) int {
 	opts.LeadMayWorkAlone = true
 	stateDir, stateErr := platformfs.HomeConfigDir()
 	atStart := stateFiles(stateDir)
-	home, _ := os.UserHomeDir()
-	warm := newWarmProcesses(browser.NewBrowserTabs(home))
-	defer warm.Close()
-	hand, err := handConfig(opts, recorded, warm, notify)
+	var hand handRun
+	if lone, built := loneTool(opts, call.Name); built {
+		hand.config, err = loneConfig(opts, recorded, lone, notify)
+	} else {
+		home, _ := os.UserHomeDir()
+		warm := newWarmProcesses(browser.NewBrowserTabs(home))
+		defer warm.Close()
+		hand, err = handConfig(opts, recorded, warm, notify)
+	}
 	if err != nil {
 		return refuseTool(errOut, err.Error())
 	}
@@ -129,6 +137,55 @@ type handRun struct {
 	unstarted unstartedTools
 }
 
+func loneTool(opts wiring.RunOpts, name string) (contract.Tool, bool) {
+	leads := leadToolConstructors()
+	at := slices.IndexFunc(leads, func(lead leadTool) bool { return lead.name == name })
+	if at < 0 || opts.Agent != "" || opts.ToolSet == toolSetThree || settingspkg.TextSaying(opts.Dir, settingspkg.Shell, nil) != "" {
+		return nil, false
+	}
+	tool, err := leads[at].construct(opts.Dir)
+	if err != nil {
+		return nil, false
+	}
+	return tools.NewMemo().Wrap([]contract.Tool{tool})[0], true
+}
+
+func loneConfig(opts wiring.RunOpts, recorded string, lone contract.Tool, notify func(string)) (loop.Config, error) {
+	opts, sessions, places, err := handStores(opts, recorded)
+	if err != nil {
+		return loop.Config{}, err
+	}
+	keys := &storedKeys{}
+	redactor := keys.redactor()
+	turnID := cmp.Or(opts.TurnID, loop.NewID(time.Now()))
+	config := loop.Config{Places: places, Redactor: &redactor, Tools: loop.NewRegistry(lone), Project: cmp.Or(opts.Dir, "."), SessionSource: hooks.SessionStartup, Task: opts.Task, Wire: opts.Wire,
+		ResultBytesCap: konst.TurnResultBytesCap, Sessions: sessions, Session: cmp.Or(opts.Session, opts.TurnID, session.NewEventID()), Proxy: wiring.LoadProxySetting(opts.Dir).Proxy, Notify: notify,
+		NewID: func() string { return turnID }}
+	if opts.GateArm != gateOff {
+		if gate, _ := toolGateOn(opts.Dir, places.Log, keys.keyring()); gate != nil {
+			config.Gate, config.GateMode = gate, gateMode(opts.GateArm)
+		}
+	}
+	return config, nil
+}
+
+func handStores(opts wiring.RunOpts, recorded string) (wiring.RunOpts, *session.Store, platformproject.Places, error) {
+	dir := cmp.Or(opts.Dir, ".")
+	sessions, err := session.OpenIn(dir)
+	if err != nil {
+		return opts, nil, platformproject.Places{}, err
+	}
+	if recorded != "" {
+		row, _, err := sessionSummary(sessions, recorded)
+		if err != nil {
+			return opts, nil, platformproject.Places{}, err
+		}
+		opts.Session = row.ID
+	}
+	places, err := platformproject.ResolvePlaces(dir)
+	return opts, sessions, places, err
+}
+
 func handConfig(opts wiring.RunOpts, recorded string, warm *warmProcesses, notify func(string)) (handRun, error) {
 	var hand handRun
 	shell, err := loop.ResolveRunShell(settingspkg.TextSaying(opts.Dir, settingspkg.Shell, notify))
@@ -136,19 +193,7 @@ func handConfig(opts wiring.RunOpts, recorded string, warm *warmProcesses, notif
 		return hand, err
 	}
 	opts.Shell = shell
-	dir := cmp.Or(opts.Dir, ".")
-	sessions, err := session.OpenIn(dir)
-	if err != nil {
-		return hand, err
-	}
-	if recorded != "" {
-		row, _, err := sessionSummary(sessions, recorded)
-		if err != nil {
-			return hand, err
-		}
-		opts.Session = row.ID
-	}
-	places, err := platformproject.ResolvePlaces(dir)
+	opts, sessions, places, err := handStores(opts, recorded)
 	if err != nil {
 		return hand, err
 	}
