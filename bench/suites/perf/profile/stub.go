@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os/exec"
 	"strings"
+	"sync/atomic"
 )
 
 type idleHome string
@@ -19,11 +20,12 @@ const (
 
 const mockLoginCode = "mock-login-code"
 
-func startStub() (string, error) {
+func startStub() (string, *atomic.Int64, error) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
+	usage := &atomic.Int64{}
 	go func() {
 		_ = http.Serve(listener, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch {
@@ -32,6 +34,7 @@ func startStub() (string, error) {
 					"account":      map[string]any{"uuid": "mock-account", "email_address": "mock@example.invalid"},
 					"organization": map[string]any{"uuid": "mock-org", "name": "Mock"}})
 			case r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/usage"):
+				usage.Add(1)
 				_ = json.NewEncoder(w).Encode(map[string]any{"five_hour": map[string]any{"utilization": 10, "resets_at": "2099-01-01T00:00:00Z"},
 					"seven_day": map[string]any{"utilization": 20, "resets_at": "2099-01-01T00:00:00Z"}})
 			default:
@@ -39,7 +42,7 @@ func startStub() (string, error) {
 			}
 		}))
 	}()
-	return "http://" + listener.Addr().String(), nil
+	return "http://" + listener.Addr().String(), usage, nil
 }
 
 func stubEnv(home idleHome, url string) ([]string, error) {

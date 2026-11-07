@@ -22,6 +22,7 @@ type idleReading struct {
 	MCyclesPerS         float64  `json:"mcycles_per_s"`
 	Threads             int      `json:"threads"`
 	Heard               []string `json:"heard,omitempty"`
+	UsageRequests       int64    `json:"usage_requests,omitempty"`
 }
 
 type idleRun struct {
@@ -65,7 +66,7 @@ func idle(args []string) error {
 	if *label == "" || *build == "" || *work == "" || len(command) == 0 {
 		return errors.New("idle needs -label, -build, -work and a command after --")
 	}
-	url, err := startStub()
+	url, _, err := startStub()
 	if err != nil {
 		return err
 	}
