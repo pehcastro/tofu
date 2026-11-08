@@ -75,7 +75,7 @@ type LexState struct {
 // LexTransition maps a character range to a next state.
 type LexTransition struct {
 	Lo, Hi    rune // inclusive character range
-	NextState int
+	NextState int32
 	// Skip mirrors tree-sitter's SKIP(state): consume the matched rune
 	// and continue lexing while resetting token start.
 	Skip bool
@@ -685,10 +685,8 @@ type Language struct {
 	// produced this Language. Keep it private so blob encoding stays stable.
 	grammarBlobSHA256      [32]byte
 	grammarBlobSHA256Valid bool
-	// blobInfo records the version header LoadLanguage found (or did not
-	// find) on the blob that produced this Language. See BlobInfo and
-	// LanguageBlobInfo in language_blob_version_header.go.
-	blobInfo LanguageBlobInfo
+	cRecoveryTablesFailure string
+	cRecoveryTablesKnown   bool
 	// ImmediateTokens is a bitmask of symbol IDs that are token.immediate() tokens.
 	// When the lexer matches one of these after consuming whitespace, the match
 	// should be rejected — immediate tokens must match at the original position.
@@ -1167,53 +1165,48 @@ func (l *Language) buildKeywordLexPrefilter() keywordLexPrefilter {
 	states := l.KeywordLexStates
 	const maxLen = 255
 	var filter keywordLexPrefilter
-
-	type frame struct {
-		state int
-		depth int
-	}
-	visited := make(map[frame]bool)
-	queue := []frame{{state: 0, depth: 0}}
-	for len(queue) > 0 {
-		f := queue[0]
-		queue = queue[1:]
-		if f.state < 0 || f.state >= len(states) {
+	reachedAtDepth := make([]int, len(states))
+	frontier := []int{0}
+	for depth := 0; len(frontier) > 0; depth++ {
+		if depth > maxLen {
 			return keywordLexPrefilter{allowAll: true}
 		}
-		if visited[f] {
-			continue
-		}
-		visited[f] = true
-		if f.depth > maxLen {
-			return keywordLexPrefilter{allowAll: true}
-		}
-
-		st := states[f.state]
-		if st.AcceptToken != 0 && f.depth > 0 {
-			filter.hasAny = true
-			filter.lengths[f.depth/64] |= uint64(1) << uint(f.depth%64)
-		}
-		// A default transition can be taken by any byte, which would make the
-		// first-character set unbounded; bail out conservatively.
-		if st.Default >= 0 {
-			return keywordLexPrefilter{allowAll: true}
-		}
-		for _, tr := range st.Transitions {
-			if tr.NextState < 0 {
-				continue
-			}
-			if tr.Lo < 0 || tr.Hi > 0x7F || tr.Hi < tr.Lo {
-				// Non-ASCII (or malformed) ranges cannot be represented in the
-				// 256-bit first set without risking a false negative.
+		var next []int
+		for _, state := range frontier {
+			if state < 0 || state >= len(states) {
 				return keywordLexPrefilter{allowAll: true}
 			}
-			if f.depth == 0 {
-				for c := tr.Lo; c <= tr.Hi; c++ {
-					filter.first[c/64] |= uint64(1) << uint(c%64)
-				}
+			st := states[state]
+			if st.AcceptToken != 0 && depth > 0 {
+				filter.hasAny = true
+				filter.lengths[depth/64] |= uint64(1) << uint(depth%64)
 			}
-			queue = append(queue, frame{state: tr.NextState, depth: f.depth + 1})
+			if st.Default >= 0 {
+				return keywordLexPrefilter{allowAll: true}
+			}
+			for _, tr := range st.Transitions {
+				if tr.NextState < 0 {
+					continue
+				}
+				if tr.Lo < 0 || tr.Hi > 0x7F || tr.Hi < tr.Lo {
+					return keywordLexPrefilter{allowAll: true}
+				}
+				if depth == 0 {
+					for c := tr.Lo; c <= tr.Hi; c++ {
+						filter.first[c/64] |= uint64(1) << uint(c%64)
+					}
+				}
+				target := int(tr.NextState)
+				if target < len(states) {
+					if reachedAtDepth[target] == depth+1 {
+						continue
+					}
+					reachedAtDepth[target] = depth + 1
+				}
+				next = append(next, target)
+			}
 		}
+		frontier = next
 	}
 	if !filter.hasAny {
 		return keywordLexPrefilter{allowAll: true}
@@ -1300,21 +1293,6 @@ func (l *Language) GrammarBlobSHA256() ([32]byte, bool) {
 		return [32]byte{}, false
 	}
 	return l.grammarBlobSHA256, true
-}
-
-// BlobInfo returns the version metadata LoadLanguage recorded when it loaded
-// this Language. The zero value (HasHeader == false) means either the blob
-// predates the version header, came from a producer that does not write one,
-// or this Language was never loaded through LoadLanguage at all (e.g. a
-// static ts2go source-generated Language, or an in-memory grammargen
-// Language that was never round-tripped through a blob). LoadLanguage still
-// loads a headerless blob for compatibility; callers that want a stronger
-// guarantee can check HasHeader and warn or reject.
-func (l *Language) BlobInfo() LanguageBlobInfo {
-	if l == nil {
-		return LanguageBlobInfo{}
-	}
-	return l.blobInfo
 }
 
 func compactRecoverEOFArtifactConfigured(l *Language) bool {

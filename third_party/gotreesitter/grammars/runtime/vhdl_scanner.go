@@ -4,6 +4,7 @@ package grammarruntime
 
 import (
 	"strings"
+	"sync"
 	"unicode"
 
 	gotreesitter "github.com/odvcencio/gotreesitter"
@@ -677,30 +678,18 @@ func (t *vhdlTrie) match(lexer *gotreesitter.ExternalLexer) []int {
 // Global trie (built once, like the C token_tree)
 // ---------------------------------------------------------------------------
 
-var vhdlTokenTrie *vhdlTrie
-
-func init() {
-	vhdlTokenTrie = newVhdlTrie()
-
-	// Reserved words (all lowercase in the trie; lexer lowercases on lookup)
-	vhdlRegisterReserved(vhdlTokenTrie)
-	vhdlRegisterDirectives(vhdlTokenTrie)
-	vhdlRegisterDelimiters(vhdlTokenTrie)
-	vhdlRegisterOperatorSymbols(vhdlTokenTrie)
-	vhdlRegisterAttributes(vhdlTokenTrie)
-	vhdlRegisterBaseSpecifiers(vhdlTokenTrie)
-
-	// Library registrations
-	vhdlRegisterStdEnv(vhdlTokenTrie)
-	vhdlRegisterStdStandard(vhdlTokenTrie)
-	vhdlRegisterStdTextio(vhdlTokenTrie)
-	vhdlRegisterIeeeStdLogic1164(vhdlTokenTrie)
-	vhdlRegisterIeeeNumericStd(vhdlTokenTrie)
-	vhdlRegisterIeeeFixedPkg(vhdlTokenTrie)
-	vhdlRegisterIeeeFloatPkg(vhdlTokenTrie)
-	vhdlRegisterIeeeMathReal(vhdlTokenTrie)
-	vhdlRegisterIeeeMathComplex(vhdlTokenTrie)
-}
+var vhdlTokenTrie = sync.OnceValue(func() *vhdlTrie {
+	t := newVhdlTrie()
+	for _, register := range []func(*vhdlTrie){
+		vhdlRegisterReserved, vhdlRegisterDirectives, vhdlRegisterDelimiters, vhdlRegisterOperatorSymbols,
+		vhdlRegisterAttributes, vhdlRegisterBaseSpecifiers, vhdlRegisterStdEnv, vhdlRegisterStdStandard,
+		vhdlRegisterStdTextio, vhdlRegisterIeeeStdLogic1164, vhdlRegisterIeeeNumericStd, vhdlRegisterIeeeFixedPkg,
+		vhdlRegisterIeeeFloatPkg, vhdlRegisterIeeeMathReal, vhdlRegisterIeeeMathComplex,
+	} {
+		register(t)
+	}
+	return t
+})
 
 func vhdlRegisterReserved(t *vhdlTrie) {
 	keywords := []struct {
@@ -1474,7 +1463,7 @@ func (sc VhdlExternalScanner) Scan(payload any, lexer *gotreesitter.ExternalLexe
 		(lexer.Lookahead() >= 'A' && lexer.Lookahead() <= 'Z')
 	firstCharIsDoubleQuote := lexer.Lookahead() == '"'
 
-	types := vhdlTokenTrie.match(lexer)
+	types := vhdlTokenTrie().match(lexer)
 
 	// If trie didn't match and first char was a letter, it's an identifier
 	if len(types) == 0 && firstCharIsLetter {

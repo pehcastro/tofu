@@ -11,7 +11,7 @@ import (
 )
 
 // BlobSHA256 identifies the packaged grammar artifact.
-const BlobSHA256 = "df63fc35604c4e4e7a484abde9eb2110b61640045601c23991723f323a48310d"
+const BlobSHA256 = "443b3163737165f6b4a6212d00c74b6a6a38420d83fa6102d887257a78964ffd"
 
 func init() { grammarruntime.RegisterGoSupport(); grammarruntime.RegisterBlob("go", grammarblobs.Go) }
 

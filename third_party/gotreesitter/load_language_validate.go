@@ -20,7 +20,7 @@ const maxSaneLanguageTableCount = 4_000_000
 // pass them (see TestValidateDecodedLanguageAcceptsAllShippedBlobs), so they
 // verify only the index bounds that later table lookups rely on, not
 // grammar-specific semantics.
-func validateDecodedLanguage(lang *Language) error {
+func ValidateLanguage(lang *Language) error {
 	if lang == nil {
 		return fmt.Errorf("validate language: nil language")
 	}
@@ -150,7 +150,7 @@ func validateLanguageLexTables(lang *Language) error {
 			return fmt.Errorf("validate language: LexStates[%d].EOF %d is outside LexStates (len %d)", i, ls.EOF, numLexStates)
 		}
 		for j, tr := range ls.Transitions {
-			if tr.NextState >= 0 && tr.NextState >= numLexStates {
+			if tr.NextState >= 0 && int(tr.NextState) >= numLexStates {
 				return fmt.Errorf("validate language: LexStates[%d].Transitions[%d].NextState %d is outside LexStates (len %d)", i, j, tr.NextState, numLexStates)
 			}
 		}

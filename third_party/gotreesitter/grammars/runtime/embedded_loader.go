@@ -2,7 +2,6 @@ package grammarruntime
 
 import (
 	"container/list"
-	"crypto/sha256"
 	"fmt"
 	"os"
 	"strconv"
@@ -230,7 +229,8 @@ func LoadLanguage(name string, data []byte) (*gotreesitter.Language, error) {
 		return nil, err
 	}
 	AttachLanguageSupport(name, lang)
-	attachBuiltinLanguageRuntimeProfile(name, sha256.Sum256(data), lang)
+	sum, _ := lang.GrammarBlobSHA256()
+	attachBuiltinLanguageRuntimeProfile(name, sum, lang)
 	return lang, nil
 }
 
@@ -625,9 +625,12 @@ func decodeEmbeddedLanguage(blobName string) (*gotreesitter.Language, [32]byte, 
 	}
 	defer blob.close()
 
-	sum := sha256.Sum256(blob.data)
 	lang, err := decodeLanguageBlobData(blobName, blob.data)
-	return lang, sum, err
+	if err != nil {
+		return nil, [32]byte{}, err
+	}
+	sum, _ := lang.GrammarBlobSHA256()
+	return lang, sum, nil
 }
 
 // DecodeAndCertifyLanguageBlob decodes a raw grammar blob and reproduces
@@ -664,21 +667,34 @@ func decodeLanguageBlobData(blobName string, data []byte) (*gotreesitter.Languag
 	if err != nil {
 		return nil, fmt.Errorf("decode grammar blob %q: %w", blobName, err)
 	}
-	compactDecodedLanguage(lang)
+	return lang, nil
+}
+
+func RepairDecodedLanguage(blobName string, lang *gotreesitter.Language) {
+	gotreesitter.InferGeneratedRepeatAuxMetadata(lang)
+	for _, states := range [][]gotreesitter.LexState{lang.LexStates, lang.KeywordLexStates} {
+		for i := range states {
+			states[i].Transitions = mergeAdjacentLexTransitions(states[i].Transitions)
+		}
+	}
 	repairNoLookaheadLexModes(lang)
-	// Attach reserved words before any repair below that appends a
-	// synthetic symbol name (e.g. the JS/TS optional-chain repair): the
-	// sidecar's recorded symbol count is the original ts_symbol_names
-	// count from parser.c, and appended synthetic symbols never appear in
-	// any reserved-word set, so validating first keeps the exact symbol
-	// count match meaningful.
 	attachReservedWordsForBlob(blobName, lang)
 	repairJavaScriptTypeScriptOptionalChainTokenSymbol(blobName, lang)
 	repairDartCollapsedLeafTokenSymbols(blobName, lang)
 	repairDhallUnicodeAnonymousSymbolNames(blobName, lang)
 	attachReduceChainHints(blobName, lang)
+}
 
-	return lang, nil
+func mergeAdjacentLexTransitions(ts []gotreesitter.LexTransition) []gotreesitter.LexTransition {
+	var merged []gotreesitter.LexTransition
+	for _, tr := range ts {
+		if n := len(merged); n > 0 && merged[n-1].NextState == tr.NextState && merged[n-1].Skip == tr.Skip && merged[n-1].Hi < tr.Lo && merged[n-1].Hi+1 == tr.Lo {
+			merged[n-1].Hi = tr.Hi
+			continue
+		}
+		merged = append(merged, tr)
+	}
+	return merged
 }
 
 // attachReservedWordsForBlob normalizes blobName to a bare language name

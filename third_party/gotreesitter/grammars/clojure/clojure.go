@@ -11,7 +11,7 @@ import (
 )
 
 // BlobSHA256 identifies the packaged grammar artifact.
-const BlobSHA256 = "9e97c4185fc120df97c8155070693c05440eb76d202128ba3d07fbdcc11f18b1"
+const BlobSHA256 = "21f5731e530505f7489f3e8f75839ba07522a1275a168799a0e354544291507d"
 
 func init() { ; grammarruntime.RegisterBlob("clojure", grammarblobs.Clojure) }
 

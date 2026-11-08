@@ -677,8 +677,9 @@ func buildParserDerivedTables(l *Language) *parserDerivedTables {
 		t.externalValidMaskByState = buildExternalValidMaskByState(t.externalValidByState, len(l.ExternalSymbols))
 	}
 	t.classifiedActions = buildClassifiedParseActions(l)
-	t.keepSameNamedAnonChildSymbol = buildKeepSameNamedAnonChildSymbols(l)
-	t.sharedAnonymousTokenSymbol = buildSharedAnonymousTokenSymbols(l)
+	several := tokensShiftingToSeveralStates(l)
+	t.keepSameNamedAnonChildSymbol = buildKeepSameNamedAnonChildSymbols(l, several)
+	t.sharedAnonymousTokenSymbol = buildSharedAnonymousTokenSymbols(l, several)
 	t.eagerDefaultReduces = buildEagerDefaultReduceActions(parserActionTableView{
 		language:          l,
 		denseLimit:        languageDenseLimit(l),

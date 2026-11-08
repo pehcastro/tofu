@@ -11,7 +11,7 @@ import (
 )
 
 // BlobSHA256 identifies the packaged grammar artifact.
-const BlobSHA256 = "a1d1bb30d9971f1c3d645aab456521943a5f0da419b57a0986fc9b2a502a90d9"
+const BlobSHA256 = "3b2a65062c1bc26337d35b9dfde6e2a506f315b8db5c25250451a980f4bfb52d"
 
 func init() { ; grammarruntime.RegisterBlob("groovy", grammarblobs.Groovy) }
 

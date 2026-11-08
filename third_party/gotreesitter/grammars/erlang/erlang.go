@@ -11,7 +11,7 @@ import (
 )
 
 // BlobSHA256 identifies the packaged grammar artifact.
-const BlobSHA256 = "aa63243bd946d324bfb335d84c162cbaf8cc9922feef71de17296a18186ecedf"
+const BlobSHA256 = "3a95d33d9a72ade08150f47f15e6eb182296f4756cb879dda741e4dfbd12f454"
 
 func init() {
 	grammarruntime.RegisterErlangSupport()

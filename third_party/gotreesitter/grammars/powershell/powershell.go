@@ -11,7 +11,7 @@ import (
 )
 
 // BlobSHA256 identifies the packaged grammar artifact.
-const BlobSHA256 = "93a9e417574e13acee18e811162a27539e747f517b8705b240f8b02091a1d40e"
+const BlobSHA256 = "19c495e54f1ac55c494a70d194da06274b475b2679dd379cc3f092377041ab1b"
 
 func init() {
 	grammarruntime.RegisterPowershellSupport()

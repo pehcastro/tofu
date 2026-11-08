@@ -410,16 +410,11 @@ func buildFieldPlanForProduction(lang *Language, childCount int, productionID ui
 // Returns a per-symbol slice indexed by the named parent symbol, or nil when no
 // such keep-cases exist (so synthetic Languages without a parse table are
 // unaffected).
-func buildKeepSameNamedAnonChildSymbols(lang *Language) []bool {
+func buildKeepSameNamedAnonChildSymbols(lang *Language, several []bool) []bool {
 	if lang == nil || len(lang.SymbolMetadata) == 0 {
 		return nil
 	}
-	if len(lang.ParseTable) == 0 && len(lang.SmallParseTableMap) == 0 {
-		return nil
-	}
-
 	meta := lang.SymbolMetadata
-	tokenCount := int(lang.TokenCount)
 
 	// For each name, find its visible named symbol and visible anonymous token.
 	type pair struct{ named, anon int }
@@ -448,37 +443,10 @@ func buildKeepSameNamedAnonChildSymbols(lang *Language) []bool {
 		}
 	}
 
-	// Collect anon-token candidates (those with a same-named named twin) and
-	// count distinct shift-target states per anon token.
-	anonShiftTargets := map[int]map[int]struct{}{}
-	for _, p := range byName {
-		if p.named < 0 || p.anon < 0 {
-			continue
-		}
-		anonShiftTargets[p.anon] = map[int]struct{}{}
-	}
-	if len(anonShiftTargets) == 0 {
-		return nil
-	}
-
-	denseLimit := languageDenseLimit(lang)
-	smallBase := int(lang.LargeStateCount)
-	forEachStateAction(lang, denseLimit, smallBase, func(state, sym int, act ParseAction) {
-		if act.Type != ParseActionShift {
-			return
-		}
-		if set, ok := anonShiftTargets[sym]; ok && sym < tokenCount {
-			set[int(act.State)] = struct{}{}
-		}
-	})
-
 	out := make([]bool, len(meta))
 	any := false
 	for _, p := range byName {
-		if p.named < 0 || p.anon < 0 {
-			continue
-		}
-		if len(anonShiftTargets[p.anon]) >= 2 {
+		if p.named >= 0 && p.anon >= 0 && p.anon < len(several) && several[p.anon] {
 			out[p.named] = true
 			any = true
 		}
@@ -489,37 +457,14 @@ func buildKeepSameNamedAnonChildSymbols(lang *Language) []bool {
 	return out
 }
 
-func buildSharedAnonymousTokenSymbols(lang *Language) []bool {
-	if lang == nil || len(lang.SymbolMetadata) == 0 || (len(lang.ParseTable) == 0 && len(lang.SmallParseTableMap) == 0) {
+func buildSharedAnonymousTokenSymbols(lang *Language, several []bool) []bool {
+	if lang == nil || len(lang.SymbolMetadata) == 0 {
 		return nil
 	}
-	tokenCount := int(lang.TokenCount)
-	shiftTargets := map[int]map[int]struct{}{}
-	for sym, meta := range lang.SymbolMetadata {
-		if sym >= tokenCount || !meta.Visible || meta.Named {
-			continue
-		}
-		shiftTargets[sym] = map[int]struct{}{}
-	}
-	if len(shiftTargets) == 0 {
-		return nil
-	}
-
-	denseLimit := languageDenseLimit(lang)
-	smallBase := int(lang.LargeStateCount)
-	forEachStateAction(lang, denseLimit, smallBase, func(state, sym int, act ParseAction) {
-		if act.Type != ParseActionShift || sym >= tokenCount {
-			return
-		}
-		if set, ok := shiftTargets[sym]; ok {
-			set[int(act.State)] = struct{}{}
-		}
-	})
-
 	out := make([]bool, len(lang.SymbolMetadata))
 	any := false
-	for sym, targets := range shiftTargets {
-		if len(targets) >= 2 {
+	for sym, meta := range lang.SymbolMetadata {
+		if sym < len(several) && several[sym] && meta.Visible && !meta.Named {
 			out[sym] = true
 			any = true
 		}
@@ -530,55 +475,55 @@ func buildSharedAnonymousTokenSymbols(lang *Language) []bool {
 	return out
 }
 
-// forEachStateAction iterates every (state, symbol) -> ParseAction across both
-// the dense and small (sparse) parse tables, invoking fn for each action of the
-// resolved action entry. Action index 0 is the no-action/error entry.
-func forEachStateAction(lang *Language, denseLimit, smallBase int, fn func(state, sym int, act ParseAction)) {
-	resolve := func(state, sym int, idx uint16) {
-		if idx == 0 || int(idx) >= len(lang.ParseActions) {
+func tokensShiftingToSeveralStates(lang *Language) []bool {
+	if lang == nil || lang.TokenCount == 0 || (len(lang.ParseTable) == 0 && len(lang.SmallParseTableMap) == 0) {
+		return nil
+	}
+	tokenCount := int(lang.TokenCount)
+	first := make([]StateID, tokenCount)
+	seen := make([]bool, tokenCount)
+	several := make([]bool, tokenCount)
+	note := func(sym int, idx uint16) {
+		if sym >= tokenCount || idx == 0 || int(idx) >= len(lang.ParseActions) || several[sym] {
 			return
 		}
 		for _, act := range lang.ParseActions[idx].Actions {
-			fn(state, sym, act)
-		}
-	}
-
-	for state := 0; state < denseLimit && state < len(lang.ParseTable); state++ {
-		row := lang.ParseTable[state]
-		for sym, idx := range row {
-			if idx == 0 {
-				continue
+			switch {
+			case act.Type != ParseActionShift:
+			case !seen[sym]:
+				seen[sym], first[sym] = true, act.State
+			case first[sym] != act.State:
+				several[sym] = true
 			}
-			resolve(state, sym, idx)
 		}
 	}
-
+	for state := 0; state < languageDenseLimit(lang) && state < len(lang.ParseTable); state++ {
+		row := lang.ParseTable[state]
+		for sym, idx := range row[:min(len(row), tokenCount)] {
+			note(sym, idx)
+		}
+	}
 	table := lang.SmallParseTable
-	for smallIdx, offset := range lang.SmallParseTableMap {
-		state := smallBase + smallIdx
+	for _, offset := range lang.SmallParseTableMap {
 		pos := int(offset)
 		if pos >= len(table) {
 			continue
 		}
-		groupCount := table[pos]
+		groups := int(table[pos])
 		pos++
-		for i := uint16(0); i < groupCount; i++ {
+		for range groups {
 			if pos+1 >= len(table) {
 				break
 			}
-			sectionValue := table[pos]
-			symbolCount := table[pos+1]
+			value, count := table[pos], int(table[pos+1])
 			pos += 2
-			for j := uint16(0); j < symbolCount; j++ {
-				if pos >= len(table) {
-					break
-				}
-				sym := int(table[pos])
-				resolve(state, sym, sectionValue)
-				pos++
+			for _, sym := range table[pos:min(pos+count, len(table))] {
+				note(int(sym), value)
 			}
+			pos += count
 		}
 	}
+	return several
 }
 
 func (p *Parser) applyActionWithReduceChain(source []byte, s *glrStack, act ParseAction, tok Token, anyReduced *bool, nodeCount *int, arena *nodeArena, entryScratch *glrEntryScratch, gssScratch *gssScratch, tmpEntries *[]stackEntry, deferParentLinks bool, trackChildErrors *bool) bool {

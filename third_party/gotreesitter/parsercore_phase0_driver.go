@@ -14275,7 +14275,7 @@ func (s *diagnosticParserCoreGenericScheduler) publishTotals() {
 }
 
 func authenticatedParserCoreGoLanguage(scanner ExternalScanner) (*Language, error) {
-	const goBlobSHA256 = "df63fc35604c4e4e7a484abde9eb2110b61640045601c23991723f323a48310d"
+	const goBlobSHA256 = "443b3163737165f6b4a6212d00c74b6a6a38420d83fa6102d887257a78964ffd"
 	if fmt.Sprintf("%x", sha256.Sum256(parserCoreCertifiedGoBlob)) != goBlobSHA256 {
 		return nil, errors.New("parser-core phase zero: certified Go grammar identity mismatch")
 	}

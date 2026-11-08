@@ -229,10 +229,10 @@ const (
 // Native EOF trials use the exact Scala blob covered by the locked-C suffix
 // differential. Other blobs retain the exact-row trial until certified.
 var cRecoveryEOFSentinelScalaBlobSHA256 = [32]byte{
-	0xb3, 0x19, 0xfb, 0x9e, 0x03, 0x0c, 0x13, 0xc9,
-	0x9c, 0x85, 0x2c, 0xd0, 0xb0, 0x9b, 0x76, 0xbc,
-	0x97, 0x5f, 0xbd, 0x63, 0xc8, 0xb6, 0xd6, 0x99,
-	0x9d, 0x71, 0x18, 0x65, 0xec, 0x9a, 0x58, 0x62,
+	0xad, 0x5a, 0x12, 0x7b, 0xf0, 0x31, 0x47, 0x40,
+	0x6c, 0x53, 0xae, 0x9b, 0x8a, 0x5a, 0x94, 0x01,
+	0x1c, 0x2e, 0x5e, 0x8a, 0xd5, 0xe8, 0xff, 0xa9,
+	0x88, 0xb0, 0x7c, 0xe3, 0xec, 0x85, 0x6c, 0xdd,
 }
 
 func cRecoveryEOFSentinelCertified(lang *Language) bool {
@@ -567,14 +567,22 @@ func diagnoseCRecoveryGateUncached(lang *Language) CRecoveryGateDiagnostics {
 			return fail(reason)
 		}
 	}
-	if reason := parseTablesCRecoveryFailure(lang); reason != "" {
-		return fail(reason)
+	reason := lang.cRecoveryTablesFailure
+	if !lang.cRecoveryTablesKnown {
+		reason = cRecoveryTablesFailure(lang)
 	}
-	if reason := parseActionsCRecoveryFailure(lang); reason != "" {
+	if reason != "" {
 		return fail(reason)
 	}
 	d.Supported = true
 	return d
+}
+
+func cRecoveryTablesFailure(lang *Language) string {
+	if reason := parseTablesCRecoveryFailure(lang); reason != "" {
+		return reason
+	}
+	return parseActionsCRecoveryFailure(lang)
 }
 
 func languageSupportsCRecoveryCostCompetition(lang *Language) bool {
