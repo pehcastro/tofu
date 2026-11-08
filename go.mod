@@ -260,3 +260,5 @@ replace github.com/charmbracelet/ultraviolet => ./third_party/ultraviolet
 replace github.com/gorilla/css => ./third_party/gorilla-css
 
 replace github.com/microcosm-cc/bluemonday => ./third_party/bluemonday
+
+replace github.com/odvcencio/gotreesitter => ./third_party/gotreesitter

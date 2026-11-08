@@ -1,0 +1,447 @@
+package gotreesitter
+
+import (
+	"github.com/odvcencio/gotreesitter/internal/incr"
+	"slices"
+	"unicode/utf8"
+)
+
+// A proof pays for both source versions. Exhaustion declines before reuse.
+type tokenInvariantPrimitiveBudget struct{ bytes, scans uint32 }
+
+func (b *tokenInvariantPrimitiveBudget) charge(span uint32) bool {
+	if b.scans == 0 || span > b.bytes {
+		return false
+	}
+	b.scans--
+	b.bytes -= span
+	return true
+}
+
+func (b *tokenInvariantPrimitiveBudget) chargeBytes(span uint32) bool {
+	if span > b.bytes {
+		return false
+	}
+	b.bytes -= span
+	return true
+}
+
+func (d *dfaTokenSource) tokenInvariantPrimitiveEditsEquivalent(oldSource, newSource []byte, edit InputEdit, maxReadSpan uint32) (uint32, bool) {
+	return d.tokenInvariantPrimitiveEditsEquivalentWithScannerProof(oldSource, newSource, edit, maxReadSpan, false)
+}
+
+func (d *dfaTokenSource) tokenInvariantPrimitiveEditsEquivalentWithScannerProof(oldSource, newSource []byte, edit InputEdit, maxReadSpan uint32, scannerEquivalent bool) (uint32, bool) {
+	return d.tokenInvariantPrimitiveEditsEquivalentBeforeToken(oldSource, newSource, edit, maxReadSpan, scannerEquivalent, ^uint32(0))
+}
+
+func (d *dfaTokenSource) tokenInvariantPrimitiveEditsEquivalentBeforeToken(oldSource, newSource []byte, edit InputEdit, maxReadSpan uint32, scannerEquivalent bool, lastScanOrigin uint32) (uint32, bool) {
+	mapping := incr.TokenEdit{Start: edit.StartByte, OldEnd: edit.OldEndByte, NewEnd: edit.NewEndByte, Row: edit.StartPoint.Row}
+	moving := edit.OldEndByte != edit.NewEndByte
+	lengthNeutral := d != nil && d.language != nil && scannerEquivalent && moving &&
+		edit.StartPoint.Row == edit.OldEndPoint.Row && edit.StartPoint.Row == edit.NewEndPoint.Row &&
+		incr.LengthNeutralScannerEdit(d.language.ExternalScanner, oldSource, newSource, mapping)
+	if d == nil || d.lexer == nil || d.language == nil || len(d.lexer.includedRanges) != 0 ||
+		(!lengthNeutral && (len(oldSource) != len(newSource) || moving || edit.StartByte >= edit.OldEndByte || edit.OldEndPoint != edit.NewEndPoint)) ||
+		uint64(edit.OldEndByte) > uint64(len(oldSource)) || maxReadSpan == 0 {
+		return 0, false
+	}
+	budget := tokenInvariantPrimitiveBudget{32768, 2048}
+	if !budget.chargeBytes(uint32(2 * len(utf8BOM))) {
+		return 0, false
+	}
+	oldBOM, newBOM := Lexer{source: oldSource}, Lexer{source: newSource}
+	oldBOM.skipLeadingBOM()
+	newBOM.skipLeadingBOM()
+	if oldBOM.pos != newBOM.pos || oldBOM.col != newBOM.col {
+		return 0, false
+	}
+	if !lengthNeutral && !tokenInvariantWhitespaceGatesEquivalent(oldSource, newSource, edit, &budget) {
+		return 0, false
+	}
+	var modeStorage [1024]uint32
+	modes := modeStorage[:0]
+	// The lexer can use state zero for a fallback scan without a mode row.
+	if len(d.lexer.states) != 0 {
+		modes = append(modes, 0)
+	}
+	if len(d.language.LexModes) > 32768 {
+		return 0, false
+	}
+	for _, mode := range d.language.LexModes {
+		for index, state := range [...]uint32{mode.LexStateIndex(), mode.AfterWhitespaceLexStateIndex()} {
+			if index == 1 && state == 0 {
+				continue
+			}
+			if state == noLookaheadLexState {
+				continue
+			}
+			if uint64(state) >= uint64(len(d.lexer.states)) {
+				return 0, false
+			}
+			if !slices.Contains(modes, state) {
+				if len(modes) == len(modeStorage) {
+					return 0, false
+				}
+				modes = append(modes, state)
+			}
+		}
+		if d.language.ExternalScanner != nil && !scannerEquivalent {
+			if int(mode.ExternalLexState) >= len(d.language.ExternalLexStates) {
+				return 0, false
+			}
+			if len(d.language.ExternalLexStates[mode.ExternalLexState]) > len(d.language.ExternalSymbols) {
+				return 0, false
+			}
+		}
+	}
+	if len(modes) == 0 {
+		return 0, false
+	}
+	maskCount := 0
+	var externalPayload any
+	var externalScratch ExternalLexer
+	var maskStorage [8]bool
+	if d.language.ExternalScanner != nil && !scannerEquivalent {
+		scanner, ok := d.language.ExternalScanner.(StatelessExternalScanner)
+		if !ok || !scanner.ExternalScannerIsStateless() || len(d.language.ExternalSymbols) > len(maskStorage) {
+			return 0, false
+		}
+		// Retry masks and GLR unions need not occur in ExternalLexStates.
+		// Enumerate the complete bounded mask space, including the empty mask.
+		maskCount = 1 << uint(len(d.language.ExternalSymbols))
+		externalPayload = scanner.Create()
+		defer scanner.Destroy(externalPayload)
+	}
+	origin := uint32(0)
+	if edit.StartByte > maxReadSpan {
+		origin = edit.StartByte - maxReadSpan
+	}
+	// Derive the initial point from the supplied edit point, not a full-file
+	// scan. A previous-line search also consumes the bounded byte allowance.
+	point := edit.StartPoint
+	for i := edit.StartByte; i > origin; i-- {
+		if budget.bytes == 0 {
+			return 0, false
+		}
+		budget.bytes--
+		if oldSource[i-1] == '\n' {
+			if point.Row == 0 {
+				return 0, false
+			}
+			point.Row--
+			column := uint32(0)
+			for j := i - 1; j > 0 && oldSource[j-1] != '\n'; j-- {
+				if budget.bytes == 0 {
+					return 0, false
+				}
+				budget.bytes--
+				column++
+			}
+			point.Column = column
+		} else {
+			if point.Column == 0 {
+				return 0, false
+			}
+			point.Column--
+		}
+	}
+	oldPoint, newPoint := point, point
+	maximum := maxReadSpan
+	if lengthNeutral && edit.NewEndByte > edit.OldEndByte {
+		if uint64(maximum)+uint64(edit.NewEndByte-edit.OldEndByte) > uint64(^uint32(0)) {
+			return 0, false
+		}
+		maximum += edit.NewEndByte - edit.OldEndByte
+	}
+	// Keyword selection depends on its bounded source slice, not the LR
+	// mode that returned that slice. Cache only completed equal comparisons.
+	var keywordSpans [16][2]uint32
+	keywordSpanCount := 0
+	lastOrigin := edit.OldEndByte
+	if lengthNeutral {
+		lastOrigin = min(edit.StartByte+1, lastScanOrigin)
+	}
+	for ; origin < lastOrigin; origin++ {
+		for _, mode := range modes {
+			oldToken, oldLex, oldOK, ok := d.tokenInvariantProbeDFALimited(oldSource, origin, oldPoint, mode, &budget, maxReadSpan)
+			if !ok {
+				return 0, false
+			}
+			// Complete old coverage proves that a wider hypothetical scan
+			// never executed. Do not let unreachable modes inflate new coverage.
+			if oldToken.lexerLookaheadEndByte-origin > maxReadSpan {
+				continue
+			}
+			// The deterministic raw scan cannot change when every byte it
+			// examined precedes the edit. Its token and keyword slice also
+			// precede the edit, so no duplicate scan or text check is needed.
+			if oldToken.lexerLookaheadEndByte <= edit.StartByte {
+				continue
+			}
+			newToken, newLex, newOK, ok := d.tokenInvariantProbeDFA(newSource, origin, newPoint, mode, &budget)
+			projectedToken, projectedLex := oldToken, oldLex
+			projected := true
+			if lengthNeutral {
+				projectedToken, projectedLex, projected = projectTokenInvariantPrimitive(oldToken, oldLex, mapping)
+			}
+			if !ok || !projected || oldOK != newOK || !tokenInvariantPrimitiveTokensEqual(projectedToken, newToken) ||
+				projectedLex.pos != newLex.pos || projectedLex.row != newLex.row || projectedLex.col != newLex.col ||
+				projectedLex.failTokenStartPos != newLex.failTokenStartPos || projectedLex.failTokenStartRow != newLex.failTokenStartRow || projectedLex.failTokenStartCol != newLex.failTokenStartCol {
+				return 0, false
+			}
+			maximum = maxUint32(maximum, newToken.lexerLookaheadEndByte-origin)
+			if oldOK && !d.tokenInvariantLiteralCandidatesEquivalent(oldToken, newToken, &budget) {
+				return 0, false
+			}
+			if oldOK && oldToken.Symbol == d.language.KeywordCaptureToken && oldToken.EndByte > oldToken.StartByte && len(d.language.KeywordLexStates) != 0 {
+				key := [2]uint32{oldToken.StartByte, oldToken.EndByte}
+				if !budget.chargeBytes(uint32(keywordSpanCount)) {
+					return 0, false
+				}
+				if slices.Contains(keywordSpans[:keywordSpanCount], key) {
+					continue
+				}
+				// Charge one budgeted byte for the old-source prefilter call
+				// and one for the new-source prefilter call below. Each call
+				// is bounded, constant-time work, so both charges are 1, not
+				// a copy-paste of a single charge.
+				if !budget.chargeBytes(1) {
+					return 0, false
+				}
+				if !budget.chargeBytes(1) {
+					return 0, false
+				}
+				oldPrefilter := d.language.keywordLexCouldMatch(oldSource, int(oldToken.StartByte), int(oldToken.EndByte))
+				newPrefilter := d.language.keywordLexCouldMatch(newSource, int(newToken.StartByte), int(newToken.EndByte))
+				if oldPrefilter != newPrefilter {
+					return 0, false
+				}
+				var tokens [2]Token
+				var accepted [2]bool
+				for index, source := range [][]byte{oldSource, newSource} {
+					span := oldToken
+					if index == 1 {
+						span = newToken
+					}
+					width := span.EndByte - span.StartByte
+					if budget.scans == 0 || uint64(width)+5 > uint64(budget.bytes) {
+						return 0, false
+					}
+					probe := dfaTokenSource{language: d.language}
+					tokens[index], accepted[index] = probe.lexKeywordSource(source[span.StartByte:span.EndByte])
+					if !budget.charge(probe.tokenInvariantReadSpan()) {
+						return 0, false
+					}
+					if index == 1 {
+						maximum = maxUint32(maximum, probe.tokenInvariantReadSpan())
+					}
+				}
+				if lengthNeutral && accepted[0] && accepted[1] {
+					// Keyword tokens use coordinates relative to their captured slice.
+					tokens[0].EndByte = tokens[1].EndByte
+				}
+				if accepted[0] != accepted[1] || !tokenInvariantPrimitiveTokensEqual(tokens[0], tokens[1]) {
+					return 0, false
+				}
+				if keywordSpanCount < len(keywordSpans) {
+					keywordSpans[keywordSpanCount] = key
+					keywordSpanCount++
+				}
+			}
+		}
+		for bits := 0; bits < maskCount; bits++ {
+			mask := maskStorage[:len(d.language.ExternalSymbols)]
+			for index := range mask {
+				mask[index] = bits&(1<<uint(index)) != 0
+			}
+			oldLex, oldOK, oldSpan, ok := d.tokenInvariantProbeExternal(oldSource, origin, oldPoint, mask, &budget, externalPayload, &externalScratch, maxReadSpan)
+			if !ok {
+				return 0, false
+			}
+			if oldSpan > maxReadSpan || uint64(origin)+uint64(oldSpan) <= uint64(edit.StartByte) {
+				continue
+			}
+			newLex, newOK, newSpan, ok := d.tokenInvariantProbeExternal(newSource, origin, newPoint, mask, &budget, externalPayload, &externalScratch, 0)
+			if !ok || oldOK != newOK {
+				return 0, false
+			}
+			maximum = maxUint32(maximum, newSpan)
+			if oldLex.startPos != newLex.startPos || oldLex.pos != newLex.pos || oldLex.endPos != newLex.endPos ||
+				oldLex.startPoint != newLex.startPoint || oldLex.point != newLex.point || oldLex.endPoint != newLex.endPoint ||
+				oldLex.endMarked != newLex.endMarked || oldLex.advancedContent != newLex.advancedContent ||
+				oldLex.resultSymbol != newLex.resultSymbol || oldLex.hasResult != newLex.hasResult {
+				return 0, false
+			}
+		}
+		if oldSource[origin] == '\n' {
+			oldPoint.Row++
+			oldPoint.Column = 0
+		} else {
+			oldPoint.Column++
+		}
+		if newSource[origin] == '\n' {
+			newPoint.Row++
+			newPoint.Column = 0
+		} else {
+			newPoint.Column++
+		}
+	}
+	return maximum, true
+}
+
+// Apply the internal coordinate proof to the facade's lexer tuples.
+func projectTokenInvariantPrimitive(tok Token, lex Lexer, edit incr.TokenEdit) (Token, Lexer, bool) {
+	project := func(offset *uint32, point *Point) bool {
+		row, column, ok := edit.Point(*offset, point.Row, point.Column)
+		if !ok {
+			return false
+		}
+		value, ok := edit.Byte(*offset)
+		if !ok {
+			return false
+		}
+		*offset, *point = value, Point{Row: row, Column: column}
+		return true
+	}
+	if !project(&tok.StartByte, &tok.StartPoint) || !project(&tok.EndByte, &tok.EndPoint) {
+		return Token{}, Lexer{}, false
+	}
+	pos := uint32(lex.pos)
+	point := Point{Row: lex.row, Column: lex.col}
+	if !project(&pos, &point) {
+		return Token{}, Lexer{}, false
+	}
+	lex.pos, lex.row, lex.col = int(pos), point.Row, point.Column
+	fail := uint32(lex.failTokenStartPos)
+	failPoint := Point{Row: lex.failTokenStartRow, Column: lex.failTokenStartCol}
+	if !project(&fail, &failPoint) {
+		return Token{}, Lexer{}, false
+	}
+	lex.failTokenStartPos, lex.failTokenStartRow, lex.failTokenStartCol = int(fail), failPoint.Row, failPoint.Column
+	return tok, lex, true
+}
+
+func tokenInvariantWhitespaceGatesEquivalent(oldSource, newSource []byte, edit InputEdit, budget *tokenInvariantPrimitiveBudget) bool {
+	start := uint32(0)
+	if edit.StartByte > utf8.UTFMax {
+		start = edit.StartByte - utf8.UTFMax
+	}
+	end := min(uint64(len(oldSource)), uint64(edit.OldEndByte)+utf8.UTFMax)
+	oldLexer, newLexer := Lexer{source: oldSource}, Lexer{source: newSource}
+	oldProbe, newProbe := dfaTokenSource{lexer: &oldLexer}, dfaTokenSource{lexer: &newLexer}
+	for position := uint64(start); position <= end; position++ {
+		// Each helper decodes at most one UTF-8 rune. Include boundaries
+		// after the edit because the prefix decoder can inspect changed bytes.
+		// The first charge covers the old and new isAtWhitespacePosition
+		// calls below; the second covers the old and new
+		// isAfterWhitespacePosition calls. Each pair charges 2*UTFMax, one
+		// UTFMax per source, so both charges are the same size on purpose.
+		if !budget.chargeBytes(2 * utf8.UTFMax) {
+			return false
+		}
+		if !budget.chargeBytes(2 * utf8.UTFMax) {
+			return false
+		}
+		oldLexer.pos, newLexer.pos = int(position), int(position)
+		if oldProbe.isAtWhitespacePosition() != newProbe.isAtWhitespacePosition() ||
+			oldProbe.isAfterWhitespacePosition() != newProbe.isAfterWhitespacePosition() {
+			return false
+		}
+	}
+	return true
+}
+
+func (d *dfaTokenSource) tokenInvariantLiteralCandidatesEquivalent(oldToken, newToken Token, budget *tokenInvariantPrimitiveBudget) bool {
+	// Compare the whole ordered candidate signature, independent of active
+	// parser states. Equal candidates preserve every action-filtered election.
+	if uint64(len(oldToken.Text))+uint64(len(newToken.Text)) > uint64(budget.bytes) ||
+		!budget.chargeBytes(uint32(len(oldToken.Text))) || !budget.chargeBytes(uint32(len(newToken.Text))) {
+		return false
+	}
+	oldCandidates := d.language.TokenSymbolsByName(oldToken.Text)
+	newCandidates := d.language.TokenSymbolsByName(newToken.Text)
+	if !budget.chargeBytes(uint32(len(oldCandidates))) || !budget.chargeBytes(uint32(len(newCandidates))) || !slices.Equal(oldCandidates, newCandidates) {
+		return false
+	}
+	if d.language.TokenCount == 0 {
+		// The keyword wrapper has a fallback for metadata-light languages.
+		for symbol := uint32(1); symbol < d.language.SymbolCount && uint64(symbol) < uint64(len(d.language.SymbolNames)); symbol++ {
+			name := d.language.SymbolNames[symbol]
+			if uint64(len(name))*2 > uint64(budget.bytes) || !budget.chargeBytes(uint32(len(name))) || !budget.chargeBytes(uint32(len(name))) {
+				return false
+			}
+			if (name == oldToken.Text) != (name == newToken.Text) {
+				return false
+			}
+		}
+	}
+	if len(oldCandidates) == 0 {
+		return true
+	}
+	if !budget.chargeBytes(uint32(len(oldToken.Text))) || !budget.chargeBytes(uint32(len(newToken.Text))) {
+		return false
+	}
+	return isIdentifierLikeLiteralText(oldToken.Text) == isIdentifierLikeLiteralText(newToken.Text) &&
+		d.language.anonymousTokenNameShapePossible(oldToken.Text) == d.language.anonymousTokenNameShapePossible(newToken.Text)
+}
+
+func tokenInvariantPrimitiveTokensEqual(a, b Token) bool {
+	a.Text, b.Text = "", ""
+	a.lexerLookaheadEndByte, b.lexerLookaheadEndByte = 0, 0
+	return a == b
+}
+
+func (d *dfaTokenSource) tokenInvariantProbeDFA(source []byte, origin uint32, point Point, mode uint32, budget *tokenInvariantPrimitiveBudget) (Token, Lexer, bool, bool) {
+	return d.tokenInvariantProbeDFALimited(source, origin, point, mode, budget, 0)
+}
+
+func tokenInvariantProbeLimit(source []byte, origin uint32, budget *tokenInvariantPrimitiveBudget, oldMaximum uint32) (uint64, bool) {
+	limit := min(uint64(len(source)), uint64(origin)+uint64(budget.bytes))
+	// Keep a full UTF-8 decoding margin beyond the exclusion boundary.
+	// A cut there can only affect scans already wider than old coverage.
+	proofLimit := uint64(origin) + uint64(oldMaximum) + 1 + utf8.UTFMax
+	proofCut := oldMaximum != 0 && proofLimit < uint64(len(source)) && proofLimit < limit
+	if proofCut {
+		limit = proofLimit
+	}
+	return limit, proofCut
+}
+
+func (d *dfaTokenSource) tokenInvariantProbeDFALimited(source []byte, origin uint32, point Point, mode uint32, budget *tokenInvariantPrimitiveBudget, oldMaximum uint32) (Token, Lexer, bool, bool) {
+	if budget.scans == 0 || budget.bytes == 0 {
+		return Token{}, Lexer{}, false, false
+	}
+	limit, proofCut := tokenInvariantProbeLimit(source, origin, budget, oldMaximum)
+	probe := *d.lexer
+	probe.source = source[:int(limit)]
+	probe.pos, probe.row, probe.col = int(origin), point.Row, point.Column
+	probe.tokenInvariantReadSpanMax = nil
+	probe.failTokenStartPos, probe.failTokenStartRow, probe.failTokenStartCol, probe.failTokenStartRangeIdx = 0, 0, 0, 0
+	probe.failTokenEnd = includedLexerCursor{}
+	var tok Token
+	accepted := probe.scanInto(mode, int(origin), point.Row, point.Column, &tok)
+	frontier := tokenInvariantExaminedEnd(probe.source, tok.lexerLookaheadEndByte)
+	// This private token carries the proof bound, not the public C frontier.
+	tok.lexerLookaheadEndByte = frontier
+	if frontier < origin || (limit < uint64(len(source)) && uint64(frontier) >= limit && !proofCut) || !budget.charge(frontier-origin) {
+		return Token{}, Lexer{}, false, false
+	}
+	return tok, probe, accepted, true
+}
+
+func (d *dfaTokenSource) tokenInvariantProbeExternal(source []byte, origin uint32, point Point, mask []bool, budget *tokenInvariantPrimitiveBudget, payload any, lexer *ExternalLexer, oldMaximum uint32) (ExternalLexer, bool, uint32, bool) {
+	if budget.scans == 0 || budget.bytes == 0 {
+		return ExternalLexer{}, false, 0, false
+	}
+	limit, proofCut := tokenInvariantProbeLimit(source, origin, budget, oldMaximum)
+	lexer.reset(source[:int(limit)], int(origin), point.Row, point.Column)
+	accepted := RunExternalScanner(d.language, payload, lexer, mask)
+	frontier := tokenInvariantExaminedEnd(lexer.source, maxUint32(lexer.lookaheadEndByte, lexer.lookaheadEndByteAtCursor()))
+	if lexer.readFrontier != nil {
+		frontier = maxUint32(frontier, lexer.readFrontier.examined)
+	}
+	if frontier < origin || (limit < uint64(len(source)) && uint64(frontier) >= limit && !proofCut) || !budget.charge(frontier-origin) {
+		return ExternalLexer{}, false, 0, false
+	}
+	return *lexer, accepted, frontier - origin, true
+}
