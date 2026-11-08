@@ -57,7 +57,7 @@ func (s Strictness) skipsComments() bool {
 
 func (s Strictness) matchTerminal(goal *node, candidate tree.Node) step {
 	kindMatched := goal.matchesKind(candidate)
-	if kindMatched && (!goal.named || goal.text == candidate.Text()) {
+	if kindMatched && (!goal.named || goal.text == string(candidate.Bytes())) {
 		return matchedBoth
 	}
 	if s.skipsComments() && candidate.IsExtra() {
@@ -76,7 +76,7 @@ func (s Strictness) matchTerminal(goal *node, candidate tree.Node) step {
 		}
 		skipsGoal, skipsCandidate = !goal.named, !candidate.IsNamed()
 	case Template:
-		if goal.text == candidate.Text() {
+		if goal.text == string(candidate.Bytes()) {
 			return matchedBoth
 		}
 		skipsCandidate = !candidate.IsNamed()

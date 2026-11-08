@@ -1,6 +1,7 @@
 package metavar
 
 import (
+	"bytes"
 	"maps"
 	"slices"
 	"strings"
@@ -74,17 +75,21 @@ type Env struct {
 	transformed map[string]string
 }
 
-func NewEnv() *Env {
-	return &Env{single: map[string]tree.Node{}, multi: map[string][]tree.Node{}, transformed: map[string]string{}}
-}
+func NewEnv() *Env { return &Env{} }
 
 func (e *Env) Clone() *Env {
+	if e == nil {
+		return &Env{}
+	}
 	return &Env{single: maps.Clone(e.single), multi: maps.Clone(e.multi), transformed: maps.Clone(e.transformed)}
 }
 
 func (e *Env) Insert(name string, node tree.Node) bool {
 	if bound, ok := e.single[name]; ok && !sameTree(bound, node) {
 		return false
+	}
+	if e.single == nil {
+		e.single = map[string]tree.Node{}
 	}
 	e.single[name] = node
 	return true
@@ -94,11 +99,19 @@ func (e *Env) InsertMulti(name string, nodes []tree.Node) bool {
 	if bound, ok := e.multi[name]; ok && !sameNamed(bound, nodes) {
 		return false
 	}
+	if e.multi == nil {
+		e.multi = map[string][]tree.Node{}
+	}
 	e.multi[name] = nodes
 	return true
 }
 
-func (e *Env) InsertTransformed(name, text string) { e.transformed[name] = text }
+func (e *Env) InsertTransformed(name, text string) {
+	if e.transformed == nil {
+		e.transformed = map[string]string{}
+	}
+	e.transformed[name] = text
+}
 
 func (e *Env) Single(name string) (tree.Node, bool) {
 	node, ok := e.single[name]
@@ -121,7 +134,8 @@ func sameNamed(bound, nodes []tree.Node) bool {
 }
 
 func (e *Env) Texts() map[string]string {
-	texts := maps.Clone(e.transformed)
+	texts := make(map[string]string, len(e.transformed)+len(e.single)+len(e.multi))
+	maps.Copy(texts, e.transformed)
 	for name, node := range e.single {
 		texts[name] = node.Text()
 	}
@@ -140,7 +154,15 @@ func sameTree(goal, candidate tree.Node) bool {
 		return true
 	}
 	if goal.IsNamedLeaf() || candidate.IsNamedLeaf() {
-		return goal.Text() == candidate.Text()
+		return bytes.Equal(goal.Bytes(), candidate.Bytes())
 	}
-	return goal.KindID() == candidate.KindID() && slices.EqualFunc(goal.Children(), candidate.Children(), sameTree)
+	if goal.KindID() != candidate.KindID() || goal.ChildCount() != candidate.ChildCount() {
+		return false
+	}
+	for i := range goal.ChildCount() {
+		if !sameTree(goal.Child(i), candidate.Child(i)) {
+			return false
+		}
+	}
+	return true
 }

@@ -29,6 +29,7 @@ func New(raw []byte, l lang.Lang) (Rule, error) {
 	if err != nil {
 		return Rule{}, err
 	}
+	defer empty.Release()
 	return compiler{lang: l, grammar: empty.Language()}.rule(raw)
 }
 
@@ -54,7 +55,7 @@ func (c compiler) fields(fields map[string]json.RawMessage, keys string) (Rule, 
 			return Rule{}, fmt.Errorf("rule key %q is not one of %s", key, keys)
 		}
 	}
-	var r Rule
+	var parts []matcher
 	for _, key := range strings.Split(ruleKeys, ", ") {
 		raw, ok := fields[key]
 		if !ok {
@@ -64,12 +65,12 @@ func (c compiler) fields(fields map[string]json.RawMessage, keys string) (Rule, 
 		if err != nil {
 			return Rule{}, fmt.Errorf("%s: %w", key, err)
 		}
-		r.parts = append(r.parts, part)
+		parts = append(parts, part)
 	}
-	if len(r.parts) == 0 {
+	if len(parts) == 0 {
 		return Rule{}, fmt.Errorf("a rule needs one of %s", ruleKeys)
 	}
-	return r, nil
+	return newRule(parts), nil
 }
 
 func (c compiler) part(key string, raw json.RawMessage) (matcher, error) {
@@ -86,17 +87,18 @@ func (c compiler) part(key string, raw json.RawMessage) (matcher, error) {
 		if err != nil {
 			return nil, err
 		}
-		if _, known := c.grammar.SymbolByName(kind); !known {
+		symbol, known := c.grammar.SymbolByName(kind)
+		if !known {
 			return nil, fmt.Errorf("%q is not a node kind in %s", kind, c.lang)
 		}
-		return kindRule(kind), nil
+		return kindRule(c.grammar.PublicSymbolForNamedness(symbol, true)), nil
 	case "regex":
 		expr, err := text(raw)
 		if err != nil {
 			return nil, err
 		}
 		re, err := regexp.Compile(expr)
-		return regexRule{re}, err
+		return regexRule{re: re}, err
 	case "all", "any":
 		var raws []json.RawMessage
 		if err := json.Unmarshal(raw, &raws); err != nil {
@@ -112,10 +114,10 @@ func (c compiler) part(key string, raw json.RawMessage) (matcher, error) {
 		if key == "any" {
 			return anyRule(subs), nil
 		}
-		return Rule{parts: subs}, nil
+		return newRule(subs), nil
 	case "not":
 		inner, err := c.rule(raw)
-		return notRule{inner}, err
+		return notRule{inner: inner}, err
 	case "inside":
 		rel, err := c.relation(raw)
 		return insideRule{rel}, err

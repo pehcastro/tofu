@@ -5,7 +5,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -25,8 +24,9 @@ import (
 const Languages = "the language name or its file extension, such as go, ts, tsx, js, py, rs, php, java, cs, cpp, rb, swift, kt; a script or style inside an html, svelte or vue file is searched with js, ts or css"
 
 type Site struct {
-	Start, End, Line int
-	Before, After    string
+	Start, End, Line   int
+	UnitStart, UnitEnd int
+	Before, After      string
 }
 
 type File struct {
@@ -91,27 +91,31 @@ func RewriteRule(ctx context.Context, raw []byte, rewrite string, l lang.Lang, p
 	})
 }
 
+type searched struct {
+	walked
+	sites []Site
+	err   error
+}
+
+func Workers() int { return min(runtime.GOMAXPROCS(0), konst.CodemodWorkersMax) }
+
 func search(ctx context.Context, l lang.Lang, paths, words []string, edit editor) ([]File, error) {
-	files, sizes, err := walk(l, paths)
+	files, err := walk(l, paths)
 	if err != nil {
 		return nil, err
 	}
-	largestFirst := make([]int, len(files))
-	for i := range largestFirst {
-		largestFirst[i] = i
-	}
-	slices.SortFunc(largestFirst, func(a, b int) int { return cmp.Compare(sizes[b], sizes[a]) })
-	searched := make([]File, len(files))
-	failures := make([]error, len(files))
+	slices.SortFunc(files, func(a, b walked) int { return cmp.Compare(b.size, a.size) })
 	var next atomic.Int64
+	outcomes := make([][]searched, Workers())
 	var workers sync.WaitGroup
-	for range min(runtime.GOMAXPROCS(0), len(files)) {
+	for w := range outcomes {
 		workers.Go(func() {
 			parser := lang.NewParser(l)
-			for at := int(next.Add(1) - 1); at < len(files) && ctx.Err() == nil; at = int(next.Add(1) - 1) {
-				i := largestFirst[at]
-				searched[i].Path = files[i]
-				searched[i].Sites, failures[i] = rewriteFile(files[i], parser, words, edit)
+			for i := next.Add(1) - 1; i < int64(len(files)) && ctx.Err() == nil; i = next.Add(1) - 1 {
+				sites, err := rewriteFile(files[i].path, parser, words, edit)
+				if err != nil || len(sites) > 0 {
+					outcomes[w] = append(outcomes[w], searched{walked: files[i], sites: sites, err: err})
+				}
 			}
 		})
 	}
@@ -119,21 +123,28 @@ func search(ctx context.Context, l lang.Lang, paths, words []string, edit editor
 	if ctx.Err() != nil {
 		return nil, fmt.Errorf("stopped after %d ms with files left to search: narrow paths", konst.CodemodRunMillis)
 	}
-	var found []File
-	for i, file := range searched {
-		if failures[i] != nil {
-			return nil, fmt.Errorf("%s: %w", file.Path, failures[i])
+	all := slices.SortedFunc(slices.Values(slices.Concat(outcomes...)), func(a, b searched) int { return walkOrder(a.walked, b.walked) })
+	found := make([]File, len(all))
+	for i, s := range all {
+		if s.err != nil {
+			return nil, fmt.Errorf("%s: %w", s.path, s.err)
 		}
-		if len(file.Sites) > 0 {
-			found = append(found, file)
-		}
+		found[i] = File{Path: s.path, Sites: s.sites}
 	}
 	return found, nil
 }
 
+func walkOrder(a, b walked) int {
+	if a.root != b.root {
+		return cmp.Compare(a.root, b.root)
+	}
+	segmentsA, segmentsB := strings.Split(a.path, string(filepath.Separator)), strings.Split(b.path, string(filepath.Separator))
+	return slices.Compare(segmentsA, segmentsB)
+}
+
 func rewriteFile(path string, parser lang.Parser, words []string, edit editor) ([]Site, error) {
 	source, err := os.ReadFile(path)
-	if err != nil {
+	if err != nil || len(source) == 0 || len(source) > konst.CodemodFileBytesSkipped && bytes.Count(source, []byte("\n")) > konst.CodemodFileLinesSkipped {
 		return nil, err
 	}
 	for _, word := range words {
@@ -179,42 +190,31 @@ func rewriteFile(path string, parser lang.Parser, words []string, edit editor) (
 			After:  made.Text,
 		})
 	}
+	top, first := root.Node(), 0
+	for i := range sites {
+		sites[i].UnitStart, sites[i].UnitEnd = 0, len(source)
+		if top.ChildCount() == 0 {
+			continue
+		}
+		for first < top.ChildCount()-1 && top.Child(first).End() <= uint32(sites[i].Start) {
+			first++
+		}
+		last := first
+		for last < top.ChildCount()-1 && top.Child(last+1).Start() < uint32(sites[i].End) {
+			last++
+		}
+		sites[i].UnitStart = min(int(top.Child(first).Start()), sites[i].Start)
+		sites[i].UnitEnd = max(int(top.Child(last).End()), sites[i].End)
+	}
 	return sites, nil
 }
 
 func Files(l lang.Lang, roots []string) ([]string, error) {
-	files, _, err := walk(l, roots)
-	return files, err
-}
-
-func walk(l lang.Lang, roots []string) ([]string, []int64, error) {
-	var files []string
-	var sizes []int64
-	for _, root := range roots {
-		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			name := entry.Name()
-			fileLang, parsed := lang.FromPath(name)
-			switch {
-			case entry.IsDir() && path != root && (strings.HasPrefix(name, ".") || name == "vendor" || name == "testdata" || name == "node_modules"):
-				return filepath.SkipDir
-			case entry.IsDir() || !parsed || fileLang != l && (!l.Embeddable() || !fileLang.HostsScripts()):
-				return nil
-			case len(files) == konst.CodemodFilesScanned:
-				return fmt.Errorf("more than %d %s files under paths: narrow paths", konst.CodemodFilesScanned, l)
-			}
-			info, err := entry.Info()
-			if err != nil {
-				return err
-			}
-			files, sizes = append(files, path), append(sizes, info.Size())
-			return nil
-		})
-		if err != nil {
-			return nil, nil, err
-		}
+	found, err := walk(l, roots)
+	slices.SortFunc(found, walkOrder)
+	files := make([]string, len(found))
+	for i, file := range found {
+		files[i] = file.path
 	}
-	return files, sizes, nil
+	return files, err
 }

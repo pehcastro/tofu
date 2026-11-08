@@ -97,6 +97,13 @@ func (g *node) matchesKind(candidate tree.Node) bool {
 	return g.anyKind || g.kind == candidate.KindID()
 }
 
+func (p Pattern) Kind() (gotreesitter.Symbol, bool) {
+	if p.root.shape == metaVarShape || p.Strictness == Template || p.root.anyKind {
+		return 0, false
+	}
+	return p.root.kind, true
+}
+
 func ellipsisOf(goal *node) (metavar.Var, bool) {
 	if goal.shape == metaVarShape && goal.metaVar.IsEllipsis() {
 		return goal.metaVar, true
@@ -124,7 +131,7 @@ func (g *node) words(into []string) []string {
 }
 
 func (p Pattern) Match(candidate tree.Node) (*metavar.Env, bool) {
-	if p.root.shape != metaVarShape && p.Strictness != Template && !p.root.matchesKind(candidate) {
+	if kind, typed := p.Kind(); typed && kind != candidate.KindID() {
 		return nil, false
 	}
 	env := envBinder{metavar.NewEnv()}

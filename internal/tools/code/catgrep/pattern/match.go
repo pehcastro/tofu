@@ -8,8 +8,14 @@ import (
 type binder interface {
 	terminal(candidate tree.Node) bool
 	metaVar(v metavar.Var, candidate tree.Node) bool
-	ellipsis(v metavar.Var, nodes []tree.Node, skippedTrivial int) bool
+	ellipsis(v metavar.Var, run span) bool
 	probe() binder
+}
+
+type span struct {
+	parent         tree.Node
+	from, to       int
+	skippedTrivial int
 }
 
 type envBinder struct{ env *metavar.Env }
@@ -31,11 +37,15 @@ func (b envBinder) metaVar(v metavar.Var, candidate tree.Node) bool {
 	panic("pattern: unknown meta variable kind")
 }
 
-func (b envBinder) ellipsis(v metavar.Var, nodes []tree.Node, skippedTrivial int) bool {
+func (b envBinder) ellipsis(v metavar.Var, run span) bool {
 	if v.Kind != metavar.MultiCapture {
 		return true
 	}
-	return b.env.InsertMulti(v.Name, nodes[:max(len(nodes)-skippedTrivial, 0)])
+	nodes := make([]tree.Node, 0, max(run.to-run.skippedTrivial-run.from, 0))
+	for i := run.from; i < run.to-run.skippedTrivial; i++ {
+		nodes = append(nodes, run.parent.Child(i))
+	}
+	return b.env.InsertMulti(v.Name, nodes)
 }
 
 func (b envBinder) probe() binder { return envBinder{b.env.Clone()} }
@@ -52,11 +62,11 @@ func (b *endBinder) metaVar(_ metavar.Var, candidate tree.Node) bool {
 	return true
 }
 
-func (b *endBinder) ellipsis(_ metavar.Var, nodes []tree.Node, _ int) bool {
-	if len(nodes) == 0 {
+func (b *endBinder) ellipsis(_ metavar.Var, run span) bool {
+	if run.to == run.from {
 		return false
 	}
-	b.end = nodes[len(nodes)-1].End()
+	b.end = run.parent.Child(run.to - 1).End()
 	return true
 }
 
@@ -82,7 +92,7 @@ func matchNode(goal *node, candidate tree.Node, b binder, s Strictness) step {
 		if s != Template && !goal.matchesKind(candidate) {
 			return noMatch
 		}
-		if matchChildren(goal.children, candidate.Children(), b, s) {
+		if matchChildren(goal.children, candidate, b, s) {
 			return matchedBoth
 		}
 		return noMatch
@@ -101,26 +111,25 @@ const (
 
 type cursor struct {
 	goals      []node
-	candidates []tree.Node
+	parent     tree.Node
+	count      int
 	goal, cand int
 }
 
 func (c *cursor) goalsLeft() bool { return c.goal < len(c.goals) }
 
-func (c *cursor) candsLeft() bool { return c.cand < len(c.candidates) }
+func (c *cursor) candsLeft() bool { return c.cand < c.count }
 
 func (c *cursor) peekGoal() *node { return &c.goals[c.goal] }
 
-func (c *cursor) peekCand() tree.Node { return c.candidates[c.cand] }
+func (c *cursor) peekCand() tree.Node { return c.parent.Child(c.cand) }
 
-func (c *cursor) restCands() []tree.Node {
-	rest := c.candidates[c.cand:]
-	c.cand = len(c.candidates)
-	return rest
+func (c *cursor) run(from, skippedTrivial int) span {
+	return span{parent: c.parent, from: from, to: c.cand, skippedTrivial: skippedTrivial}
 }
 
-func matchChildren(goals []node, candidates []tree.Node, b binder, s Strictness) bool {
-	c := &cursor{goals: goals, candidates: candidates}
+func matchChildren(goals []node, parent tree.Node, b binder, s Strictness) bool {
+	c := &cursor{goals: goals, parent: parent, count: parent.ChildCount()}
 	if !c.candsLeft() {
 		return false
 	}
@@ -143,11 +152,11 @@ func matchChildren(goals []node, candidates []tree.Node, b binder, s Strictness)
 		}
 		if c.goalsLeft() {
 			c.goal++
-			c.cand = min(c.cand+1, len(c.candidates))
+			c.cand = min(c.cand+1, c.count)
 		}
 		if !c.goalsLeft() {
-			for _, rest := range c.restCands() {
-				if !s.skipsTrailing(rest) {
+			for ; c.candsLeft(); c.cand++ {
+				if !s.skipsTrailing(c.peekCand()) {
 					return false
 				}
 			}
@@ -167,12 +176,13 @@ func matchEllipsis(c *cursor, b binder, s Strictness) flow {
 	if !ok {
 		return fallthroughFlow
 	}
-	var matched []tree.Node
+	from := c.cand
 	c.goal++
 	skipped := 0
 	for !c.goalsLeft() || c.peekGoal().trivial() {
 		if !c.goalsLeft() {
-			if !b.ellipsis(v, append(matched, c.restCands()...), skipped) {
+			c.cand = c.count
+			if !b.ellipsis(v, c.run(from, skipped)) {
 				return failFlow
 			}
 			return returnFlow
@@ -181,21 +191,19 @@ func matchEllipsis(c *cursor, b binder, s Strictness) flow {
 		skipped++
 	}
 	if _, next := ellipsisOf(c.peekGoal()); next {
-		matched = append(matched, c.peekCand())
 		c.cand++
-		if !c.candsLeft() || !b.ellipsis(v, matched, skipped) {
+		if !c.candsLeft() || !b.ellipsis(v, c.run(from, skipped)) {
 			return failFlow
 		}
 		return continueFlow
 	}
 	for {
 		if matchNode(c.peekGoal(), c.peekCand(), b.probe(), s) == matchedBoth {
-			if !b.ellipsis(v, matched, skipped) {
+			if !b.ellipsis(v, c.run(from, skipped)) {
 				return failFlow
 			}
 			return fallthroughFlow
 		}
-		matched = append(matched, c.peekCand())
 		c.cand++
 		if !c.candsLeft() {
 			return failFlow

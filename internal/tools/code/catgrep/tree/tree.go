@@ -62,6 +62,8 @@ func (n Node) Source() []byte { return n.root.source }
 
 func (n Node) Text() string { return n.inner.Text(n.root.source) }
 
+func (n Node) Bytes() []byte { return n.root.source[n.inner.StartByte():n.inner.EndByte()] }
+
 func (n Node) Parent() (Node, bool) {
 	parent := n.inner.Parent()
 	return Node{inner: parent, root: n.root}, parent != nil
