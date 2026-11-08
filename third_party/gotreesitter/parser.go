@@ -6479,6 +6479,15 @@ func (p *Parser) parseInternal(source []byte, ts TokenSource, reuse *reuseCursor
 			if relexKeyword(currentState) {
 				stackRelexActive = true
 			}
+			if len(stacks) > 1 && dts != nil && dts.glrUnionSymbolsDiffer && p.stateHasActionForSymbol(currentState, tok.Symbol) {
+				if own, ok := dts.ownLexForState(currentState, tok); ok && p.stateHasActionForSymbol(currentState, own.Symbol) {
+					if p.glrTrace {
+						fmt.Printf("  stack[%d] OWN-LEX: sym=%d -> sym=%d [%d-%d] in state=%d\n", si, tok.Symbol, own.Symbol, own.StartByte, own.EndByte, currentState)
+					}
+					tok = own
+					stackRelexActive = true
+				}
+			}
 			noteStopDiagnosticStack(s)
 			packedVersionReductionSteps := 0
 			packedVersionMinDepth := s.depth()

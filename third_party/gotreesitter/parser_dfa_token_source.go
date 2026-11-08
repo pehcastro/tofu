@@ -133,8 +133,13 @@ type dfaTokenSource struct {
 	// the inline and overflow storage are cleared before the token source can
 	// return to its pool. Most elections fit inline; exceptional wider elections
 	// retain their overflow capacity across parser-pool cycles.
-	glrUnionScanInline  [8]glrUnionDFAScan
-	glrUnionScanScratch []glrUnionDFAScan
+	glrUnionScanInline    [8]glrUnionDFAScan
+	glrUnionScanScratch   []glrUnionDFAScan
+	glrUnionStartPos      int
+	glrUnionStartRow      uint32
+	glrUnionStartCol      uint32
+	glrUnionStartRange    int
+	glrUnionSymbolsDiffer bool
 
 	// Zero-width external token loop prevention.
 	// Tracks which external token indices have been produced as zero-width
@@ -1417,6 +1422,8 @@ func (d *dfaTokenSource) nextGLRUnionDFAToken() (Token, bool) {
 	startCol := d.lexer.col
 	startRangeIdx := d.lexer.includedRangeIdx
 	d.beginGLRUnionScanCache()
+	d.glrUnionStartPos, d.glrUnionStartRow, d.glrUnionStartCol, d.glrUnionStartRange = startPos, startRow, startCol, startRangeIdx
+	d.glrUnionSymbolsDiffer = false
 
 	bestScore := 0
 	bestFound := false
@@ -1550,6 +1557,7 @@ func (d *dfaTokenSource) nextGLRUnionDFAToken() (Token, bool) {
 	// but the returned token must retain the complete invalidation extent.
 	for i := range d.glrUnionScanScratch {
 		scan := &d.glrUnionScanScratch[i]
+		d.glrUnionSymbolsDiffer = d.glrUnionSymbolsDiffer || ownLexDiffers(scan.tok, bestTok)
 		if !tokensSameLexForGLRCandidate(scan.tok, bestTok) ||
 			scan.endPos != bestEndPos || scan.endRow != bestEndRow || scan.endCol != bestEndCol {
 			continue
@@ -1580,6 +1588,29 @@ func (d *dfaTokenSource) glrUnionScanForState(state StateID) (Token, int, uint32
 		endCol: endCol,
 	})
 	return tok, endPos, endRow, endCol
+}
+
+func (d *dfaTokenSource) ownLexForState(state StateID, shared Token) (Token, bool) {
+	elected := false
+	for i := range d.glrUnionScanScratch {
+		scan := &d.glrUnionScanScratch[i]
+		if scan.state == state {
+			return scan.tok, ownLexDiffers(scan.tok, shared)
+		}
+		elected = elected || scan.tok.StartByte == shared.StartByte && scan.tok.EndByte == shared.EndByte
+	}
+	if !elected {
+		return Token{}, false
+	}
+	pos, row, col, rangeIdx := d.lexer.pos, d.lexer.row, d.lexer.col, d.lexer.includedRangeIdx
+	d.lexer.pos, d.lexer.row, d.lexer.col, d.lexer.includedRangeIdx = d.glrUnionStartPos, d.glrUnionStartRow, d.glrUnionStartCol, d.glrUnionStartRange
+	own, _, _, _ := d.glrUnionScanForState(state)
+	d.lexer.pos, d.lexer.row, d.lexer.col, d.lexer.includedRangeIdx = pos, row, col, rangeIdx
+	return own, ownLexDiffers(own, shared)
+}
+
+func ownLexDiffers(own, shared Token) bool {
+	return own.Symbol != shared.Symbol && own.StartByte == shared.StartByte && own.EndByte == shared.EndByte
 }
 
 func (d *dfaTokenSource) beginGLRUnionScanCache() {
