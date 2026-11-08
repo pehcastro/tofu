@@ -206,7 +206,10 @@ func (p *Parser) resultMaterializationStopReason(arena *nodeArena) ParseStopReas
 	if arena != nil && arena.budgetExhausted() {
 		return p.noteMemoryBudgetStop(parseMemoryBudgetStopSourceArena)
 	}
-	if p != nil && p.budgetScratch != nil && p.budgetScratch.budgetExhausted() {
+	if p == nil || !p.budgetScratch.budgetPollDue() {
+		return ParseStopNone
+	}
+	if p.budgetScratch != nil && p.budgetScratch.budgetExhausted() {
 		// Closes the gap documented in
 		// spore.2026-08-02.walnut-e.memory-exhaustion: gssScratch (the
 		// exploding allocator in production's C-recovery missing-token
@@ -227,10 +230,8 @@ func (p *Parser) resultMaterializationStopReason(arena *nodeArena) ParseStopReas
 		// coverage those five sites always had.
 		return p.noteMemoryBudgetStop(parseMemoryBudgetStopSourceScratch)
 	}
-	if p != nil {
-		if reason := p.runtimeMemoryBudgetStopReason(arenaAllocatedVolume(arena) + scratchAllocatedVolume(p.budgetScratch)); reason == ParseStopMemoryBudget {
-			return reason
-		}
+	if reason := p.runtimeMemoryBudgetStopReason(arenaAllocatedVolume(arena) + scratchAllocatedVolume(p.budgetScratch)); reason == ParseStopMemoryBudget {
+		return reason
 	}
 	return ParseStopNone
 }

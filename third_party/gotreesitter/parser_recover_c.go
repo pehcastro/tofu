@@ -947,14 +947,14 @@ func (p *Parser) errorCostCompetitionEnabled() bool {
 // and the source cannot lex error mode itself, lex the token with the
 // engine's own DFA from the group position and resynchronize the custom
 // source afterwards (SkipToByte) once normal parsing resumes.
-func (p *Parser) cRecoverAcquireToken(ts TokenSource, stacks []glrStack, source []byte) Token {
+func (p *Parser) cRecoverAcquireToken(ts TokenSource, stacks []glrStack, source []byte, customSourceEligible bool) Token {
 	workCountRecordLexerFrontDoor()
 	// work-count-assembly: union-frontier election seam
 	workCountRecordFrontierLexerElection()
 	if !p.errorCostCompetitionEnabled() {
 		return ts.Next()
 	}
-	p.cRecoverCustomSourceEligible = p.cRecoverCustomSourceEligibleFor(ts, source)
+	p.cRecoverCustomSourceEligible = customSourceEligible
 	if tok, ok := p.cRecoverInternalErrorModeToken(ts, stacks, source); ok {
 		return tok
 	}
@@ -5326,6 +5326,19 @@ func (p *Parser) isGraphQLRecoveryTripleQuote(sym Symbol) bool {
 // (see cRecoverResumeLookahead) which the caller must adopt so redispatched
 // versions act on the same lookahead the resumed group consumed, and any
 // active budget/timeout stop reason encountered while condensing.
+func (p *Parser) cCondenseNeeded(stacks []glrStack, tok Token) bool {
+	if len(stacks) != 1 {
+		return true
+	}
+	if s := &stacks[0]; s.cPaused || s.cRec != nil || s.cRecoverMissingGroup != nil {
+		return true
+	}
+	if cold := p.forestDeclineMemo; cold != nil && len(cold.cPausedLookaheads) > 0 {
+		return true
+	}
+	return p.crecoveryEnteredErrorState && p.emptyExternalRecoveryEnabled() && tok.ExternalScannerToken && tok.StartByte == tok.EndByte
+}
+
 func (p *Parser) cCondenseAndResume(stacks []glrStack, source []byte, ts TokenSource, tok Token, nodeCount *int, arena *nodeArena, entryScratch *glrEntryScratch, gssScratch *gssScratch, tmpEntries *[]stackEntry, parseScratch *parserScratch, trackChildErrors *bool, condenseClean ...bool) ([]glrStack, bool, Token, ParseStopReason) {
 	// Every paused head is either resumed or removed by this operation. Do
 	// not retain the losing heads through the rest of a potentially long parse.

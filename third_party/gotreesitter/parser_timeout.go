@@ -32,6 +32,8 @@ const parseStopPollMask = 1023
 // every call.
 const materializationDeadlinePollMask = 63
 
+const scratchBudgetPollMask = 15
+
 func (p *parseStopPoller) poll() ParseStopReason {
 	if p == nil {
 		return ParseStopNone

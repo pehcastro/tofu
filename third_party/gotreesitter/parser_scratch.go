@@ -37,6 +37,7 @@ type parserScratch struct {
 	relexSnapshotInUse       bool
 	trackChildErrors         bool
 	materializeStopPollCount uint32
+	budgetPollCount          uint32
 	budgetBytes              int64
 	budgetBaselineBytes      int64
 	gssBaselineBytes         int64
@@ -106,6 +107,14 @@ func (s *parserScratch) resetReplayPages() {
 	}
 	s.advancePageUsed, s.closePageUsed = 0, 0
 	s.advanceFrames, s.closeFrames = 0, 0
+}
+
+func (s *parserScratch) budgetPollDue() bool {
+	if s == nil {
+		return true
+	}
+	s.budgetPollCount++
+	return s.budgetPollCount&scratchBudgetPollMask == 0
 }
 
 func (s *parserScratch) budgetExhausted() bool {
@@ -242,6 +251,7 @@ func releaseParserScratch(s *parserScratch, skipGSSClear bool) {
 	s.relexSnapshotInUse = false
 	s.trackChildErrors = false
 	s.materializeStopPollCount = 0
+	s.budgetPollCount = 0
 	s.resetReplayPages()
 	s.entries.reset()
 	s.gss.skipClear = skipGSSClear

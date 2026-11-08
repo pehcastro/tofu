@@ -354,6 +354,7 @@ type Parser struct {
 	cancellationFlag                   *uint32
 	parseWorkLimits                    ParseWorkLimits
 	parseBudgetDepth                   int
+	parseStopPolls                     uint32
 	parseDeadline                      time.Time
 	parseStoppedReason                 ParseStopReason
 	parseRuntimeMemoryBudgetBytes      int64
@@ -4791,10 +4792,7 @@ func cleanAcceptedStackSelectableAtEOF(source []byte, expectedEOFByte uint32, in
 	if s == nil || !s.accepted {
 		return false
 	}
-	if stackResultErrorRank(s, arena) != 0 {
-		return true
-	}
-	return parserTailAllowsCleanAcceptance(source, s.byteOffset, expectedEOFByte, included, continuationEscape)
+	return parserTailAllowsCleanAcceptance(source, s.byteOffset, expectedEOFByte, included, continuationEscape) || stackResultErrorRank(s, arena) != 0
 }
 
 func cleanAcceptedTreeLeavesRealTail(tree *Tree, source []byte, expectedEOFByte uint32, included []Range, continuationEscape byte) bool {
@@ -5799,6 +5797,7 @@ func (p *Parser) parseInternal(source []byte, ts TokenSource, reuse *reuseCursor
 	parseRuntime.MemoryBudgetBytes = arena.budgetBytes
 
 	needToken := true
+	customSourceEligible := p.cRecoverCustomSourceEligibleFor(ts, source)
 
 	var lastReduceState StateID
 	lastReduceDepth := -1
@@ -5904,10 +5903,10 @@ func (p *Parser) parseInternal(source []byte, ts TokenSource, reuse *reuseCursor
 			}
 			if phaseTiming {
 				tokenStart := time.Now()
-				tok = p.cRecoverAcquireToken(ts, stacks, source)
+				tok = p.cRecoverAcquireToken(ts, stacks, source, customSourceEligible)
 				tokenNextNanos += time.Since(tokenStart).Nanoseconds()
 			} else {
-				tok = p.cRecoverAcquireToken(ts, stacks, source)
+				tok = p.cRecoverAcquireToken(ts, stacks, source, customSourceEligible)
 			}
 			if progress.enabled {
 				progress.emit(time.Now(), "token_end", iterationsUsed, perfTokensConsumed+1, tok, true, stacks, maxStacksSeen, nodeCount, peakStackDepth, needToken, singleStackIterations, multiStackIterations, "")
@@ -7525,9 +7524,11 @@ func (p *Parser) parseInternal(source []byte, ts TokenSource, reuse *reuseCursor
 			var resumed bool
 			condenseRan = true
 			var reason ParseStopReason
-			if recoveryRuntimeDetailedBuildEnabled {
+			switch {
+			case !p.cCondenseNeeded(stacks, tok):
+			case recoveryRuntimeDetailedBuildEnabled:
 				stacks, resumed, tok, reason = p.cCondenseAndResumeDetailed(stacks, source, ts, tok, &nodeCount, arena, &scratch.entries, &scratch.gss, &scratch.tmpEntries, scratch, trackChildErrors, cleanConvergence)
-			} else {
+			default:
 				stacks, resumed, tok, reason = p.cCondenseAndResume(stacks, source, ts, tok, &nodeCount, arena, &scratch.entries, &scratch.gss, &scratch.tmpEntries, scratch, trackChildErrors, cleanConvergence)
 			}
 			workCountRefreshConvergenceLookahead(tok)

@@ -45,7 +45,11 @@ func (p *Parser) parseStopReasonNow() ParseStopReason {
 	if p == nil || (p.parseBudgetDepth == 0 && p.cancellationFlag == nil) {
 		return ParseStopNone
 	}
-	return p.activeParseStopReason()
+	p.parseStopPolls++
+	if p.parseStopPolls&materializationDeadlinePollMask == 0 || parseStopReasonIsActive(p.parseStoppedReason) || p.cancellationFlag != nil {
+		return p.activeParseStopReason()
+	}
+	return ParseStopNone
 }
 
 func parseStopReasonIsTerminal(reason ParseStopReason) bool {

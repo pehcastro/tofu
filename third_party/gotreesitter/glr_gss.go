@@ -950,7 +950,7 @@ func (s gssStack) materialize(dst []stackEntry) []stackEntry {
 
 func (s *gssScratch) allocNode(entry stackEntry, prev *gssNode, depth uint32) *gssNode {
 	hash := uint64(0)
-	if s == nil || !s.singleStackMode {
+	if s == nil {
 		prevHash := gssHashSeed
 		if prev != nil {
 			prevHash = gssNodeHash(prev)
