@@ -78,7 +78,7 @@ fn floating(ring_alpha: f32, shadow_y: f32, theme: &Theme) -> Div {
 
 pub fn menu_surface(theme: &Theme) -> Div {
     let shadow = theme.color(ColorToken::Shadow);
-    floating(POP_RING, POP_SHADOW_Y, theme)
+    let surface = floating(POP_RING, POP_SHADOW_Y, theme)
         .bg(tint(theme.color(ColorToken::ToastFill), GLASS_FILL))
         .backdrop_blur(px(FROST_BLUR))
         .shadow(vec![
@@ -88,7 +88,8 @@ pub fn menu_surface(theme: &Theme) -> Div {
                 MENU_SHADOW_Y,
                 MENU_SHADOW_BLUR,
             ),
-        ])
+        ]);
+    crate::components::probe::corner("menu", px(RADIUS_POP), surface)
 }
 
 pub fn sheet(title: SharedString, actions: impl IntoElement, theme: &Theme) -> Div {

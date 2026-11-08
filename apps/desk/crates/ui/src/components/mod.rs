@@ -43,6 +43,7 @@ pub mod paint;
 pub mod palette;
 pub mod pill_tabs;
 pub mod priority_icon;
+pub mod probe;
 pub mod properties;
 pub mod rich;
 pub mod scroll;

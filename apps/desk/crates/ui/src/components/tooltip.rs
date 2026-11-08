@@ -531,7 +531,8 @@ pub fn overlay_surface(theme: &Theme) -> Div {
         true => base.backdrop_blur(px(FROST_BLUR)),
         false => base,
     };
-    base.rounded(px(RADIUS))
+    let surface = base
+        .rounded(px(RADIUS))
         .border(px(RIM_WIDTH))
         .border_color(overlay_rim(theme))
         .text_color(ink(theme, T1))
@@ -543,7 +544,8 @@ pub fn overlay_surface(theme: &Theme) -> Div {
                     ..drop(shadow, y, blur)
                 })
                 .collect(),
-        )
+        );
+    crate::components::probe::corner("tooltip", px(RADIUS), surface)
 }
 
 fn own_text(theme: &Theme) -> Div {
