@@ -755,7 +755,7 @@ func (r *record) sent(id, why string, request core.Request, preview recall.Confi
 			continue
 		}
 		item := session.SentItem{Blob: hashes[i], Role: message.Role.String(), From: RecordedOrigin(message.Origin), Tokens: tokens, Images: len(message.Images)}
-		for _, cited := range memoryCitation.FindAllStringSubmatch(message.Content, -1) {
+		for _, cited := range memoryCitation().FindAllStringSubmatch(message.Content, -1) {
 			if cited[1] != memoryLineShape && !slices.Contains(item.Memory, cited[1]) {
 				item.Memory = append(item.Memory, cited[1])
 			}

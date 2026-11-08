@@ -343,15 +343,21 @@ func named(source, line string) (string, bool) {
 	return line, false
 }
 
-var (
-	nameWord  = regexp.MustCompile(`[A-Za-z0-9_.\-/\\]+`)
-	fileName  = regexp.MustCompile(`^[A-Za-z0-9_\-]*[A-Za-z][A-Za-z0-9_\-]*(\.[A-Za-z0-9_\-]+)*\.(go|mod|sum|txt|md|json|jsonl|yaml|yml|toml|csv|rs|ts|tsx|js|py|sh|ps1|html|css|sql|c|h|java|rb|lock|log|golden|patch|xml|ini|env|bat|exe)$`)
-	qualified = regexp.MustCompile(`^[a-z][A-Za-z0-9_]*\.[A-Z][A-Za-z0-9_]*$`)
-	humped    = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*[a-z0-9][A-Z][A-Za-z0-9]*$`)
-	snake     = regexp.MustCompile(`^[a-z][a-z0-9]*(_[a-z0-9]+)+$`)
-	ticketID  = regexp.MustCompile(`^[A-Z]{2,}-[0-9]+$`)
-	titled    = regexp.MustCompile(`^[A-Z][A-Za-z0-9_]*[a-z][A-Za-z0-9_]*$`)
-)
+type nameShapes struct {
+	word, file, qualified, humped, snake, ticket, titled *regexp.Regexp
+}
+
+var shapes = sync.OnceValue(func() nameShapes {
+	return nameShapes{
+		word:      regexp.MustCompile(`[A-Za-z0-9_.\-/\\]+`),
+		file:      regexp.MustCompile(`^[A-Za-z0-9_\-]*[A-Za-z][A-Za-z0-9_\-]*(\.[A-Za-z0-9_\-]+)*\.(go|mod|sum|txt|md|json|jsonl|yaml|yml|toml|csv|rs|ts|tsx|js|py|sh|ps1|html|css|sql|c|h|java|rb|lock|log|golden|patch|xml|ini|env|bat|exe)$`),
+		qualified: regexp.MustCompile(`^[a-z][A-Za-z0-9_]*\.[A-Z][A-Za-z0-9_]*$`),
+		humped:    regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*[a-z0-9][A-Z][A-Za-z0-9]*$`),
+		snake:     regexp.MustCompile(`^[a-z][a-z0-9]*(_[a-z0-9]+)+$`),
+		ticket:    regexp.MustCompile(`^[A-Z]{2,}-[0-9]+$`),
+		titled:    regexp.MustCompile(`^[A-Z][A-Za-z0-9_]*[a-z][A-Za-z0-9_]*$`),
+	}
+})
 
 func pathParts(word string) []string {
 	return strings.FieldsFunc(word, func(r rune) bool { return r == '/' || r == '\\' })
@@ -365,18 +371,19 @@ func Names(text string) []string {
 			seen[name], found = true, append(found, name)
 		}
 	}
-	for _, at := range nameWord.FindAllStringIndex(text, -1) {
+	shape := shapes()
+	for _, at := range shape.word.FindAllStringIndex(text, -1) {
 		start, end := at[0], at[1]
 		word := strings.TrimRight(text[start:end], ".-/\\")
 		parts := pathParts(word)
 		switch {
 		case start > 0 && text[start-1] == ':' || len(parts) == 0:
-		case len(parts) > 1 && fileName.MatchString(parts[len(parts)-1]):
+		case len(parts) > 1 && shape.file.MatchString(parts[len(parts)-1]):
 			add(word)
 		default:
 			marked := end < len(text) && text[end] == '(' || start > 0 && text[start-1] == '`' && end < len(text) && text[end] == '`'
 			for _, part := range parts {
-				if fileName.MatchString(part) || qualified.MatchString(part) || humped.MatchString(part) || snake.MatchString(part) || ticketID.MatchString(part) || marked && titled.MatchString(part) {
+				if shape.file.MatchString(part) || shape.qualified.MatchString(part) || shape.humped.MatchString(part) || shape.snake.MatchString(part) || shape.ticket.MatchString(part) || marked && shape.titled.MatchString(part) {
 					add(part)
 				}
 			}
@@ -387,7 +394,7 @@ func Names(text string) []string {
 
 func missing(source, line string) []string {
 	present := map[string]bool{}
-	for _, word := range nameWord.FindAllString(line, -1) {
+	for _, word := range shapes().word.FindAllString(line, -1) {
 		word = strings.TrimRight(word, ".-/\\")
 		present[word] = true
 		for _, part := range pathParts(word) {
@@ -398,7 +405,7 @@ func missing(source, line string) []string {
 	for _, name := range Names(source) {
 		parts := pathParts(name)
 		short := parts[len(parts)-1]
-		if qualified.MatchString(name) {
+		if shapes().qualified.MatchString(name) {
 			short = name[strings.IndexByte(name, '.')+1:]
 		}
 		if !present[name] && !present[short] {

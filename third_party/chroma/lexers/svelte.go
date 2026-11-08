@@ -4,16 +4,18 @@ import (
 	. "github.com/alecthomas/chroma/v2"
 )
 
-var Svelte = Register(DelegatingLexer(HTML, MustNewLexer(
-	&Config{
-		Name:      "Svelte",
-		Aliases:   []string{"svelte"},
-		Filenames: []string{"*.svelte"},
-		MimeTypes: []string{"application/x-svelte"},
-		DotAll:    true,
-	},
-	svelteRules,
-)))
+func svelte() Lexer {
+	return DelegatingLexer(html(), MustNewLexer(
+		&Config{
+			Name:      "Svelte",
+			Aliases:   []string{"svelte"},
+			Filenames: []string{"*.svelte"},
+			MimeTypes: []string{"application/x-svelte"},
+			DotAll:    true,
+		},
+		svelteRules,
+	))
+}
 
 func svelteRules() Rules {
 	return Rules{

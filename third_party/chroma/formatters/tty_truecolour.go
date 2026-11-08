@@ -4,13 +4,14 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"sync"
 
 	"github.com/alecthomas/chroma/v2"
 )
 
 var TTY16m = Register("terminal16m", chroma.FormatterFunc(trueColourFormatter))
 
-var crOrCrLf = regexp.MustCompile(`\r?\n`)
+var crOrCrLf = sync.OnceValue(func() *regexp.Regexp { return regexp.MustCompile(`\r?\n`) })
 
 func writeToken(w io.Writer, formatting string, text string) {
 	if formatting == "" {
@@ -18,7 +19,7 @@ func writeToken(w io.Writer, formatting string, text string) {
 		return
 	}
 
-	newlineIndices := crOrCrLf.FindAllStringIndex(text, -1)
+	newlineIndices := crOrCrLf().FindAllStringIndex(text, -1)
 
 	afterLastNewline := 0
 	for _, indices := range newlineIndices {

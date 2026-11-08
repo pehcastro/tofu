@@ -6,15 +6,17 @@ import (
 	. "github.com/alecthomas/chroma/v2"
 )
 
-var Restructuredtext = Register(MustNewLexer(
-	&Config{
-		Name:      "reStructuredText",
-		Aliases:   []string{"rst", "rest", "restructuredtext"},
-		Filenames: []string{"*.rst", "*.rest"},
-		MimeTypes: []string{"text/x-rst", "text/prs.fallenstein.rst"},
-	},
-	restructuredtextRules,
-))
+func restructuredtext() Lexer {
+	return MustNewLexer(
+		&Config{
+			Name:      "reStructuredText",
+			Aliases:   []string{"rst", "rest", "restructuredtext"},
+			Filenames: []string{"*.rst", "*.rest"},
+			MimeTypes: []string{"text/x-rst", "text/prs.fallenstein.rst"},
+		},
+		restructuredtextRules,
+	)
+}
 
 func restructuredtextRules() Rules {
 	return Rules{

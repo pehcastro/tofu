@@ -81,8 +81,9 @@ tofu tool: quote is a mode of history now: call history with mode quote and what
 | `tofu tool list [--dir D] [--agent NAME]` | prints the offered tool names, one per line |
 | `tofu tool NAME JSON [--dir D] [--agent NAME] [--session S] [--sift free\|judged]` | runs one call and prints the result text; `--sift` picks the bash result cut as `tofu run --sift` does |
 
-Standard error ends with a line naming each file the call created, changed or removed under the tofu
-state folder in your home, or saying nothing was written.
+Standard error ends with a line naming each file the call created, changed or removed in the
+project's own state folder under `~/.tofu/projects`, or among the files directly inside `~/.tofu`,
+or saying nothing was written. The state folders of other projects are not looked at.
 
 Each call is one call in a fresh turn. A `read` therefore never answers with the unchanged line, a
 `plan` holds only what that call set, and `bash` with `background: true` and `shell` are refused with

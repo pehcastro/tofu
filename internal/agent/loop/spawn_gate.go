@@ -6,13 +6,13 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
+	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/tools/code/test"
 	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
@@ -84,7 +84,7 @@ func crateHoldsTests(crate string) bool {
 			return nil
 		}
 		body, _ := os.ReadFile(path)
-		if found = rustTestAttribute.Match(body); found {
+		if found = rustTestAttribute().Match(body); found {
 			return filepath.SkipAll
 		}
 		return nil
@@ -93,7 +93,7 @@ func crateHoldsTests(crate string) bool {
 }
 
 func ranNoTests(printed string) bool {
-	counts := cargoRunning.FindAllStringSubmatch(printed, -1)
+	counts := cargoRunning().FindAllStringSubmatch(printed, -1)
 	return len(counts) > 0 && !slices.ContainsFunc(counts, func(count []string) bool { return count[1] != "0" })
 }
 
@@ -101,9 +101,9 @@ func cargoFindings(project, lastEdit string, owns []string, printed string) (dea
 	type diagnostic struct{ said, path, line string }
 	var found []diagnostic
 	for _, line := range strings.Split(strings.ReplaceAll(printed, "\r", ""), "\n") {
-		if header := cargoHeader.FindStringSubmatch(line); header != nil && !cargoSummary.MatchString(line) {
+		if header := cargoHeader().FindStringSubmatch(line); header != nil && !cargoSummary().MatchString(line) {
 			found = append(found, diagnostic{said: header[3]})
-		} else if at := cargoLocation.FindStringSubmatch(line); at != nil && len(found) > 0 && found[len(found)-1].path == "" {
+		} else if at := cargoLocation().FindStringSubmatch(line); at != nil && len(found) > 0 && found[len(found)-1].path == "" {
 			found[len(found)-1].path, found[len(found)-1].line = at[1], at[2]
 		}
 	}
@@ -111,7 +111,7 @@ func cargoFindings(project, lastEdit string, owns []string, printed string) (dea
 	for _, each := range found {
 		mine := cargoOwned(project, lastEdit, owns, each.path)
 		foreign = foreign && !mine
-		if mine && each.path != "" && cargoDeadCode.MatchString(each.said) {
+		if mine && each.path != "" && cargoDeadCode().MatchString(each.said) {
 			dead = append(dead, each.said+" at "+each.path+":"+each.line)
 		}
 	}
@@ -202,30 +202,30 @@ const (
 )
 
 var (
-	goDiagnostic = regexp.MustCompile(`(?m)^\S+\.go:\d+:\d+: `)
-	goTestFailed = regexp.MustCompile(`(?m)^(FAIL\b|--- FAIL|panic: |\s*\[FAIL\]|Go test: .*\bfailed\b)`)
-	goTestPassed = regexp.MustCompile(`(?m)^(ok\s+\S|\?\s+\S+\s+\[no test files\]|Go test: \d+ passed in )`)
+	goDiagnostic = platformfs.LazyRegexp(`(?m)^\S+\.go:\d+:\d+: `)
+	goTestFailed = platformfs.LazyRegexp(`(?m)^(FAIL\b|--- FAIL|panic: |\s*\[FAIL\]|Go test: .*\bfailed\b)`)
+	goTestPassed = platformfs.LazyRegexp(`(?m)^(ok\s+\S|\?\s+\S+\s+\[no test files\]|Go test: \d+ passed in )`)
 
-	rustTestAttribute = regexp.MustCompile(`#\[(\w+::)*test\b`)
-	cargoRunning      = regexp.MustCompile(`(?m)^running (\d+) tests?\r?$`)
-	cargoHeader       = regexp.MustCompile(`^(warning|error)(\[\w+\])?: (.+)$`)
-	cargoSummary      = regexp.MustCompile("^(warning|error): (`[^`]+` \\(.+\\) generated|could not compile|build failed|aborting due to|\\d+ warnings? emitted)")
-	cargoLocation     = regexp.MustCompile(`^\s*--> (.+):(\d+):\d+$`)
-	cargoDeadCode     = regexp.MustCompile(`\b(is|are) never (used|read|constructed)\b|^unused\b`)
-	cargoTestFailed   = regexp.MustCompile(`(?m)^(test result: FAILED|error(\[\w+\])?: )`)
-	cargoTestPassed   = regexp.MustCompile(`(?m)^test result: ok\.`)
+	rustTestAttribute = platformfs.LazyRegexp(`#\[(\w+::)*test\b`)
+	cargoRunning      = platformfs.LazyRegexp(`(?m)^running (\d+) tests?\r?$`)
+	cargoHeader       = platformfs.LazyRegexp(`^(warning|error)(\[\w+\])?: (.+)$`)
+	cargoSummary      = platformfs.LazyRegexp("^(warning|error): (`[^`]+` \\(.+\\) generated|could not compile|build failed|aborting due to|\\d+ warnings? emitted)")
+	cargoLocation     = platformfs.LazyRegexp(`^\s*--> (.+):(\d+):\d+$`)
+	cargoDeadCode     = platformfs.LazyRegexp(`\b(is|are) never (used|read|constructed)\b|^unused\b`)
+	cargoTestFailed   = platformfs.LazyRegexp(`(?m)^(test result: FAILED|error(\[\w+\])?: )`)
+	cargoTestPassed   = platformfs.LazyRegexp(`(?m)^test result: ok\.`)
 
-	errorPrinted = regexp.MustCompile(`^(error(\[\w+\])?: |--- FAIL|FAIL(ED)?\b|\[FAIL\]|panic: |fatal: |\S+\.go:\d+:\d+: |test \S+ \.\.\. FAILED$|test result: FAILED|thread '.+' panicked at |.*\berror TS\d+|Traceback |E {3}|\w+Error: )`)
+	errorPrinted = platformfs.LazyRegexp(`^(error(\[\w+\])?: |--- FAIL|FAIL(ED)?\b|\[FAIL\]|panic: |fatal: |\S+\.go:\d+:\d+: |test \S+ \.\.\. FAILED$|test result: FAILED|thread '.+' panicked at |.*\berror TS\d+|Traceback |E {3}|\w+Error: )`)
 )
 
 func checkPrinted(check, printed string, exit *int) printedVerdict {
-	tested := goTestFailed.MatchString(printed) || goTestPassed.MatchString(printed)
+	tested := goTestFailed().MatchString(printed) || goTestPassed().MatchString(printed)
 	switch {
-	case check == "go test" && goTestFailed.MatchString(printed), check == "go vet" && goDiagnostic.MatchString(printed),
-		check == "cargo test" && cargoTestFailed.MatchString(printed):
+	case check == "go test" && goTestFailed().MatchString(printed), check == "go vet" && goDiagnostic().MatchString(printed),
+		check == "cargo test" && cargoTestFailed().MatchString(printed):
 		return printedFailed
 	case check == "go test" && tested, check == "go vet" && (tested || exit != nil && *exit == 0),
-		check == "cargo test" && cargoTestPassed.MatchString(printed):
+		check == "cargo test" && cargoTestPassed().MatchString(printed):
 		return printedPassed
 	}
 	return printedNothing
@@ -233,7 +233,7 @@ func checkPrinted(check, printed string, exit *int) printedVerdict {
 
 func errorLine(printed string) string {
 	for _, line := range strings.Split(printed, "\n") {
-		if line = strings.TrimSpace(line); errorPrinted.MatchString(line) && !cargoSummary.MatchString(line) {
+		if line = strings.TrimSpace(line); errorPrinted().MatchString(line) && !cargoSummary().MatchString(line) {
 			return line
 		}
 	}

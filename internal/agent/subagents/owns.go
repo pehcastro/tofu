@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 
 	gopath "path"
+
+	platformfs "tofu/internal/platform/fs"
 )
 
 type UnparseableGlobError struct {
@@ -45,13 +46,13 @@ func (e DeniedError) Error() string {
 	return fmt.Sprintf("%q is outside the paths this agent holds (%s): name it in your report, which asks the orchestrator to grant it, and do not edit it another way", e.Path, strings.Join(e.Owns, ", "))
 }
 
-var msysDrive = regexp.MustCompile(`^/[A-Za-z](/|$)`)
+var msysDrive = platformfs.LazyRegexp(`^/[A-Za-z](/|$)`)
 
-var globCharset = regexp.MustCompile(`^[A-Za-z0-9_./*$@+()-]+$`)
+var globCharset = platformfs.LazyRegexp(`^[A-Za-z0-9_./*$@+()-]+$`)
 
 func normalizePath(path string) string {
 	slashed := strings.ReplaceAll(path, `\`, "/")
-	if runtime.GOOS == "windows" && msysDrive.MatchString(slashed) {
+	if runtime.GOOS == "windows" && msysDrive().MatchString(slashed) {
 		slashed = slashed[1:2] + ":" + slashed[2:]
 	}
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
@@ -61,7 +62,7 @@ func normalizePath(path string) string {
 }
 
 func validGlob(glob string) error {
-	if glob == "" || !globCharset.MatchString(glob) {
+	if glob == "" || !globCharset().MatchString(glob) {
 		return UnparseableGlobError{Glob: glob}
 	}
 	return nil

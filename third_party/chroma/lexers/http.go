@@ -6,17 +6,19 @@ import (
 	. "github.com/alecthomas/chroma/v2"
 )
 
-var HTTP = Register(httpBodyContentTypeLexer(MustNewLexer(
-	&Config{
-		Name:         "HTTP",
-		Aliases:      []string{"http"},
-		Filenames:    []string{},
-		MimeTypes:    []string{},
-		NotMultiline: true,
-		DotAll:       true,
-	},
-	httpRules,
-)))
+func httpLexer() Lexer {
+	return httpBodyContentTypeLexer(MustNewLexer(
+		&Config{
+			Name:         "HTTP",
+			Aliases:      []string{"http"},
+			Filenames:    []string{},
+			MimeTypes:    []string{},
+			NotMultiline: true,
+			DotAll:       true,
+		},
+		httpRules,
+	))
+}
 
 func httpRules() Rules {
 	return Rules{

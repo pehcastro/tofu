@@ -4,15 +4,17 @@ import (
 	. "github.com/alecthomas/chroma/v2"
 )
 
-var Gemtext = Register(MustNewLexer(
-	&Config{
-		Name:      "Gemtext",
-		Aliases:   []string{"gemtext", "gmi", "gmni", "gemini"},
-		Filenames: []string{"*.gmi", "*.gmni", "*.gemini"},
-		MimeTypes: []string{"text/gemini"},
-	},
-	gemtextRules,
-))
+func gemtext() Lexer {
+	return MustNewLexer(
+		&Config{
+			Name:      "Gemtext",
+			Aliases:   []string{"gemtext", "gmi", "gmni", "gemini"},
+			Filenames: []string{"*.gmi", "*.gmni", "*.gemini"},
+			MimeTypes: []string{"text/gemini"},
+		},
+		gemtextRules,
+	)
+}
 
 func gemtextRules() Rules {
 	return Rules{

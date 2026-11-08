@@ -155,7 +155,7 @@ func (b *Boundary) Bash(command string, grammar Grammar) error {
 		return b.Shell(command)
 	}
 	if grammar == PowerShell {
-		if strings.Contains(bracedVariable.ReplaceAllString(command, ""), "{") || strings.Contains(command, "<#") {
+		if strings.Contains(bracedVariable().ReplaceAllString(command, ""), "{") || strings.Contains(command, "<#") {
 			return ReadListError{Program: "this command", Why: "has a PowerShell script block or block comment, which this check cannot see into"}
 		}
 		command = strings.ReplaceAll(command, `\`, "/")
@@ -543,7 +543,7 @@ func bare(program shellWord) error {
 
 func (b *Boundary) reads(g Grammar, c simpleCommand, left bool) error {
 	words := c.words
-	for len(words) > 0 && shellAssignment.MatchString(words[0].text) {
+	for len(words) > 0 && shellAssignment().MatchString(words[0].text) {
 		name, _, _ := strings.Cut(words[0].text, "=")
 		if name == "CARGO_TARGET_DIR" {
 			return ReadListError{Program: name, Why: sharedTargetWhy}

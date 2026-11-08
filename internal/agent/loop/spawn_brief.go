@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -12,6 +11,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
+	platformfs "tofu/internal/platform/fs"
 	platformscratch "tofu/internal/platform/scratch"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
@@ -93,10 +93,10 @@ func scratchWords(place platformscratch.ScratchPlace) string {
 		"read the shared notes in " + place.Shared() + ", and call scratch_path when you need a folder by kind."
 }
 
-var memoryCitation = regexp.MustCompile(`\[memory#([\w-]+)\]`)
+var memoryCitation = platformfs.LazyRegexp(`\[memory#([\w-]+)\]`)
 
 func (t *SpawnTool) citedMemory(brief string) (string, error) {
-	cited := memoryCitation.FindAllStringSubmatch(brief, -1)
+	cited := memoryCitation().FindAllStringSubmatch(brief, -1)
 	if len(cited) == 0 {
 		return "", nil
 	}
@@ -120,7 +120,7 @@ func (t *SpawnTool) citedMemory(brief string) (string, error) {
 	return "memory the lead cited for you, each line as it is saved:\n" + strings.Join(lines, "\n") + "\n\n", nil
 }
 
-var briefPath = regexp.MustCompile(`[\w./-]*\w\.[A-Za-z0-9]+`)
+var briefPath = platformfs.LazyRegexp(`[\w./-]*\w\.[A-Za-z0-9]+`)
 
 type briefCandidate struct {
 	path   string
@@ -135,7 +135,7 @@ func (t *SpawnTool) briefFiles(ctx context.Context, args spawnArgs, lead []core.
 	if memoised, cached := reader.(interface{ Uncached() contract.Tool }); cached {
 		reader = memoised.Uncached()
 	}
-	named := briefPath.FindAllString(args.Task, -1)
+	named := briefPath().FindAllString(args.Task, -1)
 	if direct, isRead := reader.(*read.ReadTool); isRead {
 		named = contract.RealPaths(direct.Root(), named)
 	}

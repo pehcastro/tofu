@@ -184,15 +184,17 @@ func caddyfileCommonRules() Rules {
 	}
 }
 
-var Caddyfile = Register(MustNewLexer(
-	&Config{
-		Name:      "Caddyfile",
-		Aliases:   []string{"caddyfile", "caddy"},
-		Filenames: []string{"Caddyfile*"},
-		MimeTypes: []string{},
-	},
-	caddyfileRules,
-))
+func caddyfile() Lexer {
+	return MustNewLexer(
+		&Config{
+			Name:      "Caddyfile",
+			Aliases:   []string{"caddyfile", "caddy"},
+			Filenames: []string{"Caddyfile*"},
+			MimeTypes: []string{},
+		},
+		caddyfileRules,
+	)
+}
 
 func caddyfileRules() Rules {
 	return Rules{
@@ -243,15 +245,17 @@ func caddyfileRules() Rules {
 	}.Merge(caddyfileCommonRules())
 }
 
-var CaddyfileDirectives = Register(MustNewLexer(
-	&Config{
-		Name:      "Caddyfile Directives",
-		Aliases:   []string{"caddyfile-directives", "caddyfile-d", "caddy-d"},
-		Filenames: []string{},
-		MimeTypes: []string{},
-	},
-	caddyfileDirectivesRules,
-))
+func caddyfileDirectives() Lexer {
+	return MustNewLexer(
+		&Config{
+			Name:      "Caddyfile Directives",
+			Aliases:   []string{"caddyfile-directives", "caddyfile-d", "caddy-d"},
+			Filenames: []string{},
+			MimeTypes: []string{},
+		},
+		caddyfileDirectivesRules,
+	)
+}
 
 func caddyfileDirectivesRules() Rules {
 	return Rules{

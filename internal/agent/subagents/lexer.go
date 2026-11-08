@@ -5,9 +5,10 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
+
+	platformfs "tofu/internal/platform/fs"
 )
 
 type shellWord struct {
@@ -192,13 +193,13 @@ func (l *shellLexer) word() shellWord {
 const shellNamePattern = `[A-Za-z0-9_]+(\[([0-9]+|@|\*)\])?`
 
 var (
-	shellName      = regexp.MustCompile(`^` + shellNamePattern + `$`)
-	bracedVariable = regexp.MustCompile(`\$\{` + shellNamePattern + `\}`)
+	shellName      = platformfs.LazyRegexp(`^` + shellNamePattern + `$`)
+	bracedVariable = platformfs.LazyRegexp(`\$\{` + shellNamePattern + `\}`)
 )
 
 func substitutes(expansion string) bool {
 	if inner, braced := strings.CutPrefix(expansion, "${"); braced {
-		return !shellName.MatchString(strings.TrimSuffix(inner, "}"))
+		return !shellName().MatchString(strings.TrimSuffix(inner, "}"))
 	}
 	return strings.HasPrefix(expansion, "$(") || strings.HasPrefix(expansion, "`")
 }
@@ -279,11 +280,11 @@ func shellCommands(command string, known map[string]string) []simpleCommand {
 	}
 }
 
-var shellAssignment = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*=`)
+var shellAssignment = platformfs.LazyRegexp(`^[A-Za-z_][A-Za-z0-9_]*=`)
 
 func (c simpleCommand) named() (string, []shellWord) {
 	words := c.words
-	for len(words) > 0 && shellAssignment.MatchString(words[0].text) {
+	for len(words) > 0 && shellAssignment().MatchString(words[0].text) {
 		words = words[1:]
 	}
 	if len(words) == 0 {

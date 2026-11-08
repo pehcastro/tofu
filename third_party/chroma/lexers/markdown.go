@@ -4,15 +4,17 @@ import (
 	. "github.com/alecthomas/chroma/v2"
 )
 
-var Markdown = Register(MustNewLexer(
-	&Config{
-		Name:      "markdown",
-		Aliases:   []string{"md", "mkd"},
-		Filenames: []string{"*.md", "*.mkd", "*.markdown"},
-		MimeTypes: []string{"text/x-markdown"},
-	},
-	markdownRules,
-))
+func markdown() Lexer {
+	return MustNewLexer(
+		&Config{
+			Name:      "markdown",
+			Aliases:   []string{"md", "mkd"},
+			Filenames: []string{"*.md", "*.mkd", "*.markdown"},
+			MimeTypes: []string{"text/x-markdown"},
+		},
+		markdownRules,
+	)
+}
 
 func markdownRules() Rules {
 	return Rules{

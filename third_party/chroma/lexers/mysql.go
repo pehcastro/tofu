@@ -4,12 +4,9 @@ import (
 	"regexp"
 )
 
-var (
-	mysqlAnalyserNameBetweenBacktickRe = regexp.MustCompile("`[a-zA-Z_]\\w*`")
-	mysqlAnalyserNameBetweenBracketRe  = regexp.MustCompile(`\[[a-zA-Z_]\w*\]`)
-)
-
 func analyseMySQL() {
+	mysqlAnalyserNameBetweenBacktickRe := regexp.MustCompile("`[a-zA-Z_]\\w*`")
+	mysqlAnalyserNameBetweenBracketRe := regexp.MustCompile(`\[[a-zA-Z_]\w*\]`)
 	GlobalLexerRegistry.Get("mysql").
 		SetAnalyser(func(text string) float32 {
 			nameBetweenBacktickCount := len(mysqlAnalyserNameBetweenBacktickRe.FindAllString(text, -1))

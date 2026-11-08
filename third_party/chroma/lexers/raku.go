@@ -11,22 +11,24 @@ import (
 	. "github.com/alecthomas/chroma/v2"
 )
 
-var Raku Lexer = Register(MustNewLexer(
-	&Config{
-		Name:    "Raku",
-		Aliases: []string{"perl6", "pl6", "raku"},
-		Filenames: []string{
-			"*.pl", "*.pm", "*.nqp", "*.p6", "*.6pl", "*.p6l", "*.pl6", "*.6pm",
-			"*.p6m", "*.pm6", "*.t", "*.raku", "*.rakumod", "*.rakutest", "*.rakudoc",
+func raku() Lexer {
+	return MustNewLexer(
+		&Config{
+			Name:    "Raku",
+			Aliases: []string{"perl6", "pl6", "raku"},
+			Filenames: []string{
+				"*.pl", "*.pm", "*.nqp", "*.p6", "*.6pl", "*.p6l", "*.pl6", "*.6pm",
+				"*.p6m", "*.pm6", "*.t", "*.raku", "*.rakumod", "*.rakutest", "*.rakudoc",
+			},
+			MimeTypes: []string{
+				"text/x-perl6", "application/x-perl6",
+				"text/x-raku", "application/x-raku",
+			},
+			DotAll: true,
 		},
-		MimeTypes: []string{
-			"text/x-perl6", "application/x-perl6",
-			"text/x-raku", "application/x-raku",
-		},
-		DotAll: true,
-	},
-	rakuRules,
-))
+		rakuRules,
+	)
+}
 
 func rakuRules() Rules {
 	type RakuToken int

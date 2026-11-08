@@ -4,16 +4,18 @@ import (
 	. "github.com/alecthomas/chroma/v2"
 )
 
-var Haxe = Register(MustNewLexer(
-	&Config{
-		Name:      "Haxe",
-		Aliases:   []string{"hx", "haxe", "hxsl"},
-		Filenames: []string{"*.hx", "*.hxsl"},
-		MimeTypes: []string{"text/haxe", "text/x-haxe", "text/x-hx"},
-		DotAll:    true,
-	},
-	haxeRules,
-))
+func haxe() Lexer {
+	return MustNewLexer(
+		&Config{
+			Name:      "Haxe",
+			Aliases:   []string{"hx", "haxe", "hxsl"},
+			Filenames: []string{"*.hx", "*.hxsl"},
+			MimeTypes: []string{"text/haxe", "text/x-haxe", "text/x-hx"},
+			DotAll:    true,
+		},
+		haxeRules,
+	)
+}
 
 func haxeRules() Rules {
 	return Rules{

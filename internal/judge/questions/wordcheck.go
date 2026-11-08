@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"tofu/internal/models/classifiers/core"
 )
@@ -46,23 +47,27 @@ func arithmeticIn(words []string) []string {
 	return sorted(seen)
 }
 
-var (
-	backtickedField = regexp.MustCompile("`([^`]+)`")
-	shapedField     = regexp.MustCompile(`^[a-z_][a-z0-9_]*(\[[0-9]+\])?(\.[a-z0-9_]+(\[[0-9]+\])?)*$`)
-	fieldIndex      = regexp.MustCompile(`\[[0-9]+\]`)
-)
+type fieldShapes struct{ backticked, shaped, index *regexp.Regexp }
+
+var fields = sync.OnceValue(func() fieldShapes {
+	return fieldShapes{
+		backticked: regexp.MustCompile("`([^`]+)`"),
+		shaped:     regexp.MustCompile(`^[a-z_][a-z0-9_]*(\[[0-9]+\])?(\.[a-z0-9_]+(\[[0-9]+\])?)*$`),
+		index:      regexp.MustCompile(`\[[0-9]+\]`),
+	}
+})
 
 func normalizeField(ref string) string {
-	return fieldIndex.ReplaceAllString(ref, "")
+	return fields().index.ReplaceAllString(ref, "")
 }
 
 func fieldFindings(words []string, state []string) (unknown, unparseable []string) {
 	seenUnknown := map[string]bool{}
 	seenUnparseable := map[string]bool{}
 	for _, w := range words {
-		for _, m := range backtickedField.FindAllStringSubmatch(w, -1) {
+		for _, m := range fields().backticked.FindAllStringSubmatch(w, -1) {
 			ref := m[1]
-			if !shapedField.MatchString(ref) {
+			if !fields().shaped.MatchString(ref) {
 				seenUnparseable[ref] = true
 				continue
 			}
@@ -88,7 +93,7 @@ func hasBlanketQuestion(questions []Question) bool {
 	for _, q := range questions {
 		named := false
 		for _, w := range q.Words() {
-			if backtickedField.MatchString(w) {
+			if fields().backticked.MatchString(w) {
 				named = true
 				break
 			}
@@ -103,8 +108,8 @@ func hasBlanketQuestion(questions []Question) bool {
 func fieldRefs(words []string) []string {
 	var out []string
 	for _, w := range words {
-		for _, m := range backtickedField.FindAllStringSubmatch(w, -1) {
-			if ref := m[1]; shapedField.MatchString(ref) {
+		for _, m := range fields().backticked.FindAllStringSubmatch(w, -1) {
+			if ref := m[1]; fields().shaped.MatchString(ref) {
 				out = append(out, normalizeField(ref))
 			}
 		}

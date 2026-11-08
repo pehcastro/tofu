@@ -4,7 +4,6 @@ import (
 	"embed"
 	"io/fs"
 	"sync"
-	"sync/atomic"
 
 	"github.com/alecthomas/chroma/v2"
 )
@@ -14,8 +13,6 @@ var embedded embed.FS
 
 var (
 	GlobalLexerRegistry = chroma.NewLexerRegistry()
-	declaredBeforeBuild []chroma.Lexer
-	registryBuilt       atomic.Bool
 	registryOnce        sync.Once
 )
 
@@ -28,17 +25,20 @@ func registry() *chroma.LexerRegistry {
 		for _, path := range paths {
 			GlobalLexerRegistry.Register(chroma.MustNewXMLLexer(embedded, path))
 		}
-		for _, lexer := range declaredBeforeBuild {
-			GlobalLexerRegistry.Register(lexer)
+		for _, build := range []func() chroma.Lexer{
+			caddyfile, caddyfileDirectives, commonLisp, emacsLisp, erb, gemtext, genshiText, genshiHTMLTemplate, genshi,
+			goLexer, goHTMLTemplate, goTextTemplate, haxe, httpLexer, markdown, markless, php, raku, restructuredtext, svelte, typoscript,
+		} {
+			GlobalLexerRegistry.Register(build())
 		}
-		declaredBeforeBuild = nil
 		analyseDNS()
 		analyseMySQL()
 		analyseZed()
-		registryBuilt.Store(true)
 	})
 	return GlobalLexerRegistry
 }
+
+func html() chroma.Lexer { return GlobalLexerRegistry.Get("HTML") }
 
 func Names(withAliases bool) []string {
 	return registry().Names(withAliases)
@@ -61,11 +61,7 @@ func Match(filename string) chroma.Lexer {
 }
 
 func Register(lexer chroma.Lexer) chroma.Lexer {
-	if registryBuilt.Load() {
-		return GlobalLexerRegistry.Register(lexer)
-	}
-	declaredBeforeBuild = append(declaredBeforeBuild, lexer)
-	return lexer
+	return registry().Register(lexer)
 }
 
 func Analyse(text string) chroma.Lexer {

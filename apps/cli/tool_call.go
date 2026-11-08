@@ -78,18 +78,19 @@ func toolVerb(args []string, out, errOut io.Writer) int {
 			say(notice)
 		}
 	}
-	opts = settled(wiring.OnTheBoundWire(opts), notify)
+	opts = wiring.OnTheBoundWire(opts)
 	opts.LeadMayWorkAlone = true
 	stateDir, stateErr := platformfs.HomeConfigDir()
-	atStart := stateFiles(stateDir)
+	places, _ := platformproject.ResolvePlaces(cmp.Or(opts.Dir, "."))
+	atStart := stateFiles(stateDir, places.State)
 	var hand handRun
 	if lone, built := loneTool(opts, call.Name); built {
-		hand.config, err = loneConfig(opts, recorded, lone, notify)
+		hand.config, err = loneConfig(opts, recorded, lone, call.Arguments, notify)
 	} else {
 		home, _ := os.UserHomeDir()
 		warm := newWarmProcesses(browser.NewBrowserTabs(home))
 		defer warm.Close()
-		hand, err = handConfig(opts, recorded, warm, notify)
+		hand, err = handConfig(settled(opts, notify), recorded, warm, notify)
 	}
 	if err != nil {
 		return refuseTool(errOut, err.Error())
@@ -106,10 +107,10 @@ func toolVerb(args []string, out, errOut io.Writer) int {
 	if hand.siftErr != nil && (call.Name == "bash" || call.Name == loop.ShellToolName) {
 		notify("no shell result is cut: " + hand.siftErr.Error())
 	}
-	afterSetup, printed := stateFiles(stateDir), ""
+	afterSetup, printed := stateFiles(stateDir, places.State), ""
 	if stateErr == nil {
 		defer func() {
-			footer := "tofu tool: under " + stateDir + " the setup " + stateWritten(atStart, afterSetup) + ", and the call " + stateWritten(afterSetup, stateFiles(stateDir))
+			footer := "tofu tool: under " + stateDir + " the setup " + stateWritten(atStart, afterSetup) + ", and the call " + stateWritten(afterSetup, stateFiles(stateDir, places.State))
 			if printed != "" && !strings.HasSuffix(printed, "\n") {
 				footer = "\n" + footer
 			}
@@ -150,7 +151,7 @@ func loneTool(opts wiring.RunOpts, name string) (contract.Tool, bool) {
 	return tools.NewMemo().Wrap([]contract.Tool{tool})[0], true
 }
 
-func loneConfig(opts wiring.RunOpts, recorded string, lone contract.Tool, notify func(string)) (loop.Config, error) {
+func loneConfig(opts wiring.RunOpts, recorded string, lone contract.Tool, args json.RawMessage, notify func(string)) (loop.Config, error) {
 	opts, sessions, places, err := handStores(opts, recorded)
 	if err != nil {
 		return loop.Config{}, err
@@ -161,7 +162,7 @@ func loneConfig(opts wiring.RunOpts, recorded string, lone contract.Tool, notify
 	config := loop.Config{Places: places, Redactor: &redactor, Tools: loop.NewRegistry(lone), Project: cmp.Or(opts.Dir, "."), SessionSource: hooks.SessionStartup, Task: opts.Task, Wire: opts.Wire,
 		ResultBytesCap: konst.TurnResultBytesCap, Sessions: sessions, Session: cmp.Or(opts.Session, opts.TurnID, session.NewEventID()), Proxy: wiring.LoadProxySetting(opts.Dir).Proxy, Notify: notify,
 		NewID: func() string { return turnID }}
-	if opts.GateArm != gateOff {
+	if opts.GateArm != gateOff && loop.PersonOnly(config.Project, loop.GateRequest{Tool: lone.Name(), Args: args}) {
 		if gate, _ := toolGateOn(opts.Dir, places.Log, keys.keyring()); gate != nil {
 			config.Gate, config.GateMode = gate, gateMode(opts.GateArm)
 		}
@@ -239,14 +240,20 @@ type stateFile struct {
 	modified time.Time
 }
 
-func stateFiles(root string) map[string]stateFile {
+func stateFiles(root, project string) map[string]stateFile {
 	files := map[string]stateFile{}
-	_ = filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() {
-			return nil
-		}
-		if info, err := entry.Info(); err == nil {
+	keep := func(path string, entry fs.DirEntry) {
+		if info, err := entry.Info(); err == nil && !entry.IsDir() {
 			files[filepath.ToSlash(strings.TrimPrefix(path, root+string(filepath.Separator)))] = stateFile{info.Size(), info.ModTime()}
+		}
+	}
+	top, _ := os.ReadDir(root)
+	for _, entry := range top {
+		keep(filepath.Join(root, entry.Name()), entry)
+	}
+	_ = filepath.WalkDir(project, func(path string, entry fs.DirEntry, err error) error {
+		if err == nil {
+			keep(path, entry)
 		}
 		return nil
 	})

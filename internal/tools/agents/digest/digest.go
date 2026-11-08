@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/models/llm/core"
+	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/platform/text"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/agents/context/window"
@@ -27,8 +27,8 @@ const (
 )
 
 var (
-	artifactLead = regexp.MustCompile(`^artifact (\S+) holds `)
-	lineRef      = regexp.MustCompile(`\bL(\d+)(?:\s*-\s*L?(\d+))?\b`)
+	artifactLead = platformfs.LazyRegexp(`^artifact (\S+) holds `)
+	lineRef      = platformfs.LazyRegexp(`\bL(\d+)(?:\s*-\s*L?(\d+))?\b`)
 )
 
 type Model interface {
@@ -160,7 +160,7 @@ func answerOf(decision core.Decision) (string, error) {
 func quoted(answer string, read []string, call string) string {
 	var cited []int
 	var past []string
-	for _, ref := range lineRef.FindAllStringSubmatch(answer, -1) {
+	for _, ref := range lineRef().FindAllStringSubmatch(answer, -1) {
 		first, _ := strconv.Atoi(ref[1])
 		last := first
 		if ref[2] != "" {
@@ -242,7 +242,7 @@ func (d Digest) resultOf(ctx context.Context, handle, call string) (string, erro
 }
 
 func (d Digest) whole(recorded string) (string, error) {
-	held := artifactLead.FindStringSubmatch(recorded)
+	held := artifactLead().FindStringSubmatch(recorded)
 	if held == nil {
 		return recorded, nil
 	}

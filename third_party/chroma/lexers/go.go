@@ -6,23 +6,25 @@ import (
 	. "github.com/alecthomas/chroma/v2"
 )
 
-var Go = Register(MustNewLexer(
-	&Config{
-		Name:      "Go",
-		Aliases:   []string{"go", "golang"},
-		Filenames: []string{"*.go"},
-		MimeTypes: []string{"text/x-gosrc"},
-	},
-	goRules,
-).SetAnalyser(func(text string) float32 {
-	if strings.Contains(text, "fmt.") && strings.Contains(text, "package ") {
-		return 0.5
-	}
-	if strings.Contains(text, "package ") {
-		return 0.1
-	}
-	return 0.0
-}))
+func goLexer() Lexer {
+	return MustNewLexer(
+		&Config{
+			Name:      "Go",
+			Aliases:   []string{"go", "golang"},
+			Filenames: []string{"*.go"},
+			MimeTypes: []string{"text/x-gosrc"},
+		},
+		goRules,
+	).SetAnalyser(func(text string) float32 {
+		if strings.Contains(text, "fmt.") && strings.Contains(text, "package ") {
+			return 0.5
+		}
+		if strings.Contains(text, "package ") {
+			return 0.1
+		}
+		return 0.0
+	})
+}
 
 func goRules() Rules {
 	return Rules{
@@ -49,7 +51,7 @@ func goRules() Rules {
 			{`0b[01_]+`, LiteralNumberBin, nil},
 			{`(0|[1-9][0-9_]*)`, LiteralNumberInteger, nil},
 			{`'(\\['"\\abfnrtv]|\\x[0-9a-fA-F]{2}|\\[0-7]{1,3}|\\u[0-9a-fA-F]{4}|\\U[0-9a-fA-F]{8}|[^\\])'`, LiteralStringChar, nil},
-			{"(`)([^`]*)(`)", ByGroups(LiteralString, UsingLexer(TypeRemappingLexer(GoTextTemplate, TypeMapping{{Other, LiteralString, nil}})), LiteralString), nil},
+			{"(`)([^`]*)(`)", ByGroups(LiteralString, UsingLexer(TypeRemappingLexer(goTextTemplate(), TypeMapping{{Other, LiteralString, nil}})), LiteralString), nil},
 			{`"(\\\\|\\"|[^"])*"`, LiteralString, nil},
 			{`(<<=|>>=|<<|>>|<=|>=|&\^=|&\^|\+=|-=|\*=|/=|%=|&=|\|=|&&|\|\||<-|\+\+|--|==|!=|:=|\.\.\.|[+\-*/%&])`, Operator, nil},
 			{`([a-zA-Z_]\w*)(\s*)(\()`, ByGroups(NameFunction, UsingSelf("root"), Punctuation), nil},
@@ -59,22 +61,26 @@ func goRules() Rules {
 	}
 }
 
-var GoHTMLTemplate = Register(DelegatingLexer(HTML, MustNewXMLLexer(
-	embedded,
-	"embedded/go_template.xml",
-).SetConfig(
-	&Config{
-		Name:    "Go HTML Template",
-		Aliases: []string{"go-html-template"},
-	},
-)))
+func goHTMLTemplate() Lexer {
+	return DelegatingLexer(html(), MustNewXMLLexer(
+		embedded,
+		"embedded/go_template.xml",
+	).SetConfig(
+		&Config{
+			Name:    "Go HTML Template",
+			Aliases: []string{"go-html-template"},
+		},
+	))
+}
 
-var GoTextTemplate = Register(MustNewXMLLexer(
-	embedded,
-	"embedded/go_template.xml",
-).SetConfig(
-	&Config{
-		Name:    "Go Text Template",
-		Aliases: []string{"go-text-template"},
-	},
-))
+func goTextTemplate() Lexer {
+	return MustNewXMLLexer(
+		embedded,
+		"embedded/go_template.xml",
+	).SetConfig(
+		&Config{
+			Name:    "Go Text Template",
+			Aliases: []string{"go-text-template"},
+		},
+	)
+}

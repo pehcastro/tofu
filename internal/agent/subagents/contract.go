@@ -1,14 +1,15 @@
 package subagents
 
 import (
-	"regexp"
 	"strings"
+
+	platformfs "tofu/internal/platform/fs"
 )
 
-var ticketPattern = regexp.MustCompile(`\b[A-Z][A-Z0-9]{1,15}-\d+(?:-\d+)?\b`)
+var ticketPattern = platformfs.LazyRegexp(`\b[A-Z][A-Z0-9]{1,15}-\d+(?:-\d+)?\b`)
 
 func TicketID(task string) string {
-	return ticketPattern.FindString(task)
+	return ticketPattern().FindString(task)
 }
 
 func AcceptanceLines(task string) []string {

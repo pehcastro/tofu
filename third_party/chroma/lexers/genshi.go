@@ -4,15 +4,17 @@ import (
 	. "github.com/alecthomas/chroma/v2"
 )
 
-var GenshiText = Register(MustNewLexer(
-	&Config{
-		Name:      "Genshi Text",
-		Aliases:   []string{"genshitext"},
-		Filenames: []string{},
-		MimeTypes: []string{"application/x-genshi-text", "text/x-genshi"},
-	},
-	genshiTextRules,
-))
+func genshiText() Lexer {
+	return MustNewLexer(
+		&Config{
+			Name:      "Genshi Text",
+			Aliases:   []string{"genshitext"},
+			Filenames: []string{},
+			MimeTypes: []string{"application/x-genshi-text", "text/x-genshi"},
+		},
+		genshiTextRules,
+	)
+}
 
 func genshiTextRules() Rules {
 	return Rules{
@@ -37,29 +39,33 @@ func genshiTextRules() Rules {
 	}
 }
 
-var GenshiHTMLTemplate = Register(MustNewLexer(
-	&Config{
-		Name:         "Genshi HTML",
-		Aliases:      []string{"html+genshi", "html+kid"},
-		Filenames:    []string{},
-		MimeTypes:    []string{"text/html+genshi"},
-		NotMultiline: true,
-		DotAll:       true,
-	},
-	genshiMarkupRules,
-))
+func genshiHTMLTemplate() Lexer {
+	return MustNewLexer(
+		&Config{
+			Name:         "Genshi HTML",
+			Aliases:      []string{"html+genshi", "html+kid"},
+			Filenames:    []string{},
+			MimeTypes:    []string{"text/html+genshi"},
+			NotMultiline: true,
+			DotAll:       true,
+		},
+		genshiMarkupRules,
+	)
+}
 
-var Genshi = Register(MustNewLexer(
-	&Config{
-		Name:         "Genshi",
-		Aliases:      []string{"genshi", "kid", "xml+genshi", "xml+kid"},
-		Filenames:    []string{"*.kid"},
-		MimeTypes:    []string{"application/x-genshi", "application/x-kid"},
-		NotMultiline: true,
-		DotAll:       true,
-	},
-	genshiMarkupRules,
-))
+func genshi() Lexer {
+	return MustNewLexer(
+		&Config{
+			Name:         "Genshi",
+			Aliases:      []string{"genshi", "kid", "xml+genshi", "xml+kid"},
+			Filenames:    []string{"*.kid"},
+			MimeTypes:    []string{"application/x-genshi", "application/x-kid"},
+			NotMultiline: true,
+			DotAll:       true,
+		},
+		genshiMarkupRules,
+	)
+}
 
 func genshiMarkupRules() Rules {
 	return Rules{

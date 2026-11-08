@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -213,8 +212,8 @@ func AppendedLines(result string) (first int, lines []string, appended bool) {
 }
 
 var (
-	ellipsisComment   = regexp.MustCompile(`^(?://+|#+|/\*+|<!--|--|;+|\{/\*).*(?:\.\.\.|…)`)
-	omittedCodePhrase = regexp.MustCompile(`(?i)\b(?:rest of|remaining|unchanged|existing|same as (?:before|above)|previous|omitted|as before|other (?:methods|functions|code))\b`)
+	ellipsisComment   = platformfs.LazyRegexp(`^(?://+|#+|/\*+|<!--|--|;+|\{/\*).*(?:\.\.\.|…)`)
+	omittedCodePhrase = platformfs.LazyRegexp(`(?i)\b(?:rest of|remaining|unchanged|existing|same as (?:before|above)|previous|omitted|as before|other (?:methods|functions|code))\b`)
 )
 
 func refuseOmission(held, content string) error {
@@ -225,7 +224,7 @@ func refuseOmission(held, content string) error {
 	var placed []string
 	for i, line := range strings.Split(content, "\n") {
 		line = strings.TrimSpace(line)
-		if old[line] == 0 && ellipsisComment.MatchString(line) && omittedCodePhrase.MatchString(line) {
+		if old[line] == 0 && ellipsisComment().MatchString(line) && omittedCodePhrase().MatchString(line) {
 			placed = append(placed, fmt.Sprintf("line %d: %q", i+1, line))
 		}
 		old[line]--

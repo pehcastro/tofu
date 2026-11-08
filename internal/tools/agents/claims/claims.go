@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	"tofu/internal/konst"
 	jev "tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/core"
+	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/agents/context/window"
 	"tofu/internal/tools/contract"
@@ -66,8 +66,8 @@ type checked struct {
 }
 
 var (
-	partBreak = regexp.MustCompile(`[;!?\n]|\.(?:\s|$)`)
-	word      = regexp.MustCompile(`[\pL\pN_]+`)
+	partBreak = platformfs.LazyRegexp(`[;!?\n]|\.(?:\s|$)`)
+	word      = platformfs.LazyRegexp(`[\pL\pN_]+`)
 )
 
 func (Claims) Name() string { return Name }
@@ -99,7 +99,7 @@ func (c Claims) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 		return contract.Result{}, fmt.Errorf("claims: arguments are not the expected shape: %w", err)
 	}
 	var parts []string
-	for _, part := range partBreak.Split(args.Report, -1) {
+	for _, part := range partBreak().Split(args.Report, -1) {
 		if part = strings.TrimSpace(strings.TrimLeft(strings.TrimSpace(part), "-*")); part != "" {
 			parts = append(parts, part)
 		}
@@ -261,8 +261,8 @@ func callsOf(events []session.Event, keep int) []call {
 }
 
 func namesOnly(part string, this, other call) bool {
-	these, others := word.FindAllString(strings.ToLower(this.Args), -1), word.FindAllString(strings.ToLower(other.Args), -1)
-	return slices.ContainsFunc(word.FindAllString(strings.ToLower(part), -1), func(named string) bool {
+	these, others := word().FindAllString(strings.ToLower(this.Args), -1), word().FindAllString(strings.ToLower(other.Args), -1)
+	return slices.ContainsFunc(word().FindAllString(strings.ToLower(part), -1), func(named string) bool {
 		return slices.Contains(these, named) && !slices.Contains(others, named)
 	})
 }

@@ -131,7 +131,6 @@ Every verb that reports state takes --json and prints one JSON document.
 func loadLocalTimeZone() { _ = time.Local.String() }
 
 func main() {
-	safe.Go(wiring.CrashTold(".", func(said string) { _, _ = fmt.Fprintln(os.Stderr, "tofu: "+said) }), "time zone load", loadLocalTimeZone)
 	stopProfile := profile.StartProfile()
 	reapTemporaryProjects(os.Stderr)
 	args, temporary := temporaryProject(os.Args[1:])
@@ -151,6 +150,7 @@ func main() {
 	}
 	letGo := func() {}
 	if opens {
+		safe.Go(wiring.CrashTold(".", func(said string) { _, _ = fmt.Fprintln(os.Stderr, "tofu: "+said) }), "time zone load", loadLocalTimeZone)
 		openProject(os.Stderr, os.Stdin, dir, opensTheApp && isTerminal(os.Stdin) && isTerminal(os.Stderr), temporary, register)
 		letGo = platformproject.HoldProjectOpen(dir)
 	}

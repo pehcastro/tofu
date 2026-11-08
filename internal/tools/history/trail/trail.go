@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -17,6 +16,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/history/shadow"
@@ -33,8 +33,8 @@ const (
 )
 
 var (
-	ticketShape = regexp.MustCompile(`^[A-Z][A-Z0-9]*-[0-9]+$`)
-	commitShape = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+	ticketShape = platformfs.LazyRegexp(`^[A-Z][A-Z0-9]*-[0-9]+$`)
+	commitShape = platformfs.LazyRegexp(`^[0-9a-f]{7,40}$`)
 	timeLayouts = []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02 15:04", "2006-01-02T15:04", "2006-01-02"}
 )
 
@@ -155,12 +155,12 @@ func (t Trail) anchored(ctx context.Context, turns []shadow.Recorded, said []tol
 		}
 		return "the turn running at " + at.Format(time.RFC3339) + " or the first after it", picked, "", nil
 	}
-	if ticketShape.MatchString(anchor) {
+	if ticketShape().MatchString(anchor) {
 		mentioned := saying(anchor)
 		pick(func(one shadow.Recorded) bool { return strings.Contains(one.Agent, anchor) || mentioned(one) })
 		return "ticket " + anchor + ", in a sub-agent's brief or in a message", picked, "", nil
 	}
-	if commitShape.MatchString(anchor) {
+	if commitShape().MatchString(anchor) {
 		if listed, err := projectGit(ctx, t.Store.Work(), "ls-tree", "-r", "-z", anchor+"^{commit}"); err == nil {
 			held := map[string]string{}
 			for _, entry := range strings.Split(strings.TrimSuffix(listed, "\x00"), "\x00") {

@@ -3,6 +3,7 @@ package look
 import (
 	"image/color"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/x/ansi"
 )
@@ -61,9 +62,10 @@ var palettes = map[Theme]palette{
 	},
 }
 
-var transforms = compileTransforms()
-
-var dimReplacer = compileDim()
+var (
+	transforms  = sync.OnceValue(compileTransforms)
+	dimReplacer = sync.OnceValue(compileDim)
+)
 
 func compileTransforms() map[Theme]transform {
 	paletteRoles := [...]Color{Background, Panel, PanelLight, Text, MutedColor, FaintColor, Mint, MintMuted, Blue, Amber, Red, Violet, ReferenceType, ReferenceID, DiffAddBackground, DiffDeleteBackground}
@@ -100,7 +102,7 @@ func Apply(view string, theme Theme) string {
 	if theme == ThemeTerminal {
 		return ansi.Strip(view)
 	}
-	t, ok := transforms[theme]
+	t, ok := transforms()[theme]
 	if !ok {
 		return view
 	}
@@ -127,7 +129,7 @@ const (
 
 func Unthemed(line string) string { return rawOpen + line + rawClose }
 
-func Dim(view string) string { return dimReplacer.Replace(view) }
+func Dim(view string) string { return dimReplacer().Replace(view) }
 
 func Canvas(theme Theme) color.Color {
 	p, ok := palettes[theme]

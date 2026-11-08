@@ -4,15 +4,17 @@ import (
 	. "github.com/alecthomas/chroma/v2"
 )
 
-var Markless = Register(MustNewLexer(
-	&Config{
-		Name:      "Markless",
-		Aliases:   []string{"mess"},
-		Filenames: []string{"*.mess", "*.markless"},
-		MimeTypes: []string{"text/x-markless"},
-	},
-	marklessRules,
-))
+func markless() Lexer {
+	return MustNewLexer(
+		&Config{
+			Name:      "Markless",
+			Aliases:   []string{"mess"},
+			Filenames: []string{"*.mess", "*.markless"},
+			MimeTypes: []string{"text/x-markless"},
+		},
+		marklessRules,
+	)
+}
 
 func marklessRules() Rules {
 	return Rules{

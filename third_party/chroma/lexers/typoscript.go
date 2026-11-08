@@ -4,17 +4,19 @@ import (
 	. "github.com/alecthomas/chroma/v2"
 )
 
-var Typoscript = Register(MustNewLexer(
-	&Config{
-		Name:      "TypoScript",
-		Aliases:   []string{"typoscript"},
-		Filenames: []string{"*.ts"},
-		MimeTypes: []string{"text/x-typoscript"},
-		DotAll:    true,
-		Priority:  0.1,
-	},
-	typoscriptRules,
-))
+func typoscript() Lexer {
+	return MustNewLexer(
+		&Config{
+			Name:      "TypoScript",
+			Aliases:   []string{"typoscript"},
+			Filenames: []string{"*.ts"},
+			MimeTypes: []string{"text/x-typoscript"},
+			DotAll:    true,
+			Priority:  0.1,
+		},
+		typoscriptRules,
+	)
+}
 
 func typoscriptRules() Rules {
 	return Rules{

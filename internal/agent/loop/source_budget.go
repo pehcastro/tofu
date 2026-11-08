@@ -372,7 +372,7 @@ func (b *sourceBudget) markPrinted(ctx context.Context, command, printed string)
 		return
 	}
 	root := string(b.files.Root())
-	named := briefPath.FindAllString(printed, -1)
+	named := briefPath().FindAllString(printed, -1)
 	for _, arg := range args {
 		matches, _ := filepath.Glob(filepath.Join(root, arg))
 		for _, match := range matches {

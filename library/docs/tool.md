@@ -24,7 +24,9 @@ such as `quote`, is refused with the call to make instead.
 The call runs in `--dir`, or the current directory without it, and reads
 the tofu state for that project from your home, `~/.tofu`. Standard error
 ends with one line naming each file the call created, changed or removed
-under that state folder, or saying nothing was written.
+in that project's state folder or among the files directly inside
+`~/.tofu`, or saying nothing was written. The state folders of other
+projects are not looked at.
 
 ## Change it
 
