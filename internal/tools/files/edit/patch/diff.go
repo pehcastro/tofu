@@ -25,58 +25,146 @@ func splitLines(text string) []string {
 	return split
 }
 
-func oversizedForDiff(oldLines, nextLines int) bool {
-	return oldLines*nextLines > konst.DiffTableMaxCells
-}
-
 func Hunks(before, after string) []Hunk {
 	old, next := splitLines(before), splitLines(after)
-	if oversizedForDiff(len(old), len(next)) {
-		return []Hunk{{Removed: old, Added: next}}
-	}
-	table := longestCommon(old, next)
-	i, j := 0, 0
-	aligned := func() bool { return i < len(old) && j < len(next) && old[i] == next[j] }
+	d := differ{old: old, next: next, removed: make([]bool, len(old)), added: make([]bool, len(next)), budget: konst.DiffTableMaxCells}
+	aLo, aHi, bLo, bHi := d.trim(0, len(old), 0, len(next))
+	size := pathVectorLen(aHi-aLo, bHi-bLo)
+	d.forward, d.backward = make([]int, size), make([]int, size)
+	d.compare(aLo, aHi, bLo, bHi)
 	var hunks []Hunk
-	for range len(old) + len(next) {
-		if i >= len(old) && j >= len(next) {
-			break
-		}
-		if aligned() {
+	i, j := 0, 0
+	for i < len(old) || j < len(next) {
+		if i < len(old) && j < len(next) && !d.removed[i] && !d.added[j] {
 			i++
 			j++
 			continue
 		}
 		hunk := Hunk{BeforeStart: i, AfterStart: j}
-		for (i < len(old) || j < len(next)) && !aligned() {
-			if j < len(next) && (i == len(old) || table[i][j+1] >= table[i+1][j]) {
-				hunk.Added = append(hunk.Added, next[j])
-				j++
-				continue
-			}
-			hunk.Removed = append(hunk.Removed, old[i])
+		for i < len(old) && d.removed[i] {
 			i++
 		}
+		for j < len(next) && d.added[j] {
+			j++
+		}
+		hunk.Removed, hunk.Added = old[hunk.BeforeStart:i:i], next[hunk.AfterStart:j:j]
 		hunks = append(hunks, hunk)
 	}
 	return hunks
 }
 
-func longestCommon(old, next []string) [][]int {
-	table := make([][]int, len(old)+1)
-	for i := range table {
-		table[i] = make([]int, len(next)+1)
+type differ struct {
+	old, next         []string
+	removed, added    []bool
+	forward, backward []int
+	budget            int
+}
+
+func pathVectorLen(oldLines, nextLines int) int {
+	return (oldLines+nextLines+1)/2*2 + 2
+}
+
+func (d *differ) trim(aLo, aHi, bLo, bHi int) (int, int, int, int) {
+	for aLo < aHi && bLo < bHi && d.old[aLo] == d.next[bLo] {
+		aLo++
+		bLo++
 	}
-	for i := len(old) - 1; i >= 0; i-- {
-		for j := len(next) - 1; j >= 0; j-- {
-			if old[i] == next[j] {
-				table[i][j] = table[i+1][j+1] + 1
-				continue
-			}
-			table[i][j] = max(table[i+1][j], table[i][j+1])
+	for aLo < aHi && bLo < bHi && d.old[aHi-1] == d.next[bHi-1] {
+		aHi--
+		bHi--
+	}
+	return aLo, aHi, bLo, bHi
+}
+
+func (d *differ) mark(aLo, aHi, bLo, bHi int) {
+	for i := aLo; i < aHi; i++ {
+		d.removed[i] = true
+	}
+	for j := bLo; j < bHi; j++ {
+		d.added[j] = true
+	}
+}
+
+func (d *differ) compare(aLo, aHi, bLo, bHi int) {
+	aLo, aHi, bLo, bHi = d.trim(aLo, aHi, bLo, bHi)
+	if aLo < aHi && bLo < bHi {
+		if x, y, found := d.middle(aLo, aHi, bLo, bHi); found {
+			d.compare(aLo, x, bLo, y)
+			d.compare(x, aHi, y, bHi)
+			return
 		}
 	}
-	return table
+	d.mark(aLo, aHi, bLo, bHi)
+}
+
+func (d *differ) middle(aLo, aHi, bLo, bHi int) (int, int, bool) {
+	n, m := aHi-aLo, bHi-bLo
+	reach := (n + m + 1) / 2
+	size := pathVectorLen(n, m)
+	forward, backward := d.forward[:size], d.backward[:size]
+	for i := range size {
+		forward[i], backward[i] = -1, -1
+	}
+	forward[reach+1], backward[reach+1] = 0, 0
+	delta := n - m
+	odd := delta%2 != 0
+	fStart, fEnd, bStart, bEnd := 0, 0, 0, 0
+	for step := range reach {
+		d.budget -= 2*step + 1
+		if d.budget < 0 {
+			return 0, 0, false
+		}
+		for k := -step + fStart; k <= step-fEnd; k += 2 {
+			at := reach + k
+			x := forward[at-1] + 1
+			if k == -step || k != step && forward[at-1] < forward[at+1] {
+				x = forward[at+1]
+			}
+			y := x - k
+			for x < n && y < m && d.old[aLo+x] == d.next[bLo+y] {
+				x++
+				y++
+			}
+			forward[at] = x
+			switch {
+			case x > n:
+				fEnd += 2
+			case y > m:
+				fStart += 2
+			case odd:
+				other := reach + delta - k
+				if other >= 0 && other < size && backward[other] != -1 && x >= n-backward[other] {
+					return aLo + x, bLo + y, true
+				}
+			}
+		}
+		for k := -step + bStart; k <= step-bEnd; k += 2 {
+			at := reach + k
+			x := backward[at-1] + 1
+			if k == -step || k != step && backward[at-1] < backward[at+1] {
+				x = backward[at+1]
+			}
+			y := x - k
+			for x < n && y < m && d.old[aHi-1-x] == d.next[bHi-1-y] {
+				x++
+				y++
+			}
+			backward[at] = x
+			switch {
+			case x > n:
+				bEnd += 2
+			case y > m:
+				bStart += 2
+			case !odd:
+				other := reach + delta - k
+				if other >= 0 && other < size && forward[other] != -1 && forward[other] >= n-x {
+					fx := forward[other]
+					return aLo + fx, bLo + fx - (other - reach), true
+				}
+			}
+		}
+	}
+	return 0, 0, false
 }
 
 func Unified(path, before, after string) string {
