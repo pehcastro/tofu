@@ -1,15 +1,15 @@
 use gpui::{
-    canvas, div, fill, linear_color_stop, linear_gradient, point, prelude::*, px, relative, size,
-    AnyElement, Bounds, Div, ElementId, FontWeight, Pixels, Rgba, SharedString, Stateful,
+    AnyElement, Bounds, Div, ElementId, FontWeight, Pixels, Rgba, SharedString, Stateful, canvas,
+    div, fill, linear_color_stop, linear_gradient, point, prelude::*, px, relative, size,
 };
 
 use crate::component::{control, icon};
-use crate::components::button::{button, ButtonKind};
+use crate::components::button::{ButtonKind, button};
 use crate::components::glyph::Glyph;
 use crate::components::paint::{drop, glyph, ink, ring, tint, top_light};
 use crate::components::probe::corner;
 use crate::components::size::{
-    CAP2_TRACKING, CAPTION_TEXT, DOT, DOTS_SHARE, DOT_SPACING, FONT_CAP2, FONT_SMALL, HEADER,
+    CAP2_TRACKING, CAPTION_TEXT, DOT, DOT_SPACING, DOTS_SHARE, FONT_CAP2, FONT_SMALL, HEADER,
     HEADER_PAD_LEFT, HEADER_PAD_LEFT_TABBED, HEADER_PAD_RIGHT, INNER_SHADOW_BLUR,
     RADIUS_CHIP_SMALL, SHELL_TEXT, TAB_IN_TILE,
 };

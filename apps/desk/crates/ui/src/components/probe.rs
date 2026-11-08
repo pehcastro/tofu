@@ -58,14 +58,20 @@ pub fn corner(name: impl Into<SharedString>, radius: Pixels, mut surface: Div) -
     surface.interactivity().on_prepaint(move |prepaint, _, _| {
         let bounds = prepaint.bounds;
         let (x, y) = (f32::from(bounds.left()), f32::from(bounds.top()));
-        let placed: SharedString = format!("{name}@{},{}", x.round(), y.round()).into();
+        let (w, h) = (f32::from(bounds.size.width), f32::from(bounds.size.height));
+        let placed: SharedString = format!(
+            "{name}@{},{},{},{}",
+            x.round(),
+            y.round(),
+            w.round(),
+            h.round()
+        )
+        .into();
         if !first_time(logged, &placed) {
             return;
         }
         eprintln!(
-            "corner {placed} x={x} y={y} w={} h={} r={}",
-            f32::from(bounds.size.width),
-            f32::from(bounds.size.height),
+            "corner {placed} x={x} y={y} w={w} h={h} r={}",
             f32::from(radius)
         );
     });
