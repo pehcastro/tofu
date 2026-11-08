@@ -2,7 +2,8 @@ param(
   [string]$Exe = "",
   [switch]$SkipMenu,
   [switch]$SkipTooltip,
-  [double]$Threshold = 0
+  [double]$Threshold = 0,
+  [ValidateSet("Glass", "Flat")][string]$Theme = "Glass"
 )
 $ErrorActionPreference = "Stop"
 $desk = Split-Path $PSScriptRoot -Parent
@@ -17,6 +18,11 @@ $timeout = [TimeSpan]::FromSeconds(60)
 $menuTimeout = [TimeSpan]::FromSeconds(5)
 $settle = 1500
 $menuSettle = 400
+$hoverSettle = 400
+$windowColour = "#ffffffff"
+$themeBase = @{ Glass = "tofu-glass"; Flat = "tofu-flat" }[$Theme]
+$themeFile = "corner-$($Theme.ToLower())"
+$themeMode = "dark"
 
 function Read-Const([string]$file, [string]$name) {
   $text = Get-Content -Raw -LiteralPath (Join-Path $desk $file)
@@ -84,7 +90,17 @@ $WM_CLOSE = 0x0010; $WM_KEYDOWN = 0x0100; $WM_MOUSEMOVE = 0x0200; $WM_LBUTTONDOW
 
 $root = Join-Path ([IO.Path]::GetTempPath()) ("desk-corner-check-" + [guid]::NewGuid().ToString("N"))
 $userHome = Join-Path $root "home"
-New-Item -ItemType Directory -Force -Path (Join-Path $userHome ".tofu\desk") | Out-Null
+$deskHome = Join-Path $userHome ".tofu\desk"
+foreach ($folder in @("config", "themes")) { New-Item -ItemType Directory -Force -Path (Join-Path $deskHome $folder) | Out-Null }
+$themeJson = [ordered]@{
+  name = "Corner $Theme on white"
+  extends = $themeBase
+  glass = @{ tint = 1 }
+  dark = @{ surface = @{ window = $windowColour } }
+  light = @{ surface = @{ window = $windowColour } }
+} | ConvertTo-Json -Depth 4
+[IO.File]::WriteAllText((Join-Path $deskHome "themes\$themeFile.json"), $themeJson)
+[IO.File]::WriteAllText((Join-Path $deskHome "config\theme"), "$themeFile $themeMode`n")
 $repos = @(foreach ($name in @("alpha", "beta")) {
   $repo = Join-Path $root $name
   New-Item -ItemType Directory -Force -Path $repo | Out-Null
@@ -197,7 +213,8 @@ function Wait-Quiet([scriptblock]$ready, [TimeSpan]$within, [int]$quietMs) {
   $false
 }
 
-$saved = @{ USERPROFILE = $env:USERPROFILE; APPDATA = $env:APPDATA; DESK_LAYOUT_LOG = $env:DESK_LAYOUT_LOG; DESK_FIRST_RUN = $env:DESK_FIRST_RUN }
+$saved = @{ USERPROFILE = $env:USERPROFILE; APPDATA = $env:APPDATA; DESK_LAYOUT_LOG = $env:DESK_LAYOUT_LOG; DESK_FIRST_RUN = $env:DESK_FIRST_RUN; TOFU_DESK_THEME = $env:TOFU_DESK_THEME }
+Remove-Item env:TOFU_DESK_THEME -ErrorAction SilentlyContinue
 $env:USERPROFILE = $userHome
 $env:APPDATA = Join-Path $userHome "AppData\Roaming"
 $env:DESK_LAYOUT_LOG = "1"
@@ -249,7 +266,15 @@ try {
       $notes += "projects + clicked at {0:N1},{1:N1}" -f $plusX, $plusY
       Click $handle $plusX $plusY
       $menuOpen = { param($probes) @(Current-Corners $probes.corners | Where-Object { $_.kind -eq "menu" }).Count -ge 1 }
-      if (Wait-Quiet $menuOpen $menuTimeout $menuSettle) { $shots["menu"] = Capture $handle }
+      if (Wait-Quiet $menuOpen $menuTimeout $menuSettle) {
+        $rect = New-Object DeskCornerRect
+        [DeskCornerCheck]::GetClientRect($handle, [ref]$rect) | Out-Null
+        $awayX = [int]($rect.Right * 3 / 4); $awayY = [int]($rect.Bottom / 2)
+        [DeskCornerCheck]::PostMessage($handle, $WM_MOUSEMOVE, [IntPtr]0, [DeskCornerCheck]::Point($awayX, $awayY)) | Out-Null
+        $notes += "pointer moved off projects + to $awayX,$awayY device px before the menu shot"
+        Start-Sleep -Milliseconds $hoverSettle
+        $shots["menu"] = Capture $handle
+      }
       else { $notes += "the projects + menu logged no surface within $($menuTimeout.TotalSeconds) s" }
       [DeskCornerCheck]::PostMessage($handle, $WM_KEYDOWN, [IntPtr]0x1B, [IntPtr]0) | Out-Null
       Start-Sleep -Milliseconds 400
@@ -309,13 +334,24 @@ foreach ($state in $shots.Keys) {
 $threshold = if ($Threshold -gt 0) { $Threshold } else { $noise + [Math]::Max($margin, $noise) }
 $thresholdFrom = if ($Threshold -gt 0) { "given with -Threshold" } else { "noise + max($margin, noise)" }
 
+$deskLog = Read-Log
+$resolved = [regex]::Matches($deskLog, "(?m)^desk theme (\S+ \S+)") | ForEach-Object { $_.Groups[1].Value } | Select-Object -Last 1
+$backdrop = [regex]::Matches($deskLog, "(?m)^desk: shell backdrop (\S+) fill (#[0-9a-f]+)") | Select-Object -Last 1
+$fill = if ($backdrop) { $backdrop.Groups[2].Value } else { "" }
+$backdropText = if ($backdrop) { "$($backdrop.Groups[1].Value) fill $fill" } else { "not logged" }
+$themeProblems = @([regex]::Matches($deskLog, "(?m)^theme \S+: .*$") | ForEach-Object { $_.Value.Trim() })
+$failures = @()
+
 "corner-check  exe $Exe  scale $script:scale"
+"theme ${Theme}: wrote $themeFile.json (extends $themeBase, glass.tint 1, surface.window $windowColour) and config\theme `"$themeFile $themeMode`"; desk resolved `"$resolved`", shell backdrop $backdropText"
+foreach ($problem in $themeProblems) { "note: $problem" }
+if ($resolved -ne "$themeFile $themeMode") { $failures += "theme resolved to `"$resolved`", not `"$themeFile $themeMode`"" }
+if ($fill -ne $windowColour) { $failures += "window fill $backdropText, not $windowColour" }
 "clean noise {0:N1} luma, the largest gap-to-outside difference over {1} window-corner pairs {2}px in from the window edge (largest at {3})" -f $noise, $noisePairs, $windowInset, $noiseAt
 "threshold {0:N1} luma, {1}" -f $threshold, $thresholdFrom
 "gap pixel inside the box at floor(r*(1-1/sqrt2) - $curveClearance) device px from both edges, outside pixel the same offset outside the box on the diagonal; edge pair at ${edgeOut}px and $(2 * $edgeOut)px out"
 foreach ($note in $notes) { "note: $note" }
 "{0,-16} {1,-26} {2,-7} {3,8} {4,8} {5,7}  {6}" -f "surface", "box", "corner", "gap", "outside", "diff", "verdict"
-$failures = @()
 foreach ($surface in $surfaces.Keys) {
   $spec = $surfaces[$surface]
   $bitmap = $shots[$spec.shot]
