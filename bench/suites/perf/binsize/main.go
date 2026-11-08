@@ -33,8 +33,24 @@ const (
 	grammarsRoot     = gotreesitterRoot + "/grammars/"
 	langPackage      = "./internal/tools/code/catgrep/lang"
 	catgrepDir       = "internal/tools/code/catgrep"
-	stubbedLang      = "package lang\n\ntype Lang uint8\n\nconst Rust Lang = 1\n\nfunc (Lang) String() string { return \"\" }\n"
-	stubbedTree      = `package tree
+	stubbedLang      = `package lang
+
+type Lang uint8
+
+const (
+	Rust Lang = iota + 1
+	Go
+)
+
+func (Lang) String() string { return "" }
+
+type Parser struct{}
+
+func NewParser(Lang) Parser { return Parser{} }
+
+func (Parser) BrokenRow([]byte) (int, bool) { return 0, false }
+`
+	stubbedTree = `package tree
 
 import (
 	"errors"
@@ -48,6 +64,8 @@ type Root struct{}
 type Node struct{}
 
 func Parse(string, lang.Lang) (*Root, error) { return nil, errors.New("no cat-grep in this build") }
+
+func (*Root) Release() {}
 
 func (*Root) Node() Node { return Node{} }
 
@@ -77,14 +95,17 @@ import (
 const Languages = ""
 
 type Site struct {
-	Start, End, Line int
-	Before, After    string
+	Start, End, Line   int
+	UnitStart, UnitEnd int
+	Before, After      string
 }
 
 type File struct {
 	Path  string
 	Sites []Site
 }
+
+func Workers() int { return 1 }
 
 func LangNamed(string) (lang.Lang, error) { return 0, errors.New("no cat-grep in this build") }
 
@@ -268,7 +289,11 @@ func withoutCatgrep(root, scratch string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, file := range langFiles {
+	searchFiles, err := filepath.Glob(filepath.Join(root, catgrepDir, "*.go"))
+	if err != nil {
+		return nil, err
+	}
+	for _, file := range slices.Concat(langFiles, searchFiles) {
 		overlay[file] = ""
 	}
 	overlay[langFiles[0]] = filepath.Join(scratch, "lang_stub.go")

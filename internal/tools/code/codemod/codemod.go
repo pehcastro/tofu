@@ -18,8 +18,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/odvcencio/gotreesitter"
-
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	platformfs "tofu/internal/platform/fs"
@@ -346,7 +344,7 @@ func declarationsFault(parser lang.Parser, checked *bytes.Buffer, file catgrep.F
 		}
 		sites = sites[group:]
 	}
-	row, broken := faultRow(parser, checked.Bytes())
+	row, broken := parser.BrokenRow(checked.Bytes())
 	if !broken {
 		return nil
 	}
@@ -359,7 +357,7 @@ func declarationsFault(parser lang.Parser, checked *bytes.Buffer, file catgrep.F
 	}
 	checked.Truncate(len(declarationScope))
 	checked.Write(before[at.from:at.to])
-	if _, wasBroken := faultRow(parser, checked.Bytes()); wasBroken {
+	if _, wasBroken := parser.BrokenRow(checked.Bytes()); wasBroken {
 		return wholeFileFault(parser, file, before)
 	}
 	return refusal(file.Path, at.line+row-at.row, text)
@@ -372,8 +370,8 @@ const declarationScope = "package scope\n"
 func wholeFileFault(parser lang.Parser, file catgrep.File, before []byte) error {
 	var after bytes.Buffer
 	splice(&after, before, 0, len(before), applied(file.Sites))
-	row, broken := faultRow(parser, after.Bytes())
-	if _, wasBroken := faultRow(parser, before); !broken || wasBroken {
+	row, broken := parser.BrokenRow(after.Bytes())
+	if _, wasBroken := parser.BrokenRow(before); !broken || wasBroken {
 		return nil
 	}
 	return refusal(file.Path, row+1, strings.Split(after.String(), "\n")[row])
@@ -381,36 +379,6 @@ func wholeFileFault(parser lang.Parser, file catgrep.File, before []byte) error 
 
 func refusal(path string, line int, text string) error {
 	return fmt.Errorf("the rewrite leaves %s as code that does not parse: line %d reads %s", path, line, strings.TrimSpace(text))
-}
-
-func faultRow(parser lang.Parser, code []byte) (int, bool) {
-	parsed, err := parser.Parse(code)
-	if err != nil {
-		return 0, true
-	}
-	defer parsed.Release()
-	if fault, broken := lang.FirstFault(parsed); broken {
-		return int(fault.At.Row), true
-	}
-	grammar := parsed.Language()
-	pending := []*gotreesitter.Node{parsed.RootNode()}
-	for len(pending) > 0 {
-		node := pending[len(pending)-1]
-		pending = pending[:len(pending)-1]
-		if kind := node.Type(grammar); kind == "defer_statement" || kind == "go_statement" {
-			called := node.NamedChild(0)
-			for called != nil && called.Type(grammar) == "parenthesized_expression" {
-				called = called.NamedChild(0)
-			}
-			if called == nil || called.Type(grammar) != "call_expression" {
-				return int(node.StartPoint().Row), true
-			}
-		}
-		for i := node.ChildCount() - 1; i >= 0; i-- {
-			pending = append(pending, node.Child(i))
-		}
-	}
-	return 0, false
 }
 
 func (c Codemod) checked(ctx context.Context, lang string, changes []change) string {

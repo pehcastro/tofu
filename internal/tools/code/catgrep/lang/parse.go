@@ -36,6 +36,36 @@ func (p Parser) Parse(source []byte) (*gotreesitter.Tree, error) {
 
 func Parse(source []byte, l Lang) (*gotreesitter.Tree, error) { return NewParser(l).Parse(source) }
 
+func (p Parser) BrokenRow(code []byte) (int, bool) {
+	parsed, err := p.Parse(code)
+	if err != nil {
+		return 0, true
+	}
+	defer parsed.Release()
+	if fault, broken := FirstFault(parsed); broken {
+		return int(fault.At.Row), true
+	}
+	grammar := parsed.Language()
+	pending := []*gotreesitter.Node{parsed.RootNode()}
+	for len(pending) > 0 {
+		node := pending[len(pending)-1]
+		pending = pending[:len(pending)-1]
+		if kind := node.Type(grammar); kind == "defer_statement" || kind == "go_statement" {
+			called := node.NamedChild(0)
+			for called != nil && called.Type(grammar) == "parenthesized_expression" {
+				called = called.NamedChild(0)
+			}
+			if called == nil || called.Type(grammar) != "call_expression" {
+				return int(node.StartPoint().Row), true
+			}
+		}
+		for i := node.ChildCount() - 1; i >= 0; i-- {
+			pending = append(pending, node.Child(i))
+		}
+	}
+	return 0, false
+}
+
 func FirstFault(tree *gotreesitter.Tree) (Fault, bool) {
 	pending := []*gotreesitter.Node{tree.RootNode()}
 	for len(pending) > 0 {
