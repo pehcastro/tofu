@@ -53,6 +53,7 @@ func RegisterBuiltinScanners() {
 	RegisterGnSupport()
 	RegisterGoSupport()
 	RegisterGodot_resourceSupport()
+	RegisterGroovySupport()
 	RegisterHackSupport()
 	RegisterHaskellSupport()
 	RegisterHaxeSupport()

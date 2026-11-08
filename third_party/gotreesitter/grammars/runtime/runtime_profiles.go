@@ -781,7 +781,7 @@ var builtinLanguageRuntimeProfiles = map[string]builtinLanguageRuntimeProfile{
 	// keeps incremental fallbacks and explicit diagnostic overrides
 	// conservative.
 	"groovy": {
-		blobSHA256: mustRuntimeProfileSHA256("3b2a65062c1bc26337d35b9dfde6e2a506f315b8db5c25250451a980f4bfb52d"),
+		blobSHA256: mustRuntimeProfileSHA256("5d5b91aa091509015b0a62a61f44e5fa7a4b42a5bbb02ca34bcce7e0e0c8ce4b"),
 		fullParseAcceptedErrorRetryProfile: gotreesitter.FullParseAcceptedErrorRetryProfile{
 			MinSourceBytes:      64 * 1024,
 			InitialStackCeiling: 2,
