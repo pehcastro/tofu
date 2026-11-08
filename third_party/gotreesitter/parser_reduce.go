@@ -4147,23 +4147,16 @@ func (p *Parser) tryFastVisibleReduceActionFromGSS(s *glrStack, act ParseAction,
 		return false
 	}
 	childCount := int(act.ChildCount)
-	if !gssSpanIsLinear(s.gss.head, childCount) {
+	if childCount < 1 || childCount > 8 || !gssSpanIsLinear(s.gss.head, childCount) {
 		return false
 	}
-	if childCount <= 1 || childCount > 8 {
-		return false
-	}
-	if len(p.reduceAliasSequence(act.ProductionID)) != 0 || p.reduceProductionHasEffectiveFields(childCount, act.ProductionID, arena) {
+	aliasSeq := p.reduceAliasSequence(act.ProductionID)
+	labelled := len(aliasSeq) != 0 || p.reduceProductionHasEffectiveFields(childCount, act.ProductionID, arena)
+	parentVisible := int(act.Symbol) >= len(p.language.SymbolMetadata) || p.language.SymbolMetadata[act.Symbol].Visible
+	if (labelled || childCount == 1 || !parentVisible) && (p.usePendingFullParents() || len(p.unaryWrapperFlatteningSet) != 0) {
 		return false
 	}
 	if p.forceRawSpanAll || (int(act.Symbol) < len(p.forceRawSpanTable) && p.forceRawSpanTable[act.Symbol]) {
-		return false
-	}
-	parentVisible := true
-	if idx := int(act.Symbol); idx < len(p.language.SymbolMetadata) {
-		parentVisible = p.language.SymbolMetadata[act.Symbol].Visible
-	}
-	if !parentVisible {
 		return false
 	}
 
@@ -4183,17 +4176,20 @@ func (p *Parser) tryFastVisibleReduceActionFromGSS(s *glrStack, act ParseAction,
 		if child == nil || child.isExtra() {
 			return false
 		}
-		visible := true
-		if idx := int(child.symbol); idx < len(symbolMeta) {
-			visible = symbolMeta[child.symbol].Visible
+		sym := child.symbol
+		if i < len(aliasSeq) && aliasSeq[i] != 0 {
+			sym = aliasSeq[i]
 		}
-		if !visible {
+		if int(sym) < len(symbolMeta) && !symbolMeta[sym].Visible {
 			return false
 		}
 		childBuf[i] = child
 		n = n.prev
 	}
 	if n == nil {
+		return false
+	}
+	if childCount == 1 && !labelled && !tok.NoLookahead && childBuf[0].ownerArena == arena && childBuf[0].parent == nil && (p.reduceTiming != nil || arena.breakdownEnabled) {
 		return false
 	}
 	topState := n.entry.state
@@ -4207,19 +4203,20 @@ func (p *Parser) tryFastVisibleReduceActionFromGSS(s *glrStack, act ParseAction,
 	if perfCountersEnabled {
 		perfRecordReduceChildrenFastGSS(childCount)
 	}
+	var rawWindow [8]stackEntry
+	for i := 0; i < childCount; i++ {
+		rawWindow[i] = newStackEntryNode(0, childBuf[i])
+	}
+	rawShape := p.captureRawShape(gssScratch, arena, act.Symbol, act.ProductionID, rawWindow[:childCount], 0, childCount)
 	copy(children, childBuf[:childCount])
+	var fieldIDs []FieldID
+	var fieldSources []uint8
+	if labelled {
+		fieldIDs, fieldSources = p.labelFastReduceChildren(arena, children, aliasSeq, act.ProductionID)
+	}
 	if timing != nil {
 		timing.reduceChildBuildNanos += time.Since(childStart).Nanoseconds()
 	}
-	var rawEntries [16]stackEntry
-	rawWindow := rawEntries[:0]
-	if childCount > cap(rawEntries) {
-		rawWindow = make([]stackEntry, 0, childCount)
-	}
-	for i := 0; i < childCount; i++ {
-		rawWindow = append(rawWindow, newStackEntryNode(0, children[i]))
-	}
-	rawShape := p.captureRawShape(gssScratch, arena, act.Symbol, act.ProductionID, rawWindow, 0, len(rawWindow))
 	named := p.isNamedSymbol(act.Symbol)
 	var parent *Node
 	parentStart := time.Time{}
@@ -4227,13 +4224,18 @@ func (p *Parser) tryFastVisibleReduceActionFromGSS(s *glrStack, act ParseAction,
 		parentStart = time.Now()
 	}
 	if deferParentLinks {
-		parent = newParentNodeInArenaNoLinksWithFieldSources(arena, act.Symbol, named, children, nil, nil, act.ProductionID, trackChildErrors)
+		parent = newParentNodeInArenaNoLinksWithFieldSources(arena, act.Symbol, named, children, fieldIDs, fieldSources, act.ProductionID, trackChildErrors)
 	} else {
-		parent = newParentNodeInArenaWithFieldSources(arena, act.Symbol, named, children, nil, nil, act.ProductionID)
+		parent = newParentNodeInArenaWithFieldSources(arena, act.Symbol, named, children, fieldIDs, fieldSources, act.ProductionID)
 	}
 	parent.rawShape = rawShape
-	setReduceNodeDynamicPrecedence(parent, rawWindow, 0, len(rawWindow), act)
-	p.recordReductionParentConstructed(arena, parent, act.Symbol, len(children), nil, nil, reduceChildPathFastGSS)
+	setReduceNodeDynamicPrecedence(parent, rawWindow[:childCount], 0, childCount, act)
+	p.recordReductionParentConstructed(arena, parent, act.Symbol, len(children), fieldIDs, fieldSources, reduceChildPathFastGSS)
+	if !parentVisible {
+		span := computeReduceRawSpan(rawWindow[:childCount], 0, childCount)
+		parent.startByte, parent.endByte = span.startByte, span.endByte
+		parent.startPoint, parent.endPoint = span.startPoint, span.endPoint
+	}
 	if timing != nil {
 		timing.reduceParentBuildNanos += time.Since(parentStart).Nanoseconds()
 	}
@@ -4271,6 +4273,38 @@ func (p *Parser) tryFastVisibleReduceActionFromGSS(s *glrStack, act ParseAction,
 		*tmpEntries = (*tmpEntries)[:0]
 	}
 	return true
+}
+
+func (p *Parser) labelFastReduceChildren(arena *nodeArena, children []*Node, aliasSeq []Symbol, productionID uint16) ([]FieldID, []uint8) {
+	rawFieldIDs, rawInherited, _ := p.buildFieldIDs(len(children), productionID, arena)
+	var fieldIDs []FieldID
+	var fieldSources []uint8
+	if rawFieldIDs != nil {
+		fieldIDs = arena.allocFieldIDSlice(len(children))
+		fieldSources = arena.allocFieldSourceSlice(len(children))
+	}
+	for i, n := range children {
+		var fid FieldID
+		inherited := false
+		if i < len(rawFieldIDs) {
+			fid = rawFieldIDs[i]
+			inherited = i < len(rawInherited) && rawInherited[i]
+		}
+		if i < len(aliasSeq) && aliasSeq[i] != 0 {
+			n = p.aliasedNodeInArena(arena, n, aliasSeq[i])
+			children[i] = n
+		}
+		if fieldIDs != nil && !inherited && !p.shouldSuppressVisibleDirectField(n, fid) {
+			fieldIDs[i] = fid
+			if fid != 0 {
+				fieldSources[i] = fieldSourceDirect
+			}
+		}
+	}
+	if fieldIDs != nil {
+		p.suppressReducedChildFields(children, fieldIDs, fieldSources)
+	}
+	return fieldIDs, fieldSources
 }
 
 func (p *Parser) tryFastUnaryCollapseFromGSS(s *glrStack, act ParseAction, tok Token, anyReduced *bool, arena *nodeArena, entryScratch *glrEntryScratch, gssScratch *gssScratch, tmpEntries *[]stackEntry) bool {
