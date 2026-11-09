@@ -16,6 +16,16 @@ const BlobSHA256 = "175dc35bc305306f1e78d175197e181cd3bf3d6cb064b532b8acbb0b1a8b
 func init() {
 	grammarruntime.RegisterRustSupport()
 	grammarruntime.RegisterBlob("rust", grammarblobs.Rust)
+	gotreesitter.RegisterCCoreLanguage("rust", LanguageC)
+}
+
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.RustC())
+	if err != nil {
+		return nil
+	}
+	lang.ExternalScanner = grammarruntime.RustExternalScanner{}.ExternalScannerForLanguage(lang)
+	return lang
 }
 
 // Language returns the cached grammar with its scanner and certified runtime profile.

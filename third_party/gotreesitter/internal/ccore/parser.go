@@ -14,29 +14,34 @@ const (
 	opsPerStopCheck         = 100
 	initialState            = 1
 	sourceBytesPerTree      = 2
+	serializationBufferSize = 1024
 )
 
 type parser struct {
-	t          *Tables
-	r          Result
-	s          stack
-	l          lexer
-	stop       func() bool
-	cacheToken uint32
-	cacheByte  uint32
-	finished   uint32
-	accepts    int
-	ops        int
-	outcome    Status
-	trailing   []uint32
-	trailing2  []uint32
+	t             *Tables
+	r             Result
+	s             stack
+	l             lexer
+	scanner       Scanner
+	stop          func() bool
+	cacheToken    uint32
+	cacheByte     uint32
+	cacheExternal uint32
+	finished      uint32
+	accepts       int
+	ops           int
+	outcome       Status
+	trailing      []uint32
+	trailing2     []uint32
+	scanBuf       [serializationBufferSize]byte
 }
 
-func Parse(t *Tables, src []byte, stop func() bool) (Result, Status) {
-	p := &parser{t: t, stop: stop, l: lexer{src: src}}
+func Parse(t *Tables, src []byte, scanner Scanner, stop func() bool) (Result, Status) {
+	p := &parser{t: t, stop: stop, scanner: scanner, l: lexer{src: src}}
 	estimate := len(src)/sourceBytesPerTree + 1
 	p.r.Trees = make([]Subtree, 1, estimate)
 	p.r.Kids = make([]uint32, 0, estimate)
+	p.r.scans = []scanState{{}}
 	p.s = stack{r: &p.r, nodes: make([]stackNode, 1, 64)}
 	p.s.heads = []head{{node: p.s.newNode(0, 0, initialState)}}
 	if !p.run() {
@@ -171,16 +176,18 @@ func (p *parser) decline() bool {
 func (p *parser) advance(v int) bool {
 	state := p.s.node(v).state
 	position := p.s.node(v).position.Bytes
-	lookahead, entry := p.cached(state, position)
-	if lookahead == 0 {
-		if p.t.LexModes[state].LexState == noLexState {
-			return p.decline()
-		}
-		lookahead = p.lex(v, state)
-		p.cacheToken, p.cacheByte = lookahead, position
-		entry = p.t.entry(state, p.r.Trees[lookahead].Symbol)
-	}
+	external := p.s.heads[v].external
+	lookahead, entry := p.cached(v, state, position)
+	needsLex := lookahead == 0
 	for {
+		if needsLex {
+			needsLex = false
+			lookahead = p.lex(v, state)
+			if lookahead != 0 {
+				p.cacheToken, p.cacheByte, p.cacheExternal = lookahead, position, external
+			}
+			entry = p.t.entry(state, p.r.Trees[lookahead].Symbol)
+		}
 		if !p.checkStop() {
 			return false
 		}
@@ -200,7 +207,7 @@ func (p *parser) advance(v int) bool {
 				return true
 			case ActionReduce:
 				reduced = true
-				if rv := p.reduce(v, a.Symbol, uint32(a.ChildCount), int32(a.DynPrec), a.ProductionID); rv != noVersion {
+				if rv := p.reduce(v, a.Symbol, uint32(a.ChildCount), int32(a.DynPrec), a.ProductionID, lookahead == 0); rv != noVersion {
 					lastReduction = rv
 				}
 			case ActionAccept:
@@ -213,6 +220,7 @@ func (p *parser) advance(v int) bool {
 		if lastReduction != noVersion {
 			p.s.renumber(lastReduction, v)
 			state = p.s.node(v).state
+			needsLex = lookahead == 0
 			entry = p.t.entry(state, p.r.Trees[lookahead].Symbol)
 			continue
 		}
@@ -243,6 +251,9 @@ func (p *parser) shift(v int, state uint16, lookahead uint32, extra bool) {
 		p.r.Trees[lookahead].Extra = extra
 	}
 	p.s.push(v, lookahead, state)
+	if p.r.Trees[lookahead].scan != 0 {
+		p.s.heads[v].external = lookahead
+	}
 }
 
 func (p *parser) splitTrailingExtras(children []uint32, into []uint32) ([]uint32, []uint32) {
@@ -254,7 +265,7 @@ func (p *parser) splitTrailingExtras(children []uint32, into []uint32) ([]uint32
 	return children[:n], append(into, children[n:]...)
 }
 
-func (p *parser) reduce(v int, symbol uint16, count uint32, dynPrec int32, productionID uint16) int {
+func (p *parser) reduce(v int, symbol uint16, count uint32, dynPrec int32, productionID uint16, endOfExtra bool) int {
 	initial := len(p.s.heads)
 	slices := p.s.pop(v, count, false)
 	removed := 0
@@ -288,6 +299,7 @@ func (p *parser) reduce(v int, symbol uint16, count uint32, dynPrec int32, produ
 		}
 		state := p.s.node(sv).state
 		next := p.t.nextState(state, symbol)
+		p.r.Trees[parent].Extra = endOfExtra && next == state
 		p.r.Trees[parent].DynPrec += dynPrec
 		p.s.push(sv, parent, next)
 		for _, t := range p.trailing {

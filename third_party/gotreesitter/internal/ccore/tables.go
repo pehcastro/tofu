@@ -41,6 +41,7 @@ type LexTransition struct {
 
 type LexMode struct {
 	LexState    uint16
+	External    uint16
 	ReservedSet uint16
 }
 
@@ -63,6 +64,12 @@ type Tables struct {
 	KeywordCapture     uint16
 	ReservedWords      []uint16
 	ReservedSetSize    uint32
+	ExternalStates     [][]bool
+}
+
+type Scanner interface {
+	Scan(at Length, valid []bool, state []byte) (symbol uint16, start, end Length, found bool)
+	Serialize(buf []byte) int
 }
 
 const (
@@ -72,6 +79,7 @@ const (
 	noLexState     uint16 = 0xFFFF
 	invalidRune    int32  = -1
 	dfaInvalidRune int32  = 0x10FFFF
+	byteOrderMark         = "\xef\xbb\xbf"
 )
 
 func (t *Tables) lookup(state, symbol uint16) uint16 {

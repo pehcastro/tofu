@@ -1,11 +1,14 @@
 package ccore
 
+import "bytes"
+
 type Subtree struct {
 	Padding      Length
 	Size         Length
 	ChildStart   uint32
 	ChildCount   uint32
 	DynPrec      int32
+	scan         uint32
 	Symbol       uint16
 	ParseState   uint16
 	ProductionID uint16
@@ -13,10 +16,30 @@ type Subtree struct {
 	Keyword      bool
 }
 
+type scanState struct{ start, end uint32 }
+
 type Result struct {
-	Trees []Subtree
-	Kids  []uint32
-	Root  uint32
+	Trees     []Subtree
+	Kids      []uint32
+	Root      uint32
+	scans     []scanState
+	scanBytes []byte
+}
+
+func (r *Result) scannerState(id uint32) []byte {
+	s := r.scans[r.Trees[id].scan]
+	return r.scanBytes[s.start:s.end]
+}
+
+func (r *Result) addScan(state []byte) uint32 {
+	start := uint32(len(r.scanBytes))
+	r.scanBytes = append(r.scanBytes, state...)
+	r.scans = append(r.scans, scanState{start, uint32(len(r.scanBytes))})
+	return uint32(len(r.scans) - 1)
+}
+
+func (r *Result) sameScannerState(a, b uint32) bool {
+	return r.Trees[a].scan == r.Trees[b].scan || bytes.Equal(r.scannerState(a), r.scannerState(b))
 }
 
 func (r *Result) Children(id uint32) []uint32 {

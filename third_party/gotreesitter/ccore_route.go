@@ -73,15 +73,48 @@ func (p *Parser) ParseNewCore(source []byte) (*Tree, bool) {
 	if p.needsParseBudget() {
 		stop = func() bool { return p.activeParseStopReason() != ParseStopNone }
 	}
-	result, status := ccore.Parse(b.tables, source, stop)
+	var scanner ccore.Scanner
+	if s := b.source.ExternalScanner; s != nil {
+		cs := &ccoreScanner{scanner: s, payload: s.Create(), source: source}
+		defer s.Destroy(cs.payload)
+		scanner = cs
+	}
+	result, status := ccore.Parse(b.tables, source, scanner, stop)
 	if status != ccore.Accepted {
 		return nil, false
 	}
 	return b.materialize(&result, source)
 }
 
+type ccoreScanner struct {
+	scanner ExternalScanner
+	payload any
+	lexer   ExternalLexer
+	source  []byte
+}
+
+func (s *ccoreScanner) Scan(at ccore.Length, valid []bool, state []byte) (uint16, ccore.Length, ccore.Length, bool) {
+	s.scanner.Deserialize(s.payload, state)
+	l := &s.lexer
+	l.reset(s.source, int(at.Bytes), at.Row, at.Column)
+	if !s.scanner.Scan(s.payload, l, valid) || !l.hasResult {
+		return 0, ccore.Length{}, ccore.Length{}, false
+	}
+	end := ccore.Length{Bytes: uint32(l.pos), Row: l.point.Row, Column: l.point.Column}
+	if l.endMarked {
+		end = ccore.Length{Bytes: uint32(l.endPos), Row: l.endPoint.Row, Column: l.endPoint.Column}
+	}
+	start := ccore.Length{Bytes: uint32(l.startPos), Row: l.startPoint.Row, Column: l.startPoint.Column}
+	if end.Bytes < start.Bytes {
+		start = end
+	}
+	return uint16(l.resultSymbol), start, end, true
+}
+
+func (s *ccoreScanner) Serialize(buf []byte) int { return s.scanner.Serialize(s.payload, buf) }
+
 func bindCCore(source, target *Language) *ccoreBinding {
-	if source == nil || target == nil || source.ExternalTokenCount != 0 {
+	if source == nil || target == nil || source.ExternalTokenCount != 0 && source.ExternalScanner == nil {
 		return nil
 	}
 	b := &ccoreBinding{target: target, source: source, tables: ccoreTables(source)}
@@ -95,6 +128,9 @@ func bindCCore(source, target *Language) *ccoreBinding {
 		key := symbolNameNamedKey{name: source.SymbolNames[sym], named: meta.Named}
 		matches := ccoreVisibleSymbols(target, key)
 		if len(matches) == 0 {
+			if hidden, ok := target.symbolByNameAndNamed(key.name, key.named); ok {
+				b.symbols[sym], b.mapped[sym] = hidden, true
+			}
 			continue
 		}
 		pick := len(matches) - 1
@@ -148,6 +184,7 @@ func ccoreTables(lang *Language) *ccore.Tables {
 		Keywords:           ccoreLexer(lang.KeywordLexStates),
 		KeywordCapture:     uint16(lang.KeywordCaptureToken),
 		ReservedSetSize:    uint32(lang.MaxReservedWordSetSize),
+		ExternalStates:     lang.ExternalLexStates,
 	}
 	for _, row := range lang.ParseTable {
 		t.ParseTable = append(t.ParseTable, row...)
@@ -169,7 +206,7 @@ func ccoreTables(lang *Language) *ccore.Tables {
 		t.Actions = append(t.Actions, ccore.ActionEntry{Reusable: e.Reusable, Actions: actions})
 	}
 	for _, m := range lang.LexModes {
-		t.LexModes = append(t.LexModes, ccore.LexMode{LexState: m.LexState, ReservedSet: m.ReservedWordSetID})
+		t.LexModes = append(t.LexModes, ccore.LexMode{LexState: m.LexState, External: m.ExternalLexState, ReservedSet: m.ReservedWordSetID})
 	}
 	for _, w := range lang.ReservedWords {
 		t.ReservedWords = append(t.ReservedWords, uint16(w))

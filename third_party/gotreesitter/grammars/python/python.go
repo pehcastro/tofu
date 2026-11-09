@@ -16,6 +16,16 @@ const BlobSHA256 = "5a733769bfdde8dc091c7b10e3794d37a621257a4f6d98e8a8caa9b00fac
 func init() {
 	grammarruntime.RegisterPythonSupport()
 	grammarruntime.RegisterBlob("python", grammarblobs.Python)
+	gotreesitter.RegisterCCoreLanguage("python", LanguageC)
+}
+
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.PythonC())
+	if err != nil {
+		return nil
+	}
+	lang.ExternalScanner = grammarruntime.PythonExternalScanner{}.ExternalScannerForLanguage(lang)
+	return lang
 }
 
 // Language returns the cached grammar with its scanner and certified runtime profile.

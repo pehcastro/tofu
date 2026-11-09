@@ -1,7 +1,9 @@
 package ccore
 
-func (p *parser) cached(state uint16, position uint32) (uint32, *ActionEntry) {
-	if p.cacheToken == 0 || p.cacheByte != position {
+import "bytes"
+
+func (p *parser) cached(v int, state uint16, position uint32) (uint32, *ActionEntry) {
+	if p.cacheToken == 0 || p.cacheByte != position || !p.r.sameScannerState(p.cacheExternal, p.s.heads[v].external) {
 		return 0, nil
 	}
 	tok := &p.r.Trees[p.cacheToken]
@@ -16,21 +18,32 @@ func (p *parser) cached(state uint16, position uint32) (uint32, *ActionEntry) {
 	if tok.Size.Bytes == 0 && tok.Symbol != symEnd {
 		return 0, nil
 	}
-	if entry.Reusable {
+	if current.External == 0 && entry.Reusable {
 		return p.cacheToken, entry
 	}
 	return 0, nil
 }
 
 func (p *parser) lex(v int, parseState uint16) uint32 {
-	l := &p.l
 	mode := p.t.LexModes[parseState]
+	if mode.LexState == noLexState {
+		return 0
+	}
+	l := &p.l
 	start := p.s.node(v).position
 	errorMode := parseState == errorState
 	skipped := false
 	var errStart, errEnd Length
 	l.reset(start)
 	for {
+		if mode.External != 0 {
+			if leaf := p.scan(start, l.pos, mode.External, v, parseState, errorMode); leaf != 0 {
+				if !skipped {
+					return leaf
+				}
+				break
+			}
+		}
 		l.start()
 		found := l.run(&p.t.Main, int32(mode.LexState))
 		l.finish()
@@ -71,4 +84,29 @@ func (p *parser) lex(v int, parseState uint16) uint32 {
 		}
 	}
 	return p.r.leaf(symbol, padding, size, parseState, keyword)
+}
+
+func (p *parser) scan(start, current Length, external uint16, v int, parseState uint16, errorMode bool) uint32 {
+	at := current
+	if at.Bytes == 0 && bytes.HasPrefix(p.l.src, []byte(byteOrderMark)) {
+		at = Length{Bytes: uint32(len(byteOrderMark)), Column: uint32(len(byteOrderMark))}
+	}
+	last := p.s.heads[v].external
+	previous := p.r.scannerState(last)
+	symbol, tokenStart, tokenEnd, found := p.scanner.Scan(at, p.t.ExternalStates[external], previous)
+	if !found {
+		return 0
+	}
+	state := p.scanBuf[:p.scanner.Serialize(p.scanBuf[:])]
+	changed := !bytes.Equal(previous, state)
+	if tokenEnd.Bytes <= current.Bytes && !changed && (errorMode || p.t.nextState(parseState, symbol) == parseState) {
+		return 0
+	}
+	scan := p.r.Trees[last].scan
+	if changed || scan == 0 {
+		scan = p.r.addScan(state)
+	}
+	leaf := p.r.leaf(symbol, tokenStart.sub(start), tokenEnd.sub(tokenStart), parseState, false)
+	p.r.Trees[leaf].scan = scan
+	return leaf
 }

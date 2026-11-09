@@ -14,6 +14,8 @@ import (
 
 	ts "github.com/odvcencio/gotreesitter"
 	golang "github.com/odvcencio/gotreesitter/grammars/go"
+	"github.com/odvcencio/gotreesitter/grammars/python"
+	"github.com/odvcencio/gotreesitter/grammars/rust"
 )
 
 type file struct {
@@ -44,7 +46,8 @@ func run() error {
 	sexp := flag.Bool("sexp", false, "also compare S-expressions file by file")
 	incremental := flag.Bool("incremental", false, "also compare an incremental parse after an edit with a fresh parse")
 	flag.Parse()
-	if *langName != "go" {
+	language, ok := map[string]func() *ts.Language{"go": golang.Language, "python": python.Language, "rust": rust.Language}[*langName]
+	if !ok {
 		return fmt.Errorf("unknown -lang %q", *langName)
 	}
 	if *engine != "old" && *engine != "default" {
@@ -60,7 +63,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	g := &gate{lang: golang.Language(), engine: *engine, c: *c}
+	g := &gate{lang: language(), engine: *engine, c: *c}
 	g.parser = ts.NewParser(g.lang)
 	if err := g.compare(files, *sexp, *incremental); err != nil {
 		return err

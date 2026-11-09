@@ -29,8 +29,9 @@ const (
 )
 
 type head struct {
-	node   uint32
-	status status
+	node     uint32
+	external uint32
+	status   status
 }
 
 type iterator struct {
@@ -144,8 +145,8 @@ func (s *stack) push(v int, subtree uint32, state uint16) {
 	s.heads[v].node = s.newNode(s.heads[v].node, subtree, state)
 }
 
-func (s *stack) addVersion(node uint32) int {
-	s.heads = append(s.heads, head{node: node})
+func (s *stack) addVersion(original int, node uint32) int {
+	s.heads = append(s.heads, head{node: node, external: s.heads[original].external})
 	s.nodes[node].refs++
 	return len(s.heads) - 1
 }
@@ -169,7 +170,8 @@ func (s *stack) swap(a, b int) { s.heads[a], s.heads[b] = s.heads[b], s.heads[a]
 func (s *stack) canMerge(a, b int) bool {
 	ha, hb := s.heads[a], s.heads[b]
 	na, nb := &s.nodes[ha.node], &s.nodes[hb.node]
-	return ha.status == active && hb.status == active && na.state == nb.state && na.position.Bytes == nb.position.Bytes
+	return ha.status == active && hb.status == active && na.state == nb.state && na.position.Bytes == nb.position.Bytes &&
+		s.r.sameScannerState(ha.external, hb.external)
 }
 
 func (s *stack) merge(a, b int) bool {
@@ -207,7 +209,7 @@ func (s *stack) recycle(b []uint32) { s.buffers = append(s.buffers, b) }
 
 func (s *stack) cloned(b []uint32) []uint32 { return append(s.buffer(), b...) }
 
-func (s *stack) addSlice(node uint32, subtrees []uint32) {
+func (s *stack) addSlice(original int, node uint32, subtrees []uint32) {
 	for i := len(s.slices) - 1; i >= 0; i-- {
 		if s.heads[s.slices[i].version].node == node {
 			s.slices = append(s.slices, slice{})
@@ -216,7 +218,7 @@ func (s *stack) addSlice(node uint32, subtrees []uint32) {
 			return
 		}
 	}
-	s.slices = append(s.slices, slice{subtrees: subtrees, version: s.addVersion(node)})
+	s.slices = append(s.slices, slice{subtrees: subtrees, version: s.addVersion(original, node)})
 }
 
 func (s *stack) pop(v int, goal uint32, all bool) []slice {
@@ -233,7 +235,7 @@ func (s *stack) pop(v int, goal uint32, all bool) []slice {
 					for a, b := 0, len(subtrees)-1; a < b; a, b = a+1, b-1 {
 						subtrees[a], subtrees[b] = subtrees[b], subtrees[a]
 					}
-					s.addSlice(it.node, subtrees)
+					s.addSlice(v, it.node, subtrees)
 				} else {
 					s.recycle(it.subtrees)
 				}
