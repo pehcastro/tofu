@@ -320,27 +320,29 @@ func unparsable(language string, found []catgrep.File) error {
 }
 
 func declarationsFault(parser lang.Parser, checked *bytes.Buffer, file catgrep.File) error {
-	before, err := os.ReadFile(file.Path)
-	if err != nil {
-		return err
+	if file.KeepsParse {
+		return nil
 	}
+	before := file.Source
 	checked.Reset()
 	checked.WriteString(declarationScope)
 	var units []unit
-	rows, shift := 1, 0
+	rows, lines, counted := 1, 1, 0
 	for sites := applied(file.Sites); len(sites) > 0; {
 		group, from, to := 1, sites[0].UnitStart, sites[0].UnitEnd
 		for group < len(sites) && sites[group].UnitStart < to {
 			to = max(to, sites[group].UnitEnd)
 			group++
 		}
-		units = append(units, unit{row: rows, line: bytes.Count(before[:from], []byte("\n")) + 1 + shift, from: from, to: to})
+		lines += bytes.Count(before[counted:from], []byte("\n"))
+		counted = from
+		units = append(units, unit{row: rows, line: lines, from: from, to: to})
 		written := checked.Len()
 		splice(checked, before, from, to, sites[:group])
 		checked.WriteByte('\n')
 		rows += bytes.Count(checked.Bytes()[written:], []byte("\n"))
 		for _, s := range sites[:group] {
-			shift += strings.Count(s.After, "\n") - strings.Count(s.Before, "\n")
+			lines += strings.Count(s.After, "\n") - strings.Count(s.Before, "\n")
 		}
 		sites = sites[group:]
 	}

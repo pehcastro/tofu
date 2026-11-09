@@ -101,8 +101,10 @@ type Site struct {
 }
 
 type File struct {
-	Path  string
-	Sites []Site
+	Path       string
+	Sites      []Site
+	Source     []byte
+	KeepsParse bool
 }
 
 func Workers() int { return 1 }

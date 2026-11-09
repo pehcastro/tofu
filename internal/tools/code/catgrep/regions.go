@@ -2,7 +2,10 @@ package catgrep
 
 import (
 	"bytes"
+	"go/scanner"
+	"go/token"
 	"slices"
+	"strings"
 
 	"tofu/internal/tools/code/catgrep/lang"
 )
@@ -25,6 +28,61 @@ func identByte(c byte) bool {
 }
 
 func digit(c byte) bool { return c >= '0' && c <= '9' }
+
+func tokensKept(searched, source []byte, sites []Site, reserved []string) bool {
+	gluesOn := func(b byte) bool { return identByte(b) || b >= 0x80 }
+	for _, s := range sites {
+		glued := s.Start > 0 && gluesOn(source[s.Start-1]) || s.End < len(source) && gluesOn(source[s.End])
+		if !bytes.Equal(searched[s.UnitStart:s.UnitEnd], source[s.UnitStart:s.UnitEnd]) || s.Before != s.After && (glued || !sameTokens(s.Before, s.After, reserved)) {
+			return false
+		}
+	}
+	return true
+}
+
+type goToken struct {
+	kind     token.Token
+	text     string
+	newlines int
+}
+
+func sameTokens(before, after string, reserved []string) bool {
+	was, wasRead := goTokens(before)
+	is, isRead := goTokens(after)
+	if !wasRead || !isRead || len(was) != len(is) {
+		return false
+	}
+	for i, old := range was {
+		renamed := old.kind == token.IDENT && identifierShaped(old.text) && identifierShaped(is[i].text) && !slices.Contains(reserved, old.text) && !slices.Contains(reserved, is[i].text)
+		if old.kind != is[i].kind || old.newlines != is[i].newlines || old.text != is[i].text && !renamed {
+			return false
+		}
+	}
+	return true
+}
+
+func goTokens(code string) ([]goToken, bool) {
+	file := token.NewFileSet().AddFile("", -1, len(code))
+	failed := false
+	var s scanner.Scanner
+	s.Init(file, []byte(code), func(token.Position, string) { failed = true }, scanner.ScanComments)
+	var read []goToken
+	for end := 0; ; {
+		at, kind, text := s.Scan()
+		if kind == token.SEMICOLON && text == "\n" {
+			continue
+		}
+		if text == "" {
+			text = kind.String()
+		}
+		offset := file.Offset(at)
+		read = append(read, goToken{kind: kind, text: text, newlines: strings.Count(code[end:offset], "\n")})
+		if kind == token.EOF || kind == token.ILLEGAL {
+			return read, kind == token.EOF && !failed
+		}
+		end = offset + len(text)
+	}
+}
 
 func maximalMunch(l lang.Lang) bool {
 	switch l {

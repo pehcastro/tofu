@@ -1,7 +1,9 @@
 package lang
 
 import (
+	"bytes"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/odvcencio/gotreesitter"
@@ -16,14 +18,43 @@ type Fault struct {
 }
 
 type Parser struct {
-	Lang  Lang
-	inner *gotreesitter.Parser
+	Lang   Lang
+	inner  *gotreesitter.Parser
+	checks Checks
+	flat   *[]gotreesitter.FlatNode
 }
+
+type Checks struct{ kinds []checkedKind }
+
+type checkedKind uint8
+
+const (
+	otherKind checkedKind = iota
+	spawnKind
+	parenthesizedKind
+	callKind
+)
 
 func NewParser(l Lang) Parser {
 	inner := gotreesitter.NewParser(l.Grammar())
 	inner.SetTimeoutMicros(konst.CodemodRunMillis * 1000)
-	return Parser{Lang: l, inner: inner}
+	return Parser{Lang: l, inner: inner, checks: NewChecks(l), flat: new([]gotreesitter.FlatNode)}
+}
+
+func NewChecks(l Lang) Checks {
+	grammar := l.Grammar()
+	kinds := make([]checkedKind, len(grammar.SymbolNames))
+	for symbol := range kinds {
+		switch (&gotreesitter.FlatNode{Symbol: gotreesitter.Symbol(symbol)}).Type(grammar) {
+		case "defer_statement", "go_statement":
+			kinds[symbol] = spawnKind
+		case "parenthesized_expression":
+			kinds[symbol] = parenthesizedKind
+		case "call_expression":
+			kinds[symbol] = callKind
+		}
+	}
+	return Checks{kinds: kinds}
 }
 
 func (p Parser) Parse(source []byte) (*gotreesitter.Tree, error) {
@@ -37,7 +68,14 @@ func (p Parser) Parse(source []byte) (*gotreesitter.Tree, error) {
 func Parse(source []byte, l Lang) (*gotreesitter.Tree, error) { return NewParser(l).Parse(source) }
 
 func (p Parser) BrokenRow(code []byte) (int, bool) {
-	parsed, err := p.Parse(code)
+	flat, parsed, err := p.inner.ParseFlat(code, *p.flat)
+	*p.flat = flat
+	if err == nil && parsed == nil {
+		if !p.checks.Faulted(flat, code) {
+			return 0, false
+		}
+		parsed, err = p.Parse(code)
+	}
 	if err != nil {
 		return 0, true
 	}
@@ -64,6 +102,55 @@ func (p Parser) BrokenRow(code []byte) (int, bool) {
 		}
 	}
 	return 0, false
+}
+
+func (c Checks) Faulted(flat []gotreesitter.FlatNode, code []byte) bool {
+	spawns := hasWord(code, "defer") || hasWord(code, "go")
+	for i := range flat {
+		if flat[i].IsError() || spawns && c.kind(flat[i]) == spawnKind && c.kind(c.unwrapped(flat, flat[i])) != callKind {
+			return true
+		}
+	}
+	return false
+}
+
+func (c Checks) unwrapped(flat []gotreesitter.FlatNode, statement gotreesitter.FlatNode) gotreesitter.FlatNode {
+	node := statement
+	for {
+		kids := flat[node.Kids : node.Kids+node.KidCount]
+		named := slices.IndexFunc(kids, func(kid gotreesitter.FlatNode) bool { return kid.Flags&gotreesitter.FlatNamed != 0 })
+		if named < 0 {
+			return statement
+		}
+		if node = kids[named]; c.kind(node) != parenthesizedKind {
+			return node
+		}
+	}
+}
+
+func (c Checks) kind(node gotreesitter.FlatNode) checkedKind {
+	if int(node.Symbol) < len(c.kinds) {
+		return c.kinds[node.Symbol]
+	}
+	return otherKind
+}
+
+func hasWord(code []byte, word string) bool {
+	for at := 0; ; at++ {
+		found := bytes.Index(code[at:], []byte(word))
+		if found < 0 {
+			return false
+		}
+		at += found
+		end := at + len(word)
+		if (at == 0 || !wordByte(code[at-1])) && (end == len(code) || !wordByte(code[end])) {
+			return true
+		}
+	}
+}
+
+func wordByte(b byte) bool {
+	return b == '_' || '0' <= b && b <= '9' || 'a' <= b && b <= 'z' || 'A' <= b && b <= 'Z'
 }
 
 func FirstFault(tree *gotreesitter.Tree) (Fault, bool) {

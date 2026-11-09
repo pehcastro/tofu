@@ -32,8 +32,10 @@ type Site struct {
 }
 
 type File struct {
-	Path  string
-	Sites []Site
+	Path       string
+	Sites      []Site
+	Source     []byte
+	KeepsParse bool
 }
 
 func LangNamed(name string) (lang.Lang, error) {
@@ -92,8 +94,8 @@ func RewriteRule(ctx context.Context, raw []byte, rewrite string, l lang.Lang, p
 
 type searched struct {
 	walked
-	sites []Site
-	err   error
+	file File
+	err  error
 }
 
 func Workers() int { return min(runtime.GOMAXPROCS(0), konst.CodemodWorkersMax) }
@@ -109,6 +111,7 @@ type scratch struct {
 	cuts   []cut
 	hits   []int
 	keep   []bool
+	checks lang.Checks
 }
 
 func search(ctx context.Context, l lang.Lang, paths []string, need literals, edit editor) ([]File, error) {
@@ -123,11 +126,11 @@ func search(ctx context.Context, l lang.Lang, paths []string, need literals, edi
 	for w := range outcomes {
 		workers.Go(func() {
 			parser := tree.NewParser(l)
-			var s scratch
+			s := scratch{checks: lang.NewChecks(l)}
 			for i := next.Add(1) - 1; i < int64(len(files)) && ctx.Err() == nil; i = next.Add(1) - 1 {
-				sites, err := rewriteFile(files[i], parser, &s, need, edit)
-				if err != nil || len(sites) > 0 {
-					outcomes[w] = append(outcomes[w], searched{walked: files[i], sites: sites, err: err})
+				file, err := rewriteFile(files[i], parser, &s, need, edit)
+				if err != nil || len(file.Sites) > 0 {
+					outcomes[w] = append(outcomes[w], searched{walked: files[i], file: file, err: err})
 				}
 			}
 		})
@@ -142,7 +145,7 @@ func search(ctx context.Context, l lang.Lang, paths []string, need literals, edi
 		if s.err != nil {
 			return nil, fmt.Errorf("%s: %w", s.path, s.err)
 		}
-		found[i] = File{Path: s.path, Sites: s.sites}
+		found[i] = s.file
 	}
 	return found, nil
 }
@@ -174,15 +177,15 @@ func (s *scratch) readSized(file walked) ([]byte, error) {
 	return s.read[:n], errors.Join(err, opened.Close())
 }
 
-func rewriteFile(file walked, parser *tree.Parser, s *scratch, need literals, edit editor) ([]Site, error) {
+func rewriteFile(file walked, parser *tree.Parser, s *scratch, need literals, edit editor) (File, error) {
 	source, err := s.readSized(file)
 	if err != nil || len(source) == 0 || len(source) > konst.CodemodFileBytesSkipped && bytes.Count(source, []byte("\n")) > konst.CodemodFileLinesSkipped {
-		return nil, err
+		return File{}, err
 	}
 	munch := maximalMunch(parser.Lang)
 	for _, word := range need.words {
 		if nextWord(source, word, 0, munch && identifierShaped(word)) < 0 {
-			return nil, nil
+			return File{}, nil
 		}
 	}
 	searched, regioned := source, false
@@ -191,12 +194,12 @@ func rewriteFile(file walked, parser *tree.Parser, s *scratch, need literals, ed
 	case host != parser.Lang:
 		var scripted bool
 		if searched, scripted, err = lang.Scripts(source, host, parser.Lang); err != nil || !scripted {
-			return nil, err
+			return File{}, err
 		}
 	case need.split != unsplit:
 		masked, held := s.mask(parser.Lang, source, need)
 		if !held {
-			return nil, nil
+			return File{}, nil
 		}
 		if masked != nil {
 			searched, regioned = masked, true
@@ -205,10 +208,11 @@ func rewriteFile(file walked, parser *tree.Parser, s *scratch, need literals, ed
 	root, err := parser.Parse(searched)
 	if err == nil && regioned && !root.Clean() {
 		root.Release()
+		searched = source
 		root, err = parser.Parse(source)
 	}
 	if err != nil {
-		return nil, err
+		return File{}, err
 	}
 	defer root.Release()
 	var sites []Site
@@ -219,7 +223,7 @@ func rewriteFile(file walked, parser *tree.Parser, s *scratch, need literals, ed
 		pending = pending[:len(pending)-1]
 		made, matched, err := edit(node)
 		if err != nil {
-			return nil, err
+			return File{}, err
 		}
 		for i := node.ChildCount() - 1; i >= 0; i-- {
 			pending = append(pending, node.Child(i))
@@ -253,7 +257,11 @@ func rewriteFile(file walked, parser *tree.Parser, s *scratch, need literals, ed
 		sites[i].UnitStart = min(int(top.Child(first).Start()), sites[i].Start)
 		sites[i].UnitEnd = max(int(top.Child(last).End()), sites[i].End)
 	}
-	return sites, nil
+	if len(sites) == 0 || parser.Lang != lang.Go {
+		return File{Path: file.path, Sites: sites}, nil
+	}
+	keeps := !root.Faulted(s.checks) && tokensKept(searched, source, sites, parser.Lang.Grammar().SymbolNames)
+	return File{Path: file.path, Sites: sites, Source: bytes.Clone(source), KeepsParse: keeps}, nil
 }
 
 func Files(l lang.Lang, roots []string) ([]string, error) {
