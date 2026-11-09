@@ -1471,6 +1471,9 @@ func (p *Parser) parse(source []byte) (*Tree, error) {
 	// accounting.
 	endSharedParseBudget := p.enterParseBudget()
 	defer endSharedParseBudget()
+	if tree, ok := p.parseCCore(source); ok {
+		return tree, nil
+	}
 	if tree, ok := p.parseHTTPCommentRun(source); ok {
 		return tree, nil
 	}
