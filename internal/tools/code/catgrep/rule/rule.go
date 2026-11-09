@@ -25,12 +25,7 @@ type compiler struct {
 }
 
 func New(raw []byte, l lang.Lang) (Rule, error) {
-	empty, err := lang.Parse(nil, l)
-	if err != nil {
-		return Rule{}, err
-	}
-	defer empty.Release()
-	return compiler{lang: l, grammar: empty.Language()}.rule(raw)
+	return compiler{lang: l, grammar: l.Grammar()}.rule(raw)
 }
 
 func (c compiler) rule(raw json.RawMessage) (Rule, error) {

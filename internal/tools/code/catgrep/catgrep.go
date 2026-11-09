@@ -56,23 +56,16 @@ func Rewrite(ctx context.Context, src, rewrite string, l lang.Lang, paths []stri
 		edit, err := replace.MakeEdit(p, pattern.Match{Node: n, Env: env}, rewrite)
 		return edit, true, err
 	})
-	if err != nil || len(found) > 0 {
+	at, unparsed := p.Unparsed()
+	if err != nil || len(found) > 0 || !unparsed {
 		return found, err
 	}
-	parsed, err := lang.Parse([]byte(l.PreprocessPattern(src)), l)
-	if err != nil {
-		return nil, err
-	}
-	defer parsed.Release()
-	fault, broken := lang.FirstFault(parsed)
-	if !broken || fault.Missing {
-		return nil, nil
-	}
-	column := int(fault.At.Column)
-	if fault.At.Row == 0 {
+	before := l.PreprocessPattern(src)[:at]
+	row, column := strings.Count(before, "\n"), at-strings.LastIndexByte(before, '\n')-1
+	if row == 0 {
 		column -= len(l.PreprocessPattern(""))
 	}
-	return nil, fmt.Errorf("pattern has an error: at line %d column %d it does not parse as %s, and it matched nothing. write it as code that parses on its own", fault.At.Row+1, column+1, l)
+	return nil, fmt.Errorf("pattern has an error: at line %d column %d it does not parse as %s, and it matched nothing. write it as code that parses on its own", row+1, column+1, l)
 }
 
 func RewriteRule(ctx context.Context, raw []byte, rewrite string, l lang.Lang, paths []string) ([]File, error) {
@@ -106,7 +99,7 @@ func search(ctx context.Context, l lang.Lang, paths, words []string, edit editor
 	}
 	slices.SortFunc(files, func(a, b walked) int { return cmp.Compare(b.size, a.size) })
 	var next atomic.Int64
-	outcomes := make([][]searched, Workers())
+	outcomes := make([][]searched, min(Workers(), len(files)))
 	var workers sync.WaitGroup
 	for w := range outcomes {
 		workers.Go(func() {

@@ -194,7 +194,7 @@ func (l Lang) spec() spec {
 
 func (l Lang) String() string { return l.spec().name }
 
-func (l Lang) grammar() *gotreesitter.Language { return l.spec().grammar() }
+func (l Lang) Grammar() *gotreesitter.Language { return l.spec().grammar() }
 
 func (l Lang) HostsScripts() bool { return l.spec().role == scriptHost }
 

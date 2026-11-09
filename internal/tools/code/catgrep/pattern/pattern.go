@@ -33,6 +33,8 @@ type node struct {
 type Pattern struct {
 	root       node
 	Strictness Strictness
+	unparsedAt int
+	unparsed   bool
 }
 
 type Match struct {
@@ -64,8 +66,17 @@ func New(src string, l lang.Lang) (Pattern, error) {
 	if _, ok := ellipsisOf(&root); ok {
 		return Pattern{}, fmt.Errorf("pattern %q in %s is a lone multi meta variable: use $VAR or wrap $$$VAR in a larger pattern", src, l)
 	}
-	return Pattern{root: root, Strictness: Smart}, nil
+	p := Pattern{root: root, Strictness: Smart}
+	for n := range parsed.Node().PreOrder() {
+		if n.IsError() || n.IsMissing() {
+			p.unparsedAt, p.unparsed = int(n.Start()), !n.IsMissing()
+			break
+		}
+	}
+	return p, nil
 }
+
+func (p Pattern) Unparsed() (int, bool) { return p.unparsedAt, p.unparsed }
 
 func single(children []tree.Node) bool {
 	switch len(children) {

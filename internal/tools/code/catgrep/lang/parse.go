@@ -21,7 +21,7 @@ type Parser struct {
 }
 
 func NewParser(l Lang) Parser {
-	inner := gotreesitter.NewParser(l.grammar())
+	inner := gotreesitter.NewParser(l.Grammar())
 	inner.SetTimeoutMicros(konst.CodemodRunMillis * 1000)
 	return Parser{Lang: l, inner: inner}
 }

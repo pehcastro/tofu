@@ -159,7 +159,8 @@ func loneConfig(opts wiring.RunOpts, recorded string, lone contract.Tool, args j
 	keys := &storedKeys{}
 	redactor := keys.redactor()
 	turnID := cmp.Or(opts.TurnID, loop.NewID(time.Now()))
-	config := loop.Config{Places: places, Redactor: &redactor, Tools: loop.NewRegistry(lone), Project: cmp.Or(opts.Dir, "."), SessionSource: hooks.SessionStartup, Task: opts.Task, Wire: opts.Wire,
+	var leadToolUnsifted loop.ShellSift
+	config := loop.Config{Places: places, Redactor: &redactor, Tools: loop.NewRegistry(lone), Sift: &leadToolUnsifted, Project: cmp.Or(opts.Dir, "."), SessionSource: hooks.SessionStartup, Task: opts.Task, Wire: opts.Wire,
 		ResultBytesCap: konst.TurnResultBytesCap, Sessions: sessions, Session: cmp.Or(opts.Session, opts.TurnID, session.NewEventID()), Proxy: wiring.LoadProxySetting(opts.Dir).Proxy, Notify: notify,
 		NewID: func() string { return turnID }}
 	if opts.GateArm != gateOff && loop.PersonOnly(config.Project, loop.GateRequest{Tool: lone.Name(), Args: args}) {
