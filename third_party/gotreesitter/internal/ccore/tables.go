@@ -1,6 +1,9 @@
 package ccore
 
-import "unicode/utf8"
+import (
+	"math/bits"
+	"unicode/utf8"
+)
 
 type ActionType uint8
 
@@ -56,20 +59,19 @@ type Lexer struct {
 }
 
 type Tables struct {
-	SymbolCount        uint32
-	TokenCount         uint32
-	LargeStateCount    uint32
-	ParseTable         []uint16
-	SmallParseTable    []uint16
-	SmallParseTableMap []uint32
-	Actions            []ActionEntry
-	LexModes           []LexMode
-	Main               Lexer
-	Keywords           Lexer
-	KeywordCapture     uint16
-	ReservedWords      []uint16
-	ReservedSetSize    uint32
-	ExternalStates     [][]bool
+	SymbolCount     uint32
+	TokenCount      uint32
+	LargeStateCount uint32
+	ParseTable      []uint16
+	Small           SmallTable
+	Actions         []ActionEntry
+	LexModes        []LexMode
+	Main            Lexer
+	Keywords        Lexer
+	KeywordCapture  uint16
+	ReservedWords   []uint16
+	ReservedSetSize uint32
+	ExternalStates  [][]bool
 }
 
 type Scanner interface {
@@ -87,24 +89,56 @@ const (
 	byteOrderMark         = "\xef\xbb\xbf"
 )
 
+type SmallTable struct {
+	width  uint32
+	words  []uint64
+	ranks  []uint32
+	values []uint16
+}
+
+func NewSmallTable(symbolCount uint32, table []uint16, offsets []uint32) SmallTable {
+	width := (symbolCount + 63) / 64
+	s := SmallTable{width: width, words: make([]uint64, uint32(len(offsets))*width), ranks: make([]uint32, uint32(len(offsets))*width)}
+	row := make([]uint16, width*64)
+	for k, offset := range offsets {
+		base := uint32(k) * width
+		words, ranks := s.words[base:base+width], s.ranks[base:base+width]
+		data := table[offset:]
+		i := 1
+		for range int(data[0]) {
+			value, count := data[i], int(data[i+1])
+			for _, symbol := range data[i+2 : i+2+count] {
+				if bit := uint64(1) << (symbol & 63); words[symbol>>6]&bit == 0 {
+					words[symbol>>6] |= bit
+					row[symbol] = value
+				}
+			}
+			i += 2 + count
+		}
+		for w, word := range words {
+			ranks[w] = uint32(len(s.values))
+			for ; word != 0; word &= word - 1 {
+				s.values = append(s.values, row[w*64+bits.TrailingZeros64(word)])
+			}
+		}
+	}
+	return s
+}
+
+func (s *SmallTable) lookup(index uint32, symbol uint16) uint16 {
+	at := index*s.width + uint32(symbol>>6)
+	word, bit := s.words[at], uint64(1)<<(symbol&63)
+	if word&bit == 0 {
+		return 0
+	}
+	return s.values[s.ranks[at]+uint32(bits.OnesCount64(word&(bit-1)))]
+}
+
 func (t *Tables) lookup(state, symbol uint16) uint16 {
 	if uint32(state) < t.LargeStateCount {
 		return t.ParseTable[uint32(state)*t.SymbolCount+uint32(symbol)]
 	}
-	data := t.SmallParseTable[t.SmallParseTableMap[uint32(state)-t.LargeStateCount]:]
-	groups := int(data[0])
-	i := 1
-	for g := 0; g < groups; g++ {
-		value, count := data[i], int(data[i+1])
-		i += 2
-		for _, s := range data[i : i+count] {
-			if s == symbol {
-				return value
-			}
-		}
-		i += count
-	}
-	return 0
+	return t.Small.lookup(uint32(state)-t.LargeStateCount, symbol)
 }
 
 func (t *Tables) entry(state, symbol uint16) *ActionEntry {

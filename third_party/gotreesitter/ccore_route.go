@@ -232,16 +232,15 @@ func ccoreVisibleSymbols(lang *Language) map[symbolNameNamedKey][]Symbol {
 
 func ccoreTables(lang *Language) *ccore.Tables {
 	t := &ccore.Tables{
-		SymbolCount:        lang.SymbolCount,
-		TokenCount:         lang.TokenCount,
-		LargeStateCount:    lang.LargeStateCount,
-		SmallParseTable:    lang.SmallParseTable,
-		SmallParseTableMap: lang.SmallParseTableMap,
-		Main:               ccoreLexer(lang.LexStates),
-		Keywords:           ccoreLexer(lang.KeywordLexStates),
-		KeywordCapture:     uint16(lang.KeywordCaptureToken),
-		ReservedSetSize:    uint32(lang.MaxReservedWordSetSize),
-		ExternalStates:     lang.ExternalLexStates,
+		SymbolCount:     lang.SymbolCount,
+		TokenCount:      lang.TokenCount,
+		LargeStateCount: lang.LargeStateCount,
+		Small:           ccore.NewSmallTable(lang.SymbolCount, lang.SmallParseTable, lang.SmallParseTableMap),
+		Main:            ccoreLexer(lang.LexStates),
+		Keywords:        ccoreLexer(lang.KeywordLexStates),
+		KeywordCapture:  uint16(lang.KeywordCaptureToken),
+		ReservedSetSize: uint32(lang.MaxReservedWordSetSize),
+		ExternalStates:  lang.ExternalLexStates,
 	}
 	t.ParseTable = contiguousRows(lang.ParseTable, int(lang.SymbolCount))
 	actionCount := 0
