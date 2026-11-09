@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -49,7 +50,11 @@ func Rewrite(ctx context.Context, src, rewrite string, l lang.Lang, paths []stri
 	if err != nil {
 		return nil, err
 	}
-	found, err := search(ctx, l, paths, p.Words(), func(n tree.Node) (replace.Edit, bool, error) {
+	need := literals{words: p.Words()}
+	if kind, typed := p.Kind(); typed && len(need.words) > 0 {
+		need.split = splitFor(l, l.Grammar().SymbolNames[kind])
+	}
+	found, err := search(ctx, l, paths, need, func(n tree.Node) (replace.Edit, bool, error) {
 		env, matched := p.Match(n)
 		if !matched {
 			return replace.Edit{}, false, nil
@@ -74,7 +79,7 @@ func RewriteRule(ctx context.Context, raw []byte, rewrite string, l lang.Lang, p
 	if err != nil {
 		return nil, err
 	}
-	return search(ctx, l, paths, nil, func(n tree.Node) (replace.Edit, bool, error) {
+	return search(ctx, l, paths, literals{}, func(n tree.Node) (replace.Edit, bool, error) {
 		env, matched := r.Match(n)
 		if !matched {
 			return replace.Edit{}, false, nil
@@ -93,7 +98,20 @@ type searched struct {
 
 func Workers() int { return min(runtime.GOMAXPROCS(0), konst.CodemodWorkersMax) }
 
-func search(ctx context.Context, l lang.Lang, paths, words []string, edit editor) ([]File, error) {
+type literals struct {
+	words []string
+	split split
+}
+
+type scratch struct {
+	read   []byte
+	masked []byte
+	cuts   []cut
+	hits   []int
+	keep   []bool
+}
+
+func search(ctx context.Context, l lang.Lang, paths []string, need literals, edit editor) ([]File, error) {
 	files, err := walk(l, paths)
 	if err != nil {
 		return nil, err
@@ -105,9 +123,9 @@ func search(ctx context.Context, l lang.Lang, paths, words []string, edit editor
 	for w := range outcomes {
 		workers.Go(func() {
 			parser := tree.NewParser(l)
-			var read bytes.Buffer
+			var s scratch
 			for i := next.Add(1) - 1; i < int64(len(files)) && ctx.Err() == nil; i = next.Add(1) - 1 {
-				sites, err := rewriteFile(files[i], parser, &read, words, edit)
+				sites, err := rewriteFile(files[i], parser, &s, need, edit)
 				if err != nil || len(sites) > 0 {
 					outcomes[w] = append(outcomes[w], searched{walked: files[i], sites: sites, err: err})
 				}
@@ -137,33 +155,58 @@ func walkOrder(a, b walked) int {
 	return slices.Compare(segmentsA, segmentsB)
 }
 
-func rewriteFile(file walked, parser *tree.Parser, read *bytes.Buffer, words []string, edit editor) ([]Site, error) {
-	path := file.path
-	opened, err := os.Open(path)
+func (s *scratch) readSized(file walked) ([]byte, error) {
+	opened, err := os.Open(file.path)
 	if err != nil {
 		return nil, err
 	}
-	read.Reset()
-	read.Grow(int(file.size) + bytes.MinRead)
-	_, err = read.ReadFrom(opened)
-	err = errors.Join(err, opened.Close())
-	source := read.Bytes()
+	s.read = slices.Grow(s.read[:0], int(file.size)+1)[:file.size+1]
+	n, err := opened.Read(s.read)
+	if errors.Is(err, io.EOF) {
+		err = nil
+	}
+	if err == nil && n != int(file.size) {
+		rest := bytes.NewBuffer(s.read[:n])
+		_, err = rest.ReadFrom(opened)
+		s.read = rest.Bytes()
+		n = len(s.read)
+	}
+	return s.read[:n], errors.Join(err, opened.Close())
+}
+
+func rewriteFile(file walked, parser *tree.Parser, s *scratch, need literals, edit editor) ([]Site, error) {
+	source, err := s.readSized(file)
 	if err != nil || len(source) == 0 || len(source) > konst.CodemodFileBytesSkipped && bytes.Count(source, []byte("\n")) > konst.CodemodFileLinesSkipped {
 		return nil, err
 	}
-	for _, word := range words {
-		if !bytes.Contains(source, []byte(word)) {
+	munch := maximalMunch(parser.Lang)
+	for _, word := range need.words {
+		if nextWord(source, word, 0, munch && identifierShaped(word)) < 0 {
 			return nil, nil
 		}
 	}
-	searched := source
-	if host, _ := lang.FromPath(path); host != parser.Lang {
+	searched, regioned := source, false
+	host, _ := lang.FromPath(file.path)
+	switch {
+	case host != parser.Lang:
 		var scripted bool
 		if searched, scripted, err = lang.Scripts(source, host, parser.Lang); err != nil || !scripted {
 			return nil, err
 		}
+	case need.split != unsplit:
+		masked, held := s.mask(parser.Lang, source, need)
+		if !held {
+			return nil, nil
+		}
+		if masked != nil {
+			searched, regioned = masked, true
+		}
 	}
 	root, err := parser.Parse(searched)
+	if err == nil && regioned && !root.Clean() {
+		root.Release()
+		root, err = parser.Parse(source)
+	}
 	if err != nil {
 		return nil, err
 	}

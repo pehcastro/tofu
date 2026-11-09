@@ -59,6 +59,8 @@ func (p *Parser) Parse(source []byte) (*Root, error) {
 	return &Root{flat: flat, lang: p.inner.Language(), source: source, owner: p}, nil
 }
 
+func (r *Root) Clean() bool { return r.old == nil }
+
 func (r *Root) Release() {
 	switch {
 	case r.old != nil:
