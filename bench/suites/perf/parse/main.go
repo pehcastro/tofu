@@ -37,22 +37,23 @@ func main() {
 
 func run() error {
 	langName := flag.String("lang", "go", "language")
-	engine := flag.String("engine", "new", "old or new")
+	engine := flag.String("engine", "default", "default or old")
 	list := flag.String("files", "", "file with one source path per line")
 	c := flag.String("c", "", "path to the C harness built against tree-sitter")
 	reps := flag.Int("reps", 0, "timing repetitions, 0 skips timing")
 	sexp := flag.Bool("sexp", false, "also compare S-expressions file by file")
+	incremental := flag.Bool("incremental", false, "also compare an incremental parse after an edit with a fresh parse")
 	flag.Parse()
 	if *langName != "go" {
 		return fmt.Errorf("unknown -lang %q", *langName)
 	}
-	if *engine != "old" && *engine != "new" {
+	if *engine != "old" && *engine != "default" {
 		return fmt.Errorf("unknown -engine %q", *engine)
 	}
 	if *c == "" || *list == "" {
 		return errors.New("-c and -files are required")
 	}
-	if err := os.Unsetenv(ts.CCoreSwitchEnv); err != nil {
+	if err := use(*engine); err != nil {
 		return err
 	}
 	files, err := readFiles(*list)
@@ -61,7 +62,7 @@ func run() error {
 	}
 	g := &gate{lang: golang.Language(), engine: *engine, c: *c}
 	g.parser = ts.NewParser(g.lang)
-	if err := g.compare(files, *sexp); err != nil {
+	if err := g.compare(files, *sexp, *incremental); err != nil {
 		return err
 	}
 	if *reps > 0 {
@@ -86,35 +87,89 @@ func readFiles(list string) ([]file, error) {
 	return files, nil
 }
 
-func (g *gate) parse(src []byte, engine string) (*ts.Tree, bool, error) {
-	if engine == "new" {
-		if tree, ok := g.parser.ParseNewCore(src); ok {
-			return tree, false, nil
-		}
-		tree, err := g.parser.Parse(src)
-		return tree, true, err
+func use(engine string) error {
+	if engine == "old" {
+		return os.Setenv(ts.CCoreSwitchEnv, "0")
 	}
-	tree, err := g.parser.Parse(src)
-	return tree, false, err
+	return os.Unsetenv(ts.CCoreSwitchEnv)
 }
 
-func (g *gate) compare(files []file, sexp bool) error {
+func (g *gate) declined(src []byte) bool {
+	tree, ok := g.parser.ParseNewCore(src)
+	if ok {
+		tree.Release()
+	}
+	return !ok
+}
+
+func (g *gate) sexpOf(tree *ts.Tree) string {
+	var b strings.Builder
+	writeSexp(&b, tree.RootNode(), g.lang)
+	return b.String()
+}
+
+func (g *gate) sameTree(a, b *ts.Tree) bool {
+	return slices.Equal(nodeList(a.RootNode(), g.lang), nodeList(b.RootNode(), g.lang)) && g.sexpOf(a) == g.sexpOf(b)
+}
+
+func (g *gate) equalToOldCore(src []byte) (bool, error) {
+	tree, err := g.parser.Parse(src)
+	if err != nil {
+		return false, err
+	}
+	defer tree.Release()
+	if err := use("old"); err != nil {
+		return false, err
+	}
+	old, err := g.parser.Parse(src)
+	if err := errors.Join(err, use(g.engine)); err != nil {
+		return false, err
+	}
+	defer old.Release()
+	return g.sameTree(tree, old), nil
+}
+
+func (g *gate) incrementalEqualsFresh(f file) (bool, error) {
+	at := len(f.src) / 2
+	edited := slices.Concat(f.src[:at], []byte("zq"), f.src[at:])
+	tree, err := g.parser.Parse(f.src)
+	if err != nil {
+		return false, err
+	}
+	defer tree.Release()
+	row := uint32(bytes.Count(f.src[:at], []byte("\n")))
+	start := ts.Point{Row: row, Column: uint32(at - bytes.LastIndexByte(f.src[:at], '\n') - 1)}
+	tree.Edit(ts.InputEdit{StartByte: uint32(at), OldEndByte: uint32(at), NewEndByte: uint32(at + 2), StartPoint: start, OldEndPoint: start, NewEndPoint: ts.Point{Row: row, Column: start.Column + 2}})
+	inc, err := g.parser.ParseIncremental(edited, tree)
+	if err != nil {
+		return false, err
+	}
+	defer inc.Release()
+	fresh, err := g.parser.Parse(edited)
+	if err != nil {
+		return false, err
+	}
+	defer fresh.Release()
+	return g.sameTree(inc, fresh), nil
+}
+
+func (g *gate) compare(files []file, sexp, incremental bool) error {
 	want, err := g.cLists(files)
 	if err != nil {
 		return err
 	}
-	same, sexpSame := 0, 0
-	var declined, differ []string
+	same, sexpSame, incSame := 0, 0, 0
+	var declined []file
+	var differ []string
 	for _, f := range files {
-		tree, wasDeclined, err := g.parse(f.src, g.engine)
+		tree, err := g.parser.Parse(f.src)
 		if err != nil {
 			return fmt.Errorf("%s: %w", f.path, err)
 		}
-		got := nodeList(tree.RootNode(), g.lang)
 		switch {
-		case wasDeclined:
-			declined = append(declined, f.path)
-		case slices.Equal(got, want[f.path]):
+		case g.engine == "default" && g.declined(f.src):
+			declined = append(declined, f)
+		case slices.Equal(nodeList(tree.RootNode(), g.lang), want[f.path]):
 			same++
 		default:
 			differ = append(differ, f.path)
@@ -124,30 +179,52 @@ func (g *gate) compare(files []file, sexp bool) error {
 			if err != nil {
 				return err
 			}
-			var b strings.Builder
-			writeSexp(&b, tree.RootNode(), g.lang)
-			if b.String() == c {
+			if g.sexpOf(tree) == c {
 				sexpSame++
 			} else {
 				fmt.Println("sexp differs from C:", f.path)
 			}
 		}
 		tree.Release()
+		if incremental {
+			ok, err := g.incrementalEqualsFresh(f)
+			if err != nil {
+				return fmt.Errorf("%s: %w", f.path, err)
+			}
+			if ok {
+				incSame++
+			} else {
+				fmt.Println("incremental differs from fresh:", f.path)
+			}
+		}
 	}
 	fmt.Printf("same %d of %d, declined %d\n", same, len(files), len(declined))
-	cErrors := 0
-	for _, path := range declined {
-		c, err := g.cSexp(path)
+	cErrors, oldSame := 0, 0
+	for _, f := range declined {
+		c, err := g.cSexp(f.path)
 		if err != nil {
 			return err
 		}
 		if strings.Contains(c, "(ERROR") || strings.Contains(c, "(MISSING") {
 			cErrors++
 		} else {
-			fmt.Println("declined, C clean:", path)
+			fmt.Println("declined, C clean:", f.path)
+		}
+		equal, err := g.equalToOldCore(f.src)
+		if err != nil {
+			return err
+		}
+		if equal {
+			oldSame++
+		} else {
+			fmt.Println("declined, tree differs from the old core:", f.path)
 		}
 	}
 	fmt.Printf("declined with ERROR or MISSING in C: %d of %d\n", cErrors, len(declined))
+	fmt.Printf("declined with a tree equal to the old core: %d of %d\n", oldSame, len(declined))
+	if incremental {
+		fmt.Printf("incremental equal to fresh: %d of %d\n", incSame, len(files))
+	}
 	for _, path := range differ {
 		fmt.Println("differs from C:", path)
 	}
@@ -231,12 +308,15 @@ func (g *gate) cSexp(path string) (string, error) {
 }
 
 func (g *gate) time(files []file, reps int) error {
-	for _, engine := range []string{"new", "old"} {
+	for _, engine := range []string{"default", "old"} {
+		if err := use(engine); err != nil {
+			return err
+		}
 		var totals []float64
 		for range reps {
 			start := time.Now()
 			for _, f := range files {
-				tree, _, err := g.parse(f.src, engine)
+				tree, err := g.parser.Parse(f.src)
 				if err != nil {
 					return err
 				}

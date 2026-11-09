@@ -237,6 +237,7 @@ const (
 	compactIncrementalReuseClauseScanner uint8 = iota
 	compactIncrementalReuseClauseReplay
 	compactIncrementalReuseClauseTree
+	newCoreIncrementalReuseClause
 )
 
 func incrementalReuseUnsupportedReasonForTree(oldTree *Tree) string {
@@ -1017,6 +1018,9 @@ func (p *Parser) parseIncrementalWithTokenSourceChanged(source []byte, oldTree *
 	defer func() {
 		p.reparseFactory = prevFactory
 	}()
+	if builtByNewCore(oldTree) {
+		oldTree = nil
+	}
 	tree, err := p.parseIncrementalInternal(source, oldTree, p.wrapIncludedRanges(ts), nil)
 	if err != nil {
 		return nil, err
@@ -2053,6 +2057,9 @@ func (p *Parser) incrementalAppendRequiresFreshParse(oldTree *Tree) bool {
 // parseIncrementalChangedSource runs the part of ParseIncremental that
 // parses: the source differs from oldTree's source.
 func (p *Parser) parseIncrementalChangedSource(source []byte, oldTree *Tree) (*Tree, error) {
+	if p.incrementalParsesFresh(oldTree) {
+		return p.parse(source)
+	}
 	if oldTree != nil && len(oldTree.edits) == 1 &&
 		oldTree.edits[0].StartByte == uint32(len(oldTree.source)) &&
 		p.incrementalAppendRequiresFreshParse(oldTree) {
@@ -2419,6 +2426,12 @@ func (p *Parser) parseIncrementalProfiled(source []byte, oldTree *Tree) (*Tree, 
 // ParseIncrementalProfiled that parses: the source differs from oldTree's
 // source.
 func (p *Parser) parseIncrementalProfiledChangedSource(source []byte, oldTree *Tree) (*Tree, IncrementalParseProfile, error) {
+	if p.incrementalParsesFresh(oldTree) {
+		started := time.Now()
+		tree, err := p.parse(source)
+		timing := freshParseFallbackTiming(started, tree, "new_core_fresh")
+		return tree, timing.toProfile(), err
+	}
 	if oldTree != nil && len(oldTree.edits) == 1 &&
 		oldTree.edits[0].StartByte == uint32(len(oldTree.source)) &&
 		p.incrementalAppendRequiresFreshParse(oldTree) {
@@ -2589,6 +2602,9 @@ func (p *Parser) parseIncrementalWithTokenSourceChangedProfiled(source []byte, o
 		p.reparseFactory = prevFactory
 	}()
 	timing := &incrementalParseTiming{}
+	if builtByNewCore(oldTree) {
+		oldTree = nil
+	}
 	tree, err := p.parseIncrementalInternal(source, oldTree, p.wrapIncludedRanges(ts), timing)
 	if err != nil {
 		return nil, IncrementalParseProfile{}, err

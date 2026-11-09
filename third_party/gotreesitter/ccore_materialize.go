@@ -5,6 +5,7 @@ import "github.com/odvcencio/gotreesitter/internal/ccore"
 type ccoreBuilder struct {
 	b        *ccoreBinding
 	r        *ccore.Result
+	arena    *nodeArena
 	nodes    []Node
 	kids     []*Node
 	fields   []FieldID
@@ -15,13 +16,17 @@ type ccoreBuilder struct {
 func (b *ccoreBinding) materialize(r *ccore.Result, source []byte) (*Tree, bool) {
 	total := 1 + b.countVisible(r, r.Root)
 	m := &ccoreBuilder{b: b, r: r, nodes: make([]Node, total), kids: make([]*Node, 0, total), fields: make([]FieldID, total)}
+	m.arena = &nodeArena{nodes: m.nodes}
 	m.nodes = m.nodes[:1]
 	root := &m.nodes[0]
 	m.build(root, r.Root, r.Trees[r.Root].Symbol, ccore.Length{})
 	if m.unmapped {
 		return nil, false
 	}
-	return NewTree(root, source, b.target), true
+	tree := NewTree(root, source, b.target)
+	tree.incrementalReuseDisabled = true
+	tree.incrementalReuseUnsupportedClause = newCoreIncrementalReuseClause
+	return tree, true
 }
 
 func (b *ccoreBinding) childSymbol(r *ccore.Result, parent uint32, structural int, child *ccore.Subtree) uint16 {
@@ -82,6 +87,7 @@ func (m *ccoreBuilder) build(n *Node, id uint32, symbol uint16, pos ccore.Length
 	if !m.b.mapped[symbol] {
 		m.unmapped = true
 	}
+	n.ownerArena = m.arena
 	n.symbol = m.b.symbols[symbol]
 	n.setNamed(m.b.source.SymbolMetadata[symbol].Named)
 	n.setExtra(t.Extra)
@@ -96,7 +102,7 @@ func (m *ccoreBuilder) build(n *Node, id uint32, symbol uint16, pos ccore.Length
 	m.kids = m.kids[:first+count]
 	kids, fields := m.kids[first:first+count], m.fields[first:first+count]
 	k := 0
-	m.fill(n, id, kids, fields, &k, 0, pos)
+	m.fill(n, id, kids, fields, &k, 0, 0, pos)
 	n.children = kids
 	for _, f := range fields {
 		if f != 0 {
@@ -106,7 +112,7 @@ func (m *ccoreBuilder) build(n *Node, id uint32, symbol uint16, pos ccore.Length
 	}
 }
 
-func (m *ccoreBuilder) fill(parent *Node, id uint32, kids []*Node, fields []FieldID, k *int, inherited FieldID, running ccore.Length) {
+func (m *ccoreBuilder) fill(parent *Node, id uint32, kids []*Node, fields []FieldID, k *int, inherited FieldID, supertypes uint32, running ccore.Length) {
 	structural := 0
 	production := m.r.Trees[id].ProductionID
 	for _, c := range m.r.Children(id) {
@@ -127,9 +133,12 @@ func (m *ccoreBuilder) fill(parent *Node, id uint32, kids []*Node, fields []Fiel
 			child.parent = parent
 			m.build(child, c, symbol, running)
 			child.childIndex = int32(*k)
+			if supertypes != 0 {
+				m.arena.setNodeSupertypeMask(child, supertypes)
+			}
 			*k++
 		} else {
-			m.fill(parent, c, kids, fields, k, field, running)
+			m.fill(parent, c, kids, fields, k, field, supertypes|m.b.supertypes[symbol], running)
 		}
 		running = running.Add(t.Total())
 	}

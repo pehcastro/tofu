@@ -10,12 +10,13 @@ import (
 const CCoreSwitchEnv = "GOTREESITTER_CCORE"
 
 type ccoreBinding struct {
-	target  *Language
-	source  *Language
-	tables  *ccore.Tables
-	symbols []Symbol
-	mapped  []bool
-	fields  []FieldID
+	target     *Language
+	source     *Language
+	tables     *ccore.Tables
+	symbols    []Symbol
+	mapped     []bool
+	fields     []FieldID
+	supertypes []uint32
 }
 
 type ccoreEntry struct {
@@ -46,11 +47,21 @@ func (p *Parser) ccoreBinding() *ccoreBinding {
 	return entry.binding
 }
 
+func ccoreSwitchedOff() bool { return os.Getenv(CCoreSwitchEnv) == "0" }
+
 func (p *Parser) parseCCore(source []byte) (*Tree, bool) {
-	if os.Getenv(CCoreSwitchEnv) != "1" {
+	if ccoreSwitchedOff() {
 		return nil, false
 	}
 	return p.ParseNewCore(source)
+}
+
+func builtByNewCore(t *Tree) bool {
+	return t != nil && t.incrementalReuseDisabled && t.incrementalReuseUnsupportedClause == newCoreIncrementalReuseClause
+}
+
+func (p *Parser) incrementalParsesFresh(oldTree *Tree) bool {
+	return builtByNewCore(oldTree) || (!ccoreSwitchedOff() && p.ccoreBinding() != nil)
 }
 
 func (p *Parser) ParseNewCore(source []byte) (*Tree, bool) {
@@ -97,6 +108,20 @@ func bindCCore(source, target *Language) *ccoreBinding {
 	for id := 1; id < len(source.FieldNames); id++ {
 		if fid, ok := target.FieldByName(source.FieldNames[id]); ok {
 			b.fields[id] = fid
+		}
+	}
+	b.supertypes = make([]uint32, len(source.SymbolNames))
+	for sym, name := range source.SymbolNames {
+		if source.supertypeBit(Symbol(sym)) == 0 {
+			continue
+		}
+		for t, targetName := range target.SymbolNames {
+			if bit := target.supertypeBit(Symbol(t)); bit != 0 && targetName == name {
+				b.supertypes[sym] = bit
+			}
+		}
+		if b.supertypes[sym] == 0 {
+			return nil
 		}
 	}
 	return b
