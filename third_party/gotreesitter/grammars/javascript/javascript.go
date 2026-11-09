@@ -16,6 +16,16 @@ const BlobSHA256 = "142deed2ea9b34abfedda0343336820841a52168ed52195f2363540436cb
 func init() {
 	grammarruntime.RegisterJavascriptSupport()
 	grammarruntime.RegisterBlob("javascript", grammarblobs.Javascript)
+	gotreesitter.RegisterCCoreLanguage("javascript", LanguageC)
+}
+
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.JavascriptC())
+	if err != nil {
+		return nil
+	}
+	lang.ExternalScanner = grammarruntime.JavaScriptExternalScanner{}.ExternalScannerForLanguage(lang)
+	return lang
 }
 
 // Language returns the cached grammar with its scanner and certified runtime profile.

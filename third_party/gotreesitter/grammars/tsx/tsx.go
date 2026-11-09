@@ -16,6 +16,16 @@ const BlobSHA256 = "2a28c6057addaca38d7922d3e646ee3165c5de10b71bcdb73b6d95189219
 func init() {
 	grammarruntime.RegisterTsxSupport()
 	grammarruntime.RegisterBlob("tsx", grammarblobs.Tsx)
+	gotreesitter.RegisterCCoreLanguage("tsx", LanguageC)
+}
+
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.TsxC())
+	if err != nil {
+		return nil
+	}
+	lang.ExternalScanner = grammarruntime.TsxExternalScanner{}.ExternalScannerForLanguage(lang)
+	return lang
 }
 
 // Language returns the cached grammar with its scanner and certified runtime profile.

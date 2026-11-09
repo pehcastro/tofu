@@ -15,8 +15,11 @@ import (
 
 	ts "github.com/odvcencio/gotreesitter"
 	golang "github.com/odvcencio/gotreesitter/grammars/go"
+	"github.com/odvcencio/gotreesitter/grammars/javascript"
 	"github.com/odvcencio/gotreesitter/grammars/python"
 	"github.com/odvcencio/gotreesitter/grammars/rust"
+	"github.com/odvcencio/gotreesitter/grammars/tsx"
+	"github.com/odvcencio/gotreesitter/grammars/typescript"
 )
 
 type file struct {
@@ -48,7 +51,10 @@ func run() error {
 	incremental := flag.Bool("incremental", false, "also compare an incremental parse after an edit with a fresh parse")
 	flat := flag.Bool("flat", false, "only compare the flat parse cat-grep matches over with the node tree, one flat reused across every file")
 	flag.Parse()
-	language, ok := map[string]func() *ts.Language{"go": golang.Language, "python": python.Language, "rust": rust.Language}[*langName]
+	language, ok := map[string]func() *ts.Language{
+		"go": golang.Language, "python": python.Language, "rust": rust.Language,
+		"typescript": typescript.Language, "tsx": tsx.Language, "javascript": javascript.Language,
+	}[*langName]
 	if !ok {
 		return fmt.Errorf("unknown -lang %q", *langName)
 	}

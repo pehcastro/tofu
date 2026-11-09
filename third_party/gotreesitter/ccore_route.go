@@ -165,12 +165,13 @@ func bindCCore(source, target *Language) *ccoreBinding {
 	b.symbols = make([]Symbol, len(source.SymbolNames))
 	b.mapped = make([]bool, len(source.SymbolNames))
 	seen := map[symbolNameNamedKey]int{}
+	targetVisible, sourceVisible := ccoreVisibleSymbols(target), ccoreVisibleSymbols(source)
 	for sym, meta := range source.SymbolMetadata {
 		if !meta.Visible {
 			continue
 		}
 		key := symbolNameNamedKey{name: source.SymbolNames[sym], named: meta.Named}
-		matches := ccoreVisibleSymbols(target, key)
+		matches := targetVisible[key]
 		if len(matches) == 0 {
 			if hidden, ok := target.symbolByNameAndNamed(key.name, key.named); ok {
 				b.symbols[sym], b.mapped[sym] = hidden, true
@@ -178,7 +179,7 @@ func bindCCore(source, target *Language) *ccoreBinding {
 			continue
 		}
 		pick := len(matches) - 1
-		if len(ccoreVisibleSymbols(source, key)) == len(matches) {
+		if len(sourceVisible[key]) == len(matches) {
 			pick = seen[key]
 		}
 		seen[key]++
@@ -207,11 +208,12 @@ func bindCCore(source, target *Language) *ccoreBinding {
 	return b
 }
 
-func ccoreVisibleSymbols(lang *Language, key symbolNameNamedKey) []Symbol {
-	var out []Symbol
+func ccoreVisibleSymbols(lang *Language) map[symbolNameNamedKey][]Symbol {
+	out := make(map[symbolNameNamedKey][]Symbol, len(lang.SymbolMetadata))
 	for sym, meta := range lang.SymbolMetadata {
-		if meta.Visible && meta.Named == key.named && lang.SymbolNames[sym] == key.name {
-			out = append(out, Symbol(sym))
+		if meta.Visible {
+			key := symbolNameNamedKey{name: lang.SymbolNames[sym], named: meta.Named}
+			out[key] = append(out[key], Symbol(sym))
 		}
 	}
 	return out
@@ -230,13 +232,20 @@ func ccoreTables(lang *Language) *ccore.Tables {
 		ReservedSetSize:    uint32(lang.MaxReservedWordSetSize),
 		ExternalStates:     lang.ExternalLexStates,
 	}
+	t.ParseTable = make([]uint16, 0, len(lang.ParseTable)*int(lang.SymbolCount))
 	for _, row := range lang.ParseTable {
 		t.ParseTable = append(t.ParseTable, row...)
 	}
+	actionCount := 0
 	for _, e := range lang.ParseActions {
-		actions := make([]ccore.Action, len(e.Actions))
-		for i, a := range e.Actions {
-			actions[i] = ccore.Action{
+		actionCount += len(e.Actions)
+	}
+	slab := make([]ccore.Action, 0, actionCount)
+	t.Actions = make([]ccore.ActionEntry, len(lang.ParseActions))
+	for i, e := range lang.ParseActions {
+		first := len(slab)
+		for _, a := range e.Actions {
+			slab = append(slab, ccore.Action{
 				Type:         ccore.ActionType(a.Type),
 				Extra:        a.Extra,
 				Repetition:   a.Repetition,
@@ -245,33 +254,39 @@ func ccoreTables(lang *Language) *ccore.Tables {
 				State:        uint16(a.State),
 				ProductionID: a.ProductionID,
 				DynPrec:      a.DynamicPrecedence,
-			}
+			})
 		}
-		t.Actions = append(t.Actions, ccore.ActionEntry{Reusable: e.Reusable, Actions: actions})
+		t.Actions[i] = ccore.ActionEntry{Reusable: e.Reusable, Actions: slab[first:len(slab):len(slab)]}
 	}
-	for _, m := range lang.LexModes {
-		t.LexModes = append(t.LexModes, ccore.LexMode{LexState: m.LexState, External: m.ExternalLexState, ReservedSet: m.ReservedWordSetID})
+	t.LexModes = make([]ccore.LexMode, len(lang.LexModes))
+	for i, m := range lang.LexModes {
+		t.LexModes[i] = ccore.LexMode{LexState: m.LexState, External: m.ExternalLexState, ReservedSet: m.ReservedWordSetID}
 	}
-	for _, w := range lang.ReservedWords {
-		t.ReservedWords = append(t.ReservedWords, uint16(w))
+	t.ReservedWords = make([]uint16, len(lang.ReservedWords))
+	for i, w := range lang.ReservedWords {
+		t.ReservedWords[i] = uint16(w)
 	}
 	return t
 }
 
 func ccoreLexer(states []LexState) ccore.Lexer {
-	var l ccore.Lexer
+	transitions := 0
 	for _, s := range states {
+		transitions += len(s.Transitions)
+	}
+	l := ccore.Lexer{States: make([]ccore.LexState, len(states)), Transitions: make([]ccore.LexTransition, 0, transitions)}
+	for i, s := range states {
 		start := uint32(len(l.Transitions))
 		for _, tr := range s.Transitions {
 			l.Transitions = append(l.Transitions, ccore.LexTransition{Lo: tr.Lo, Hi: tr.Hi, Next: tr.NextState, Skip: tr.Skip})
 		}
-		l.States = append(l.States, ccore.LexState{
+		l.States[i] = ccore.LexState{
 			Accepts:     s.AcceptToken != 0 || s.AcceptEOF,
 			AcceptToken: uint16(s.AcceptToken),
 			EOF:         int32(s.EOF),
 			TransStart:  start,
 			TransEnd:    uint32(len(l.Transitions)),
-		})
+		}
 	}
 	return l
 }
