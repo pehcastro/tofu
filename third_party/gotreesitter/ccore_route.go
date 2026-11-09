@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"sync"
+	"unsafe"
 
 	"github.com/odvcencio/gotreesitter/internal/ccore"
 )
@@ -80,15 +81,25 @@ func (p *Parser) ParseNewCore(source []byte) (*Tree, bool) {
 	return b.materialize(result, source)
 }
 
+type FlatWork = ccore.Work
+
 func (p *Parser) ParseFlat(source []byte, into []FlatNode) ([]FlatNode, *Tree, error) {
-	if b := p.ccoreBinding(); b != nil && !ccoreSwitchedOff() {
+	b := p.ccoreBinding()
+	if b == nil {
+		return p.ParseFlatWith(nil, source, into)
+	}
+	work := b.works.Get().(*ccore.Work)
+	defer b.works.Put(work)
+	return p.ParseFlatWith(work, source, into)
+}
+
+func (p *Parser) ParseFlatWith(work *FlatWork, source []byte, into []FlatNode) ([]FlatNode, *Tree, error) {
+	if b := p.ccoreBinding(); b != nil && work != nil && !ccoreSwitchedOff() {
 		defer p.enterParseBudget()()
-		work := b.works.Get().(*ccore.Work)
 		result, ok := p.parseCCoreInto(b, work, source)
 		if ok {
 			into, ok = b.flatten(result, into)
 		}
-		b.works.Put(work)
 		if ok {
 			return into, nil, nil
 		}
@@ -232,10 +243,7 @@ func ccoreTables(lang *Language) *ccore.Tables {
 		ReservedSetSize:    uint32(lang.MaxReservedWordSetSize),
 		ExternalStates:     lang.ExternalLexStates,
 	}
-	t.ParseTable = make([]uint16, 0, len(lang.ParseTable)*int(lang.SymbolCount))
-	for _, row := range lang.ParseTable {
-		t.ParseTable = append(t.ParseTable, row...)
-	}
+	t.ParseTable = contiguousRows(lang.ParseTable, int(lang.SymbolCount))
 	actionCount := 0
 	for _, e := range lang.ParseActions {
 		actionCount += len(e.Actions)
@@ -267,6 +275,23 @@ func ccoreTables(lang *Language) *ccore.Tables {
 		t.ReservedWords[i] = uint16(w)
 	}
 	return t
+}
+
+func contiguousRows(rows [][]uint16, width int) []uint16 {
+	if len(rows) == 0 || width == 0 {
+		return nil
+	}
+	base, rowBytes := uintptr(unsafe.Pointer(unsafe.SliceData(rows[0]))), uintptr(width)*unsafe.Sizeof(uint16(0))
+	for i, row := range rows {
+		if len(row) != width || uintptr(unsafe.Pointer(unsafe.SliceData(row))) != base+uintptr(i)*rowBytes {
+			whole := make([]uint16, 0, len(rows)*width)
+			for _, row := range rows {
+				whole = append(whole, row...)
+			}
+			return whole
+		}
+	}
+	return unsafe.Slice(unsafe.SliceData(rows[0]), len(rows)*width)
 }
 
 func ccoreLexer(states []LexState) ccore.Lexer {

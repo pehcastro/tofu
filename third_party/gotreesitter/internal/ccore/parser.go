@@ -1,6 +1,9 @@
 package ccore
 
-import "slices"
+import (
+	"bytes"
+	"slices"
+)
 
 type Status uint8
 
@@ -15,9 +18,8 @@ const (
 	maxVersionCountOverflow = 4
 	opsPerStopCheck         = 100
 	initialState            = 1
-	sourceBytesPerTree      = 2
 	reserveSlack            = 256
-	projectionMargin        = 16
+	treeQuartersPerInkByte  = 3
 	serializationBufferSize = 1024
 )
 
@@ -44,7 +46,8 @@ type Work struct{ p parser }
 
 func (w *Work) Parse(t *Tables, src []byte, scanner Scanner, stop func() bool) (*Result, Status) {
 	old := &w.p
-	estimate := len(src)/sourceBytesPerTree + 1
+	inked := len(src) - bytes.Count(src, []byte{' '}) - bytes.Count(src, []byte{'\n'})
+	estimate := inked*treeQuartersPerInkByte/4 + reserveSlack
 	w.p = parser{t: t, stop: stop, scanner: scanner, l: lexer{src: src}, trailing: old.trailing[:0], trailing2: old.trailing2[:0],
 		r: Result{
 			Trees:     append(slices.Grow(old.r.Trees[:0], estimate), Subtree{}),
@@ -66,21 +69,6 @@ func (w *Work) Parse(t *Tables, src []byte, scanner Scanner, stop func() bool) (
 	}
 	p.r.Root = p.finished
 	return &p.r, Accepted
-}
-
-func (p *parser) reserve(at uint32) {
-	if at > 0 {
-		p.r.Trees = project(p.r.Trees, at, len(p.l.src))
-		p.r.Kids = project(p.r.Kids, at, len(p.l.src))
-	}
-}
-
-func project[T any](s []T, at uint32, total int) []T {
-	if cap(s)-len(s) > reserveSlack {
-		return s
-	}
-	projected := int(int64(len(s)) * int64(total) / int64(at))
-	return slices.Grow(s, projected+projected/projectionMargin+reserveSlack-len(s))
 }
 
 func (p *parser) run() bool {

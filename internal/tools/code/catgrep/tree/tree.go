@@ -14,6 +14,7 @@ import (
 type Parser struct {
 	Lang  lang.Lang
 	inner *gotreesitter.Parser
+	work  gotreesitter.FlatWork
 	spare []gotreesitter.FlatNode
 }
 
@@ -47,7 +48,7 @@ func Parse(source string, l lang.Lang) (*Root, error) {
 }
 
 func (p *Parser) Parse(source []byte) (*Root, error) {
-	flat, old, err := p.inner.ParseFlat(source, p.spare)
+	flat, old, err := p.inner.ParseFlatWith(&p.work, source, p.spare)
 	if err != nil {
 		return nil, fmt.Errorf("parse %s: %w", p.Lang, err)
 	}

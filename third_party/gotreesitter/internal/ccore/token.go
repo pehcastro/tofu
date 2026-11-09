@@ -31,7 +31,6 @@ func (p *parser) lex(v int, parseState uint16) uint32 {
 	}
 	l := &p.l
 	start := p.s.node(v).position
-	p.reserve(start)
 	errorMode := parseState == errorState
 	skipped := false
 	var errStart, errEnd uint32

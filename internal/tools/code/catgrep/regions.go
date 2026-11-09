@@ -48,40 +48,46 @@ type goToken struct {
 }
 
 func sameTokens(before, after string, reserved []string) bool {
-	was, wasRead := goTokens(before)
-	is, isRead := goTokens(after)
-	if !wasRead || !isRead || len(was) != len(is) {
-		return false
-	}
-	for i, old := range was {
-		renamed := old.kind == token.IDENT && identifierShaped(old.text) && identifierShaped(is[i].text) && !slices.Contains(reserved, old.text) && !slices.Contains(reserved, is[i].text)
-		if old.kind != is[i].kind || old.newlines != is[i].newlines || old.text != is[i].text && !renamed {
+	was, is := newGoScan(before), newGoScan(after)
+	for {
+		old, now := was.next(), is.next()
+		renamed := old.kind == token.IDENT && identifierShaped(old.text) && identifierShaped(now.text) && !slices.Contains(reserved, old.text) && !slices.Contains(reserved, now.text)
+		if old.kind != now.kind || old.newlines != now.newlines || old.text != now.text && !renamed {
 			return false
 		}
+		if old.kind == token.EOF || old.kind == token.ILLEGAL {
+			return old.kind == token.EOF && !was.failed && !is.failed
+		}
 	}
-	return true
 }
 
-func goTokens(code string) ([]goToken, bool) {
-	file := token.NewFileSet().AddFile("", -1, len(code))
-	failed := false
-	var s scanner.Scanner
-	s.Init(file, []byte(code), func(token.Position, string) { failed = true }, scanner.ScanComments)
-	var read []goToken
-	for end := 0; ; {
-		at, kind, text := s.Scan()
+type goScan struct {
+	code    string
+	file    *token.File
+	scanner scanner.Scanner
+	end     int
+	failed  bool
+}
+
+func newGoScan(code string) *goScan {
+	g := &goScan{code: code, file: token.NewFileSet().AddFile("", -1, len(code))}
+	g.scanner.Init(g.file, []byte(code), func(token.Position, string) { g.failed = true }, scanner.ScanComments)
+	return g
+}
+
+func (g *goScan) next() goToken {
+	for {
+		at, kind, text := g.scanner.Scan()
 		if kind == token.SEMICOLON && text == "\n" {
 			continue
 		}
 		if text == "" {
 			text = kind.String()
 		}
-		offset := file.Offset(at)
-		read = append(read, goToken{kind: kind, text: text, newlines: strings.Count(code[end:offset], "\n")})
-		if kind == token.EOF || kind == token.ILLEGAL {
-			return read, kind == token.EOF && !failed
-		}
-		end = offset + len(text)
+		offset := g.file.Offset(at)
+		read := goToken{kind: kind, text: text, newlines: strings.Count(g.code[g.end:offset], "\n")}
+		g.end = offset + len(text)
+		return read
 	}
 }
 

@@ -2,7 +2,6 @@ package metavar
 
 import (
 	"bytes"
-	"maps"
 	"slices"
 	"strings"
 
@@ -70,9 +69,34 @@ func validName(name string) bool {
 func (v Var) IsEllipsis() bool { return v.Kind == Multiple || v.Kind == MultiCapture }
 
 type Env struct {
-	single      map[string]tree.Node
-	multi       map[string][]tree.Node
-	transformed map[string]string
+	single      []binding[tree.Node]
+	multi       []binding[[]tree.Node]
+	transformed []binding[string]
+}
+
+type binding[T any] struct {
+	name  string
+	value T
+}
+
+func lookup[T any](bound []binding[T], name string) (T, bool) {
+	for _, b := range bound {
+		if b.name == name {
+			return b.value, true
+		}
+	}
+	var none T
+	return none, false
+}
+
+func bind[T any](bound []binding[T], name string, value T) []binding[T] {
+	for i := range bound {
+		if bound[i].name == name {
+			bound[i].value = value
+			return bound
+		}
+	}
+	return append(bound, binding[T]{name: name, value: value})
 }
 
 func NewEnv() *Env { return &Env{} }
@@ -81,52 +105,34 @@ func (e *Env) Clone() *Env {
 	if e == nil {
 		return &Env{}
 	}
-	return &Env{single: maps.Clone(e.single), multi: maps.Clone(e.multi), transformed: maps.Clone(e.transformed)}
+	return &Env{single: slices.Clone(e.single), multi: slices.Clone(e.multi), transformed: slices.Clone(e.transformed)}
 }
 
 func (e *Env) Insert(name string, node tree.Node) bool {
-	if bound, ok := e.single[name]; ok && !sameTree(bound, node) {
+	if bound, ok := lookup(e.single, name); ok && !sameTree(bound, node) {
 		return false
 	}
-	if e.single == nil {
-		e.single = map[string]tree.Node{}
-	}
-	e.single[name] = node
+	e.single = bind(e.single, name, node)
 	return true
 }
 
 func (e *Env) InsertMulti(name string, nodes []tree.Node) bool {
-	if bound, ok := e.multi[name]; ok && !sameNamed(bound, nodes) {
+	if bound, ok := lookup(e.multi, name); ok && !sameNamed(bound, nodes) {
 		return false
 	}
-	if e.multi == nil {
-		e.multi = map[string][]tree.Node{}
-	}
-	e.multi[name] = nodes
+	e.multi = bind(e.multi, name, nodes)
 	return true
 }
 
 func (e *Env) InsertTransformed(name, text string) {
-	if e.transformed == nil {
-		e.transformed = map[string]string{}
-	}
-	e.transformed[name] = text
+	e.transformed = bind(e.transformed, name, text)
 }
 
-func (e *Env) Single(name string) (tree.Node, bool) {
-	node, ok := e.single[name]
-	return node, ok
-}
+func (e *Env) Single(name string) (tree.Node, bool) { return lookup(e.single, name) }
 
-func (e *Env) Multi(name string) ([]tree.Node, bool) {
-	nodes, ok := e.multi[name]
-	return nodes, ok
-}
+func (e *Env) Multi(name string) ([]tree.Node, bool) { return lookup(e.multi, name) }
 
-func (e *Env) Transformed(name string) (string, bool) {
-	text, ok := e.transformed[name]
-	return text, ok
-}
+func (e *Env) Transformed(name string) (string, bool) { return lookup(e.transformed, name) }
 
 func sameNamed(bound, nodes []tree.Node) bool {
 	unnamed := func(n tree.Node) bool { return !n.IsNamed() }
@@ -135,16 +141,18 @@ func sameNamed(bound, nodes []tree.Node) bool {
 
 func (e *Env) Texts() map[string]string {
 	texts := make(map[string]string, len(e.transformed)+len(e.single)+len(e.multi))
-	maps.Copy(texts, e.transformed)
-	for name, node := range e.single {
-		texts[name] = node.Text()
+	for _, b := range e.transformed {
+		texts[b.name] = b.value
 	}
-	for name, nodes := range e.multi {
-		parts := make([]string, len(nodes))
-		for i, n := range nodes {
+	for _, b := range e.single {
+		texts[b.name] = b.value.Text()
+	}
+	for _, b := range e.multi {
+		parts := make([]string, len(b.value))
+		for i, n := range b.value {
 			parts[i] = n.Text()
 		}
-		texts[name] = "[" + strings.Join(parts, ", ") + "]"
+		texts[b.name] = "[" + strings.Join(parts, ", ") + "]"
 	}
 	return texts
 }
