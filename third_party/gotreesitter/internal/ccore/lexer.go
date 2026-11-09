@@ -1,6 +1,9 @@
 package ccore
 
-import "unicode/utf8"
+import (
+	"unicode/utf8"
+	"unsafe"
+)
 
 type lexer struct {
 	src        []byte
@@ -18,6 +21,10 @@ func (l *lexer) eof() bool { return int(l.pos) >= len(l.src) }
 func (l *lexer) decode() {
 	if l.eof() {
 		l.lookahead, l.size = 0, 1
+		return
+	}
+	if b := l.src[l.pos]; b < utf8.RuneSelf {
+		l.lookahead, l.size = int32(b), 1
 		return
 	}
 	r, n := utf8.DecodeRune(l.src[l.pos:])
@@ -85,21 +92,85 @@ func (l *lexer) run(dfa *Lexer, state int32) bool {
 			state = st.EOF
 			continue
 		}
-		c := l.lookahead
-		if c == invalidRune {
-			c = dfaInvalidRune
-		}
-		next := int32(-1)
-		for _, t := range dfa.Transitions[st.TransStart:st.TransEnd] {
-			if t.Lo <= c && c <= t.Hi {
-				next = t.Next
-				l.advance(t.Skip)
-				break
-			}
-		}
+		next, skip := dfa.step(state, l.lookahead)
 		if next < 0 {
 			return found
 		}
+		l.advance(skip)
 		state = next
 	}
+}
+
+type denseEntry uint16
+
+const maxDenseStates = 1<<15 - 1
+
+func toDense(next int32, skip bool) denseEntry {
+	e := denseEntry(next+1) << 1
+	if skip {
+		e |= 1
+	}
+	return e
+}
+
+func (dfa *Lexer) step(state, c int32) (int32, bool) {
+	if uint32(c) < utf8.RuneSelf {
+		e := dfa.dense[int(state)*int(dfa.classCount)+int(dfa.classes[c])]
+		return int32(e>>1) - 1, e&1 != 0
+	}
+	return dfa.scan(state, c)
+}
+
+func (dfa *Lexer) scan(state, c int32) (int32, bool) {
+	if c == invalidRune {
+		c = dfaInvalidRune
+	}
+	st := &dfa.States[state]
+	for _, t := range dfa.Transitions[st.TransStart:st.TransEnd] {
+		if t.Lo <= c && c <= t.Hi {
+			return t.Next, t.Skip
+		}
+	}
+	return -1, false
+}
+
+func NewLexer(states []LexState, transitions []LexTransition) Lexer {
+	if len(states) > maxDenseStates {
+		panic("ccore: lex states do not fit a dense entry")
+	}
+	dfa := Lexer{States: states, Transitions: transitions}
+	var boundary [utf8.RuneSelf + 1]bool
+	for _, t := range transitions {
+		boundary[min(max(t.Lo, 0), utf8.RuneSelf)] = true
+		boundary[min(max(t.Hi+1, 0), utf8.RuneSelf)] = true
+	}
+	seen := map[string]uint8{}
+	var columns [][]denseEntry
+	column := make([]denseEntry, len(states))
+	for b := range dfa.classes {
+		if b > 0 && !boundary[b] {
+			dfa.classes[b] = dfa.classes[b-1]
+			continue
+		}
+		for s := range states {
+			column[s] = toDense(dfa.scan(int32(s), int32(b)))
+		}
+		key := unsafe.String((*byte)(unsafe.Pointer(unsafe.SliceData(column))), 2*len(column))
+		class, ok := seen[key]
+		if !ok {
+			class = uint8(len(columns))
+			seen[key] = class
+			columns = append(columns, column)
+			column = make([]denseEntry, len(states))
+		}
+		dfa.classes[b] = class
+	}
+	dfa.classCount = uint32(len(columns))
+	dfa.dense = make([]denseEntry, len(states)*len(columns))
+	for k, col := range columns {
+		for s, e := range col {
+			dfa.dense[s*len(columns)+k] = e
+		}
+	}
+	return dfa
 }

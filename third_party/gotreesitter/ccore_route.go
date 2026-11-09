@@ -299,19 +299,19 @@ func ccoreLexer(states []LexState) ccore.Lexer {
 	for _, s := range states {
 		transitions += len(s.Transitions)
 	}
-	l := ccore.Lexer{States: make([]ccore.LexState, len(states)), Transitions: make([]ccore.LexTransition, 0, transitions)}
+	lexStates, lexTransitions := make([]ccore.LexState, len(states)), make([]ccore.LexTransition, 0, transitions)
 	for i, s := range states {
-		start := uint32(len(l.Transitions))
+		start := uint32(len(lexTransitions))
 		for _, tr := range s.Transitions {
-			l.Transitions = append(l.Transitions, ccore.LexTransition{Lo: tr.Lo, Hi: tr.Hi, Next: tr.NextState, Skip: tr.Skip})
+			lexTransitions = append(lexTransitions, ccore.LexTransition{Lo: tr.Lo, Hi: tr.Hi, Next: tr.NextState, Skip: tr.Skip})
 		}
-		l.States[i] = ccore.LexState{
+		lexStates[i] = ccore.LexState{
 			Accepts:     s.AcceptToken != 0 || s.AcceptEOF,
 			AcceptToken: uint16(s.AcceptToken),
 			EOF:         int32(s.EOF),
 			TransStart:  start,
-			TransEnd:    uint32(len(l.Transitions)),
+			TransEnd:    uint32(len(lexTransitions)),
 		}
 	}
-	return l
+	return ccore.NewLexer(lexStates, lexTransitions)
 }

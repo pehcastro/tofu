@@ -1,5 +1,7 @@
 package ccore
 
+import "unicode/utf8"
+
 type ActionType uint8
 
 const (
@@ -48,6 +50,9 @@ type LexMode struct {
 type Lexer struct {
 	States      []LexState
 	Transitions []LexTransition
+	classes     [utf8.RuneSelf]uint8
+	classCount  uint32
+	dense       []denseEntry
 }
 
 type Tables struct {
