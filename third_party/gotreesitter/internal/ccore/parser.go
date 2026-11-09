@@ -1,5 +1,7 @@
 package ccore
 
+import "slices"
+
 type Status uint8
 
 const (
@@ -14,6 +16,8 @@ const (
 	opsPerStopCheck         = 100
 	initialState            = 1
 	sourceBytesPerTree      = 2
+	reserveSlack            = 256
+	projectionMargin        = 16
 	serializationBufferSize = 1024
 )
 
@@ -36,19 +40,47 @@ type parser struct {
 	scanBuf       [serializationBufferSize]byte
 }
 
-func Parse(t *Tables, src []byte, scanner Scanner, stop func() bool) (Result, Status) {
-	p := &parser{t: t, stop: stop, scanner: scanner, l: lexer{src: src}}
+type Work struct{ p parser }
+
+func (w *Work) Parse(t *Tables, src []byte, scanner Scanner, stop func() bool) (*Result, Status) {
+	old := &w.p
 	estimate := len(src)/sourceBytesPerTree + 1
-	p.r.Trees = make([]Subtree, 1, estimate)
-	p.r.Kids = make([]uint32, 0, estimate)
-	p.r.scans = []scanState{{}}
-	p.s = stack{r: &p.r, nodes: make([]stackNode, 1, 64)}
-	p.s.heads = []head{{node: p.s.newNode(0, 0, initialState)}}
+	w.p = parser{t: t, stop: stop, scanner: scanner, l: lexer{src: src}, trailing: old.trailing[:0], trailing2: old.trailing2[:0],
+		r: Result{
+			Trees:     append(slices.Grow(old.r.Trees[:0], estimate), Subtree{}),
+			Kids:      slices.Grow(old.r.Kids[:0], estimate),
+			scans:     append(old.r.scans[:0], scanState{}),
+			scanBytes: old.r.scanBytes[:0],
+		},
+		s: stack{nodes: append(old.s.nodes[:0], stackNode{}), free: old.s.free[:0], heads: old.s.heads[:0],
+			iterators: old.s.iterators[:0], slices: old.s.slices[:0], buffers: old.s.buffers},
+	}
+	p := &w.p
+	p.s.r = &p.r
+	p.s.heads = append(p.s.heads, head{node: p.s.newNode(0, 0, initialState)})
 	if !p.run() {
-		return Result{}, p.outcome
+		return nil, p.outcome
+	}
+	if p.r.tooWide {
+		return nil, Declined
 	}
 	p.r.Root = p.finished
-	return p.r, Accepted
+	return &p.r, Accepted
+}
+
+func (p *parser) reserve(at uint32) {
+	if at > 0 {
+		p.r.Trees = project(p.r.Trees, at, len(p.l.src))
+		p.r.Kids = project(p.r.Kids, at, len(p.l.src))
+	}
+}
+
+func project[T any](s []T, at uint32, total int) []T {
+	if cap(s)-len(s) > reserveSlack {
+		return s
+	}
+	projected := int(int64(len(s)) * int64(total) / int64(at))
+	return slices.Grow(s, projected+projected/projectionMargin+reserveSlack-len(s))
 }
 
 func (p *parser) run() bool {
@@ -59,7 +91,7 @@ func (p *parser) run() bool {
 				if !p.advance(v) {
 					return false
 				}
-				position := p.s.node(v).position.Bytes
+				position := p.s.node(v).position
 				if position > last || v > 0 && position == last {
 					last = position
 					break
@@ -175,7 +207,7 @@ func (p *parser) decline() bool {
 
 func (p *parser) advance(v int) bool {
 	state := p.s.node(v).state
-	position := p.s.node(v).position.Bytes
+	position := p.s.node(v).position
 	external := p.s.heads[v].external
 	lookahead, entry := p.cached(v, state, position)
 	needsLex := lookahead == 0
@@ -229,7 +261,7 @@ func (p *parser) advance(v int) bool {
 			return true
 		}
 		la := &p.r.Trees[lookahead]
-		if la.Keyword && la.Symbol != p.t.KeywordCapture && !p.t.isReserved(state, la.Symbol) {
+		if la.kind == keywordToken && la.Symbol != p.t.KeywordCapture && !p.t.isReserved(state, la.Symbol) {
 			if e := p.t.entry(state, p.t.KeywordCapture); len(e.Actions) > 0 {
 				lookahead = p.r.copyOf(lookahead)
 				p.r.Trees[lookahead].Symbol = p.t.KeywordCapture
@@ -251,7 +283,7 @@ func (p *parser) shift(v int, state uint16, lookahead uint32, extra bool) {
 		p.r.Trees[lookahead].Extra = extra
 	}
 	p.s.push(v, lookahead, state)
-	if p.r.Trees[lookahead].scan != 0 {
+	if p.r.Trees[lookahead].scan() != 0 {
 		p.s.heads[v].external = lookahead
 	}
 }
@@ -330,7 +362,7 @@ func (p *parser) accept(v int, lookahead uint32) {
 				continue
 			}
 			children := append(append(append(p.s.buffer(), trees[:j]...), p.r.Children(trees[j])...), trees[j+1:]...)
-			root = p.r.node(t.Symbol, children, t.ProductionID)
+			root = p.r.node(t.Symbol, children, t.Production())
 			p.s.recycle(children)
 			break
 		}

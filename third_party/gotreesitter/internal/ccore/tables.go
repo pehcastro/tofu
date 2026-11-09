@@ -68,7 +68,7 @@ type Tables struct {
 }
 
 type Scanner interface {
-	Scan(at Length, valid []bool, state []byte) (symbol uint16, start, end Length, found bool)
+	Scan(at uint32, valid []bool, state []byte) (symbol uint16, start, end uint32, found bool)
 	Serialize(buf []byte) int
 }
 

@@ -13,7 +13,7 @@ type link struct {
 
 type stackNode struct {
 	links     [maxLinkCount]link
-	position  Length
+	position  uint32
 	refs      uint32
 	dynPrec   int32
 	state     uint16
@@ -73,7 +73,7 @@ func (s *stack) newNode(prev, subtree uint32, state uint16) uint32 {
 		n.position, n.dynPrec = p.position, p.dynPrec
 		if subtree != 0 {
 			t := &s.r.Trees[subtree]
-			n.position = n.position.Add(t.Total())
+			n.position += t.Total()
 			n.dynPrec += t.DynPrec
 		}
 	}
@@ -116,7 +116,7 @@ func (s *stack) addLink(self uint32, l link) {
 			return
 		}
 		en, ln := &s.nodes[existing.node], &s.nodes[l.node]
-		if en.state == ln.state && en.position.Bytes == ln.position.Bytes {
+		if en.state == ln.state && en.position == ln.position {
 			for j := 0; j < int(s.nodes[l.node].linkCount); j++ {
 				s.addLink(existing.node, s.nodes[l.node].links[j])
 			}
@@ -170,7 +170,7 @@ func (s *stack) swap(a, b int) { s.heads[a], s.heads[b] = s.heads[b], s.heads[a]
 func (s *stack) canMerge(a, b int) bool {
 	ha, hb := s.heads[a], s.heads[b]
 	na, nb := &s.nodes[ha.node], &s.nodes[hb.node]
-	return ha.status == active && hb.status == active && na.state == nb.state && na.position.Bytes == nb.position.Bytes &&
+	return ha.status == active && hb.status == active && na.state == nb.state && na.position == nb.position &&
 		s.r.sameScannerState(ha.external, hb.external)
 }
 

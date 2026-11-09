@@ -1,6 +1,7 @@
 package gotreesitter
 
 import (
+	"bytes"
 	"os"
 	"sync"
 
@@ -17,6 +18,7 @@ type ccoreBinding struct {
 	mapped     []bool
 	fields     []FieldID
 	supertypes []uint32
+	works      sync.Pool
 }
 
 type ccoreEntry struct {
@@ -69,6 +71,33 @@ func (p *Parser) ParseNewCore(source []byte) (*Tree, bool) {
 	if b == nil {
 		return nil, false
 	}
+	work := b.works.Get().(*ccore.Work)
+	defer b.works.Put(work)
+	result, ok := p.parseCCoreInto(b, work, source)
+	if !ok {
+		return nil, false
+	}
+	return b.materialize(result, source)
+}
+
+func (p *Parser) ParseFlat(source []byte, into []FlatNode) ([]FlatNode, *Tree, error) {
+	if b := p.ccoreBinding(); b != nil && !ccoreSwitchedOff() {
+		defer p.enterParseBudget()()
+		work := b.works.Get().(*ccore.Work)
+		result, ok := p.parseCCoreInto(b, work, source)
+		if ok {
+			into, ok = b.flatten(result, into)
+		}
+		b.works.Put(work)
+		if ok {
+			return into, nil, nil
+		}
+	}
+	tree, err := p.Parse(source)
+	return into, tree, err
+}
+
+func (p *Parser) parseCCoreInto(b *ccoreBinding, work *ccore.Work, source []byte) (*ccore.Result, bool) {
 	var stop func() bool
 	if p.needsParseBudget() {
 		stop = func() bool { return p.activeParseStopReason() != ParseStopNone }
@@ -79,11 +108,8 @@ func (p *Parser) ParseNewCore(source []byte) (*Tree, bool) {
 		defer s.Destroy(cs.payload)
 		scanner = cs
 	}
-	result, status := ccore.Parse(b.tables, source, scanner, stop)
-	if status != ccore.Accepted {
-		return nil, false
-	}
-	return b.materialize(&result, source)
+	result, status := work.Parse(b.tables, source, scanner, stop)
+	return result, status == ccore.Accepted
 }
 
 type ccoreScanner struct {
@@ -91,24 +117,41 @@ type ccoreScanner struct {
 	payload any
 	lexer   ExternalLexer
 	source  []byte
+	rowAt   uint32
+	row     uint32
+	line    uint32
 }
 
-func (s *ccoreScanner) Scan(at ccore.Length, valid []bool, state []byte) (uint16, ccore.Length, ccore.Length, bool) {
+func (s *ccoreScanner) point(at uint32) Point {
+	if at >= s.rowAt {
+		gap := s.source[s.rowAt:at]
+		if crossed := bytes.Count(gap, []byte{'\n'}); crossed > 0 {
+			s.row += uint32(crossed)
+			s.line = s.rowAt + uint32(bytes.LastIndexByte(gap, '\n')+1)
+		}
+	} else {
+		s.row -= uint32(bytes.Count(s.source[at:s.rowAt], []byte{'\n'}))
+		if at < s.line {
+			s.line = uint32(bytes.LastIndexByte(s.source[:at], '\n') + 1)
+		}
+	}
+	s.rowAt = at
+	return Point{Row: s.row, Column: at - s.line}
+}
+
+func (s *ccoreScanner) Scan(at uint32, valid []bool, state []byte) (uint16, uint32, uint32, bool) {
 	s.scanner.Deserialize(s.payload, state)
 	l := &s.lexer
-	l.reset(s.source, int(at.Bytes), at.Row, at.Column)
+	pt := s.point(at)
+	l.reset(s.source, int(at), pt.Row, pt.Column)
 	if !s.scanner.Scan(s.payload, l, valid) || !l.hasResult {
-		return 0, ccore.Length{}, ccore.Length{}, false
+		return 0, 0, 0, false
 	}
-	end := ccore.Length{Bytes: uint32(l.pos), Row: l.point.Row, Column: l.point.Column}
+	end := uint32(l.pos)
 	if l.endMarked {
-		end = ccore.Length{Bytes: uint32(l.endPos), Row: l.endPoint.Row, Column: l.endPoint.Column}
+		end = uint32(l.endPos)
 	}
-	start := ccore.Length{Bytes: uint32(l.startPos), Row: l.startPoint.Row, Column: l.startPoint.Column}
-	if end.Bytes < start.Bytes {
-		start = end
-	}
-	return uint16(l.resultSymbol), start, end, true
+	return uint16(l.resultSymbol), min(uint32(l.startPos), end), end, true
 }
 
 func (s *ccoreScanner) Serialize(buf []byte) int { return s.scanner.Serialize(s.payload, buf) }
@@ -118,6 +161,7 @@ func bindCCore(source, target *Language) *ccoreBinding {
 		return nil
 	}
 	b := &ccoreBinding{target: target, source: source, tables: ccoreTables(source)}
+	b.works.New = func() any { return &ccore.Work{} }
 	b.symbols = make([]Symbol, len(source.SymbolNames))
 	b.mapped = make([]bool, len(source.SymbolNames))
 	seen := map[symbolNameNamedKey]int{}

@@ -1,88 +1,197 @@
 package tree
 
 import (
+	"fmt"
 	"iter"
+	"strings"
 
 	"github.com/odvcencio/gotreesitter"
 
+	"tofu/internal/konst"
 	"tofu/internal/tools/code/catgrep/lang"
 )
 
+type Parser struct {
+	Lang  lang.Lang
+	inner *gotreesitter.Parser
+	spare []gotreesitter.FlatNode
+}
+
 type Root struct {
-	tree   *gotreesitter.Tree
+	flat   []gotreesitter.FlatNode
+	old    *gotreesitter.Tree
+	lang   *gotreesitter.Language
 	source []byte
+	owner  *Parser
 }
 
 type Node struct {
-	inner *gotreesitter.Node
-	root  *Root
+	root *Root
+	i    uint32
+	old  *gotreesitter.Node
+}
+
+func NewParser(l lang.Lang) *Parser {
+	inner := gotreesitter.NewParser(l.Grammar())
+	inner.SetTimeoutMicros(konst.CodemodRunMillis * 1000)
+	return &Parser{Lang: l, inner: inner}
 }
 
 func Parse(source string, l lang.Lang) (*Root, error) {
-	return ParseWith(lang.NewParser(l), []byte(source))
-}
-
-func ParseWith(parser lang.Parser, source []byte) (*Root, error) {
-	parsed, err := parser.Parse(source)
+	bytes := []byte(source)
+	parsed, err := lang.Parse(bytes, l)
 	if err != nil {
 		return nil, err
 	}
-	return &Root{tree: parsed, source: source}, nil
+	return &Root{old: parsed, lang: parsed.Language(), source: bytes}, nil
 }
 
-func (r *Root) Release() { r.tree.Release() }
+func (p *Parser) Parse(source []byte) (*Root, error) {
+	flat, old, err := p.inner.ParseFlat(source, p.spare)
+	if err != nil {
+		return nil, fmt.Errorf("parse %s: %w", p.Lang, err)
+	}
+	if old != nil {
+		p.spare = flat
+		return &Root{old: old, lang: old.Language(), source: source}, nil
+	}
+	p.spare = nil
+	return &Root{flat: flat, lang: p.inner.Language(), source: source, owner: p}, nil
+}
 
-func (r *Root) Node() Node { return Node{inner: r.tree.RootNode(), root: r} }
+func (r *Root) Release() {
+	switch {
+	case r.old != nil:
+		r.old.Release()
+	case r.owner != nil:
+		r.owner.spare, r.owner = r.flat, nil
+	}
+}
 
-func (n Node) Kind() string { return n.inner.Type(n.root.tree.Language()) }
+func (r *Root) Node() Node {
+	if r.old != nil {
+		return Node{root: r, old: r.old.RootNode()}
+	}
+	return Node{root: r}
+}
+
+func (n Node) at() *gotreesitter.FlatNode { return &n.root.flat[n.i] }
+
+func (n Node) Kind() string {
+	if n.root.old != nil {
+		return n.old.Type(n.root.lang)
+	}
+	return n.at().Type(n.root.lang)
+}
 
 func (n Node) KindID() gotreesitter.Symbol {
-	return n.root.tree.Language().PublicSymbolForNamedness(n.inner.Symbol(), n.inner.IsNamed())
+	if n.root.old != nil {
+		return n.root.lang.PublicSymbolForNamedness(n.old.Symbol(), n.old.IsNamed())
+	}
+	return n.root.lang.PublicSymbolForNamedness(n.at().Symbol, n.IsNamed())
 }
 
-func (n Node) Same(other Node) bool { return n.inner == other.inner }
+func (n Node) Same(other Node) bool { return n == other }
 
-func (n Node) IsNamed() bool { return n.inner.IsNamed() }
+func (n Node) flag(f gotreesitter.FlatFlags) bool { return n.at().Flags&f != 0 }
 
-func (n Node) IsExtra() bool { return n.inner.IsExtra() }
+func (n Node) IsNamed() bool {
+	if n.root.old != nil {
+		return n.old.IsNamed()
+	}
+	return n.flag(gotreesitter.FlatNamed)
+}
 
-func (n Node) IsMissing() bool { return n.inner.IsMissing() }
+func (n Node) IsExtra() bool {
+	if n.root.old != nil {
+		return n.old.IsExtra()
+	}
+	return n.flag(gotreesitter.FlatExtra)
+}
 
-func (n Node) IsError() bool { return n.inner.IsError() }
+func (n Node) IsMissing() bool { return n.root.old != nil && n.old.IsMissing() }
 
-func (n Node) IsLeaf() bool { return n.inner.ChildCount() == 0 }
+func (n Node) IsError() bool {
+	if n.root.old != nil {
+		return n.old.IsError()
+	}
+	return n.at().IsError()
+}
 
-func (n Node) IsNamedLeaf() bool { return n.inner.NamedChildCount() == 0 }
+func (n Node) IsLeaf() bool { return n.ChildCount() == 0 }
 
-func (n Node) Start() uint32 { return n.inner.StartByte() }
+func (n Node) IsNamedLeaf() bool {
+	if n.root.old != nil {
+		return n.old.NamedChildCount() == 0
+	}
+	for i := range n.ChildCount() {
+		if n.Child(i).IsNamed() {
+			return false
+		}
+	}
+	return true
+}
 
-func (n Node) End() uint32 { return n.inner.EndByte() }
+func (n Node) Start() uint32 {
+	if n.root.old != nil {
+		return n.old.StartByte()
+	}
+	return n.at().Start
+}
+
+func (n Node) End() uint32 {
+	if n.root.old != nil {
+		return n.old.EndByte()
+	}
+	return n.at().End
+}
 
 func (n Node) Source() []byte { return n.root.source }
 
-func (n Node) Text() string { return n.inner.Text(n.root.source) }
+func (n Node) Text() string { return string(n.Bytes()) }
 
-func (n Node) Bytes() []byte { return n.root.source[n.inner.StartByte():n.inner.EndByte()] }
+func (n Node) Bytes() []byte { return n.root.source[n.Start():n.End()] }
 
 func (n Node) Parent() (Node, bool) {
-	parent := n.inner.Parent()
-	return Node{inner: parent, root: n.root}, parent != nil
+	if n.root.old != nil {
+		parent := n.old.Parent()
+		return Node{root: n.root, old: parent}, parent != nil
+	}
+	return Node{root: n.root, i: n.at().Parent}, n.i != 0
 }
 
 func (n Node) Field(name string) (Node, bool) {
-	child := n.inner.ChildByFieldName(name, n.root.tree.Language())
-	return Node{inner: child, root: n.root}, child != nil
+	if n.root.old != nil {
+		child := n.old.ChildByFieldName(name, n.root.lang)
+		return Node{root: n.root, old: child}, child != nil
+	}
+	id, ok := n.root.lang.FieldByName(name)
+	for i := range n.ChildCount() {
+		if child := n.Child(i); ok && id != 0 && child.at().Field == id {
+			return child, true
+		}
+	}
+	return Node{}, false
 }
 
-func (n Node) ChildCount() int { return n.inner.ChildCount() }
+func (n Node) ChildCount() int {
+	if n.root.old != nil {
+		return n.old.ChildCount()
+	}
+	return int(n.at().KidCount)
+}
 
-func (n Node) Child(i int) Node { return Node{inner: n.inner.Child(i), root: n.root} }
+func (n Node) Child(i int) Node {
+	if n.root.old != nil {
+		return Node{root: n.root, old: n.old.Child(i)}
+	}
+	return Node{root: n.root, i: n.at().Kids + uint32(i)}
+}
 
 func (n Node) Children() []Node {
-	inner := n.inner.Children()
-	children := make([]Node, len(inner))
-	for i, c := range inner {
-		children[i] = Node{inner: c, root: n.root}
+	children := make([]Node, n.ChildCount())
+	for i := range children {
+		children[i] = n.Child(i)
 	}
 	return children
 }
@@ -103,4 +212,25 @@ func (n Node) PreOrder() iter.Seq[Node] {
 	}
 }
 
-func (n Node) SExpr() string { return n.inner.SExpr(n.root.tree.Language()) }
+func (n Node) SExpr() string {
+	if n.root.old != nil {
+		return n.old.SExpr(n.root.lang)
+	}
+	if !n.IsNamed() && !n.IsError() {
+		return ""
+	}
+	var b strings.Builder
+	n.writeSExpr(&b)
+	return b.String()
+}
+
+func (n Node) writeSExpr(b *strings.Builder) {
+	b.WriteString("(" + n.Kind())
+	for i := range n.ChildCount() {
+		if child := n.Child(i); child.IsNamed() || child.IsError() {
+			b.WriteByte(' ')
+			child.writeSExpr(b)
+		}
+	}
+	b.WriteByte(')')
+}

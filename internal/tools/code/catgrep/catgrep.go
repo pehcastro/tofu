@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -103,9 +104,10 @@ func search(ctx context.Context, l lang.Lang, paths, words []string, edit editor
 	var workers sync.WaitGroup
 	for w := range outcomes {
 		workers.Go(func() {
-			parser := lang.NewParser(l)
+			parser := tree.NewParser(l)
+			var read bytes.Buffer
 			for i := next.Add(1) - 1; i < int64(len(files)) && ctx.Err() == nil; i = next.Add(1) - 1 {
-				sites, err := rewriteFile(files[i].path, parser, words, edit)
+				sites, err := rewriteFile(files[i], parser, &read, words, edit)
 				if err != nil || len(sites) > 0 {
 					outcomes[w] = append(outcomes[w], searched{walked: files[i], sites: sites, err: err})
 				}
@@ -135,8 +137,17 @@ func walkOrder(a, b walked) int {
 	return slices.Compare(segmentsA, segmentsB)
 }
 
-func rewriteFile(path string, parser lang.Parser, words []string, edit editor) ([]Site, error) {
-	source, err := os.ReadFile(path)
+func rewriteFile(file walked, parser *tree.Parser, read *bytes.Buffer, words []string, edit editor) ([]Site, error) {
+	path := file.path
+	opened, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	read.Reset()
+	read.Grow(int(file.size) + bytes.MinRead)
+	_, err = read.ReadFrom(opened)
+	err = errors.Join(err, opened.Close())
+	source := read.Bytes()
 	if err != nil || len(source) == 0 || len(source) > konst.CodemodFileBytesSkipped && bytes.Count(source, []byte("\n")) > konst.CodemodFileLinesSkipped {
 		return nil, err
 	}
@@ -152,7 +163,7 @@ func rewriteFile(path string, parser lang.Parser, words []string, edit editor) (
 			return nil, err
 		}
 	}
-	root, err := tree.ParseWith(parser, searched)
+	root, err := parser.Parse(searched)
 	if err != nil {
 		return nil, err
 	}

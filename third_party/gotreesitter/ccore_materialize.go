@@ -1,6 +1,10 @@
 package gotreesitter
 
-import "github.com/odvcencio/gotreesitter/internal/ccore"
+import (
+	"slices"
+
+	"github.com/odvcencio/gotreesitter/internal/ccore"
+)
 
 type ccoreBuilder struct {
 	b        *ccoreBinding
@@ -9,21 +13,42 @@ type ccoreBuilder struct {
 	nodes    []Node
 	kids     []*Node
 	fields   []FieldID
-	metas    []nodeFieldMetadata
+	lines    []uint32
 	unmapped bool
+}
+
+func lineStarts(source []byte) []uint32 {
+	lines := []uint32{0}
+	for at, c := range source {
+		if c == '\n' {
+			lines = append(lines, uint32(at+1))
+		}
+	}
+	return lines
+}
+
+func (m *ccoreBuilder) point(at uint32) Point {
+	row, found := slices.BinarySearch(m.lines, at)
+	if !found {
+		row--
+	}
+	return Point{Row: uint32(row), Column: at - m.lines[row]}
 }
 
 func (b *ccoreBinding) materialize(r *ccore.Result, source []byte) (*Tree, bool) {
 	total := 1 + b.countVisible(r, r.Root)
-	m := &ccoreBuilder{b: b, r: r, nodes: make([]Node, total), kids: make([]*Node, 0, total), fields: make([]FieldID, total)}
-	m.arena = &nodeArena{nodes: m.nodes}
-	m.nodes = m.nodes[:1]
+	arena := acquireNodeArena(arenaClassFull)
+	arena.ensureNodeCapacity(total)
+	arena.used = total
+	m := &ccoreBuilder{b: b, r: r, arena: arena, nodes: arena.nodes[:1:total], kids: arena.allocNodeSliceNoClear(total)[:0], fields: arena.allocFieldIDSlice(total), lines: lineStarts(source)}
 	root := &m.nodes[0]
-	m.build(root, r.Root, r.Trees[r.Root].Symbol, ccore.Length{})
+	m.build(root, r.Root, r.Trees[r.Root].Symbol, 0)
 	if m.unmapped {
+		arena.Release()
 		return nil, false
 	}
 	tree := NewTree(root, source, b.target)
+	tree.arena = arena
 	tree.incrementalReuseDisabled = true
 	tree.incrementalReuseUnsupportedClause = newCoreIncrementalReuseClause
 	return tree, true
@@ -33,7 +58,7 @@ func (b *ccoreBinding) childSymbol(r *ccore.Result, parent uint32, structural in
 	if child.Extra {
 		return child.Symbol
 	}
-	if row := b.source.AliasSequences[r.Trees[parent].ProductionID]; structural < len(row) && row[structural] != 0 {
+	if row := b.source.AliasSequences[r.Trees[parent].Production()]; structural < len(row) && row[structural] != 0 {
 		return uint16(row[structural])
 	}
 	return child.Symbol
@@ -80,10 +105,10 @@ func (b *ccoreBinding) directField(production uint16, structural int) FieldID {
 	return 0
 }
 
-func (m *ccoreBuilder) build(n *Node, id uint32, symbol uint16, pos ccore.Length) {
+func (m *ccoreBuilder) build(n *Node, id uint32, symbol uint16, pos uint32) {
 	t := &m.r.Trees[id]
-	start := pos.Add(t.Padding)
-	end := start.Add(t.Size)
+	start := pos + t.Padding
+	end := start + t.Size
 	if !m.b.mapped[symbol] {
 		m.unmapped = true
 	}
@@ -91,8 +116,8 @@ func (m *ccoreBuilder) build(n *Node, id uint32, symbol uint16, pos ccore.Length
 	n.symbol = m.b.symbols[symbol]
 	n.setNamed(m.b.source.SymbolMetadata[symbol].Named)
 	n.setExtra(t.Extra)
-	n.startByte, n.endByte = start.Bytes, end.Bytes
-	n.startPoint, n.endPoint = Point{start.Row, start.Column}, Point{end.Row, end.Column}
+	n.startByte, n.endByte = start, end
+	n.startPoint, n.endPoint = m.point(start), m.point(end)
 	n.childIndex = -1
 	count := m.b.visibleChildren(m.r, id)
 	if count == 0 {
@@ -106,15 +131,16 @@ func (m *ccoreBuilder) build(n *Node, id uint32, symbol uint16, pos ccore.Length
 	n.children = kids
 	for _, f := range fields {
 		if f != 0 {
-			n.fieldMetadata = m.meta(fields)
+			n.fieldMetadata = m.arena.allocNodeFieldMetadata()
+			n.fieldMetadata.ids = fields
 			break
 		}
 	}
 }
 
-func (m *ccoreBuilder) fill(parent *Node, id uint32, kids []*Node, fields []FieldID, k *int, inherited FieldID, supertypes uint32, running ccore.Length) {
+func (m *ccoreBuilder) fill(parent *Node, id uint32, kids []*Node, fields []FieldID, k *int, inherited FieldID, supertypes uint32, running uint32) {
 	structural := 0
-	production := m.r.Trees[id].ProductionID
+	production := m.r.Trees[id].Production()
 	for _, c := range m.r.Children(id) {
 		t := &m.r.Trees[c]
 		symbol := m.b.childSymbol(m.r, id, structural, t)
@@ -140,14 +166,93 @@ func (m *ccoreBuilder) fill(parent *Node, id uint32, kids []*Node, fields []Fiel
 		} else {
 			m.fill(parent, c, kids, fields, k, field, supertypes|m.b.supertypes[symbol], running)
 		}
-		running = running.Add(t.Total())
+		running += t.Total()
 	}
 }
 
-func (m *ccoreBuilder) meta(fields []FieldID) *nodeFieldMetadata {
-	if len(m.metas) == cap(m.metas) {
-		m.metas = make([]nodeFieldMetadata, 0, 1024)
+type FlatFlags uint8
+
+const (
+	FlatNamed FlatFlags = 1 << iota
+	FlatExtra
+)
+
+type FlatNode struct {
+	Start, End     uint32
+	Parent         uint32
+	Kids, KidCount uint32
+	Symbol         Symbol
+	Field          FieldID
+	Flags          FlatFlags
+}
+
+func (n *FlatNode) IsError() bool { return n.Symbol == errorSymbol }
+
+func (n *FlatNode) Type(lang *Language) string {
+	if n.IsError() {
+		return "ERROR"
 	}
-	m.metas = append(m.metas, nodeFieldMetadata{ids: fields})
-	return &m.metas[len(m.metas)-1]
+	if int(n.Symbol) < len(lang.SymbolNames) {
+		return unescapePunctuationSymbolName(lang.SymbolNames[n.Symbol])
+	}
+	return ""
+}
+
+type flatBuilder struct {
+	b     *ccoreBinding
+	r     *ccore.Result
+	nodes []FlatNode
+}
+
+func (b *ccoreBinding) flatten(r *ccore.Result, into []FlatNode) ([]FlatNode, bool) {
+	f := &flatBuilder{b: b, r: r, nodes: append(slices.Grow(into[:0], 1+b.countVisible(r, r.Root)), FlatNode{})}
+	ok := f.node(0, r.Root, r.Trees[r.Root].Symbol, 0)
+	return f.nodes, ok
+}
+
+func (f *flatBuilder) node(at, id uint32, symbol uint16, pos uint32) bool {
+	t := &f.r.Trees[id]
+	n := &f.nodes[at]
+	n.Start = pos + t.Padding
+	n.End = n.Start + t.Size
+	n.Symbol = f.b.symbols[symbol]
+	if f.b.source.SymbolMetadata[symbol].Named {
+		n.Flags |= FlatNamed
+	}
+	if t.Extra {
+		n.Flags |= FlatExtra
+	}
+	n.Kids, n.KidCount = uint32(len(f.nodes)), uint32(f.b.visibleChildren(f.r, id))
+	f.nodes = f.nodes[:n.Kids+n.KidCount]
+	next := n.Kids
+	return f.b.mapped[symbol] && f.kids(at, id, &next, 0, pos)
+}
+
+func (f *flatBuilder) kids(parent, id uint32, next *uint32, inherited FieldID, running uint32) bool {
+	structural := 0
+	production := f.r.Trees[id].Production()
+	for _, c := range f.r.Children(id) {
+		t := &f.r.Trees[c]
+		symbol := f.b.childSymbol(f.r, id, structural, t)
+		field := FieldID(0)
+		if !t.Extra {
+			field = f.b.directField(production, structural)
+			structural++
+			if field == 0 {
+				field = inherited
+			}
+		}
+		if f.b.source.SymbolMetadata[symbol].Visible {
+			at := *next
+			*next++
+			f.nodes[at] = FlatNode{Parent: parent, Field: f.b.fields[field]}
+			if !f.node(at, c, symbol, running) {
+				return false
+			}
+		} else if !f.kids(parent, c, next, field, running) {
+			return false
+		}
+		running += t.Total()
+	}
+	return true
 }

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -45,6 +46,7 @@ func run() error {
 	reps := flag.Int("reps", 0, "timing repetitions, 0 skips timing")
 	sexp := flag.Bool("sexp", false, "also compare S-expressions file by file")
 	incremental := flag.Bool("incremental", false, "also compare an incremental parse after an edit with a fresh parse")
+	flat := flag.Bool("flat", false, "only compare the flat parse cat-grep matches over with the node tree, one flat reused across every file")
 	flag.Parse()
 	language, ok := map[string]func() *ts.Language{"go": golang.Language, "python": python.Language, "rust": rust.Language}[*langName]
 	if !ok {
@@ -65,6 +67,9 @@ func run() error {
 	}
 	g := &gate{lang: language(), engine: *engine, c: *c}
 	g.parser = ts.NewParser(g.lang)
+	if *flat {
+		return g.compareFlat(files)
+	}
 	if err := g.compare(files, *sexp, *incremental); err != nil {
 		return err
 	}
@@ -235,6 +240,68 @@ func (g *gate) compare(files []file, sexp, incremental bool) error {
 		fmt.Printf("sexp same %d of %d\n", sexpSame, len(files))
 	}
 	return nil
+}
+
+func (g *gate) compareFlat(files []file) error {
+	var flat []ts.FlatNode
+	same, old := 0, 0
+	for _, f := range files {
+		tree, err := g.parser.Parse(f.src)
+		if err != nil {
+			return fmt.Errorf("%s: %w", f.path, err)
+		}
+		var fallback *ts.Tree
+		if flat, fallback, err = g.parser.ParseFlat(f.src, flat); err != nil {
+			return fmt.Errorf("%s: %w", f.path, err)
+		}
+		if fallback != nil {
+			old++
+			fallback.Release()
+			tree.Release()
+			continue
+		}
+		var lines []uint32
+		for at, c := range f.src {
+			if c == '\n' {
+				lines = append(lines, uint32(at))
+			}
+		}
+		if sameFlat(flat, 0, tree.RootNode(), g.lang, lines) {
+			same++
+		} else {
+			fmt.Println("flat differs from the node tree:", f.path)
+		}
+		tree.Release()
+	}
+	fmt.Printf("flat same %d of %d, old core tree %d\n", same, len(files), old)
+	return nil
+}
+
+func pointAt(newlines []uint32, at uint32) ts.Point {
+	row := sort.Search(len(newlines), func(i int) bool { return newlines[i] >= at })
+	if row == 0 {
+		return ts.Point{Column: at}
+	}
+	return ts.Point{Row: uint32(row), Column: at - newlines[row-1] - 1}
+}
+
+func sameFlat(flat []ts.FlatNode, at uint32, n *ts.Node, lang *ts.Language, newlines []uint32) bool {
+	got := &flat[at]
+	if got.Start != n.StartByte() || got.End != n.EndByte() || n.StartPoint() != pointAt(newlines, got.Start) || n.EndPoint() != pointAt(newlines, got.End) || got.Symbol != n.Symbol() || int(got.KidCount) != n.ChildCount() ||
+		got.Flags&ts.FlatNamed != 0 != n.IsNamed() || got.Flags&ts.FlatExtra != 0 != n.IsExtra() || n.IsMissing() {
+		return false
+	}
+	for i := range n.ChildCount() {
+		kid, child := got.Kids+uint32(i), n.Child(i)
+		field := ""
+		if id := flat[kid].Field; id != 0 && int(id) < len(lang.FieldNames) {
+			field = lang.FieldNames[id]
+		}
+		if flat[kid].Parent != at || child.Parent() != n || field != n.FieldNameForChild(i, lang) || !sameFlat(flat, kid, child, lang, newlines) {
+			return false
+		}
+	}
+	return true
 }
 
 func nodeList(n *ts.Node, lang *ts.Language) []string {
