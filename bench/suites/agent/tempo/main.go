@@ -287,8 +287,8 @@ func save(r row) error {
 	if err := os.MkdirAll(filepath.Dir(r.path()), 0o755); err != nil {
 		return err
 	}
-	fmt.Printf("%s: exit %d, %.1f s wall, %.1f s active, %.1f s model, %s, %s, %d requests, out %d, check %t, predicted P50 %.1f s\n", r.name(), r.ExitCode,
-		float64(r.WallMS)/1000, float64(r.ActiveMS)/1000, float64(r.ModelMS)/1000, r.Model, r.Credential, r.Requests, r.Tokens.Out, r.Check.Passed, r.Prediction.P50S)
+	fmt.Printf("%s: exit %d, %.1f s wall, %.1f s active, %.1f s model, %s, %s, %d requests, out %d, %d test stalls, first at %d ms, check %t, predicted P50 %.1f s\n", r.name(), r.ExitCode,
+		float64(r.WallMS)/1000, float64(r.ActiveMS)/1000, float64(r.ModelMS)/1000, r.Model, r.Credential, r.Requests, r.Tokens.Out, r.TestStalls, r.FirstStall, r.Check.Passed, r.Prediction.P50S)
 	return os.WriteFile(r.path(), append(body, '\n'), 0o644)
 }
 

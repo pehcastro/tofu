@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -14,7 +15,12 @@ import (
 	"tofu/bench/kit/transcript"
 )
 
-const idleCap = 300 * time.Second
+const (
+	idleCap   = 300 * time.Second
+	stallFrom = 20 * time.Second
+)
+
+var bunTest = regexp.MustCompile(`\bbun test\b`)
 
 var toolKinds = []string{"write", "edit", "read", "test", "build", "shell", "talk", "other"}
 
@@ -51,6 +57,8 @@ type measured struct {
 	Tokens     tokens      `json:"tokens"`
 	Calls      []kindTotal `json:"calls"`
 	Writes     writes      `json:"writes"`
+	TestStalls int         `json:"test_stalls"`
+	FirstStall int64       `json:"first_stall_ms"`
 }
 
 type stamped struct {
@@ -59,11 +67,12 @@ type stamped struct {
 }
 
 type streamEvent struct {
-	Type         string `json:"type"`
-	Subtype      string `json:"subtype"`
-	APIKeySource string `json:"apiKeySource"`
-	SessionID    string `json:"session_id"`
-	Version      string `json:"claude_code_version"`
+	Type         string    `json:"type"`
+	Subtype      string    `json:"subtype"`
+	APIKeySource string    `json:"apiKeySource"`
+	SessionID    string    `json:"session_id"`
+	Version      string    `json:"claude_code_version"`
+	Timestamp    time.Time `json:"timestamp"`
 	Message      struct {
 		ID      string          `json:"id"`
 		Model   string          `json:"model"`
@@ -136,14 +145,18 @@ func measureStream(lines []stamped) measured {
 	}
 	uses, requests := map[string]toolUse{}, map[string]*requestSpan{}
 	created, edited := map[string]bool{}, map[string]bool{}
+	bunTests := map[string]time.Time{}
 	var lastOther int64
+	var firstEvent time.Time
 	for _, line := range lines {
 		var e streamEvent
 		if json.Unmarshal([]byte(line.text), &e) != nil {
 			continue
 		}
 		var blocks []contentBlock
-		_ = json.Unmarshal(e.Message.Content, &blocks)
+		if json.Unmarshal(e.Message.Content, &blocks) == nil && blocks != nil && firstEvent.IsZero() {
+			firstEvent = e.Timestamp
+		}
 		switch e.Type {
 		case "system":
 			if e.Subtype == "init" {
@@ -163,6 +176,9 @@ func measureStream(lines []stamped) measured {
 				if b.Type == "tool_use" {
 					uses[b.ID] = toolUse{kind: toolKind(b), begun: line.ms}
 				}
+				if b.Type == "tool_use" && b.Name == "Bash" && bunTest.MatchString(b.Input.Command) {
+					bunTests[b.ID] = e.Timestamp
+				}
 			}
 			continue
 		case "user":
@@ -170,6 +186,12 @@ func measureStream(lines []stamped) measured {
 				use, known := uses[b.ToolUseID]
 				if b.Type != "tool_result" || !known {
 					continue
+				}
+				if called, ok := bunTests[b.ToolUseID]; ok && e.Timestamp.Sub(called) >= stallFrom {
+					if m.TestStalls == 0 {
+						m.FirstStall = called.Sub(firstEvent).Milliseconds()
+					}
+					m.TestStalls++
 				}
 				total := &m.Calls[slices.Index(toolKinds, use.kind)]
 				total.Calls++

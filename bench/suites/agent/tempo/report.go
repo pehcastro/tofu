@@ -62,13 +62,13 @@ func writeReport(args []string) error {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "# tempo, batch %s\n\nTimes in seconds. Actual is the wall time of the claude process, from start to exit; active is the transcript's line span with gaps capped at %s. Log error is ln(actual / P50): 0 is exact, +0.69 took twice as long. No call was discarded as a warm-up.\n\n", *batch, idleCap)
-	b.WriteString("| task | rep | P50 | P80 range | self guess | actual | active | log error | guess log error | inside P80 | check |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("| task | rep | P50 | P80 range | self guess | actual | active | log error | guess log error | inside P80 | stalls | check |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, r := range rows {
 		p := r.Prediction
-		fmt.Fprintf(&b, "| %s | %d | %.1f | %.1f to %.1f | %.1f | %.1f | %.1f | %+.2f | %+.2f | %s | %s |\n", r.Task, r.Rep, p.P50S, p.P80LowS, p.P80HighS, p.SelfGuessS,
-			r.actualS(), float64(r.ActiveMS)/1000, r.logError(p.P50S), r.logError(p.SelfGuessS), yesNo(r.insideP80(), "yes", "no"), yesNo(r.Check.Passed, "pass", "fail"))
+		fmt.Fprintf(&b, "| %s | %d | %.1f | %.1f to %.1f | %.1f | %.1f | %.1f | %+.2f | %+.2f | %s | %d | %s |\n", r.Task, r.Rep, p.P50S, p.P80LowS, p.P80HighS, p.SelfGuessS,
+			r.actualS(), float64(r.ActiveMS)/1000, r.logError(p.P50S), r.logError(p.SelfGuessS), yesNo(r.insideP80(), "yes", "no"), r.TestStalls, yesNo(r.Check.Passed, "pass", "fail"))
 	}
-	var errs, guessErrs, signed, scores []float64
+	var errs, guessErrs, signed, scores, stalledWalls, cleanWalls []float64
 	inside, passed := 0, 0
 	for _, r := range rows {
 		errs = append(errs, math.Abs(r.logError(r.Prediction.P50S)))
@@ -77,6 +77,11 @@ func writeReport(args []string) error {
 		scores = append(scores, r.intervalScore())
 		inside += boolCount(r.insideP80())
 		passed += boolCount(r.Check.Passed)
+		if r.TestStalls > 0 {
+			stalledWalls = append(stalledWalls, r.actualS())
+		} else {
+			cleanWalls = append(cleanWalls, r.actualS())
+		}
 	}
 	n := len(rows)
 	low, high := jeffreysBand(inside, n)
@@ -87,6 +92,8 @@ func writeReport(args []string) error {
 	fmt.Fprintf(&b, "\n## Batch\n\n| figure | value |\n|---|---|\n| runs | %d |\n| MdALE, median abs log error | %.2f (factor %.2f) |\n| PRED25, share with abs log error within ln 1.25 | %.2f |\n", n, median(errs), math.Exp(median(errs)), float64(within)/float64(n))
 	fmt.Fprintf(&b, "| P80 coverage | %d of %d = %.2f, Jeffreys %.0f%% band %.2f to %.2f |\n| mean interval score, log scale, alpha %.1f | %.2f |\n", inside, n, float64(inside)/float64(n), bandMass*100, low, high, intervalAlpha, mean(scores))
 	fmt.Fprintf(&b, "| self-guess MdALE, the baseline | %.2f (factor %.2f) |\n| mean signed log error, negative predicted too long | %+.2f |\n| checks passed | %d of %d |\n", median(guessErrs), math.Exp(median(guessErrs)), mean(signed), passed, n)
+	fmt.Fprintf(&b, "| median wall, stalled against clean, a stall is a bun test call answered %s or more after it was made | %s over %d stalled, %s over %d clean |\n",
+		stallFrom, medianOrNone(stalledWalls), len(stalledWalls), medianOrNone(cleanWalls), len(cleanWalls))
 	b.WriteString("\n## Phase share, predicted against measured\n\nMeasured share is the phase's milliseconds over the sum of all phases: model time per request plus tool time per kind.\n\n| task | rep |")
 	for _, phase := range phases {
 		b.WriteString(" " + phase + " |")
@@ -133,6 +140,13 @@ func median(values []float64) float64 {
 		return sorted[middle]
 	}
 	return (sorted[middle-1] + sorted[middle]) / 2
+}
+
+func medianOrNone(values []float64) string {
+	if len(values) == 0 {
+		return "none"
+	}
+	return fmt.Sprintf("%.1f", median(values))
 }
 
 func mean(values []float64) float64 {
