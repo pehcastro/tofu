@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"tofu/bench/kit/transcript"
 )
 
 type claudeLine struct {
@@ -120,7 +122,7 @@ func lineKind(line claudeLine, tools map[string]claudeTool) (bucket, string) {
 			}
 			kind := toolBucket(name)
 			if name == "Bash" || name == "PowerShell" {
-				kind = commandBucket(block.Input.Command)
+				kind = bucket(transcript.CommandBucket(block.Input.Command))
 			}
 			tools[block.ID] = claudeTool{name: name, kind: kind}
 		}

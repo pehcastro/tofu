@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"time"
 
+	"tofu/bench/kit/transcript"
 	"tofu/internal/agent/loop"
 	"tofu/internal/store/session"
 )
@@ -100,7 +101,7 @@ func (t *tally) generation(events []session.Event, exchanges []session.Exchange,
 			kind := toolBucket(call.tool)
 			switch call.tool {
 			case "bash":
-				kind = commandBucket(call.args.Command)
+				kind = bucket(transcript.CommandBucket(call.args.Command))
 				for _, name := range shellName.FindAllString(result.Content, -1) {
 					shells[agentShell{event.Agent, name}] = kind
 				}
