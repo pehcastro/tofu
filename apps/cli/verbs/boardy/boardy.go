@@ -55,6 +55,8 @@ func UsageOf(subcommand string) string {
 		return boardyRuleUsage
 	case "bypass":
 		return boardyBypassUsage
+	case "cost":
+		return boardyCostUsage
 	case "request":
 		return "tofu boardy request new <words> [--tickets A,B]|add <R> <ticket>...|review <R> pass|fail --note text|show <R>|list [--board KEY] [--as name] [--json]"
 	}
@@ -164,6 +166,8 @@ func (call boardyCall) run(subcommand string) int {
 		return call.ask()
 	case "catchup":
 		return call.catchup()
+	case "cost":
+		return call.cost()
 	}
 	return call.boards()
 }
@@ -176,7 +180,7 @@ func boardyFlags(args []string) (map[string]string, []string, error) {
 		switch {
 		case !isFlag:
 			rest = append(rest, args[i])
-		case name == "all" || name == "answers" || name == "thread" || name == "evidence":
+		case name == "all" || name == "answers" || name == "thread" || name == "evidence" || name == "claude":
 			flags[name] = "true"
 		case i+1 == len(args):
 			return nil, nil, fmt.Errorf("--%s needs a value", name)
