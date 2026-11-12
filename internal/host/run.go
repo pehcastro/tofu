@@ -693,6 +693,7 @@ func awaitPerson(emit func(Event), book *asks, config *loop.Config) loop.Person 
 		timer := time.NewTimer(unanswered.waited)
 		defer timer.Stop()
 		started := time.Now()
+		defer func() { loop.PersonWaited(ctx, time.Since(started)) }()
 		select {
 		case <-timer.C:
 			resumed.Resolution.Decision = unanswered.applied()

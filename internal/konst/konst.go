@@ -661,6 +661,13 @@ const (
 const SpawnEstimateRunsMost = 20
 
 const (
+	EstimateDoneByFactor   = 1.5
+	EstimateFirstRunFactor = 1.75
+	EstimateShortMillis    = 120_000
+	EstimateShortPadMillis = 60_000
+)
+
+const (
 	TokenRateMinTokens      = 200
 	TokenRateMinMillis      = 4_000
 	TokenRateHalfLifeMillis = 20_000

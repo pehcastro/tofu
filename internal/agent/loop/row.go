@@ -64,12 +64,13 @@ type ToolCallRow struct {
 	ResultHandleError string          `json:"result_handle_error,omitempty"`
 	SiftSavedBytes    int             `json:"sift_saved_bytes,omitempty"`
 
-	ParallelBatch  int    `json:"parallel_batch,omitempty"`
-	GateDecisionID string `json:"gate_decision_id,omitempty"`
-	GateVerdict    string `json:"gate_verdict,omitempty"`
-	GateError      string `json:"gate_error,omitempty"`
-	DurationMS     int64  `json:"duration_ms"`
-	Error          string `json:"error,omitempty"`
+	ParallelBatch    int    `json:"parallel_batch,omitempty"`
+	GateDecisionID   string `json:"gate_decision_id,omitempty"`
+	GateVerdict      string `json:"gate_verdict,omitempty"`
+	GateError        string `json:"gate_error,omitempty"`
+	DurationMS       int64  `json:"duration_ms"`
+	PermissionWaitMS int64  `json:"permission_wait_ms,omitempty"`
+	Error            string `json:"error,omitempty"`
 
 	Rules      []session.RuleFinding `json:"rules,omitempty"`
 	GateReason *ledger.Reason        `json:"gate_reason,omitempty"`
@@ -165,6 +166,7 @@ type StepRow struct {
 	CostUSD          float64           `json:"cost_usd"`
 	DurationMS       int64             `json:"duration_ms"`
 	FirstTokenMS     int64             `json:"first_token_ms"`
+	LastByteMS       int64             `json:"last_byte_ms,omitempty"`
 	Warnings         []string          `json:"warnings,omitempty"`
 	Occupancy        *recall.Occupancy `json:"occupancy,omitempty"`
 	Bands            *recall.Bands     `json:"bands,omitempty"`

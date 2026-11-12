@@ -885,6 +885,42 @@ func sessionReadsLines(page cli.Page, report sessionReadsReport) []string {
 	return lines
 }
 
+func estimateCounts(store *session.Store, id string) string {
+	events, err := store.EventsOf(id, session.EventEstimate, session.EventEstimateSettled)
+	if err != nil {
+		return "not read: " + err.Error()
+	}
+	estimated, err := session.Estimates(events)
+	if err != nil || len(estimated) == 0 {
+		return ""
+	}
+	var kept, late, open, none int
+	var latest int64
+	for _, one := range estimated {
+		switch promise, by := one.Promise(); promise {
+		case session.PromiseOpen:
+			open++
+		case session.PromiseNone:
+			none++
+		case session.PromiseKept:
+			kept++
+		case session.PromiseLate:
+			late, latest = late+1, max(latest, by)
+		}
+	}
+	words := []string{output.Plural(len(estimated), "estimate"), strconv.Itoa(kept) + " done by the promised time", strconv.Itoa(late) + " late"}
+	if late > 0 {
+		words[2] += " by up to " + spanOf(latest)
+	}
+	if open > 0 {
+		words = append(words, strconv.Itoa(open)+" open")
+	}
+	if none > 0 {
+		words = append(words, strconv.Itoa(none)+" with no promise")
+	}
+	return strings.Join(words, ", ")
+}
+
 func sessionInfoLines(page cli.Page, row sessionRow, now time.Time, store *session.Store) []string {
 	verdict := cli.Verdict{Mark: cli.Idle, Text: cmp.Or(row.Outcome, "open")}
 	hint := "tofu session resume " + row.Handle
@@ -921,6 +957,9 @@ func sessionInfoLines(page cli.Page, row sessionRow, now time.Time, store *sessi
 		{Label: "error", Text: output.OneLine(row.Error)},
 		{Label: "wire", Text: strings.TrimSpace(row.Wire + " " + row.Model)},
 		{Label: "parent", Text: parent},
+	}
+	if estimates := estimateCounts(store, row.ID); estimates != "" {
+		facts = append(facts, cli.Fact{Label: "estimates", Text: estimates})
 	}
 	if row.CostUSD > 0 {
 		facts = append(facts, cli.Fact{Label: "cost", Text: dollars(row.CostUSD)})

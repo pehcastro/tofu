@@ -9,6 +9,7 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"tofu/internal/agent/hooks"
@@ -104,6 +105,7 @@ type gatedCall struct {
 	fire    func(context.Context, hooks.Input) hooks.Verdict
 	hooks   []HookRun
 	before  []hooks.Context
+	waited  *atomic.Int64
 }
 
 type shadowVerdict struct {
@@ -130,6 +132,9 @@ func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, 
 	row.Refused, row.Hooks = g.refusal != "", append(g.hooks, row.Hooks...)
 	row.ParallelBatch = batch
 	row.Proxy = g.proxy
+	if g.waited != nil {
+		row.PermissionWaitMS = g.waited.Load()
+	}
 	row.Command = g.redact.Redact(row.Command)
 	if len(row.Args) > 0 {
 		row.Args = json.RawMessage(g.redact.Redact(string(row.Args)))

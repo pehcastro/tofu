@@ -416,68 +416,6 @@ func (a spawnArgs) mission() string {
 
 const unnamedAgent = "a sub-agent on the lead's model"
 
-func (t *SpawnTool) estimate(agent string) (string, error) {
-	who := cmp.Or(agent, unnamedAgent)
-	var headers []session.Header
-	if t.base.Sessions != nil {
-		listing, err := t.base.Sessions.ReadOnce().Listing()
-		if err != nil {
-			return "", err
-		}
-		headers = listing.Sessions
-	}
-	slices.SortFunc(headers, func(a, b session.Header) int { return b.At.Compare(a.At) })
-	var usd, calls, walls []float64
-	sessionsRead, costed := 0, false
-	for _, header := range headers {
-		ran := map[string]int{}
-		for _, run := range header.Agents {
-			if run.Definition == agent && run.EndedAt != nil && len(walls) < konst.SpawnEstimateRunsMost {
-				ran[run.Agent] = len(walls)
-				usd, calls, walls = append(usd, 0), append(calls, 0), append(walls, float64(run.EndedAt.Sub(run.StartedAt)))
-			}
-		}
-		if len(ran) == 0 {
-			continue
-		}
-		sessionsRead++
-		requests, err := t.base.Sessions.EventsOf(header.ID, session.EventRequest)
-		if err != nil {
-			return "", err
-		}
-		for _, request := range requests {
-			at, theirs := ran[request.Agent]
-			var body struct {
-				CostUSD *float64 `json:"cost_usd"`
-			}
-			if !theirs || json.Unmarshal(request.Body, &body) != nil {
-				continue
-			}
-			calls[at]++
-			if body.CostUSD != nil {
-				usd[at], costed = usd[at]+*body.CostUSD, true
-			}
-		}
-	}
-	if len(walls) == 0 {
-		return "no history: " + who + " has no finished run recorded in this project, so there is no estimate", nil
-	}
-	cost := strconv.FormatFloat(median(usd), 'f', 4, 64) + " USD"
-	if !costed {
-		cost = "no cost recorded"
-	}
-	return fmt.Sprintf("estimate for %s, the median of its last %d finished runs in %d sessions: %s, %s calls, %s of wall time",
-		who, len(walls), sessionsRead, cost, strconv.FormatFloat(median(calls), 'f', -1, 64), time.Duration(median(walls)).Round(time.Second)), nil
-}
-
-func median(values []float64) float64 {
-	sorted, middle := slices.Sorted(slices.Values(values)), len(values)/2
-	if len(sorted)%2 == 1 {
-		return sorted[middle]
-	}
-	return (sorted[middle-1] + sorted[middle]) / 2
-}
-
 func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	timing := startSpawnTiming()
 	var args spawnArgs
@@ -490,14 +428,16 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	t.mu.Unlock()
 	defer naming.passed(site.call)
 	if args.Estimate {
-		if _, err := t.SubAgents.Named(args.Agent); err != nil {
+		definition, err := t.SubAgents.Named(args.Agent)
+		if err != nil {
 			return contract.Result{}, err
 		}
-		said, err := t.estimate(args.Agent)
+		said, err := t.base.estimate(estimateFor{scope: session.EstimateAgent, model: cmp.Or(definition.Model, t.base.Slug), task: args.Task})
 		if err != nil {
 			return contract.Result{}, fmt.Errorf("spawn: no estimate: %w", err)
 		}
-		return contract.Result{Content: said + ". nothing was started", Command: "spawn estimate " + cmp.Or(args.Agent, unnamedAgent)}, nil
+		who := cmp.Or(args.Agent, unnamedAgent)
+		return contract.Result{Content: estimateWords(who, said) + ". nothing was started", Command: "spawn estimate " + who}, nil
 	}
 	if strings.TrimSpace(args.Task) == "" {
 		return contract.Result{}, errors.New("spawn: task is required")
@@ -653,18 +593,19 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 		task += t.SubAgents.Brief(definition, args.Task)
 	}
 	timing.took("brief")
+	said := narrowed + clampedWords(effort, opened) + held.runningWords() + "\n\n"
+	if estimated, err := t.estimateStart(site, subAgentID, opened.Slug, args.Task); err != nil {
+		said += "no estimate: " + err.Error()
+	} else {
+		held.trace.estimate, said = estimated, said+estimateWords(definition.Name, estimated.body)
+	}
+	timing.took("estimate")
 	site.notice(site.agent, timing.words(subAgentID))
 	started = true
 	t.Inbox.hold(held, site.log)
 	safe.Go(project.Crashes(t.Project), "sub-agent "+subAgentID, func() {
 		t.background(runCtx, cancel, held, opened, site, task, core.Origin{Source: core.SourceBrief, Name: t.orchestratorID}, warm)
 	})
-	said := narrowed + clampedWords(effort, opened) + held.runningWords()
-	if estimated, err := t.estimate(definition.Name); err != nil {
-		said += "\n\nno estimate: " + err.Error()
-	} else {
-		said += "\n\n" + estimated
-	}
 	if boardSizes != nil {
 		if err := t.base.Board.Fire(rules.WhenAfter, rules.HookAgentSpawn, "", args.Ticket, t.base.Session); err != nil {
 			said += "\n\na board hook after agent.spawn failed: " + err.Error()
@@ -905,13 +846,16 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 		}
 		return written(ended)
 	}
-	id := subAgent.NewID()
+	id, beganAt := subAgent.NewID(), time.Now()
 	began := trace.begin(id)
 	claims, sentBack, state, unbelievedAtCap, runErr := t.runRounds(ctx, subAgentCtx, held, subAgent)
 	forked := held.forkedSoFar()
 	asked := subAgent.Boundary.Reported()
 	last := &claims[len(claims)-1]
-	if err := errors.Join(began, trace.end(id, state)); err != nil {
+	held.calls.Lock()
+	outcome := agentOutcome(ctx, held.stopping, state)
+	held.calls.Unlock()
+	if err := errors.Join(began, trace.end(id, state), trace.settle(id, outcome, beganAt, append(slices.Clone(forked), claims...))); err != nil {
 		last.Warnings = append(last.Warnings, "this sub-agent run was not wholly recorded: "+err.Error())
 	}
 	report := reportOf(agent, forked, []Row{wholeRun(claims)}, state)

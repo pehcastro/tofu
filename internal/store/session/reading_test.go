@@ -58,10 +58,13 @@ func oneOfEachWrittenKind(t *testing.T) []Event {
 		eventOf(t, EventTurnEnd, map[string]string{"outcome": "stopped"}),
 		eventOf(t, EventNotice, NoticeBody{Text: "the gate is off"}),
 		eventOf(t, EventListChange, ListChangeBody{Kind: "fork", After: []string{"a1"}}),
+		eventOf(t, EventEstimate, EstimateBody{Scope: EstimateTurn, Basis: EstimateFirstRun, SaidMS: 60_000, DoneByMS: 105_000}),
+		eventOf(t, EventEstimateSettled, EstimateSettledBody{Estimate: "estimate-1", Outcome: EstimateDone, TookMS: 50_000}),
 	}
 }
 
-var tracedOnly = []EventKind{EventTurnStart, EventSpawn, EventAgentEnd, EventNotice, EventListChange, EventReport, EventHook, EventMemoryRequest, EventSent}
+var tracedOnly = []EventKind{EventTurnStart, EventSpawn, EventAgentEnd, EventNotice, EventListChange, EventReport, EventHook, EventMemoryRequest, EventSent,
+	EventEstimate, EventEstimateSettled}
 
 func TestAMemoryModelCallBetweenTheLeadsRequestsIsNotOneOfItsSteps(t *testing.T) {
 	events := []Event{

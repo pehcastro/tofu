@@ -33,9 +33,17 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 	calls, asked := map[string]int{}, map[string]session.CallBody{}
 	libraryFiles, tickets := map[string]string{}, map[string]string{}
 	forked := map[string]*loop.Fork{}
+	estimates := map[string]session.Estimated{}
+	if joined, err := session.Estimates(events); err == nil {
+		for _, estimated := range joined {
+			estimates[estimated.Event.ID] = estimated
+		}
+	}
 	for _, event := range events {
 		row := traceRow{At: event.At, Agent: event.Agent, Turn: event.Turn, ID: event.ID}
 		switch event.Kind {
+		case session.EventEstimate:
+			row = estimateRow(row, estimates[event.ID])
 		case session.EventPrompt:
 			var prompt session.PromptBody
 			_ = json.Unmarshal(event.Body, &prompt)
@@ -418,6 +426,58 @@ func spent(usd float64) string {
 		return ""
 	}
 	return dollars(usd)
+}
+
+func spanOf(ms int64) string { return render.Until(time.Duration(ms) * time.Millisecond) }
+
+func estimateRow(row traceRow, estimated session.Estimated) traceRow {
+	said := estimated.EstimateBody
+	row.Kind, row.State = kindEstimate, "open"
+	var where string
+	switch said.Scope {
+	case session.EstimateTurn:
+		where = "lead turn"
+	case session.EstimateAgent:
+		row.Agent, where = said.Agent, "sub-agent "+said.Agent+" from call "+loop.ShortID(estimated.Event.Call)
+	case session.EstimateCall:
+		where = "call " + loop.ShortID(estimated.Event.Call)
+	default:
+		row.Text = traced("an estimate this build cannot read")
+		return row
+	}
+	promised := []string{"said " + spanOf(said.SaidMS), "done by " + spanOf(said.DoneByMS)}
+	var basis string
+	switch said.Basis {
+	case session.EstimateFromHistory:
+		basis = "from " + output.Plural(said.Runs, "earlier run") + " here on " + said.Model
+	case session.EstimateFirstRun:
+		basis = "first run, from " + output.Plural(said.Runs, "run") + " in other projects on " + said.Model
+	case session.EstimateNoHistory:
+		basis, promised = "first run, no history on "+said.Model+" anywhere", []string{"no promise"}
+	default:
+		row.Text = traced(where, "an estimate this build cannot read")
+		return row
+	}
+	parts := append([]string{where, basis}, promised...)
+	settled := estimated.Settled
+	if settled == nil {
+		row.Text = traced(append(parts, "open: no settled row, so it was killed or the session closed mid-run")...)
+		return row
+	}
+	row.State = string(settled.Outcome)
+	promise, late := estimated.Promise()
+	var verdict string
+	switch promise {
+	case session.PromiseKept:
+		verdict = "in time"
+	case session.PromiseLate:
+		verdict = "late by " + spanOf(late)
+	case session.PromiseNone, session.PromiseOpen:
+	}
+	row.Text = traced(append(parts, "took "+spanOf(settled.TookMS), string(settled.Outcome), verdict,
+		"model "+spanOf(settled.ModelMS)+", tools "+spanOf(settled.ToolsMS)+", tests and builds "+spanOf(settled.TestMS)+" in "+output.Plural(settled.TestCalls, "call")+
+			", permission "+spanOf(settled.PermissionMS)+" left out of the verdict, queue "+spanOf(settled.QueueMS))...)
+	return row
 }
 
 func traceProblem(stopped bool, failure string) traceOutcome {

@@ -304,6 +304,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	taskOrigin := config.taskOrigin(start)
 	recorded.begin(row, taskOrigin)
+	estimated, endedRows := recorded.estimate(config, start), []Row(nil)
 	if len(config.History) > 0 {
 		recorded.listChange("carried", "the turn starts on the conversation the last turn or the resume left", nil, config.History)
 	}
@@ -747,6 +748,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			}
 		}
 		row.WallClockMS = now().Sub(start).Milliseconds()
+		recorded.settle(estimated, outcome, time.Duration(row.WallClockMS)*time.Millisecond, append(endedRows, row))
 		if recorded != nil {
 			for _, failed := range recorded.failed {
 				row.Warnings = append(row.Warnings, "part of this turn was not recorded as it ran: "+failed)
@@ -877,6 +879,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		ended := row
 		ended.Outcome, ended.ForkedInto, ended.EndedInFork, ended.Conversation = OutcomeForked, fork.Into, fork, messages[afterSystem:]
 		ended.WallClockMS = now().Sub(start).Milliseconds()
+		endedRows = append(endedRows, ended)
 		if config.EndedSession != nil {
 			written.Add(1)
 			safe.Go(crashes, "ended session write", func() {
@@ -918,6 +921,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			}
 		}
 		recorded.fork(ended, row, fork, row.At)
+		recorded.carry(estimated)
 		row.Session = recorded.session()
 		held := ""
 		if heldForStep > 0 {
@@ -1358,17 +1362,18 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					if pre.Args == nil {
 						request.Asked = asked.Arguments
 					}
-					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model, fire: fire, hooks: hookRunOf(hook.PreToolUse, pre), before: pre.Context}
+					asking, waited := withPersonWait(ctx)
+					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model, fire: fire, hooks: hookRunOf(hook.PreToolUse, pre), before: pre.Context, waited: waited}
 					code, asksCode := codeAsked(stepTools, call)
 					if asksCode = asksCode && config.SpawnedFrom != ""; !asksCode {
 						gated.refusal = boundaryRefusal(stepTools, call)
 					}
 					if gated.refusal == "" {
-						gated.refusal = hookRefusal(ctx, config, request, pre)
+						gated.refusal = hookRefusal(asking, config, request, pre)
 					}
 					if asksCode && gated.refusal == "" {
 						request.Code = &code
-						if gated.refusal = codeRefusal(ctx, config.Person, request); gated.refusal == "" {
+						if gated.refusal = codeRefusal(asking, config.Person, request); gated.refusal == "" {
 							codes[gated.id] = NewRegistry(inlineCodeTool{request: request, log: config.Places.Log})
 						}
 					}
@@ -1422,7 +1427,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 								hooked = "this call did not run: a GateVerdict hook turned the gate's " + string(gated.verdict.Verdict) + " into " + string(judged.Gate) + ": " + judged.GateWhy + ". "
 							}
 						}
-						if gated.refusal = gateRefusal(ctx, config.gatePerson(ctx), request, decided, gated.gateErr); gated.refusal != "" {
+						if gated.refusal = gateRefusal(asking, config.gatePerson(asking), request, decided, gated.gateErr); gated.refusal != "" {
 							gated.refusal = hooked + gated.refusal
 						}
 					}
@@ -1676,6 +1681,7 @@ func stepFrom(id string, index int, timing requestTiming, decision core.Decision
 		attempt:          timing.attempt,
 		DurationMS:       timing.durationMS,
 		FirstTokenMS:     decision.FirstTokenMS,
+		LastByteMS:       decision.LastByteMS,
 		Index:            index,
 		AssistantText:    decision.Content,
 		Model:            decision.Build,
@@ -1719,14 +1725,22 @@ func (c Config) OfferedTools() []core.Tool {
 
 func (c Config) withLoopTools(tools []contract.Tool, running runningTools) []contract.Tool {
 	added := slices.Clone(tools)
-	holdsSkill := false
+	holdsSkill, estimating := false, -1
+	var spawner *SpawnTool
 	for at, tool := range tools {
-		if spawner, spawning := tool.(*SpawnTool); spawning {
+		if spawning, spawns := tool.(*SpawnTool); spawns {
+			spawner = spawning
 			added = append(added, messageTool{orchestrator: spawner}, subAgentsTool{orchestrator: spawner})
 		}
-		if tool.Name() == SkillToolName {
+		switch tool.Name() {
+		case SkillToolName:
 			added[at], holdsSkill = skillLoading{Tool: tool, references: running.references}, true
+		case EstimateTimeToolName:
+			estimating = at
 		}
+	}
+	if estimating >= 0 {
+		added[estimating] = EstimateTime{base: c, spawner: spawner}
 	}
 	if !c.TruncateResults {
 		added = append(added, running.fetch)

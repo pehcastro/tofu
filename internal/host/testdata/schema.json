@@ -339,6 +339,9 @@
         },
         "tokens": {
           "type": "integer"
+        },
+        "tokensPerSecond": {
+          "type": "number"
         }
       },
       "required": [
@@ -350,7 +353,8 @@
         "state",
         "steps",
         "tokens",
-        "startedAt"
+        "startedAt",
+        "tokensPerSecond"
       ],
       "type": "object"
     },
@@ -6240,6 +6244,9 @@
             "null"
           ]
         },
+        "tokensPerSecond": {
+          "type": "number"
+        },
         "turn": {
           "$ref": "#/$defs/RunningTurn"
         }
@@ -6254,7 +6261,8 @@
         "agents",
         "shells",
         "members",
-        "cron"
+        "cron",
+        "tokensPerSecond"
       ],
       "type": "object"
     },
@@ -9066,6 +9074,9 @@
         "tokensOut": {
           "type": "integer"
         },
+        "tokensPerSecond": {
+          "type": "number"
+        },
         "turn": {
           "type": "string"
         }
@@ -9082,7 +9093,8 @@
         "cacheWrite5m",
         "cacheWrite1h",
         "costUsd",
-        "decisions"
+        "decisions",
+        "tokensPerSecond"
       ],
       "type": "object"
     },
@@ -17611,6 +17623,9 @@
         },
         "parent": {
           "type": "string"
+        },
+        "permission_wait_ms": {
+          "type": "integer"
         },
         "proxy": {
           "$ref": "#/$defs/turn.ProxyRow"

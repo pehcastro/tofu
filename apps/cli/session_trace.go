@@ -49,11 +49,12 @@ const (
 	kindAttachment traceKind = "attachment"
 	kindLibrary    traceKind = "library"
 	kindAdvisor    traceKind = "advisor"
+	kindEstimate   traceKind = "estimate"
 )
 
 func traceKinds() []traceKind {
 	return []traceKind{kindTurn, kindStop, kindError, kindSpawn, kindReport, kindMessage, kindInsert, kindCron, kindRequest, kindMemory,
-		kindCall, kindShell, kindGate, kindHook, kindCache, kindCompaction, kindList, kindFork, kindRead, kindStartup, kindNotice, kindAttachment, kindLibrary, kindAdvisor}
+		kindCall, kindShell, kindGate, kindHook, kindCache, kindCompaction, kindList, kindFork, kindRead, kindStartup, kindNotice, kindAttachment, kindLibrary, kindAdvisor, kindEstimate}
 }
 
 type traceOutcome string

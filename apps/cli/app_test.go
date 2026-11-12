@@ -2139,6 +2139,7 @@ func TestEveryToolInTheRunRegistryRecordsACommandThatDoesNotRepeatItsName(t *tes
 		"mutate":             {notRunHere: "it runs a test once per mutant"},
 		"eval":               {notRunHere: "it compiles and runs a program in the project's language"},
 		"digest":             {notRunHere: "it asks a cheap model about a recorded call, and this test records none"},
+		"estimate_time":      {arguments: `{"work":"greet","model":"claude-sub/claude-haiku-5-5"}`},
 		"fetch":              {arguments: `{"url":` + strconv.Quote(page.URL) + `}`},
 		"tofu_lint_comments": {arguments: `{}`},
 		"tofu_rules_check":   {arguments: `{}`},

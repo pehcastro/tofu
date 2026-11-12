@@ -37,6 +37,26 @@ type spawnTrace struct {
 	ticket     string
 	depth      int
 	stagger    stagger
+	estimate   *openEstimate
+}
+
+func (t *SpawnTool) estimateStart(site spawnSite, agent, model, task string) (*openEstimate, error) {
+	at := time.Now()
+	body, err := t.base.estimate(estimateFor{scope: session.EstimateAgent, agent: agent, model: model, task: task})
+	if err != nil || site.log == nil {
+		return &openEstimate{at: at, body: body}, err
+	}
+	event, err := site.log.Append(session.Event{At: at, Turn: site.turn, Agent: site.agent, Call: site.call, Kind: session.EventEstimate}, body)
+	return &openEstimate{id: event.ID, at: at, body: body}, err
+}
+
+func (s spawnTrace) settle(id string, outcome session.EstimateOutcome, began time.Time, ran []Row) error {
+	if s.estimate == nil {
+		return nil
+	}
+	split := splitOf(ran)
+	split.QueueMS = began.Sub(s.estimate.at).Milliseconds()
+	return s.estimate.settle(s.site.log, session.Event{Turn: s.site.turn, Agent: id}, outcome, time.Since(s.estimate.at), split)
 }
 
 func (s spawnTrace) begin(id string) error {

@@ -1295,6 +1295,7 @@ func leadToolConstructors() []leadTool {
 		{"mutate", newMutateTool},
 		{"map", newMapTool},
 		{"api", newAPITool},
+		{loop.EstimateTimeToolName, func(string) (contract.Tool, error) { return loop.EstimateTime{}, nil }},
 	}
 }
 
