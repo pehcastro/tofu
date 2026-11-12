@@ -155,6 +155,27 @@ func benchmarkDragFrame(b *testing.B, screen string, width, height int) {
 	}
 }
 
+func BenchmarkChatDragFrameOverALongSession(b *testing.B) {
+	app := benchApp(120, 36)
+	for answer := range benchEvents {
+		var text strings.Builder
+		for line := range benchLogLines {
+			fmt.Fprintf(&text, "- answer %d line %d of a long session\n", answer, line)
+		}
+		app.Update(tui.Event{Kind: tui.EventText, Text: text.String()})
+	}
+	app.Update(tea.KeyPressMsg{Code: tea.KeyPgUp})
+	app.View()
+	app.Update(tea.MouseClickMsg{X: 4, Y: 4, Button: tea.MouseLeft})
+	app.Update(tea.MouseMotionMsg{X: 40, Y: 20, Button: tea.MouseLeft})
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := range b.N {
+		app.Update(tea.MouseMotionMsg{X: 40 + i%8, Y: 20, Button: tea.MouseLeft})
+		_ = app.View()
+	}
+}
+
 func BenchmarkShellDragFrame(b *testing.B) { benchmarkDragFrame(b, "shells", 167, 47) }
 
 func BenchmarkFileDiffDragFrame(b *testing.B) { benchmarkDragFrame(b, "file_edits", 168, 42) }

@@ -310,6 +310,8 @@ type App struct {
 	updateAt       int
 	selection      pointer.Selection
 	frozen         string
+	span           heldSpan
+	edgeTicking    bool
 	drag           pointer.Drag
 	lastSelection  string
 	drawn          string
@@ -581,7 +583,7 @@ func (a *App) resize(width, height int) {
 	a.shells.SetSize(width, body)
 	a.orders.SetSize(width, body)
 	a.settings.SetSize(width, height)
-	a.selection, a.frozen = pointer.Selection{}, ""
+	a.selection, a.frozen, a.span = pointer.Selection{}, "", heldSpan{}
 }
 
 type commandPanicked string
@@ -644,8 +646,9 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		a.press(msg)
 		return nil
 	case tea.MouseMotionMsg:
-		a.motion(msg)
-		return nil
+		return a.motion(msg)
+	case edgeScrollMsg:
+		return a.edgeScroll()
 	case tea.MouseReleaseMsg:
 		return a.release(msg)
 	case tea.MouseWheelMsg:

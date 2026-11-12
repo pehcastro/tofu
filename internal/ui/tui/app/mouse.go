@@ -2,6 +2,7 @@ package app
 
 import (
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -55,13 +56,55 @@ func (a *App) pane() pointer.Pane {
 	return pointer.Pane{Split: split, Width: a.width, Top: bodyTop, Bottom: a.height - 2}
 }
 
+type heldSpan struct {
+	from, to   session.Point
+	on, placed bool
+}
+
+type edgeScrollMsg struct{}
+
+func (a *App) place() {
+	if a.span.on && !a.span.placed {
+		a.span.from, a.span.placed = a.view.PointAt(a.selection.Start.X, a.selection.Start.Y-bodyTop), true
+	}
+}
+
+func (a *App) edge() string {
+	if !a.span.on || !a.selection.Dragged {
+		return ""
+	}
+	switch y := a.selection.End.Y; {
+	case y <= bodyTop:
+		return session.WheelUp
+	case y >= bodyTop+a.view.Track().Height-1:
+		return session.WheelDown
+	}
+	return ""
+}
+
+func edgeTick() tea.Cmd {
+	return tea.Tick(pulseInterval, func(time.Time) tea.Msg { return edgeScrollMsg{} })
+}
+
+func (a *App) edgeScroll() tea.Cmd {
+	turn := a.edge()
+	if a.edgeTicking = turn != ""; !a.edgeTicking {
+		return nil
+	}
+	a.view.Scroll(turn)
+	a.span.to = a.view.PointAt(a.selection.End.X, a.selection.End.Y-bodyTop)
+	return edgeTick()
+}
+
 func (a *App) press(msg tea.MouseClickMsg) {
 	if msg.Button != tea.MouseLeft {
 		return
 	}
-	if track, scrolls := a.track(); scrolls && len(a.dialogs) == 0 {
+	track, scrolls := a.track()
+	scrolls = scrolls && len(a.dialogs) == 0
+	if scrolls {
 		if drag, grabbed := pointer.Press(msg.X, msg.Y, a.width, track); grabbed {
-			a.selection, a.drag = pointer.Selection{}, drag
+			a.selection, a.drag, a.span = pointer.Selection{}, drag, heldSpan{}
 			a.scrollTo(drag.Scroll(msg.Y))
 			return
 		}
@@ -69,21 +112,35 @@ func (a *App) press(msg tea.MouseClickMsg) {
 	at := pointer.Cell{X: msg.X, Y: msg.Y}
 	a.frozen = ""
 	a.selection = pointer.Selection{Start: at, End: at, Pressed: true, Mods: pointer.Mods{Alt: msg.Mod&tea.ModAlt != 0, Shift: msg.Mod&tea.ModShift != 0, Ctrl: msg.Mod&tea.ModCtrl != 0}}
+	a.span = heldSpan{on: scrolls && a.current == screenChat && track.Total > 0 && msg.Y >= bodyTop && msg.Y < bodyTop+track.Height}
 }
 
-func (a *App) motion(msg tea.MouseMotionMsg) {
+func (a *App) motion(msg tea.MouseMotionMsg) tea.Cmd {
 	if a.drag.Active {
 		a.scrollTo(a.drag.Scroll(msg.Y))
-		return
+		return nil
 	}
 	if !a.selection.Pressed || msg.Button != tea.MouseLeft {
-		return
+		return nil
 	}
 	a.selection.End = pointer.Cell{X: msg.X, Y: msg.Y}
 	a.selection.Dragged = a.selection.Dragged || pointer.Distance(a.selection.Start, a.selection.End) > 1
-	if a.selection.Dragged && a.frozen == "" {
-		a.frozen = a.frame()
+	if !a.selection.Dragged {
+		return nil
 	}
+	if !a.span.on {
+		if a.frozen == "" {
+			a.frozen = a.frame()
+		}
+		return nil
+	}
+	a.place()
+	a.span.to = a.view.PointAt(msg.X, msg.Y-bodyTop)
+	if a.edgeTicking || a.edge() == "" {
+		return nil
+	}
+	a.edgeTicking = true
+	return edgeTick()
 }
 
 func (a *App) release(msg tea.MouseReleaseMsg) tea.Cmd {
@@ -99,20 +156,29 @@ func (a *App) release(msg tea.MouseReleaseMsg) tea.Cmd {
 	held.Pressed, held.End = false, pointer.Cell{X: msg.X, Y: msg.Y}
 	held.Dragged = held.Dragged || pointer.Distance(held.Start, held.End) > 1
 	a.selection = held
+	text := ""
 	if held.Dragged {
-		text := a.selectedText()
-		a.selection, a.frozen = pointer.Selection{}, ""
-		if text == "" {
-			return nil
+		if a.span.on {
+			a.place()
+			a.span.to = a.view.PointAt(msg.X, msg.Y-bodyTop)
 		}
-		a.lastSelection = text
-		return a.copy(selectionUnit, text, true)
+		text = a.selectedText()
 	}
-	a.selection = pointer.Selection{}
-	return a.click(held.Start.X, held.Start.Y, held.Mods)
+	a.selection, a.frozen, a.span = pointer.Selection{}, "", heldSpan{}
+	switch {
+	case !held.Dragged:
+		return a.click(held.Start.X, held.Start.Y, held.Mods)
+	case text == "":
+		return nil
+	}
+	a.lastSelection = text
+	return a.copy(selectionUnit, text, true)
 }
 
 func (a *App) selectedText() string {
+	if a.span.on {
+		return a.view.Between(a.span.from, a.span.to)
+	}
 	frame := a.frozen
 	if frame == "" {
 		frame = a.frame()
@@ -243,7 +309,12 @@ func (a *App) wheel(msg tea.MouseWheelMsg) tea.Cmd {
 		if delta < 0 {
 			turn = session.WheelUp
 		}
+		a.place()
 		a.view.Scroll(turn)
+		if a.span.on {
+			a.selection.End, a.selection.Dragged = pointer.Cell{X: msg.X, Y: msg.Y}, true
+			a.span.to = a.view.PointAt(msg.X, msg.Y-bodyTop)
+		}
 	case screenAgents:
 		a.feed.Wheel(delta)
 	case screenEdits:

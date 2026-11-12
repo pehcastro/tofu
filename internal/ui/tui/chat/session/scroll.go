@@ -1,6 +1,10 @@
 package session
 
-import "tofu/internal/ui/tui/input/pointer"
+import (
+	"strings"
+
+	"tofu/internal/ui/tui/input/pointer"
+)
 
 const (
 	WheelUp    = "wheel up"
@@ -176,6 +180,60 @@ func (m *Model) SetScroll(behindNewest int) {
 	if tail, scrollable := m.tailAnchor(rows); scrollable {
 		m.landAt(m.move(tail, -max(0, behindNewest)), tail)
 	}
+}
+
+type Point struct {
+	at anchor
+	x  int
+}
+
+func (m *Model) PointAt(x, row int) Point {
+	rows := m.transcriptRows()
+	_, _, top := m.scrollMetrics(rows)
+	return Point{at: m.move(top, max(0, min(row, rows-1))), x: x}
+}
+
+func ordered(from, to Point) (Point, Point) {
+	if to.at.before(from.at) || to.at == from.at && to.x < from.x {
+		return to, from
+	}
+	return from, to
+}
+
+func (m *Model) Shown(from, to Point) pointer.Selection {
+	from, to = ordered(from, to)
+	rows := m.transcriptRows()
+	_, fromTop, _ := m.scrollMetrics(rows)
+	start, end := pointer.Cell{X: from.x, Y: m.offset(from.at) - fromTop}, pointer.Cell{X: to.x, Y: m.offset(to.at) - fromTop}
+	if end.Y < 0 || start.Y >= rows {
+		return pointer.Selection{}
+	}
+	if start.Y < 0 {
+		start = pointer.Cell{}
+	}
+	if end.Y >= rows {
+		end = pointer.Cell{X: m.width, Y: rows - 1}
+	}
+	return pointer.Selection{Start: start, End: end, Dragged: true}
+}
+
+func (m *Model) Between(from, to Point) string {
+	from, to = ordered(from, to)
+	var lines []string
+	for index := from.at.entry; index < len(m.entries) && index <= to.at.entry; {
+		start, end := m.blockAt(index)
+		rendered := m.blockLines(start)
+		low, high := 0, len(rendered)
+		if start == to.at.entry {
+			high = min(high, to.at.line+1)
+		}
+		if start == from.at.entry {
+			low = min(high, from.at.line)
+		}
+		lines = append(lines, rendered[low:high]...)
+		index = end
+	}
+	return pointer.SelectedText(strings.Join(lines, "\n"), pointer.Selection{Start: pointer.Cell{X: from.x}, End: pointer.Cell{X: to.x, Y: len(lines) - 1}, Dragged: true}, pointer.Pane{Width: m.width})
 }
 
 func (m *Model) Track() pointer.Track {

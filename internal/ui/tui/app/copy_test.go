@@ -186,3 +186,87 @@ func TestWithNothingToCopyTheKeySaysSoAndWritesNothing(t *testing.T) {
 		t.Errorf("nothing-to-copy reached the transcript\n%s", transcript)
 	}
 }
+
+func longAnswerApp(t *testing.T, board *stubBoard) *App {
+	t.Helper()
+	app := newTestApp(Options{Repo: testRepo, Branch: "develop", Now: fixedClock(), Wires: anthropicAlone, Copy: board.write})
+	app.Init()
+	app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	var answer []string
+	for row := 1; row <= 200; row++ {
+		answer = append(answer, fmt.Sprintf("- line %03d of the long answer", row))
+	}
+	app.Update(Event{Kind: EventText, Text: strings.Join(answer, "\n")})
+	app.Update(Event{Kind: EventDone, Text: "cooked for"})
+	return app
+}
+
+func screenRow(app *App, y int) string {
+	return strings.Trim(strings.Split(ansi.Strip(app.View().Content), "\n")[y], " │┃")
+}
+
+func released(app *App, x, y int) {
+	if cmd := app.update(tea.MouseReleaseMsg{X: x, Y: y, Button: tea.MouseLeft}); cmd != nil {
+		app.update(cmd())
+	}
+}
+
+func TestADragHeldAcrossTheWheelCopiesBothScreens(t *testing.T) {
+	board := &stubBoard{}
+	app := longAnswerApp(t, board)
+	app.update(tea.KeyPressMsg{Code: tea.KeyHome})
+	first := screenRow(app, 3)
+	app.update(tea.MouseClickMsg{X: 4, Y: 3, Button: tea.MouseLeft})
+	app.update(tea.MouseMotionMsg{X: 20, Y: 6, Button: tea.MouseLeft})
+	held := ansi.Strip(app.View().Content)
+	for range 10 {
+		app.update(tea.MouseWheelMsg{X: 20, Y: 6, Button: tea.MouseWheelDown})
+	}
+	if ansi.Strip(app.View().Content) == held {
+		t.Fatal("the wheel during a drag moved nothing on the screen")
+	}
+	app.update(tea.MouseMotionMsg{X: 70, Y: 10, Button: tea.MouseLeft})
+	last := screenRow(app, 10)
+	released(app, 70, 10)
+	lines := strings.Split(board.written, "\n")
+	if strings.TrimSpace(lines[0]) != first || strings.TrimSpace(lines[len(lines)-1]) != last {
+		t.Fatalf("copied %d lines from %q to %q, want %q to %q", len(lines), lines[0], lines[len(lines)-1], first, last)
+	}
+	if len(lines) != 30+10-3+1 {
+		t.Fatalf("copied %d lines, want the 38 between the press and the release", len(lines))
+	}
+}
+
+func TestADragHeldAtTheBottomEdgeScrollsAndGrows(t *testing.T) {
+	board := &stubBoard{}
+	app := longAnswerApp(t, board)
+	app.update(tea.KeyPressMsg{Code: tea.KeyHome})
+	app.update(tea.MouseClickMsg{X: 4, Y: 3, Button: tea.MouseLeft})
+	tick := app.update(tea.MouseMotionMsg{X: 40, Y: 23, Button: tea.MouseLeft})
+	before := ansi.Strip(app.View().Content)
+	for range 5 {
+		if tick == nil {
+			t.Fatal("a drag held at the bottom edge asked for no scroll")
+		}
+		tick = app.update(tick())
+	}
+	if ansi.Strip(app.View().Content) == before {
+		t.Fatal("a drag held at the bottom edge did not scroll the feed")
+	}
+	released(app, 40, 23)
+	if lines := strings.Count(board.written, "\n") + 1; lines <= 14 {
+		t.Fatalf("copied %d lines, want more than one screen", lines)
+	}
+}
+
+func TestAResizeDuringADragCopiesNothing(t *testing.T) {
+	board := &stubBoard{}
+	app := longAnswerApp(t, board)
+	app.update(tea.MouseClickMsg{X: 4, Y: 3, Button: tea.MouseLeft})
+	app.update(tea.MouseMotionMsg{X: 20, Y: 8, Button: tea.MouseLeft})
+	app.update(tea.WindowSizeMsg{Width: 60, Height: 20})
+	released(app, 20, 8)
+	if board.writes != 0 {
+		t.Fatalf("a resize during a drag still copied %q", board.written)
+	}
+}

@@ -68,6 +68,12 @@ when something changed, and the welcome animations share one clock.
   prompt carries the command and its output to the model. `Esc` stops a
   command; a stopped one is not carried. Known keys in the output are
   redacted.
+- **Copy an answer longer than the screen**: drag over the chat. The
+  selection holds on to the text rather than the screen, so while you hold
+  the button the wheel scrolls it, and the pointer held on the top or bottom
+  edge scrolls by itself. Letting go copies every line from where you
+  pressed to where you let go, the scrolled ones too; `Ctrl+C` copies the
+  same while you still hold it.
 - **Change a shortcut**: Search, Commands, Models, Quote selection, Edit in
   editor, Prompt history and Settings can be rebound; they're saved in
   `~/.tofu/keybindings.json`.

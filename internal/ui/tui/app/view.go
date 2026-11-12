@@ -75,7 +75,13 @@ func (a *App) View() tea.View {
 			caret.Y += bodyTop
 		}
 	}
-	content = pointer.Paint(content, a.selection, a.pane())
+	shown := a.selection
+	if a.span.on && a.selection.Dragged {
+		shown = a.view.Shown(a.span.from, a.span.to)
+		shown.Start.Y += bodyTop
+		shown.End.Y += bodyTop
+	}
+	content = pointer.Paint(content, shown, a.pane())
 	if os.Getenv(asciiEnv) != "" || os.Getenv("TERM") == dumbTerm {
 		content = look.ASCII(content)
 	}

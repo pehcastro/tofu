@@ -57,9 +57,11 @@ while the cassette still answers.
 asking the vendors, which a fresh home cannot do:
   [{"label":"claude-sub 5h","fraction":0.62,"reported":true,"resetsIn":"3h28m"}]
 
-The driven app never reads your clipboard. --clipboard PATH makes it hold that
-file, as a file copied in the explorer does, so ctrl+v attaches it; without it
-the clipboard is empty.
+The driven app never reads or writes your clipboard. --clipboard PATH makes it
+hold that file, as a file copied in the explorer does, so ctrl+v attaches it;
+without it the clipboard is empty. A copy in the app, such as a dragged
+selection or ctrl+y, writes its text into that file, and without --clipboard it
+is handed to the terminal and kept nowhere.
 
 --host runs the session in the project's tofu host and the app joins it as a
 member over the host's socket, as tofu does, so what a person types and pastes
@@ -115,6 +117,10 @@ Steps:
   click X Y [alt] [shift] [ctrl]         press and release the left button on a cell
   drag X1 Y1 X2 Y2 [alt] [shift] [ctrl]  press, move cell by cell, then release
   wheel X Y up|down [N]                  turn the wheel N notches over a cell, 1 if no N
+  press X Y    press the left button on a cell and hold it, so later steps run
+               with it held
+  move X Y     move to a cell, with the button held after a press
+  release X Y  let the held button go over a cell
   resize W H                             resize the terminal to W columns and H rows
   wait TEXT    wait until TEXT is on the screen, and fail saying so if it never is
   idle         wait until no turn runs and no sub-agent works, and fail naming
@@ -756,7 +762,14 @@ func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePla
 		now:   clock,
 		joins: plan.host,
 	}
-	return tui.New(appOptions(dir, plan.arms, recorded, launch, held))
+	options := appOptions(dir, plan.arms, recorded, launch, held)
+	options.Copy = func(text string) error {
+		if plan.clipboard == "" {
+			return platformclipboard.ErrNoLocalClipboard
+		}
+		return os.WriteFile(plan.clipboard, []byte(text), 0o600)
+	}
+	return tui.New(options)
 }
 
 func readScript(path string, in io.Reader) ([]filmstrip.Step, error) {

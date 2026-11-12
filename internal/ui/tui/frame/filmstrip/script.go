@@ -70,6 +70,12 @@ func (d *Driver) point(verb string, fields []string) error {
 			}
 		}
 		return errors.New("the step is wheel X Y up|down [N], with N notches from 1")
+	case "press", "move", "release":
+		if at, rest, ok := cells(fields, 2, 0); ok && len(rest) == 0 {
+			d.Hold(verb, at[0], at[1])
+			return nil
+		}
+		return errors.New("the step is " + verb + " X Y, with X and Y cells from 0")
 	}
 	size, rest, ok := cells(fields, 2, 1)
 	if !ok || len(rest) > 0 {
@@ -103,7 +109,7 @@ func (d *Driver) Play(step Step, within time.Duration, plain bool, out io.Writer
 		}
 		_, err := io.WriteString(out, screen+"\n")
 		return err
-	case "click", "drag", "wheel", "resize":
+	case "click", "drag", "wheel", "resize", "press", "move", "release":
 		return d.point(step.Verb, strings.Fields(step.Text))
 	default:
 		return errors.New("no step is named " + strconv.Quote(step.Verb))

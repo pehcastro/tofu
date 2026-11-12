@@ -204,6 +204,17 @@ func (d *Driver) Wheel(x, y int, up bool, notches int) error {
 	return nil
 }
 
+func (d *Driver) Hold(verb string, x, y int) {
+	var held tea.Msg = tea.MouseMotionMsg{X: x, Y: y, Button: tea.MouseLeft}
+	switch verb {
+	case "press":
+		held = tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft}
+	case "release":
+		held = tea.MouseReleaseMsg{X: x, Y: y, Button: tea.MouseLeft}
+	}
+	d.pointAtDrawnFrame(held)
+}
+
 func (d *Driver) pointAtDrawnFrame(message tea.Msg) {
 	d.app.View()
 	d.feed(message, nil)
