@@ -39,10 +39,13 @@ func recordedJudgedNouls() []float64 { return []float64{0.91, 0.62, 0.44, 0.18, 
 
 var chunkPosition = regexp.MustCompile(`chunk (\d+) of`)
 
+var ruleAppliesAsked = regexp.MustCompile(`^applies_\d+$`)
+
 func recordedRunAnswers() map[string]string {
 	return map[string]string{
-		"kind": `{"type":"choice","choice":"explore","probabilities":{"debug":0.02,"review":0.02,"explore":0.9,"write":0.03,"plan":0.02,"none":0.01},"confidence":0.9}`,
-		"open": `{"type":"noul","noul":0.08}`,
+		"kind":    `{"type":"choice","choice":"explore","probabilities":{"debug":0.02,"review":0.02,"explore":0.9,"write":0.03,"plan":0.02,"none":0.01},"confidence":0.9}`,
+		"open":    `{"type":"noul","noul":0.08}`,
+		"applies": `{"type":"noul","noul":0.12}`,
 	}
 }
 
@@ -69,7 +72,11 @@ func stubRecordedJudgedReplies(t *testing.T) {
 		}
 		var answers []string
 		for _, id := range slices.Sorted(maps.Keys(asked.Questions)) {
-			answer, recorded := recordedRunAnswers()[id]
+			reply := id
+			if ruleAppliesAsked.MatchString(id) {
+				reply = "applies"
+			}
+			answer, recorded := recordedRunAnswers()[reply]
 			if !recorded {
 				answer = fmt.Sprintf(`{"type":"noul","noul":%g}`, recordedJudgedNouls()[chunkAsked(t, id, string(raw))%len(recordedJudgedNouls())])
 			}
