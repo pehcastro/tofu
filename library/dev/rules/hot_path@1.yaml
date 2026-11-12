@@ -1,0 +1,8 @@
+id: hot_path
+domain: dev
+kind: human
+concern: code_rules
+shapes: writing
+touches: (?i)\b(fast|slow|speed|perf|latenc|throughput|optimi[sz]|bottleneck|profil|bench|hot ?path|loop|alloc)
+text: on a path that runs often, start independent calls together and await them once, never one after another; compile a regex and parse a url once, at package or module level or at the boundary, and pass the parsed value in; read only the fields you use. NEVER add a cache to make it fast: change the shape so the work is not repeated. measure before and after on the real path, and keep the change only if the number moved.
+notes: sequential awaits, per-call regex compiles and url parses, and over-wide reads are the common avoidable costs on a hot path, and a cache hides them while adding state that goes stale. moving a waterfall into a helper does not remove it.

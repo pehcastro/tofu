@@ -216,7 +216,7 @@ func TestTheShippedIndexSaysWhatFiresForATaskAndWhy(t *testing.T) {
 	for i, m := range index {
 		why[m.RuleID] = m.Why
 		trigger := rules[i].Trigger
-		reachesAnUnnamedGoTask := trigger.condition == nil && trigger.verb == VerbNone && (trigger.languages == nil || slices.Contains(trigger.languages, "go")) && trigger.frameworks == nil && trigger.role == RoleAny
+		reachesAnUnnamedGoTask := trigger.condition == nil && trigger.verb == VerbNone && (trigger.languages == nil || slices.Contains(trigger.languages, "go")) && trigger.frameworks == nil && trigger.touches == nil && trigger.role == RoleAny
 		if m.Fires != reachesAnUnnamedGoTask {
 			t.Fatalf("rule %q fires = %v for an unnamed task naming a go file and a test file, and its condition, task and language reach that task = %v: %s", m.RuleID, m.Fires, reachesAnUnnamedGoTask, m.Why)
 		}
@@ -266,7 +266,7 @@ func TestTheShippedGoRulesReachGoFilesAndNothingElse(t *testing.T) {
 	}
 	goRules := map[string]bool{}
 	for id, r := range scoped {
-		if !slices.Equal(r.Trigger.languages, []string{"go"}) {
+		if !slices.Equal(r.Trigger.languages, []string{"go"}) || r.Trigger.touches != nil {
 			continue
 		}
 		if !fires(id, source) || !fires(id, test) || fires(id, prose) {
@@ -357,6 +357,13 @@ func TestThePathPicksTheFrameworkAndJevOrTheTouchesDecidesEachRule(t *testing.T)
 			"the touches (?i)animat|motion decides, and it matched \"motion\" and a Cargo.toml lists gpui-ce"},
 		{Task{Role: RoleSubAgent, Alone: true, Text: "animate the panel in docs/notes.md", Paths: []string{"docs/notes.md"}}, false,
 			"no Cargo.toml the task reaches lists gpui-ce"},
+		{Task{Role: RoleOrchestrator, Text: "animate the panel", Frameworks: gpui, Judged: applies}, true,
+			"jev said 0.9 and a Cargo.toml lists gpui-ce, and a lead that may spawn writes code too, so Jev's judgment of the touches reaches it"},
+		{Task{Role: RoleOrchestrator, Text: "animate the panel", Frameworks: gpui}, false,
+			"Jev did not judge the touches (?i)animat|motion for a lead that may spawn, and the keyword alone never reaches one"},
+		{Task{Role: RoleOrchestrator, Text: "what does the panel do", Frameworks: gpui, Judged: applies}, false,
+			"the touches (?i)animat|motion matches nothing in the task or its paths, so Jev is not asked"},
+		{Task{Role: RoleOrchestrator, Verb: VerbPlan, Text: "plan the panel", Frameworks: gpui}, true, "a Cargo.toml lists gpui-ce"},
 	} {
 		got := Index([]Rule{r}, c.task)[0]
 		if got.Fires != c.fires || got.Why != c.why {
@@ -370,6 +377,7 @@ func TestThePathPicksTheFrameworkAndJevOrTheTouchesDecidesEachRule(t *testing.T)
 		{Task{Role: RoleSubAgent, Text: "make crates/ui/src/panel.rs ease in", Paths: panel, Frameworks: gpui}, 1},
 		{Task{Role: RoleSubAgent, Text: "make crates/ui/src/panel.rs ease in", Paths: panel}, 0},
 		{Task{Role: RoleOrchestrator, Text: "make the panel ease in", Frameworks: gpui}, 0},
+		{Task{Role: RoleOrchestrator, Text: "animate the panel", Frameworks: gpui}, 1},
 	} {
 		if asked := AskedOfTheTask([]Rule{r}, DomainDev, c.task); len(asked) != c.asked {
 			t.Errorf("%q as %s in %v asks jev about %d rules, want %d", c.task.Text, c.task.Role, c.task.Frameworks, len(asked), c.asked)

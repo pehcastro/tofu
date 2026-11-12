@@ -1,0 +1,13 @@
+id: ts_regex_once
+domain: dev
+kind: structural
+concern: code_rules
+checker: pattern
+mode: shadow
+language: typescript, javascript
+touches: (?i)\b(regexp?|regex|url|fast|slow|perf|latenc|optimi[sz]|hot ?path|loop|alloc)
+paths: "*.ts, *.tsx, *.js, *.jsx, **/*.ts, **/*.tsx, **/*.js, **/*.jsx"
+except_paths: "*.test.*, *.spec.*, **/*.test.*, **/*.spec.*"
+pattern: (?m)^[ \t]+[^\n]*\bnew (?:RegExp|URL)\(
+text: build a `RegExp` once at module level, and parse a url once at the boundary and pass the `URL` in, never `new RegExp` or `new URL` inside a function body that runs on every call.
+notes: matches new RegExp( or new URL( on an indented line, which is inside a function, a class or a block. a module level line does not match; an indented line inside a module level object literal does.

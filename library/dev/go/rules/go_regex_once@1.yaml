@@ -1,0 +1,13 @@
+id: go_regex_once
+domain: dev
+kind: structural
+concern: code_rules
+checker: pattern
+mode: shadow
+language: go
+touches: (?i)\b(regexp?|regex|fast|slow|perf|latenc|optimi[sz]|hot ?path|loop|alloc)
+paths: "*.go, **/*.go"
+except_paths: "*_test.go, **/*_test.go"
+pattern: (?m)^\t+[^\n]*(?::=|\b(?:return|if|for|switch|case|defer|go)\b|\()[^\n]*\bregexp\.(?:Must)?Compile(?:POSIX)?\((?:`[^`\n]*`|"(?:[^"\\\n]|\\.)*")\)
+text: compile a fixed regexp once, in a package level `var`, never inside a function body, which compiles it again on every call.
+notes: matches regexp.Compile or MustCompile of one string literal on an indented line that assigns with :=, or sits after a keyword or an open call. a package level var, a field of a composite literal, and a pattern built from a runtime value do not match, so a plain = assignment or a struct field inside a function is missed, and a return inside a sync.OnceValue func is a false finding.

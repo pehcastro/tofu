@@ -1,0 +1,8 @@
+id: db_access
+domain: dev
+kind: human
+concern: code_rules
+shapes: writing
+touches: (?i)\b(sql\w*|quer(y|ies)|select|databases?|db|columns?|jsonb|postgres\w*|sqlite|mysql|orm|migrations?|n\+1)\b
+text: select only the columns the caller uses, never `select *`. never query once per row in a loop: one query with a join, an `in` list or a batch. a jsonb key that a hot query filters, sorts or joins on becomes a real column with an index. check the plan of a query that runs often before you call it done.
+notes: wide selects and per-row queries multiply the work by the row count, and a filter on a jsonb key cannot use an ordinary index. it guards against queries that are fast on a test table and slow on a real one.

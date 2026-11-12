@@ -2,7 +2,7 @@
 title: How a rule fires
 description: A rule is one instruction with triggers, and it reaches a prompt only when the task matches them.
 order: 2
-updated: 2026-10-28
+updated: 2026-11-12
 ---
 
 A rule is one YAML file, `<id>@1.yaml`, holding one instruction the model
@@ -17,7 +17,7 @@ reaches a prompt only when all of them match:
 | `scope` | A named path falls inside the glob |
 | `condition` | The regular expression matches the task |
 | `unless` | Beside `condition`: a match on a line this regular expression also matches does not count, so a domain inside an import or a module line does not fire a browse rule |
-| `touches` | For a sub-agent, the regular expression matches its task or a path it owns |
+| `touches` | For a sub-agent, the regular expression matches its task or a path it owns; for a lead that may spawn, it matches and Jev agrees |
 | `task` | The task contains `debug`, `explore`, `review` or `write` |
 | `role` | The prompt is the `orchestrator`'s or a `sub-agent`'s |
 
@@ -61,8 +61,12 @@ work is done or it is blocked on something only you can settle.
 
 `touches:` is a regular expression read against a sub-agent's task and the
 paths it owns. A rule that declares it reaches a sub-agent only when the task
-or a path matches; the lead and a single agent ignore it and get the rule as
-before. Use it for a rule about one subject, such as dialogs, motion, the URL
+or a path matches. A lead that may spawn writes code too, so it gets a
+`touches` rule for how code is written when its task matches the regular
+expression and Jev then says the rule applies; with no classifier bound the
+rule stays out, and `tofu rules why` says Jev did not judge it. A plain
+question matches nothing, so it asks Jev nothing and carries none of these
+rules. Use it for a rule about one subject, such as dialogs, motion, the URL
 or server rendering, so a sub-agent working on something else does not carry
 it. The task names it by a word, such as `dialog` or `router`, or by a path,
 such as `src/router/index.ts`, and `tofu rules index "<task>" --role sub-agent`
@@ -102,6 +106,24 @@ same pattern over every file git lists under `src`, and the session trace
 records each finding on the call it fired on. A pattern that doesn't
 compile, or one under a checker other than `pattern`, is refused when the
 rule loads.
+
+tofu ships two in `shadow`: `go_regex_once` records a `regexp.MustCompile`
+of a fixed pattern inside a Go function, and `ts_regex_once` a `new RegExp`
+or `new URL` inside a TypeScript or JavaScript function. A package or
+module level one is not recorded.
+
+## Rules for fast code and for proof
+
+| Rule | What the agent does |
+|---|---|
+| `hot_path` | On a path that runs often, starts independent calls together, compiles a regex and parses a URL once, reads only the fields it uses, and changes the shape instead of adding a cache |
+| `data_oriented` | Lays data out for the hot loop: a flat array indexed by number for dense ids, a struct of arrays when a loop reads one field |
+| `db_access` | Selects only the columns it uses, never queries once per row, and makes a hot `jsonb` key a real column |
+| `formal_first` | On concurrent or stateful code, writes the states, steps, one invariant and one eventually, agrees with you that this is what verified means, then runs a bounded model or property check and a driven run |
+| `lesson_to_check`, `pattern_to_rule` | A mistake seen twice becomes a shadow `checker: pattern` rule under `.tofu/rules`, tried on one line it must refuse and one it must allow |
+
+`hot_path`, `data_oriented` and `db_access` declare `touches`, so they reach
+a writer only on a task about speed, layout or a database.
 
 ## Why rules fire only where they apply
 

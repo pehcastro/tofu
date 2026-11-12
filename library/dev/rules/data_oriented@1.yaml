@@ -1,0 +1,8 @@
+id: data_oriented
+domain: dev
+kind: human
+concern: code_rules
+shapes: writing
+touches: (?i)\b(fast|slow|perf|loop|alloc|memory|layout|struct|array|slice|map|hash|index|batch|column|cache|hot ?path)
+text: lay data out for the read the hot loop makes. ids that are dense get a flat array indexed by number, not a hash map; a loop that reads one field over many items reads it from its own array, a struct of arrays rather than an array of structs; relations are indices into those arrays, not pointers. pick the layout from the most frequent read and write, and keep the slow path simple on top of it.
+notes: a hash map or a pointer per item costs a lookup and a cache miss on every step of a loop that a flat array walks in order. it guards against layouts chosen for how the code reads rather than how the machine reads it.

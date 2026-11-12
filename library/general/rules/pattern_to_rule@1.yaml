@@ -1,0 +1,7 @@
+id: pattern_to_rule
+domain: general
+kind: human
+concern: process_discipline
+role: sub-agent
+text: when the same mistake shows up a second time, in your code or in a finding, write a check that catches it: a rule under .tofu/rules with `kind: structural`, `checker: pattern`, `mode: shadow` and a `pattern:` that matches the bad line, tried with tofu rules check on one line it must refuse and one it must allow. when .tofu/rules is outside your paths, put the rule and both lines in your report instead.
+notes: a mistake seen twice will be made a third time, by you or the next agent, unless something catches it. shadow records without blocking, so a pattern that is wrong costs a finding rather than a refused write.
