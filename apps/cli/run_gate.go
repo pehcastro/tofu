@@ -13,6 +13,7 @@ import (
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
 	toolgate "tofu/internal/judge/points/tool_gate"
+	"tofu/internal/konst"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/platform/scratch"
@@ -49,7 +50,7 @@ func toolGateOn(dir, log string, keys core.Keyring) (*toolGate, error) {
 	if err != nil {
 		return nil, unusableRule{err}
 	}
-	client, err := wiring.JevClientFrom(keys, wiring.OneCallAtATime)
+	client, err := wiring.JevClientFrom(keys, konst.TurnParallelToolCalls)
 	if err != nil {
 		return nil, err
 	}
@@ -110,30 +111,36 @@ func thresholdsInRange(r gate.Rule, set wiring.Battery) error {
 	return nil
 }
 
-func (g *toolGate) Decide(ctx context.Context, request loop.GateRequest) (loop.GateDecision, error) {
-	row, err := g.ask(ctx, request)
-	decision := loop.GateDecision{ID: row.ID, Verdict: row.Verdict, Answers: row.Answers, Reason: row.Reason,
-		Provider: row.Provider, Model: row.Build, DurationMS: row.LatencyMS}
-	var unavailable jevUnavailable
-	switch {
-	case errors.As(err, &unavailable):
-		decision.Failure, err = unavailable.Error(), nil
-	case err != nil:
-		decision = loop.GateDecision{Verdict: ledger.VerdictAsk}
-	}
-	if decision.Verdict != ledger.VerdictDeny && loop.PersonOnly(g.cwd, request) {
-		decision.Verdict, decision.PersonOnly = ledger.VerdictAsk, true
-	}
-	if g.watch != nil {
-		g.watch(host.JudgingCall(ctx, request.Call), request.Tool, decision, err)
-	}
+func (g *toolGate) Decide(ctx context.Context, request loop.GateRequest) (decision loop.GateDecision, err error) {
+	write := g.ask(ctx, request)
+	loop.InCallOrder(ctx, func() {
+		var row ledger.Row
+		row, err = write()
+		decision = loop.GateDecision{ID: row.ID, Verdict: row.Verdict, Answers: row.Answers, Reason: row.Reason,
+			Provider: row.Provider, Model: row.Build, DurationMS: row.LatencyMS}
+		var unavailable jevUnavailable
+		switch {
+		case errors.As(err, &unavailable):
+			decision.Failure, err = unavailable.Error(), nil
+		case err != nil:
+			decision = loop.GateDecision{Verdict: ledger.VerdictAsk}
+		}
+		if decision.Verdict != ledger.VerdictDeny && loop.PersonOnly(g.cwd, request) {
+			decision.Verdict, decision.PersonOnly = ledger.VerdictAsk, true
+		}
+		if g.watch != nil {
+			g.watch(host.JudgingCall(ctx, request.Call), request.Tool, decision, err)
+		}
+	})
 	return decision, err
 }
 
-func (g *toolGate) ask(ctx context.Context, request loop.GateRequest) (ledger.Row, error) {
+func (g *toolGate) ask(ctx context.Context, request loop.GateRequest) func() (ledger.Row, error) {
 	var input map[string]any
 	if err := json.Unmarshal(request.Args, &input); err != nil {
-		return ledger.Row{}, fmt.Errorf("the %s call carries arguments the gate cannot read: %w", request.Tool, err)
+		return func() (ledger.Row, error) {
+			return ledger.Row{}, fmt.Errorf("the %s call carries arguments the gate cannot read: %w", request.Tool, err)
+		}
 	}
 	call := toolgate.ToolGateInput{
 		Agent:      "tofu-run",
@@ -148,25 +155,30 @@ func (g *toolGate) ask(ctx context.Context, request loop.GateRequest) (ledger.Ro
 	}
 	built, builder, err := toolgate.BuildToolGateV3(call)
 	if err != nil {
-		return ledger.Row{}, err
+		return func() (ledger.Row, error) { return ledger.Row{}, err }
 	}
 	written := wiring.RowInput{TurnID: request.TurnID, StateBuilder: builder, Fingerprint: toolgate.FingerprintOf(call)}
 	builtState := json.RawMessage(built)
 	if own := loop.OwnShellsCalled(ctx, request); len(own) > 0 {
-		return g.rows.AppendOwnShell(builtState, g.set, written, own)
+		return func() (ledger.Row, error) { return g.rows.AppendOwnShell(builtState, g.set, written, own) }
 	}
 	decision, err := g.client.Ask(ctx, core.Request{State: builtState, Questions: g.set.Questions})
-	g.decisions++
 	if err != nil {
-		row, writeErr := g.rows.AppendFallback(builtState, g.set, written, err)
-		if writeErr != nil {
-			return row, writeErr
+		return func() (ledger.Row, error) {
+			g.decisions++
+			row, writeErr := g.rows.AppendFallback(builtState, g.set, written, err)
+			if writeErr != nil {
+				return row, writeErr
+			}
+			return row, jevUnavailable{err}
 		}
-		return row, jevUnavailable{err}
 	}
 	written.Decision = &decision
 	written.Answers = wiring.ToLedgerAnswers(g.set.QuestionsVersion, decision.Answers)
-	row, err := g.rows.Append(builtState, g.set, written)
-	g.costUSD += row.Charge.USD
-	return row, err
+	return func() (ledger.Row, error) {
+		g.decisions++
+		row, err := g.rows.Append(builtState, g.set, written)
+		g.costUSD += row.Charge.USD
+		return row, err
+	}
 }

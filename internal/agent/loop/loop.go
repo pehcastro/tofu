@@ -334,7 +334,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	ctx = search.WithTurnTask(context.WithValue(ctx, hookEngineKey{}, hooks), config.Task)
 	row.Warnings = append(row.Warnings, untrustedHooks...)
 	var hookWarnings sync.Mutex
-	fire := func(ctx context.Context, in hook.Input) hook.Verdict {
+	hear := func(ctx context.Context, in hook.Input) hook.Verdict {
 		in.Session, in.Turn = row.Session, row.ID
 		if config.SpawnedFrom != "" {
 			in.Agent, in.AgentType = origin, config.AgentType
@@ -348,7 +348,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				recorded.undoStarted()
 			}
 		}
-		verdict := hooks.Fire(ctx, in)
+		return hooks.Fire(ctx, in)
+	}
+	keepHooks := func(call string, verdict hook.Verdict) {
 		hookWarnings.Lock()
 		defer hookWarnings.Unlock()
 		for _, warning := range verdict.Warnings {
@@ -358,8 +360,12 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		for _, ran := range verdict.Runs {
 			ran.Decision, ran.Problem, ran.Stderr = redactor.Redact(ran.Decision), redactor.Redact(ran.Problem), redactor.Redact(ran.Stderr)
-			recorded.add(session.Event{Kind: session.EventHook, Call: in.CallID}, ran)
+			recorded.add(session.Event{Kind: session.EventHook, Call: call}, ran)
 		}
+	}
+	fire := func(ctx context.Context, in hook.Input) hook.Verdict {
+		verdict := hear(ctx, in)
+		keepHooks(in.CallID, verdict)
 		return verdict
 	}
 	ctx = context.WithValue(ctx, hookFireKey{}, fire)
@@ -1357,12 +1363,15 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			author := row.author()
 			for len(pending) > 0 && !tripped && leadStop == nil {
 				width := max(stepTools.parallelPrefix(pending), 1)
-				wave := make([]gatedCall, 0, width)
-				for _, asked := range pending[:width] {
+				heard := make([]heardCall, width)
+				ordered, released := callOrders(ctx, width)
+				inParallel(crashes, "parallel gate", width, func(i int) {
+					defer released[i]()
+					asked := pending[i]
 					call := asked
 					proxied, proxyRow := config.Proxy.rewrite(ctx, asked)
 					call.Arguments = proxied
-					pre := fire(ctx, hook.Input{Event: hook.PreToolUse, Tool: call.Name, Args: call.Arguments, CallID: call.ID})
+					pre := hear(ctx, hook.Input{Event: hook.PreToolUse, Tool: call.Name, Args: call.Arguments, CallID: call.ID})
 					if pre.Args != nil {
 						call.Arguments = pre.Args
 					}
@@ -1370,12 +1379,25 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					if pre.Args == nil {
 						request.Asked = asked.Arguments
 					}
-					asking, waited := withPersonWait(ctx)
-					gated := gatedCall{call: call, asked: asked, proxy: proxyRow, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model, fire: fire, hooks: hookRunOf(hook.PreToolUse, pre), before: pre.Context, waited: waited}
 					code, asksCode := codeAsked(stepTools, call)
-					if asksCode = asksCode && config.SpawnedFrom != ""; !asksCode {
-						gated.refusal = boundaryRefusal(stepTools, call)
+					heard[i] = heardCall{call: call, proxy: proxyRow, pre: pre, request: request, code: code, asksCode: asksCode && config.SpawnedFrom != ""}
+					if !heard[i].asksCode {
+						heard[i].boundary = boundaryRefusal(stepTools, call)
 					}
+					reachesGate := pre.Block == "" && pre.Ask == "" && !heard[i].asksCode && heard[i].boundary == ""
+					if reachesGate && config.Gate != nil && !gateExempt(call.Name) && config.GateMode == GateEnforce {
+						heard[i].verdict, heard[i].gateErr = decide(ordered[i], config.Gate, request)
+						heard[i].judged = true
+					}
+				})
+				wave := make([]gatedCall, 0, width)
+				for i, asked := range pending[:width] {
+					call, pre, request := heard[i].call, heard[i].pre, heard[i].request
+					keepHooks(call.ID, pre)
+					asking, waited := withPersonWait(ctx)
+					gated := gatedCall{call: call, asked: asked, proxy: heard[i].proxy, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model, fire: fire, hooks: hookRunOf(hook.PreToolUse, pre), before: pre.Context, waited: waited}
+					code, asksCode := heard[i].code, heard[i].asksCode
+					gated.refusal = heard[i].boundary
 					if gated.refusal == "" {
 						gated.refusal = hookRefusal(asking, config, request, pre)
 					}
@@ -1415,13 +1437,12 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 							judged <- shadow
 						})
 					default:
-						verdict, err := config.Gate.Decide(ctx, request)
-						gated.verdict = verdict
-						if err != nil {
-							gated.gateErr = err.Error()
+						if !heard[i].judged {
+							heard[i].verdict, heard[i].gateErr = decide(ctx, config.Gate, request)
 						}
-						if verdict.ID != "" {
-							row.DecisionIDs = append(row.DecisionIDs, verdict.ID)
+						gated.verdict, gated.gateErr = heard[i].verdict, heard[i].gateErr
+						if gated.verdict.ID != "" {
+							row.DecisionIDs = append(row.DecisionIDs, gated.verdict.ID)
 						}
 					}
 					if config.GateMode == GateEnforce {
@@ -1446,31 +1467,18 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				answers := make([]core.Message, len(wave))
 				memoHits := make([]bool, len(wave))
 				waveCtx, waveEnded := config.Inbox.stoppableWave(contract.WithStep(contract.WithReadWindow(note.With(forget.With(plan.WithEarlierCalls(ctx, messages), forgetting), noting), shownReads), step))
-				runAt := func(i, batch int) {
+				batch := 0
+				if len(wave) > 1 {
+					batches++
+					batch = batches
+				}
+				inParallel(crashes, "parallel tool call", len(wave), func(i int) {
 					gated := wave[i]
 					if gated.call.Name == (askTool{}).Name() {
 						defer waits.begin()()
 					}
 					rows[i], answers[i], memoHits[i] = gated.run(withShellCall(waveCtx, gated.id), toolsFor(gated), config.ResultBytesCap, artifacts, batch)
-				}
-				if len(wave) == 1 {
-					runAt(0, 0)
-				} else {
-					batches++
-					var running sync.WaitGroup
-					crashed := make([]error, len(wave))
-					running.Add(len(wave))
-					for i := range wave {
-						safe.Go(crashes, "parallel tool call", func() {
-							defer running.Done()
-							crashed[i] = safe.Call(nil, "parallel tool call", func() error { runAt(i, batches); return nil })
-						})
-					}
-					running.Wait()
-					if first := slices.IndexFunc(crashed, func(err error) bool { return err != nil }); first >= 0 {
-						panic(crashed[first])
-					}
-				}
+				})
 				leadStop = waveEnded()
 				shown := make([]core.Message, 0, len(answers))
 				for i := range answers {
@@ -1884,4 +1892,76 @@ func stepHold(preview recall.Config, bands recall.Bands, stepTokens int) int {
 
 func forkStateTokens(preview recall.Config) int {
 	return konst.ForkStateBytes * 1000 / preview.BytesPerThousandTokens
+}
+
+type heardCall struct {
+	call     core.ToolCall
+	proxy    *ProxyRow
+	pre      hook.Verdict
+	request  GateRequest
+	code     subagents.InlineCode
+	asksCode bool
+	boundary string
+	verdict  GateDecision
+	gateErr  string
+	judged   bool
+}
+
+func decide(ctx context.Context, gate Gate, request GateRequest) (GateDecision, string) {
+	verdict, err := gate.Decide(ctx, request)
+	if err != nil {
+		return verdict, err.Error()
+	}
+	return verdict, ""
+}
+
+func inParallel(crashes safe.Report, unit string, n int, each func(int)) {
+	if n == 1 {
+		each(0)
+		return
+	}
+	var running sync.WaitGroup
+	crashed := make([]error, n)
+	running.Add(n)
+	for i := range n {
+		safe.Go(crashes, unit, func() {
+			defer running.Done()
+			crashed[i] = safe.Call(nil, unit, func() error { each(i); return nil })
+		})
+	}
+	running.Wait()
+	if first := slices.IndexFunc(crashed, func(err error) bool { return err != nil }); first >= 0 {
+		panic(crashed[first])
+	}
+}
+
+type callOrderKey struct{}
+
+type callOrder struct {
+	after <-chan struct{}
+	done  func()
+}
+
+func callOrders(ctx context.Context, n int) ([]context.Context, []func()) {
+	contexts, released := make([]context.Context, n), make([]func(), n)
+	after := make(chan struct{})
+	close(after)
+	for i := range n {
+		previous, done := after, make(chan struct{})
+		released[i] = sync.OnceFunc(func() { <-previous; close(done) })
+		contexts[i] = context.WithValue(ctx, callOrderKey{}, callOrder{after: previous, done: released[i]})
+		after = done
+	}
+	return contexts, released
+}
+
+func InCallOrder(ctx context.Context, write func()) {
+	order, ordered := ctx.Value(callOrderKey{}).(callOrder)
+	if !ordered {
+		write()
+		return
+	}
+	<-order.after
+	defer order.done()
+	write()
 }
