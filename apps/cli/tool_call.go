@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -23,6 +22,7 @@ import (
 	"tofu/internal/models/llm/core"
 	platformfs "tofu/internal/platform/fs"
 	platformproject "tofu/internal/platform/project"
+	platformscratch "tofu/internal/platform/scratch"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/tools/contract"
@@ -82,7 +82,8 @@ func toolVerb(args []string, out, errOut io.Writer) int {
 	opts.LeadMayWorkAlone = true
 	stateDir, stateErr := platformfs.HomeConfigDir()
 	places, _ := platformproject.ResolvePlaces(cmp.Or(opts.Dir, "."))
-	atStart := stateFiles(stateDir, places.State)
+	since := time.Now()
+	atStart := stateFiles(stateDir, places.State, since, callFolders{})
 	var hand handRun
 	if lone, built := loneTool(opts, call.Name); built {
 		hand.config, err = loneConfig(opts, recorded, lone, call.Arguments, notify)
@@ -107,10 +108,11 @@ func toolVerb(args []string, out, errOut io.Writer) int {
 	if hand.siftErr != nil && (call.Name == "bash" || call.Name == loop.ShellToolName) {
 		notify("no shell result is cut: " + hand.siftErr.Error())
 	}
-	afterSetup, printed := stateFiles(stateDir, places.State), ""
+	own := callFoldersOf(hand.config)
+	afterSetup, printed := stateFiles(stateDir, places.State, since, own), ""
 	if stateErr == nil {
 		defer func() {
-			footer := "tofu tool: under " + stateDir + " the setup " + stateWritten(atStart, afterSetup) + ", and the call " + stateWritten(afterSetup, stateFiles(stateDir, places.State))
+			footer := "tofu tool: under " + stateDir + " the setup " + stateWritten(atStart, afterSetup, since) + ", and the call " + stateWritten(afterSetup, stateFiles(stateDir, places.State, since, own), since) + " (its scratch folder is not checked)"
 			if printed != "" && !strings.HasSuffix(printed, "\n") {
 				footer = "\n" + footer
 			}
@@ -241,32 +243,58 @@ type stateFile struct {
 	modified time.Time
 }
 
-func stateFiles(root, project string) map[string]stateFile {
+type callFolders struct {
+	session string
+	scratch string
+}
+
+func callFoldersOf(config loop.Config) callFolders {
+	tag := session.FamilyTag(config.Session)
+	if identity, err := config.Sessions.Identity(config.Session); err == nil {
+		tag = identity.Tag
+	}
+	folders := callFolders{session: config.Sessions.Dir(config.Session)}
+	if scratch, err := platformscratch.ScratchFor(config.Project, config.Session, "", tag); err == nil {
+		folders.scratch = scratch.SessionDir()
+	}
+	return folders
+}
+
+func stateFiles(root, project string, since time.Time, own callFolders) map[string]stateFile {
 	files := map[string]stateFile{}
-	keep := func(path string, entry fs.DirEntry) {
-		if info, err := entry.Info(); err == nil && !entry.IsDir() {
-			files[filepath.ToSlash(strings.TrimPrefix(path, root+string(filepath.Separator)))] = stateFile{info.Size(), info.ModTime()}
+	var walk func(dir string, whole bool)
+	walk = func(dir string, whole bool) {
+		entries, _ := os.ReadDir(dir)
+		for _, entry := range entries {
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+			path := filepath.Join(dir, entry.Name())
+			switch {
+			case !entry.IsDir():
+				files[filepath.ToSlash(strings.TrimPrefix(path, root+string(filepath.Separator)))] = stateFile{info.Size(), info.ModTime()}
+			case path != own.scratch && (whole || dir == project || !info.ModTime().Before(since)):
+				walk(path, whole)
+			}
 		}
 	}
-	top, _ := os.ReadDir(root)
-	for _, entry := range top {
-		keep(filepath.Join(root, entry.Name()), entry)
+	walk(root, false)
+	walk(project, false)
+	if own.session != "" {
+		walk(own.session, true)
 	}
-	_ = filepath.WalkDir(project, func(path string, entry fs.DirEntry, err error) error {
-		if err == nil {
-			keep(path, entry)
-		}
-		return nil
-	})
 	return files
 }
 
-func stateWritten(before, after map[string]stateFile) string {
+func stateWritten(before, after map[string]stateFile, since time.Time) string {
 	var written []string
 	for path, now := range after {
-		if was, existed := before[path]; !existed {
+		was, existed := before[path]
+		switch {
+		case !existed && !now.modified.Before(since):
 			written = append(written, "created "+path)
-		} else if was != now {
+		case existed && was != now:
 			written = append(written, "changed "+path)
 		}
 	}

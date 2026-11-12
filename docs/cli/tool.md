@@ -46,10 +46,15 @@ test: go test -json -count=1 . in E:\tofu-scratchpad\t\d2361-162046\go, 1629 ms
 go test: 1 passed, 1 failed, 1 skipped
 FAIL TestDiscounted order_test.go:17: got 650, want 675
 skipped: TestShipping
-tofu tool: under E:\tofu-scratchpad\t\d2361-162046\home\.tofu the setup wrote nothing, and the call wrote nothing
+tofu tool: under E:\tofu-scratchpad\t\d2361-162046\home\.tofu the setup wrote nothing, and the call wrote nothing (its scratch folder is not checked)
 ```
 
-The last line is on standard error and the rest on standard output, so
+The last line says what the setup and the call wrote under the home: every
+top-level file, the project's first two levels, any folder changed since the
+call started, and the call's session folder in full. The session's scratch
+folder is left out, since a long session holds hundreds of thousands of
+files there, so a call answers in about a quarter second. The last line is
+on standard error and the rest on standard output, so
 `2>NUL` or `2>/dev/null` keeps only what the model reads. The call exits 1
 because the tool reported a failing test.
 
