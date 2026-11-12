@@ -778,5 +778,125 @@
     "skips": "3 session files skipped for carrying no step and no wall clock, 1 step with no hand label not counted; no call discarded as a warm up",
     "commit": "eeace70b",
     "version": "0.5.17-fix1"
+  },
+  {
+    "report": "bench/suites/agent/tempo/report-2026-11-12-r2.md",
+    "figure": "0.42 (factor 1.52)",
+    "says": "The time estimate missed the actual wall time by a log error of 0.42, a factor of 1.52, and the run landed inside its P80 range, against the model's own guess missing by 1.07, a factor of 2.93. One run is a smoke test of the suite, not a rate.",
+    "from": "rerun",
+    "sample": "1 run of the t01-health hono lab task on claude-opus-5-5 through claude -p on a subscription, written offline on 2026-11-12 from the row recorded on 2026-11-10 in runs/r2",
+    "skips": "one task, one rep, so no spread; no call discarded as a warm up",
+    "commit": "562a6289",
+    "version": "0.5.22"
+  },
+  {
+    "report": "bench/suites/agent/tempo/report-2026-11-12-stall1.md",
+    "figure": "0.28 (factor 1.32)",
+    "says": "On a run with 4 test stalls the time estimate missed the actual wall time by a log error of 0.28, a factor of 1.32, inside its P80 range, and tied the model's own guess at the same 0.28. One run is a smoke test of stall counting, not a rate.",
+    "from": "rerun",
+    "sample": "1 run of the t25-chat-billing task on claude-opus-5-5 through claude -p on a subscription, written offline on 2026-11-12 from the row recorded on 2026-11-10 in runs/stall1",
+    "skips": "one task, one rep, so no spread; no call discarded as a warm up",
+    "commit": "3018112a",
+    "version": "0.5.22"
+  },
+  {
+    "report": "bench/suites/tools/change/report-2026-11-07.md",
+    "figure": "2 sites wrong or missed",
+    "says": "tofu tool codemod, preview then apply, left 2 sites wrong or missed against 8 for tofu tool edit with replace_all on the literal, at 16 calls and 3866 tokens against 8 and 1579. Codemod wins 3 comparisons, loses 1 and ties 4; the loss is rust, where it renamed a test site and the tests stopped building.",
+    "from": "prose",
+    "sample": "2 tasks in each of go, typescript, python and rust, one run per arm on a fresh fixture copy, no model call and no network",
+    "skips": "one run per cell, so no spread; no warm up",
+    "commit": "4e9ab189",
+    "version": "0.5.21"
+  },
+  {
+    "report": "bench/suites/tools/change/report-2026-11-06.md",
+    "figure": "2 sites wrong or missed",
+    "says": "tofu tool codemod, preview then apply, left 2 sites wrong or missed against 8 for tofu tool edit with replace_all on the literal, at 16 calls and 3866 tokens against 8 and 1579. Codemod wins 3 comparisons, loses 1 and ties 4.",
+    "from": "prose",
+    "sample": "2 tasks in each of go, typescript, python and rust, one run per arm on a fresh fixture copy, no model call and no network",
+    "skips": "one run per cell, so no spread; no warm up",
+    "commit": "0532f5a2",
+    "version": "0.5.21"
+  },
+  {
+    "report": "bench/suites/tools/current/report-2026-11-06.md",
+    "figure": "1191 tokens fewer of 3063 (39%)",
+    "says": "9 change arms return fewer tokens than 0.5.21 over the whole task and 0 do not, 1191 tokens fewer of 3063 (39%) over the wins. 6 single calls return more than the same step on 0.5.21, and 3 of 21 rows failed to run.",
+    "from": "prose",
+    "sample": "21 rows, scripted tool calls on a cassette against both builds, a fresh fixture copy and HOME per arm, no model call and no network",
+    "skips": "3 of 21 rows failed to run; one run per arm, no warm up",
+    "commit": "daa23a5f",
+    "version": "0.5.21"
+  },
+  {
+    "report": "bench/suites/tools/code/report-2026-11-06.md",
+    "figure": "wins 12 comparisons, loses 0 and ties 0",
+    "says": "On the alias rename tofu tool symbols missed 0 sites, changed 0 wrongly and broke the build in 0 of 4 languages, where the bare grep changed 14 wrongly and the qualified grep missed 4 and broke all 4 builds. Over rename and find callers the tool wins 12 comparisons, loses 0 and ties 0.",
+    "from": "prose",
+    "sample": "rename and find callers in go, typescript, rust and python, one run per arm on a fresh fixture copy, no model call and no network",
+    "skips": "one run per cell, so no spread; no warm up",
+    "commit": "89a2a142",
+    "version": "0.5.21"
+  },
+  {
+    "report": "bench/suites/tools/observe/report-2026-11-06.md",
+    "figure": "The tools win 2 comparisons, lose 2 and tie 0",
+    "says": "On the server fixture the http, db and search tools beat bash with whole files and the whole body and lost to aimed bash: 740 tokens in 5 calls against 217 aimed and 1022 whole for the 650 question, 303 tokens against 257 aimed and 507 whole for the export. The tools win 2 comparisons, lose 2 and tie 0.",
+    "from": "prose",
+    "sample": "2 questions on bench/suites/tools/fixtures/server, one run per arm through tofu tool on the dev build, no model call, no network beyond 127.0.0.1",
+    "skips": "one run per arm, so no spread; no warm up",
+    "commit": "45d844e0",
+    "version": "0.5.21"
+  },
+  {
+    "report": "bench/suites/tools/delegate/report-2026-11-06.md",
+    "figure": "0 wins, 3 losses, 0 ties",
+    "says": "Every model arm passed 1 of 1, and tofu tool race used 173983 tokens in 13s against 104295 in 14s for one sub-agent and 94681 in 23s for claude -p. Over the comparisons: 0 wins, 3 losses, 0 ties.",
+    "from": "prose",
+    "sample": "one go task, one run per arm on claude-sub/claude-sonnet-5-5 and claude -p on the subscription, a fresh fixture copy per arm",
+    "skips": "one run per arm, so no spread; no warm up",
+    "commit": "e5095c38",
+    "version": "0.5.21"
+  },
+  {
+    "report": "bench/suites/tools/check/report-2026-11-06.md",
+    "figure": "0 of 3 reports claim done with a line unmet",
+    "says": "With the done_check tools on, with them off and in claude -p alike, 0 of 3 reports claim done with a line unmet and 0 give no status for every line, so the run separates nothing.",
+    "from": "prose",
+    "sample": "3 sessions per arm on one go task whose broken/ line is unmet by construction, claude-sub/claude-sonnet-5 for tofu and claude -p on the subscription, effort medium",
+    "skips": "three runs per arm, no warm up",
+    "commit": "e5095c38",
+    "version": "0.5.21"
+  },
+  {
+    "report": "bench/suites/tools/history/report-2026-11-06.md",
+    "figure": "The tools win 10 comparisons, lose 2 and tie 4",
+    "says": "tofu tool bisect named the culprit turn in 4 of 4 against 0 of 4 for git by hand on uncommitted edits and 4 of 4 for git with a commit per turn, and trail restored exactly in 2 and refused in 2 with 0 wrong. The tools win 10 comparisons, lose 2 and tie 4.",
+    "from": "prose",
+    "sample": "4 bad turns in one eight turn session on a cassette, one run per arm on a fresh fixture copy, no model call and no network",
+    "skips": "one run per arm, so no spread; no warm up",
+    "commit": "3696d587",
+    "version": "0.5.21"
+  },
+  {
+    "report": "bench/suites/tools/context/report-2026-11-06.md",
+    "figure": "-16519 (-5.5%)",
+    "says": "With context, budget, forget, note and digest offered, window tokens summed over requests fell by a median of 16519, -5.5%, while the peak request rose 998, +2.0%, and the last request 1658, +5.1%.",
+    "from": "prose",
+    "sample": "runs alternating on and off over one long go session on claude-sub/claude-sonnet-5, effort medium, a 60000 token context ceiling, a fresh HOME per run",
+    "skips": "the ranges overlap on every row; no warm up and nothing discarded",
+    "commit": "34755ec7",
+    "version": "0.5.21"
+  },
+  {
+    "report": "bench/suites/tools/debug/report-2026-11-06.md",
+    "figure": "debug wins 4 comparisons, loses 2 and ties 2",
+    "says": "tofu tool debug showed call 3 in 1 of 2 at 519 and 394 tokens with no print line written, failing in 1 each, against print lines through tofu bash in 0 of 2 at 813 tokens and print lines with the test raw in 2 of 2 at 783. debug wins 4 comparisons, loses 2 and ties 2.",
+    "from": "prose",
+    "sample": "go and python, one run per arm on a fresh fixture copy, no model call and no network; debugpy not found",
+    "skips": "one run per arm, so no spread; debugpy missing, so the python debug arms fail; no warm up",
+    "commit": "8d5ecbc3",
+    "version": "0.5.21"
   }
 ]

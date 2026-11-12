@@ -114,7 +114,7 @@ func writeReport(args []string) error {
 	for _, r := range rows {
 		fmt.Fprintf(&b, "| %s | %d | %s | %s | %s | %s | %s | %s |\n", r.Task, r.Rep, strings.Join(r.Models, ", "), r.Credential, r.Version, r.Wire, r.Machine, r.StartedAt.Format(time.RFC3339))
 	}
-	path := filepath.Join(here(), "runs", *batch, "report-"+time.Now().Format("2006-01-02")+".md")
+	path := filepath.Join(here(), "report-"+time.Now().Format("2006-01-02")+"-"+*batch+".md")
 	fmt.Println("wrote", path)
 	return os.WriteFile(path, []byte(b.String()), 0o644)
 }

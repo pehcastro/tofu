@@ -78,5 +78,15 @@
     "point": "rule_applies",
     "file": "apps/cli/run.go",
     "symbol": "NewRuleJudge"
+  },
+  {
+    "point": "claims",
+    "file": "internal/tools/agents/claims/claims.go",
+    "symbol": "(c Claims) Run"
+  },
+  {
+    "point": "done_line",
+    "file": "internal/tools/agents/done/done.go",
+    "symbol": "(d Done) confirm"
   }
 ]
