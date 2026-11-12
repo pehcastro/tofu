@@ -6,8 +6,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"hash"
+	"hash/fnv"
 	"os"
 	"os/exec"
+	"runtime/pprof"
 	"slices"
 	"sort"
 	"strings"
@@ -50,6 +53,8 @@ func run() error {
 	sexp := flag.Bool("sexp", false, "also compare S-expressions file by file")
 	incremental := flag.Bool("incremental", false, "also compare an incremental parse after an edit with a fresh parse")
 	flat := flag.Bool("flat", false, "only compare the flat parse cat-grep matches over with the node tree, one flat reused across every file")
+	digest := flag.Bool("digest", false, "compare tree digests between the ccore and old routes instead of node lists against C")
+	profile := flag.String("profile", "", "only write a CPU profile of -reps passes on the -engine route to this path")
 	flag.Parse()
 	language, ok := map[string]func() *ts.Language{
 		"go": golang.Language, "python": python.Language, "rust": rust.Language,
@@ -76,7 +81,14 @@ func run() error {
 	if *flat {
 		return g.compareFlat(files)
 	}
-	if err := g.compare(files, *sexp, *incremental); err != nil {
+	if *profile != "" {
+		return g.profile(files, *reps, *profile)
+	}
+	check := func() error { return g.compare(files, *sexp, *incremental) }
+	if *digest {
+		check = func() error { return g.digests(files) }
+	}
+	if err := check(); err != nil {
 		return err
 	}
 	if *reps > 0 {
@@ -383,27 +395,31 @@ func (g *gate) cSexp(path string) (string, error) {
 	return strings.TrimSpace(string(out)), err
 }
 
-func (g *gate) time(files []file, reps int) error {
-	for _, engine := range []string{"default", "old"} {
-		if err := use(engine); err != nil {
-			return err
-		}
-		var totals []float64
-		for range reps {
-			start := time.Now()
-			for _, f := range files {
-				tree, err := g.parser.Parse(f.src)
-				if err != nil {
-					return err
-				}
-				tree.Release()
-			}
-			totals = append(totals, float64(time.Since(start).Microseconds())/1000)
-		}
-		fmt.Printf("parse ms %s %.1f (median of %d)\n", engine, median(totals), reps)
+func (g *gate) passMs(engine string, files []file) (float64, error) {
+	if err := use(engine); err != nil {
+		return 0, err
 	}
-	var totals []float64
+	start := time.Now()
+	for _, f := range files {
+		tree, err := g.parser.Parse(f.src)
+		if err != nil {
+			return 0, err
+		}
+		tree.Release()
+	}
+	return float64(time.Since(start).Microseconds()) / 1000, use(g.engine)
+}
+
+func (g *gate) time(files []file, reps int) error {
+	routes := map[string][]float64{}
 	for range reps {
+		for _, engine := range []string{"default", "old"} {
+			ms, err := g.passMs(engine, files)
+			if err != nil {
+				return err
+			}
+			routes[engine] = append(routes[engine], ms)
+		}
 		out, err := g.runC("-time", files)
 		if err != nil {
 			return err
@@ -413,10 +429,74 @@ func (g *gate) time(files []file, reps int) error {
 		if _, err := fmt.Sscanf(string(out), "files %d parse_ms %f", &n, &ms); err != nil {
 			return fmt.Errorf("timing output of the C harness %q: %w", out, err)
 		}
-		totals = append(totals, ms)
+		routes["c"] = append(routes["c"], ms)
 	}
-	fmt.Printf("parse ms c %.1f (median of %d)\n", median(totals), reps)
+	c := median(routes["c"])
+	for _, route := range []string{"default", "old", "c"} {
+		ms := median(routes[route])
+		fmt.Printf("parse ms %s %.1f min %.1f max %.1f ratio %.2f (median of %d, interleaved)\n", route, ms, routes[route][0], routes[route][reps-1], ms/c, reps)
+	}
 	return nil
+}
+
+func (g *gate) profile(files []file, reps int, path string) error {
+	out, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	if err := pprof.StartCPUProfile(out); err != nil {
+		return errors.Join(err, out.Close())
+	}
+	for range reps {
+		if _, err = g.passMs(g.engine, files); err != nil {
+			break
+		}
+	}
+	pprof.StopCPUProfile()
+	return errors.Join(err, out.Close())
+}
+
+func (g *gate) digests(files []file) error {
+	same := 0
+	for _, f := range files {
+		ccore, err := g.digestOf("default", f.src)
+		if err != nil {
+			return fmt.Errorf("%s: %w", f.path, err)
+		}
+		old, err := g.digestOf("old", f.src)
+		if err != nil {
+			return fmt.Errorf("%s: %w", f.path, err)
+		}
+		if ccore == old {
+			same++
+		} else {
+			fmt.Printf("digest differs between routes: %s ccore %016x old %016x\n", f.path, ccore, old)
+		}
+	}
+	fmt.Printf("digest equal between ccore and old %d of %d\n", same, len(files))
+	return use(g.engine)
+}
+
+func (g *gate) digestOf(engine string, src []byte) (uint64, error) {
+	if err := use(engine); err != nil {
+		return 0, err
+	}
+	tree, err := g.parser.Parse(src)
+	if err != nil {
+		return 0, err
+	}
+	defer tree.Release()
+	h := fnv.New64a()
+	writeDigest(h, tree.RootNode(), g.lang, 0)
+	return h.Sum64(), nil
+}
+
+func writeDigest(h hash.Hash64, n *ts.Node, lang *ts.Language, depth int) {
+	h.Write(fmt.Appendf(nil, "%d:%s:%v:%v:%v:%d:%d:%v:%v:%d;", depth, n.Type(lang), n.IsNamed(), n.IsMissing(), n.IsExtra(), n.StartByte(), n.EndByte(), n.StartPoint(), n.EndPoint(), n.ChildCount()))
+	for i := range n.ChildCount() {
+		h.Write(fmt.Appendf(nil, "f%s;", n.FieldNameForChild(i, lang)))
+		writeDigest(h, n.Child(i), lang, depth+1)
+	}
 }
 
 func median(values []float64) float64 {
