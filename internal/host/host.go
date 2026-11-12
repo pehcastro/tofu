@@ -95,7 +95,7 @@ type Host struct {
 	cron     *cron.Book
 	cronMove chan struct{}
 	turnLock *sync.Mutex
-	keys     func() keyMask
+	heldKeys heldKeys
 	done     chan struct{}
 	joins    bool
 
@@ -173,7 +173,6 @@ func New(cfg Config) (*Host, []string) {
 		cron:        &cron.Book{Check: cfg.Check, Changed: cronMove},
 		cronMove:    cronMove,
 		turnLock:    cfg.ProjectTurn,
-		keys:        sync.OnceValue(loadKeyMask),
 		done:        make(chan struct{}),
 		joins:       cfg.Joins,
 		member:      MemberTUI,
@@ -914,7 +913,13 @@ func (h *Host) Resume(carry Carry) (Opened, error) {
 	return opened, nil
 }
 
-func (h *Host) Opening(carry Carry) Opened { return resumedChat(carry, h.dir) }
+func (h *Host) Opening(carry Carry) Opened {
+	if carry.Keys == nil {
+		held := h.keys()
+		carry.Keys = &held.redactor
+	}
+	return resumedChat(carry, h.dir)
+}
 
 func (h *Host) Compacted(into string, messages []core.Message) error {
 	h.mu.Lock()
@@ -938,7 +943,7 @@ func (h *Host) Compacted(into string, messages []core.Message) error {
 }
 
 func (h *Host) Ran(command, output string, stopped bool) string {
-	redactor := credential.LoadKeyRedactor()
+	redactor := h.keys().redactor
 	output = ansi.Strip(redactor.Redact(output))
 	if f := h.following.Load(); f != nil {
 		f.ask(followAsk{Op: followRan, Command: command, Text: output, Stopped: stopped})

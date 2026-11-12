@@ -151,6 +151,7 @@ func ResolveQuote(store *session.Store, recorded, ref string) (Quoted, error) {
 			return Quoted{}, err
 		case len(hits) == 1:
 			hits[0].Outcome, hits[0].Hash, hits[0].Session, hits[0].Ref = QuoteItem, hash, header.ID, refOf(hits[0].Event)
+			hits[0].Words = credential.LoadKeyRedactor().Redact(hits[0].Words)
 			return hits[0], nil
 		case len(hits) > 1:
 			return Quoted{Outcome: QuoteAmbiguous, Hash: hash, Session: header.ID}, nil
@@ -229,7 +230,7 @@ func quotedAgent(store *session.Store, recorded, name string) ([]Quoted, error) 
 				words += "\nit reported " + report.State + ": " + report.Text
 			}
 		}
-		hits = append(hits, Quoted{Event: name, Speaker: "the sub-agent " + name, Noun: "sub-agent", Words: credential.LoadKeyRedactor().Redact(words)})
+		hits = append(hits, Quoted{Event: name, Speaker: "the sub-agent " + name, Noun: "sub-agent", Words: words})
 	}
 	return hits, nil
 }
@@ -256,7 +257,7 @@ func quotedCall(call session.Event, events []session.Event) (Quoted, error) {
 		}
 		words += "it " + cmp.Or(result.ToolOutcome, session.ToolOutcomeRan) + " and returned:\n" + cmp.Or(result.Content, result.Error)
 	}
-	return Quoted{Event: call.ID, Speaker: speaker, Noun: "call", Words: credential.LoadKeyRedactor().Redact(words)}, nil
+	return Quoted{Event: call.ID, Speaker: speaker, Noun: "call", Words: words}, nil
 }
 
 func quoteSpeaker(role string) string {

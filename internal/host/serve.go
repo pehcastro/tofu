@@ -22,7 +22,6 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/quota"
-	"tofu/internal/platform/credential"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
@@ -140,11 +139,11 @@ func sessionFiles(dir, id string) string {
 	return files.String()
 }
 
-func (w *historyWalk) linesOf(carry Carry, dir string) []outgoing {
+func (w *historyWalk) linesOf(carry Carry, h *Host) []outgoing {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	read := newItems(carry.Session)
-	lines := read.all(resumedChat(carry, dir).Chat)
+	lines := read.all(h.Opening(carry).Chat)
 	if carry.Store == nil {
 		return lines
 	}
@@ -287,7 +286,7 @@ func (s *server) respond(id json.RawMessage, result any, err error) {
 	case errors.As(err, &refused):
 		reply.Error = refused
 	case err != nil:
-		reply.Error = &Refusal{Code: CodeRefused, Message: credential.LoadKeyRedactor().Redact(err.Error())}
+		reply.Error = &Refusal{Code: CodeRefused, Message: s.Host.keys().mask(err.Error())}
 	default:
 		reply.Result = result
 	}
@@ -480,7 +479,7 @@ func (s *server) history(p SessionHistoryParams) (any, error) {
 		if carry.Session == p.Session {
 			s.walk.keep(carry, files)
 		}
-		id, lines = carry.Session, s.walk.linesOf(carry, s.Host.dir)
+		id, lines = carry.Session, s.walk.linesOf(carry, s.Host)
 	}
 	first, end := window(len(lines))
 	page := []HistoryLine{}
@@ -785,7 +784,7 @@ func (s *server) shellRead(p ShellParams) (any, error) {
 	if read == nil || read.state != process.Running {
 		read = &watchedShell{}
 	}
-	if err := s.follow(p.Shell, read, credential.LoadKeyRedactor().Redact); err != nil {
+	if err := s.follow(p.Shell, read, s.Host.keys().mask); err != nil {
 		return nil, err
 	}
 	if read != s.shells[p.Shell] {
@@ -870,7 +869,7 @@ func (s *server) shellTakeOver(p ShellSizeParams) (any, error) {
 	watched := s.caughtUp(p.Shell)
 	held := ShellHeld{Shell: p.Shell, Holder: ShellHolder(process.HolderPerson), Since: *hold.Shell.HeldSince, Offset: watched.next()}
 	if watched.holder != process.HolderPerson {
-		s.changeHolder(hold.Shell.Owner, held, "", "The person took over "+p.Shell+" ("+credential.LoadKeyRedactor().Redact(hold.Shell.Command)+"). Do not read, wait on, stop or restart it until it is handed back.")
+		s.changeHolder(hold.Shell.Owner, held, "", "The person took over "+p.Shell+" ("+s.Host.keys().mask(hold.Shell.Command)+"). Do not read, wait on, stop or restart it until it is handed back.")
 	}
 	watched.raw = hold.Next
 	return ShellTakenOver{ShellHeld: held, Cols: p.Cols, Rows: p.Rows, Base: hold.Base, Next: hold.Next, Replay: hold.Replay}, nil
@@ -1220,7 +1219,7 @@ func (s *server) watched(name string) *watchedShell {
 
 func (s *server) caughtUp(name string) *watchedShell {
 	watched := s.watched(name)
-	_ = s.follow(name, watched, credential.LoadKeyRedactor().Redact)
+	_ = s.follow(name, watched, s.Host.keys().mask)
 	return watched
 }
 
@@ -1345,10 +1344,7 @@ func (s *server) scanShells(first bool) {
 	}
 	listening := s.listenersOf(found)
 	background := slices.DeleteFunc(found, process.Shell.OneShot)
-	mask := func(text string) string { return text }
-	if len(background) > 0 {
-		mask = credential.LoadKeyRedactor().Redact
-	}
+	mask := s.Host.keys().mask
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	focus := s.focus()

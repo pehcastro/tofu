@@ -14,7 +14,6 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/platform/clipboard"
-	"tofu/internal/platform/credential"
 	"tofu/internal/platform/fs"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/history/quote"
@@ -242,7 +241,7 @@ func (s *server) shellsNow() []ShellNow {
 		return now
 	}
 	found, _ := s.Shells.List()
-	mask := credential.LoadKeyRedactor().Redact
+	mask := s.Host.keys().mask
 	for _, one := range slices.DeleteFunc(found, process.Shell.OneShot) {
 		now = append(now, ShellNow{Shell: one.Name, Session: one.Session, Command: mask(one.Command), PID: one.PID, State: ShellState(one.State), StartedAt: one.Started, ExitCode: one.ExitCode, EndedAt: one.Ended,
 			Kept: ShellKept(one.Kept), Dir: one.Dir, Port: one.Port, Ready: ShellReady(one.Ready), LeftOver: one.LeftOver(), Ref: quote.QuoteRef(one.Call), ShellHolding: holdingOf(one)})

@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"tofu/internal/platform/credential"
+	"tofu/internal/platform/safe"
 	"tofu/internal/tools/agents/cron"
 )
 
@@ -26,18 +27,66 @@ type stream struct {
 }
 
 type keyMask struct {
-	mask    func(string) string
-	secrets []string
+	redactor credential.KeyRedactor
+	secrets  []string
 }
 
-func loadKeyMask() keyMask {
-	redactor := credential.LoadKeyRedactor()
-	stored, _ := credential.StoredKeys()
+func (m keyMask) mask(text string) string { return m.redactor.Redact(text) }
+
+type heldKeys struct {
+	mu     sync.Mutex
+	stamp  string
+	built  bool
+	stored map[string]string
+	held   keyMask
+}
+
+func (k *heldKeys) current() (keyMask, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	stamp := keyStoreStamp()
+	if k.built && stamp == k.stamp {
+		return k.held, nil
+	}
+	k.stamp = stamp
+	stored, err := credential.StoredKeys()
+	if k.built && (err != nil || maps.Equal(stored, k.stored)) {
+		return k.held, err
+	}
 	secrets := slices.Collect(maps.Values(stored))
 	for _, name := range credential.KeyNames() {
 		secrets = append(secrets, strings.TrimSpace(os.Getenv(name)))
 	}
-	return keyMask{mask: redactor.Redact, secrets: slices.DeleteFunc(secrets, func(secret string) bool { return secret == "" })}
+	k.built, k.stored = true, stored
+	k.held = keyMask{redactor: credential.KeyRedactorOf(stored), secrets: slices.DeleteFunc(secrets, func(secret string) bool { return secret == "" })}
+	return k.held, err
+}
+
+func keyStoreStamp() string {
+	path, err := credential.CredentialStorePath()
+	if err != nil {
+		return "no home"
+	}
+	var stamp strings.Builder
+	for _, file := range []string{path, path + "-wal"} {
+		info, err := os.Stat(file)
+		if err != nil {
+			stamp.WriteString("absent ")
+			continue
+		}
+		stamp.WriteString(strconv.FormatInt(info.Size(), 10) + " " + strconv.FormatInt(info.ModTime().UnixNano(), 10) + " ")
+	}
+	return stamp.String()
+}
+
+func (h *Host) keys() keyMask {
+	held, err := h.heldKeys.current()
+	if err != nil {
+		safe.Go(h.report, "key store note", func() {
+			h.note("the key store could not be read, so keys stay masked as they were before it changed: " + err.Error())
+		})
+	}
+	return held
 }
 
 func (h *Host) emitter() *emitter { return &emitter{h: h, keyMask: h.keys()} }
@@ -67,7 +116,7 @@ func (e *emitter) emit(event Event) {
 			e.send(Event{Kind: EventTextDelta, Text: tail})
 		}
 	}
-	e.send(redacted(event, e.mask))
+	e.send(redacted(event, e.h.keys().mask))
 }
 
 func (e *emitter) send(event Event) {
