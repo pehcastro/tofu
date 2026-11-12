@@ -147,9 +147,11 @@ func (r *Registry) YieldReady(ctx context.Context, cmd *exec.Cmd, command, owner
 	return got, err
 }
 
+var readyOutput = regexp.MustCompile(`(?i)\b(?:listening|ready|started server)\b|http://`)
+
 func (r *Registry) readiness(name string, wait Wait) Readiness {
 	output, _ := os.ReadFile(r.logPath(name))
-	if regexp.MustCompile(`(?i)\b(?:listening|ready|started server)\b|http://`).Match(output) {
+	if readyOutput.Match(output) {
 		return ReadyLine
 	}
 	if wait.Port > 0 && slices.ContainsFunc(dialLoopbacks(wait.Port, wait.Poll), func(one Address) bool { return one.Open }) {

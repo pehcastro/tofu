@@ -21,6 +21,8 @@ const (
 	leftOut       = "(the %d oldest lines are left out to fit this context; recall finds their words)\n"
 )
 
+var erroredSubAgentReport = regexp.MustCompile(`^sub-agent \S+ is ` + subagents.Errored.String() + `: `)
+
 func episodesLog(project string) (string, error) {
 	full, err := filepath.Abs(project)
 	if err != nil {
@@ -43,7 +45,7 @@ func openEpisodes(project string) (*tree.Store, error) {
 }
 
 func KeepEpisode(project string, item tree.Item) error {
-	if item.Kind == tree.KindWork && regexp.MustCompile(`^sub-agent \S+ is `+subagents.Errored.String()+`: `).MatchString(item.Text) {
+	if item.Kind == tree.KindWork && erroredSubAgentReport.MatchString(item.Text) {
 		return nil
 	}
 	store, err := openEpisodes(project)

@@ -350,9 +350,12 @@ func WordsAtMost(subject, text string, most int) error {
 	return fmt.Errorf("%s is %d words, %d over the %d; trimmed to %d it reads: %q", subject, len(words), len(words)-most, most, most, strings.Join(words[:most], " "))
 }
 
+var (
+	personDescribed = regexp.MustCompile(`(?i)\b(?:the\s+(?:person|user|owner|human|developer)|(?:person|user|owner)'s)\b`)
+	personNamed     = regexp.MustCompile(`(?:(?i:\b(?:he|she|they))|^\s*\p{Lu}\pL*)\s+(?i:wants?|prefers?|likes?|asks?|asked|said|says|needs?|expects?|hates?|told|keeps)\b`)
+)
+
 func PersonIn(statement string) (string, bool) {
-	described := regexp.MustCompile(`(?i)\b(?:the\s+(?:person|user|owner|human|developer)|(?:person|user|owner)'s)\b`)
-	named := regexp.MustCompile(`(?:(?i:\b(?:he|she|they))|^\s*\p{Lu}\pL*)\s+(?i:wants?|prefers?|likes?|asks?|asked|said|says|needs?|expects?|hates?|told|keeps)\b`)
-	found := described.FindString(statement) + named.FindString(statement)
+	found := personDescribed.FindString(statement) + personNamed.FindString(statement)
 	return found, found != ""
 }

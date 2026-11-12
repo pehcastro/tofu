@@ -108,12 +108,13 @@ func (d *Driver) FindTarget(role, name string, nth int) (ref string, fits []stri
 	return "", fits, nil
 }
 
+var refLine = regexp.MustCompile(`ref=(e\d+)[,\]]`)
+
 func (d *Driver) matches(role, name string) (exact, loose []string, err error) {
 	snapshot, err := d.observe(time.Now().Add(konst.BrowserObserveTimeoutMillis*time.Millisecond), true)
 	if err != nil {
 		return nil, nil, err
 	}
-	refLine := regexp.MustCompile(`ref=(e\d+)[,\]]`)
 	wanted := strings.ToLower(name)
 	var starting, containing []string
 	for line := range strings.Lines(snapshot) {
@@ -150,7 +151,6 @@ func (d *Driver) ObserveChanges() (string, error) {
 }
 
 func changes(before, after string) string {
-	refLine := regexp.MustCompile(`ref=(e\d+)[,\]]`)
 	lines := func(snapshot string) ([]string, map[string]string) {
 		var order []string
 		byRef := map[string]string{}

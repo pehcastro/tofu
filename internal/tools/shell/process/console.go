@@ -153,12 +153,17 @@ func (s *screenText) escape(rest []byte, text *bytes.Buffer) int {
 	return 2
 }
 
+var (
+	quotedSpan       = regexp.MustCompile(`"[^"]*"|'[^']*'`)
+	commandSeparator = regexp.MustCompile(`&&|\|\||;|\n`)
+)
+
 func pipelines(command string) [][][]string {
-	shielded := regexp.MustCompile(`"[^"]*"|'[^']*'`).ReplaceAllStringFunc(command, func(quoted string) string {
+	shielded := quotedSpan.ReplaceAllStringFunc(command, func(quoted string) string {
 		return strings.NewReplacer("|", " ", ";", " ", "&", " ", ">", " ").Replace(quoted)
 	})
 	var all [][][]string
-	for _, run := range regexp.MustCompile(`&&|\|\||;|\n`).Split(shielded, -1) {
+	for _, run := range commandSeparator.Split(shielded, -1) {
 		var stages [][]string
 		for _, stage := range strings.Split(run, "|") {
 			stages = append(stages, strings.Fields(stage))

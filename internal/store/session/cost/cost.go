@@ -133,8 +133,10 @@ func Project(root string, keys []string) (Book, error) {
 	return read(leads, keys)
 }
 
+var unsafePathRune = regexp.MustCompile(`[^a-zA-Z0-9]`)
+
 func ProjectDir(claudeHome, project string) string {
-	return filepath.Join(claudeHome, "projects", regexp.MustCompile(`[^a-zA-Z0-9]`).ReplaceAllString(project, "-"))
+	return filepath.Join(claudeHome, "projects", unsafePathRune.ReplaceAllString(project, "-"))
 }
 
 func leadFiles(root, prefix string) ([]string, error) {

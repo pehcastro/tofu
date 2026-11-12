@@ -317,6 +317,8 @@ func trustOf(hook Hook, records []trustRecord) Trust {
 	return TrustNew
 }
 
+var shellToken = regexp.MustCompile(`"[^"]*"|'[^']*'|\S+`)
+
 func (e *Engine) hash(hook Hook) string {
 	sum := sha256.New()
 	described, _ := json.Marshal([]any{hook.File, hook.Event, hook.Matcher, hook.Command, hook.Shell, hook.Timeout})
@@ -325,7 +327,7 @@ func (e *Engine) hash(hook Hook) string {
 	for _, name := range []string{"${CLAUDE_PROJECT_DIR}", "$CLAUDE_PROJECT_DIR", "%CLAUDE_PROJECT_DIR%"} {
 		expanded = strings.ReplaceAll(expanded, name, e.project)
 	}
-	for _, token := range regexp.MustCompile(`"[^"]*"|'[^']*'|\S+`).FindAllString(expanded, -1) {
+	for _, token := range shellToken.FindAllString(expanded, -1) {
 		path := strings.Trim(token, `"'`)
 		if !filepath.IsAbs(path) {
 			path = filepath.Join(e.project, path)

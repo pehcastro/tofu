@@ -97,22 +97,20 @@ func (e *Engine) fromClaude(tool string, args json.RawMessage) (json.RawMessage,
 	return renamed, true
 }
 
+var plainMatcher = regexp.MustCompile(`^[A-Za-z0-9_\-\s,|]*$`)
+
 func matcherOf(matcher string) (*regexp.Regexp, error) {
-	if matcher == "" || matcher == "*" || plainMatcher(matcher) {
+	if matcher == "" || matcher == "*" || plainMatcher.MatchString(matcher) {
 		return nil, nil
 	}
 	return regexp.Compile(matcher)
-}
-
-func plainMatcher(matcher string) bool {
-	return regexp.MustCompile(`^[A-Za-z0-9_\-\s,|]*$`).MatchString(matcher)
 }
 
 func matches(matcher string, subjects []string) bool {
 	if matcher == "" || matcher == "*" || subjects == nil {
 		return true
 	}
-	if plainMatcher(matcher) {
+	if plainMatcher.MatchString(matcher) {
 		return slices.ContainsFunc(strings.FieldsFunc(matcher, func(r rune) bool { return r == '|' || r == ',' }), func(name string) bool {
 			return slices.Contains(subjects, strings.TrimSpace(name))
 		})

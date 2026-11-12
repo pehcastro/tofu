@@ -17,6 +17,13 @@ import (
 	"tofu/internal/models/transport"
 )
 
+var (
+	claudeVersion  = regexp.MustCompile(`^claude-[a-z]+-(\d+)(?:-(\d{1,2}))?(?:-|$)`)
+	cloakingUserID = regexp.MustCompile(
+		`^user_[0-9a-fA-F]{64}_account_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}` +
+			`_session_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
+)
+
 type Request struct {
 	Model      string
 	System     []string
@@ -237,7 +244,7 @@ func (r Request) outputConfig() (*wireOutput, error) {
 }
 
 func (r Request) adaptiveThinking() *wireThinking {
-	version := regexp.MustCompile(`^claude-[a-z]+-(\d+)(?:-(\d{1,2}))?(?:-|$)`).FindStringSubmatch(r.Model)
+	version := claudeVersion.FindStringSubmatch(r.Model)
 	if !r.Effort.Thinks() || version == nil {
 		return nil
 	}
@@ -575,14 +582,8 @@ type claudeUserID struct {
 	AccountUUID string `json:"account_uuid,omitempty"`
 }
 
-func isCloakingUserID(userID string) bool {
-	return regexp.MustCompile(
-		`^user_[0-9a-fA-F]{64}_account_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}` +
-			`_session_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`).MatchString(userID)
-}
-
 func metadataUserID(r Request, oauth bool) (string, error) {
-	if r.UserID != "" && (!oauth || isCloakingUserID(r.UserID) || carriesSessionID(r.UserID)) {
+	if r.UserID != "" && (!oauth || cloakingUserID.MatchString(r.UserID) || carriesSessionID(r.UserID)) {
 		return r.UserID, nil
 	}
 	if !oauth {

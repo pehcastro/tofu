@@ -552,17 +552,18 @@ func stopOwned(registry *process.Registry, command string, owned []process.Shell
 	}, nil
 }
 
-const (
-	commandPosition = `(?:^|[;&|(` + "`" + `])\s*`
-	sleepPattern    = commandPosition + `sleep\s+(\d+(?:\.\d+)?)([smh]?)\b`
-	killPattern     = commandPosition + `(?:\S*[/\\])?(?:kill|pkill|taskkill)(?:\.exe)?(?:\s|$)`
+const commandPosition = `(?:^|[;&|(` + "`" + `])\s*`
+
+var (
+	sleepCommand = regexp.MustCompile(commandPosition + `sleep\s+(\d+(?:\.\d+)?)([smh]?)\b`)
+	killCommand  = regexp.MustCompile(commandPosition + `(?:\S*[/\\])?(?:kill|pkill|taskkill)(?:\.exe)?(?:\s|$)`)
 )
 
 func subAgentRefusal(args bashArgs) error {
 	command := args.Command
 	var waits [][]string
 	if !args.Background {
-		waits = regexp.MustCompile(sleepPattern).FindAllStringSubmatch(command, -1)
+		waits = sleepCommand.FindAllStringSubmatch(command, -1)
 	}
 	for _, match := range waits {
 		slept, err := time.ParseDuration(match[1] + cmp.Or(match[2], "s"))
@@ -571,7 +572,7 @@ func subAgentRefusal(args bashArgs) error {
 				"work on the paths you own and report what you still need from a sibling instead of waiting for it", command, slept, konst.SubAgentSleepSeconds)
 		}
 	}
-	if regexp.MustCompile(killPattern).MatchString(command) {
+	if killCommand.MatchString(command) {
 		return fmt.Errorf("bash: %q is refused: a sub-agent kills nothing but a shell tofu started for it, which runs as shell stop. "+
 			"check the app with the framework's in-process request, such as app.request or a test client, and leave servers to the orchestrator", command)
 	}
