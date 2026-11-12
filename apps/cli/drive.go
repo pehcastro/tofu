@@ -758,18 +758,17 @@ func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePla
 			}
 			return platformclipboard.Clipboard{Kind: platformclipboard.ClipboardFiles, Files: []string{plan.clipboard}}, nil
 		},
+		copy: func(text string) error {
+			if plan.clipboard == "" {
+				return platformclipboard.ErrNoLocalClipboard
+			}
+			return os.WriteFile(plan.clipboard, []byte(text), 0o600)
+		},
 		quota: quotas,
 		now:   clock,
 		joins: plan.host,
 	}
-	options := appOptions(dir, plan.arms, recorded, launch, held)
-	options.Copy = func(text string) error {
-		if plan.clipboard == "" {
-			return platformclipboard.ErrNoLocalClipboard
-		}
-		return os.WriteFile(plan.clipboard, []byte(text), 0o600)
-	}
-	return tui.New(options)
+	return tui.New(appOptions(dir, plan.arms, recorded, launch, held))
 }
 
 func readScript(path string, in io.Reader) ([]filmstrip.Step, error) {

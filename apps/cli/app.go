@@ -76,6 +76,7 @@ type appWiring struct {
 	wires     func() []app.Wire
 	blockers  func() []app.Requirement
 	clipboard func() (platformclipboard.Clipboard, error)
+	copy      func(text string) error
 	quota     func() []frame.Quota
 	reload    func(ctx context.Context, out io.Writer) int
 	now       func() time.Time
@@ -179,6 +180,7 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 		ModelsStale:  wiring.CatalogStale(time.Now()),
 		Host:         live,
 		Paste:        paste.Board{Read: wired.clipboard, Dir: live.AttachmentDir, Recorded: live.Attached},
+		Copy:         wired.copy,
 		Paths:        appPaths(dir),
 		Sessions:     func() ([]app.SessionRow, error) { return appSessions(live.ID()) },
 		Resume:       func(handle string) (string, host.Opened) { return appResume(live, handle) },
