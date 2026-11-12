@@ -27,7 +27,7 @@ func liveWire(t *testing.T) *Wire {
 	spec := codexsub.Spec()
 	store, err := accounts.Open(path, accounts.Specs{accounts.CodexSub: spec})
 	if err != nil {
-		t.Skipf("no credential store, run tofu login codex-sub: %v", err)
+		t.Skipf("no credential store, run tofu login llm codex-sub: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
 

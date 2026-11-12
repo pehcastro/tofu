@@ -38,7 +38,7 @@ func liveWire(t *testing.T) *anthropic.Wire {
 	spec := claudesub.Spec()
 	store, err := accounts.Open(path, accounts.Specs{accounts.ClaudeSub: spec})
 	if err != nil {
-		t.Skipf("no credential store, run tofu login claude-sub: %v", err)
+		t.Skipf("no credential store, run tofu login llm claude-sub: %v", err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
 

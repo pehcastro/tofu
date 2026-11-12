@@ -24,7 +24,7 @@ func liveAccount(t *testing.T, spec SubscriptionSpec) Account {
 	specs := accounts.Specs{accounts.ClaudeSub: claudesub.Spec(), accounts.CodexSub: codexsub.Spec()}
 	store, err := accounts.Open(path, specs)
 	if err != nil {
-		t.Skipf("no credential store, run tofu login %s: %v", spec.Wire, err)
+		t.Skipf("no credential store, run tofu login llm %s: %v", spec.Wire, err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
 	credential, err := specs.Lookup(spec.Wire)
