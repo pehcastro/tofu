@@ -36,6 +36,9 @@ const (
 	ledgerName            = "undo-turns.jsonl"
 	ledgerLockName        = "undo-turns.lock"
 	indexName             = "undo.index"
+	sharedIndexTemp       = "undo.index.shared"
+	sharedIndexPin        = "shared"
+	packEveryBlob         = "core.bigFileThreshold=1"
 	excludeName           = "undo.exclude"
 	walkName              = "undo.walk"
 	verbatimAttributes    = "* -text -filter -ident -working-tree-encoding\n"
@@ -108,6 +111,9 @@ func (r Repo) Prune(ctx context.Context) error {
 				fmt.Fprintf(&pins, "update %s%s/%d %s\n", pinRefs, dir.Name(), i, tree)
 			}
 		}
+	}
+	if indexed, err := r.shared().writeTree(ctx); err == nil {
+		fmt.Fprintf(&pins, "update %s%s %s\n", pinRefs, sharedIndexPin, indexed)
 	}
 	if err := os.RemoveAll(filepath.Join(r.gitDir(), filepath.FromSlash(pinRefs))); err != nil {
 		return err
@@ -193,7 +199,7 @@ type entry struct {
 }
 
 func (r Repo) Begin(ctx context.Context, turn string) error {
-	return r.locked(func() error {
+	return r.locked(ctx, func() error {
 		tree, err := r.track(ctx)
 		if err != nil {
 			return err
@@ -212,7 +218,7 @@ func (r Repo) Begin(ctx context.Context, turn string) error {
 }
 
 func (r Repo) End(ctx context.Context) error {
-	return r.locked(func() error {
+	return r.locked(ctx, func() error {
 		entries, err := r.entries()
 		if err != nil {
 			return err
@@ -234,14 +240,14 @@ func (r Repo) Undo(ctx context.Context, ask Ask) (Report, error) {
 		return Report{}, ErrNoGit
 	}
 	var report Report
-	err := r.locked(func() (err error) {
+	err := r.locked(ctx, func() (err error) {
 		report, err = r.undo(ctx, ask)
 		return err
 	})
 	return report, err
 }
 
-func (r Repo) locked(work func() error) error {
+func (r Repo) locked(ctx context.Context, work func() error) error {
 	if err := os.MkdirAll(r.Session, 0o755); err != nil {
 		return err
 	}
@@ -260,6 +266,8 @@ func (r Repo) locked(work func() error) error {
 			_ = os.Remove(lock)
 		} else if time.Now().After(deadline) {
 			return LedgerHeld{Lock: lock}
+		} else if err := ctx.Err(); err != nil {
+			return err
 		}
 	}
 }
@@ -348,6 +356,8 @@ func (r Repo) gitDir() string { return filepath.Join(r.State, gitDirName) }
 
 func (r Repo) path(name string) string { return filepath.Join(r.Session, name) }
 
+func (r Repo) shared() Repo { return Repo{State: r.State, Session: r.gitDir(), Tree: r.Tree} }
+
 func (r Repo) git(ctx context.Context, stdin string, args ...string) ([]byte, error) {
 	cmd, stderr := r.command(ctx, stdin, args...)
 	out, err := cmd.Output()
@@ -379,7 +389,7 @@ func (r Repo) track(ctx context.Context) (string, error) {
 	if err := os.MkdirAll(r.Session, 0o755); err != nil {
 		return "", err
 	}
-	if _, err := os.Stat(r.gitDir()); errors.Is(err, fs.ErrNotExist) {
+	if _, err := os.Stat(filepath.Join(r.gitDir(), "info", "attributes")); errors.Is(err, fs.ErrNotExist) {
 		if err := os.MkdirAll(r.gitDir(), 0o755); err != nil {
 			return "", err
 		}
@@ -391,6 +401,19 @@ func (r Repo) track(ctx context.Context) (string, error) {
 		}
 		if err := r.stampPruned(); err != nil {
 			return "", err
+		}
+	}
+	index := r.path(indexName)
+	if err := os.Remove(index + ".lock"); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return "", err
+	}
+	cold := false
+	if _, err := os.Stat(index); err != nil {
+		shared, err := os.ReadFile(r.shared().path(indexName))
+		if cold = err != nil; !cold {
+			if err := os.WriteFile(index, shared, 0o644); err != nil {
+				return "", err
+			}
 		}
 	}
 	if err := r.exclude(nil); err != nil {
@@ -415,10 +438,21 @@ func (r Repo) track(ctx context.Context) (string, error) {
 	if err := r.exclude(skipped); err != nil {
 		return "", err
 	}
-	if _, err := r.git(ctx, "", "add", "--all"); err != nil {
+	add := []string{"add", "--all"}
+	if cold {
+		add = append([]string{"-c", packEveryBlob}, add...)
+	}
+	if _, err := r.git(ctx, "", add...); err != nil {
 		return "", err
 	}
-	return r.writeTree(ctx)
+	tree, err := r.writeTree(ctx)
+	if err != nil {
+		return "", err
+	}
+	if kept, err := os.ReadFile(index); err == nil && os.WriteFile(r.path(sharedIndexTemp), kept, 0o644) == nil {
+		_ = os.Rename(r.path(sharedIndexTemp), r.shared().path(indexName))
+	}
+	return tree, nil
 }
 
 type walkedDir struct {

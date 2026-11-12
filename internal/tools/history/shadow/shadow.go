@@ -20,7 +20,10 @@ import (
 	platformfs "tofu/internal/platform/fs"
 )
 
-const TurnRefs = "refs/tofu/turns"
+const (
+	TurnRefs      = "refs/tofu/turns"
+	packEveryBlob = "core.bigFileThreshold=1"
+)
 
 const alwaysExcluded = "node_modules/\n.venv/\n__pycache__/\n/*/**/" + platformfs.StateDirName + "/\n/*/**/" + platformfs.LegacyStateDirName + "/\n"
 
@@ -210,13 +213,15 @@ func (s Store) Snapshot(ctx context.Context) (string, error) {
 	index := own.Name()
 	_ = own.Close()
 	defer func() { _ = os.Remove(index) }()
+	add := []string{"add", "--all", "."}
 	kept, err := os.ReadFile(shared)
 	if err != nil {
 		_ = os.Remove(index)
+		add = append([]string{"-c", packEveryBlob}, add...)
 	} else if err := os.WriteFile(index, kept, 0o600); err != nil {
 		return "", err
 	}
-	if _, err := s.gitIndexed(ctx, index, "", "add", "--all", "."); err != nil {
+	if _, err := s.gitIndexed(ctx, index, "", add...); err != nil {
 		return "", err
 	}
 	tree, err := s.gitIndexed(ctx, index, "", "write-tree")

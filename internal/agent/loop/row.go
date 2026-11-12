@@ -645,7 +645,11 @@ func (r *record) begin(row Row, task core.Origin) {
 		r.undoBegun = make(chan struct{})
 		repo, turn, report := *r.undo, r.turn, platformproject.Crashes(project)
 		safe.Go(report, "undo snapshot", func() {
-			r.undoErr = safe.Call(report, "undo snapshot", func() error { return repo.Begin(context.Background(), turn) })
+			r.undoErr = safe.Call(report, "undo snapshot", func() error {
+				timed, cancel := context.WithTimeout(context.Background(), konst.UndoSnapshotTimeoutMillis*time.Millisecond)
+				defer cancel()
+				return repo.Begin(timed, turn)
+			})
 			close(r.undoBegun)
 			if r.undoErr == nil {
 				_ = repo.Prune(context.Background())
@@ -654,18 +658,21 @@ func (r *record) begin(row Row, task core.Origin) {
 	}
 }
 
-func (r *record) undoStarted() bool {
+func (r *record) undoStarted() { r.note(r.undoStartFailure()) }
+
+func (r *record) undoStartFailure() error {
 	if r.undo == nil {
-		return false
+		return nil
 	}
 	<-r.undoBegun
-	if r.undoErr != nil {
-		if !errors.Is(r.undoErr, snapshot.ErrNoGit) {
-			r.note(errors.New("the files at the start of the turn, for undo: " + r.undoErr.Error()))
-		}
-		r.undo = nil
+	if r.undoErr == nil {
+		return nil
 	}
-	return r.undo != nil
+	r.undo = nil
+	if errors.Is(r.undoErr, snapshot.ErrNoGit) {
+		return nil
+	}
+	return errors.New("the files at the start of the turn, for undo: " + r.undoErr.Error())
 }
 
 func (r *record) message(message core.Message, request string, results map[string]ToolCallRow) {
@@ -868,10 +875,16 @@ func (r *record) end(row Row) {
 	r.note(r.log.Edit(func(header *session.Header) {
 		header.Outcome, header.Error, header.Model = row.Outcome.String(), row.Error, cmp.Or(row.Model, header.Model)
 	}))
-	if r.undoStarted() {
-		if err := r.undo.End(context.Background()); err != nil {
-			r.note(errors.New("the files at the end of the turn, for undo: " + err.Error()))
+	failed := r.undoStartFailure()
+	if r.undo != nil {
+		timed, cancel := context.WithTimeout(context.Background(), konst.UndoSnapshotTimeoutMillis*time.Millisecond)
+		if err := r.undo.End(timed); err != nil {
+			failed = errors.New("the files at the end of the turn, for undo: " + err.Error())
 		}
+		cancel()
+	}
+	if failed != nil {
+		r.notice(failed.Error())
 	}
 	r.note(r.inbox.release(r.log))
 }
