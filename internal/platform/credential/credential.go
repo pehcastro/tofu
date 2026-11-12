@@ -4,11 +4,14 @@ import (
 	"cmp"
 	"database/sql"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -296,6 +299,66 @@ type KeyRedactor struct {
 	secrets  []string
 	names    []string
 	assigned *regexp.Regexp
+	held     *HeldKeys
+}
+
+type HeldKeys struct {
+	mu       sync.Mutex
+	stamp    string
+	built    bool
+	stored   map[string]string
+	err      error
+	redactor KeyRedactor
+}
+
+func (k *HeldKeys) Live() KeyRedactor { return KeyRedactor{held: k} }
+
+func (k *HeldKeys) Current() (KeyRedactor, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if !k.refresh() {
+		return k.redactor, nil
+	}
+	return k.redactor, k.err
+}
+
+func (k *HeldKeys) Stored() (map[string]string, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	k.refresh()
+	return k.stored, k.err
+}
+
+func (k *HeldKeys) refresh() bool {
+	stamp := keyStoreStamp()
+	if k.built && stamp == k.stamp {
+		return false
+	}
+	k.stamp = stamp
+	stored, err := StoredKeys()
+	k.err = err
+	if k.built && (err != nil || maps.Equal(stored, k.stored)) {
+		return true
+	}
+	k.built, k.stored, k.redactor = true, stored, KeyRedactorOf(stored)
+	return true
+}
+
+func keyStoreStamp() string {
+	path, err := CredentialStorePath()
+	if err != nil {
+		return "no home"
+	}
+	var stamp strings.Builder
+	for _, file := range []string{path, path + "-wal"} {
+		info, err := os.Stat(file)
+		if err != nil {
+			stamp.WriteString("absent ")
+			continue
+		}
+		stamp.WriteString(strconv.FormatInt(info.Size(), 10) + " " + strconv.FormatInt(info.ModTime().UnixNano(), 10) + " ")
+	}
+	return stamp.String()
 }
 
 func LoadKeyRedactor() KeyRedactor {
@@ -326,7 +389,18 @@ func KeyRedactorOf(stored map[string]string) KeyRedactor {
 	}
 }
 
+func (r KeyRedactor) resolved() KeyRedactor {
+	if r.held == nil {
+		return r
+	}
+	held, _ := r.held.Current()
+	return held
+}
+
+func (r KeyRedactor) Secrets() []string { return r.resolved().secrets }
+
 func (r KeyRedactor) Redact(text string) string {
+	r = r.resolved()
 	for _, secret := range r.secrets {
 		text = strings.ReplaceAll(text, secret, KeyRedactedMark)
 	}

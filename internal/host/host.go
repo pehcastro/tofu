@@ -95,7 +95,7 @@ type Host struct {
 	cron     *cron.Book
 	cronMove chan struct{}
 	turnLock *sync.Mutex
-	heldKeys heldKeys
+	heldKeys credential.HeldKeys
 	done     chan struct{}
 	joins    bool
 

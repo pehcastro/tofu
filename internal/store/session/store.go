@@ -175,7 +175,8 @@ func (s *Store) ReadOnce() *Store {
 func (s *Store) ForgetRead() { s.parsed = nil }
 
 func NewStore(dir string) *Store {
-	return &Store{dir: dir, settings: DefaultSettings(), readFile: os.ReadFile, rename: os.Rename, redactor: sync.OnceValue(credential.LoadKeyRedactor)}
+	live := new(credential.HeldKeys).Live()
+	return &Store{dir: dir, settings: DefaultSettings(), readFile: os.ReadFile, rename: os.Rename, redactor: func() credential.KeyRedactor { return live }}
 }
 
 func (s *Store) Use(settings Settings) { s.settings = settings }

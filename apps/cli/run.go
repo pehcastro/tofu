@@ -1081,48 +1081,16 @@ func readsWhen(readBeforeEdit bool, reads *contract.ReadLedger) *contract.ReadLe
 }
 
 type storedKeys struct {
-	mu       sync.Mutex
-	stamp    string
-	read     bool
-	keys     core.Keyring
-	redacted credential.KeyRedactor
-}
-
-func credentialStoreStamp() string {
-	path, err := credential.CredentialStorePath()
-	if err != nil {
-		return ""
-	}
-	stamp := ""
-	for _, file := range []string{path, path + "-wal"} {
-		if info, err := os.Stat(file); err == nil {
-			stamp += info.ModTime().String() + " " + strconv.FormatInt(info.Size(), 10) + "; "
-		}
-	}
-	return stamp
-}
-
-func (s *storedKeys) current() (core.Keyring, credential.KeyRedactor) {
-	stamp := credentialStoreStamp()
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if !s.read || stamp != s.stamp {
-		s.keys = core.ReadKeyring()
-		s.redacted = credential.KeyRedactorOf(s.keys.Stored)
-		s.stamp, s.read = stamp, true
-	}
-	return s.keys, s.redacted
+	held credential.HeldKeys
 }
 
 func (s *storedKeys) keyring() core.Keyring {
-	keys, _ := s.current()
-	return keys
+	stored, err := s.held.Stored()
+	path, _ := credential.CredentialStorePath()
+	return core.Keyring{Stored: stored, Path: path, ReadErr: err}
 }
 
-func (s *storedKeys) redactor() credential.KeyRedactor {
-	_, redactor := s.current()
-	return redactor
-}
+func (s *storedKeys) redactor() credential.KeyRedactor { return s.held.Live() }
 
 type warmProcesses struct {
 	checkers *checkers.Typecheckers

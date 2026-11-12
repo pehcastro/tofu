@@ -207,8 +207,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	artifacts.keep.index = cmp.Or(config.Drops, artifacts.keep.index)
 	sifter := siftOrNothing(config.Sift)
 	if config.Redactor == nil {
-		loaded := credential.LoadKeyRedactor()
-		config.Redactor = &loaded
+		live := new(credential.HeldKeys).Live()
+		config.Redactor = &live
 	}
 	redactor := *config.Redactor
 	source := config.ToolSource

@@ -40,7 +40,7 @@ func NewWriter(dir string) *Writer {
 }
 
 func NewWriterWithClock(dir string, now func() time.Time) *Writer {
-	return &Writer{dir: dir, now: now, redact: credential.LoadKeyRedactor()}
+	return &Writer{dir: dir, now: now, redact: new(credential.HeldKeys).Live()}
 }
 
 func (w *Writer) Append(row Row) (Row, error) {
