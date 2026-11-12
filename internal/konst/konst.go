@@ -459,6 +459,7 @@ const (
 	CronCheckTailBytes     = 600
 	CronSearchDays         = 366
 	CronPromptMark         = "), not typed by the person:\n"
+	CronBookFile           = "cron.json"
 )
 
 const (

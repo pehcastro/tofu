@@ -44,6 +44,7 @@ type Catchup struct {
 	Board    string          `json:"board"`
 	File     string          `json:"file"`
 	Open     []OpenQuestion  `json:"open"`
+	Away     []OpenQuestion  `json:"away"`
 	Applied  []Applied       `json:"applied"`
 	Stale    []TypedAnswer   `json:"stale"`
 	Bypasses []BypassRequest `json:"bypasses"`
@@ -70,11 +71,16 @@ func (m Managed) OpenQuestions(key string) (Catchup, error) {
 	if err != nil {
 		return Catchup{}, err
 	}
-	c := Catchup{Board: key, File: path, Open: []OpenQuestion{}, Applied: []Applied{}, Stale: []TypedAnswer{}}
+	c := Catchup{Board: key, File: path, Open: []OpenQuestion{}, Away: []OpenQuestion{}, Applied: []Applied{}, Stale: []TypedAnswer{}}
 	for _, ticket := range tickets {
 		if !ticket.Status.Live() {
 			typed = slices.DeleteFunc(typed, func(a TypedAnswer) bool { return a.Ticket == ticket.ID })
 			continue
+		}
+		for _, q := range ticket.Questions {
+			if q.Away != "" && q.Answer != "" {
+				c.Away = append(c.Away, OpenQuestion{Ticket: ticket.ID, Title: ticket.Title, Status: ticket.Status, Question: q})
+			}
 		}
 		for _, q := range ticket.OpenQuestions() {
 			open := OpenQuestion{Ticket: ticket.ID, Title: ticket.Title, Status: ticket.Status, Question: q}
@@ -118,7 +124,7 @@ func (m Managed) Answer(id string, question int, answer, actor string) (Ticket, 
 	case answer == "":
 		return ticket, RefusedError{Ticket: id, Why: "the answer is empty: give an option number or your own words"}
 	}
-	if _, err := m.apply(OpenQuestion{Ticket: ticket.ID, Title: ticket.Title, Status: ticket.Status, Question: open[at], Answer: answer}, actor); err != nil {
+	if _, err := m.apply(OpenQuestion{Ticket: ticket.ID, Title: ticket.Title, Status: ticket.Status, Question: open[at], Answer: answer}, actor, ""); err != nil {
 		return ticket, err
 	}
 	return m.Store.Get(id)
@@ -137,7 +143,7 @@ func (m Managed) Answers(key, actor string) (Catchup, error) {
 		if open.Answer == "" {
 			continue
 		}
-		done, err := m.apply(open, actor)
+		done, err := m.apply(open, actor, "")
 		applied = append(applied, done)
 		if err != nil {
 			return listed, err
@@ -148,7 +154,7 @@ func (m Managed) Answers(key, actor string) (Catchup, error) {
 	return after, err
 }
 
-func (m Managed) apply(open OpenQuestion, actor string) (Applied, error) {
+func (m Managed) apply(open OpenQuestion, actor, away string) (Applied, error) {
 	q := open.Question
 	done := Applied{TypedAnswer: TypedAnswer{Ticket: open.Ticket, Question: q.ID, TLDR: q.TLDR, Answer: open.Answer}, Logged: open.Answer}
 	digits := strings.IndexFunc(open.Answer+" ", func(r rune) bool { return !unicode.IsDigit(r) })
@@ -159,6 +165,9 @@ func (m Managed) apply(open OpenQuestion, actor string) (Applied, error) {
 		}
 	}
 	text := fmt.Sprintf("the person answered Q%d %s: %s", q.ID, q.TLDR, done.Logged)
+	if away != "" {
+		text = fmt.Sprintf("Q%d %s, %s: %s", q.ID, q.TLDR, away, done.Logged)
+	}
 	asked, board, err := m.ticketOnBoard(open.Ticket)
 	if err != nil {
 		return done, err
@@ -169,7 +178,7 @@ func (m Managed) apply(open OpenQuestion, actor string) (Applied, error) {
 	}
 	ticket, err := m.Store.Edit(open.Ticket, func(t *Ticket) error {
 		if at := slices.IndexFunc(t.Questions, func(left Question) bool { return left.ID == q.ID }); at >= 0 {
-			t.Questions[at].Answer = done.Logged
+			t.Questions[at].Answer, t.Questions[at].Away = done.Logged, away
 		}
 		t.Log = strings.TrimSpace(t.Log + "\n" + m.Store.logLine(actor, text))
 		return nil
@@ -238,11 +247,21 @@ func (c Catchup) markdown() []byte {
 		for i, option := range q.Options {
 			fmt.Fprintf(&b, "%d. %s\n", i+1, option)
 		}
-		fmt.Fprintf(&b, "\nRecommend %d: %s\n\nanswer:", q.Recommend, q.Why)
+		fmt.Fprintf(&b, "\nRecommend %d: %s\n", q.Recommend, q.Why)
+		if q.Away != "" {
+			fmt.Fprintf(&b, "Away: %s\n", q.Away)
+		}
+		b.WriteString("\nanswer:")
 		if open.Answer != "" {
 			b.WriteString(" " + open.Answer)
 		}
 		b.WriteString("\n")
+	}
+	if len(c.Away) > 0 {
+		b.WriteString("\n# Decided while you were away\n\n")
+	}
+	for _, decided := range c.Away {
+		fmt.Fprintf(&b, "- %s Q%d %s: %s, %s\n", decided.Ticket, decided.Question.ID, decided.Question.TLDR, decided.Question.Answer, decided.Question.Away)
 	}
 	if len(c.Bypasses) > 0 {
 		b.WriteString("\n# Bypasses for you\n\n")

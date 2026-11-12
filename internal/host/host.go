@@ -720,7 +720,7 @@ func (h *Host) loadCron(id string) error {
 }
 
 func cronFile(store *session.Store, id string) string {
-	return filepath.Join(store.Dir(id), "cron.json")
+	return filepath.Join(store.Dir(id), konst.CronBookFile)
 }
 
 func (h *Host) carry(resumed Carry) error {

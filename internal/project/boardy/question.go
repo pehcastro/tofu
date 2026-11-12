@@ -31,6 +31,7 @@ type Question struct {
 	Recommend int      `json:"recommend"`
 	Why       string   `json:"why"`
 	Answer    string   `json:"answer,omitempty"`
+	Away      string   `json:"away,omitempty"`
 }
 
 var (
@@ -38,6 +39,7 @@ var (
 	optionLine      = fs.LazyRegexp(`^([1-9])\. (.+)$`)
 	recommendLine   = fs.LazyRegexp(`^Recommend ([1-9]): (.+)$`)
 	answerLine      = fs.LazyRegexp(`^Answer: (.+)$`)
+	awayLine        = fs.LazyRegexp(`^Away: (.+)$`)
 )
 
 func (t Ticket) OpenQuestions() []Question {
@@ -68,9 +70,9 @@ func (q Question) complete() error {
 	case q.ELI5 == "" || len(eli5) > konst.BoardELI5LinesMost:
 		return fmt.Errorf("its eli5 is one to %d plain lines", konst.BoardELI5LinesMost)
 	case slices.ContainsFunc(eli5, func(line string) bool {
-		return optionLine().MatchString(line) || recommendLine().MatchString(line) || answerLine().MatchString(line)
+		return optionLine().MatchString(line) || recommendLine().MatchString(line) || answerLine().MatchString(line) || awayLine().MatchString(line)
 	}):
-		return errors.New("an eli5 line reads as an option, a recommendation or an answer")
+		return errors.New("an eli5 line reads as an option, a recommendation, an answer or an away note")
 	case len(q.Options) < konst.AskPersonOptionsLeast || len(q.Options) > konst.AskPersonOptionsMost:
 		return fmt.Errorf("it has %d options, and a question offers %d to %d", len(q.Options), konst.AskPersonOptionsLeast, konst.AskPersonOptionsMost)
 	case slices.ContainsFunc(q.Options, func(option string) bool { return !oneLine(option) }):
@@ -93,6 +95,9 @@ func QuestionsMarkdown(questions []Question) string {
 		lines = append(lines, "", fmt.Sprintf("Recommend %d: %s", q.Recommend, q.Why), "")
 		if q.Answer != "" {
 			lines = append(lines, "Answer: "+q.Answer, "")
+		}
+		if q.Away != "" {
+			lines = append(lines, "Away: "+q.Away, "")
 		}
 	}
 	return strings.TrimSpace(strings.Join(lines, "\n"))
@@ -128,6 +133,10 @@ func parseQuestions(body string) ([]Question, error) {
 		}
 		if match := answerLine().FindStringSubmatch(line); match != nil {
 			q.Answer = match[1]
+			continue
+		}
+		if match := awayLine().FindStringSubmatch(line); match != nil {
+			q.Away = match[1]
 			continue
 		}
 		q.ELI5 = strings.TrimSpace(q.ELI5 + "\n" + line)
@@ -204,6 +213,43 @@ func (m Managed) ReportNotPossible(id string, q Question, actor string) (Ticket,
 		return ticket, err
 	}
 	return m.move(board, ticket, NeedsDecision, "reported not possible, so the person decides Q"+strconv.Itoa(asked.ID), actor, 0, nil)
+}
+
+const (
+	awayRef     = "away_decision@1"
+	awayDecides = "irreversible"
+)
+
+func (m Managed) DecideAway(id string, q Question, actor string) (Ticket, error) {
+	ticket, err := m.Store.Get(id)
+	if err != nil {
+		return ticket, err
+	}
+	option := q.Options[q.Recommend-1]
+	ruled := m.judged(awayRef, awayDecides, map[string]string{"ticket": ticket.Title, "question": q.TLDR + "\n" + q.ELI5, "option": option, "why": q.Why}, nil)
+	read := ruled.answers[awayDecides].Noul
+	held := ""
+	switch {
+	case ruled.unread != "":
+		held = fmt.Sprintf("Jev could not say whether recommended option %d can be undone, so the person decides it: %s", q.Recommend, ruled.unread)
+	case read >= ruled.threshold:
+		held = fmt.Sprintf("Jev read recommended option %d, %s, as one that cannot be undone (%s %.2f, held at %.2f), so the person decides it", q.Recommend, option, awayDecides, read, ruled.threshold)
+	}
+	if held != "" {
+		held = "held while the person was away: " + held
+		return m.Store.Edit(id, func(t *Ticket) error {
+			if at := slices.IndexFunc(t.Questions, func(left Question) bool { return left.ID == q.ID }); at >= 0 {
+				t.Questions[at].Away = held
+			}
+			t.Log = strings.TrimSpace(t.Log + "\n" + m.Store.logLine(actor, fmt.Sprintf("Q%d %s", q.ID, held)))
+			return nil
+		})
+	}
+	away := fmt.Sprintf("decided while the person was away, on the recommended option because %s, and Jev read it as one that can be undone (%s %.2f, below %.2f)", strings.TrimSuffix(q.Why, "."), awayDecides, read, ruled.threshold)
+	if _, err := m.apply(OpenQuestion{Ticket: id, Question: q, Answer: strconv.Itoa(q.Recommend)}, actor, away); err != nil {
+		return Ticket{}, err
+	}
+	return m.Store.Get(id)
 }
 
 func (m Managed) NotPossibleOpen(ticket Ticket) (Question, Event, bool, error) {

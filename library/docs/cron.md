@@ -25,6 +25,31 @@ or pause a job. It may not set a check command, and it may not push an
 expiry more than one step past yours. Each change it makes is one line in
 the chat, recorded as by agent.
 
+## While you are away
+
+A job can carry `away`. The orchestrator sets it with its `cron` tool, on
+create or update, when you say you are leaving, going to sleep or away from
+the computer and want the work to go on; there is no command for it. The
+crons view, the history and the fire line show `away: decides what can be
+undone`.
+
+In a turn an away job starts, a sub-agent that reports its ticket not
+possible does not stop the work: tofu takes the recommended option, moves
+the ticket back, and writes `decided while the person was away`, the option
+and why into the ticket's Log and its question. Jev reads the recommended
+option first with the `away_decision` question `irreversible`; an option it
+reads as one that cannot be undone (a push to a shared remote, a deletion
+nobody can restore, a publish, a deploy, money spent, a message sent) is
+held in `needs-decision` instead, and its question says why. When Jev
+cannot answer or no classifier is bound, the question is held too. The gate
+does not relax: a call that would ask you is refused, as in any job's turn.
+
+`tofu boardy catchup` prints every decision taken while away, with the
+ticket, the option and why, and each held question with its reason;
+`--json` carries the same under `away`, and the catch-up file has a
+`Decided while you were away` section. Tell the orchestrator you are back
+and it sets `away` to false.
+
 ## Where it lives
 
 Each session keeps its jobs in `cron.json` beside its record, under

@@ -16,6 +16,7 @@ import (
 
 	"tofu/apps/cli/output"
 	"tofu/apps/cli/wiring"
+	"tofu/internal/agent/cron"
 	"tofu/internal/agent/hooks"
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
@@ -25,6 +26,7 @@ import (
 	platformscratch "tofu/internal/platform/scratch"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
+	crontool "tofu/internal/tools/agents/cron"
 	"tofu/internal/tools/contract"
 	tools "tofu/internal/tools/registry"
 	"tofu/internal/tools/web/browser"
@@ -124,6 +126,16 @@ func toolVerb(args []string, out, errOut io.Writer) int {
 		return refuseTool(errOut, err.Error())
 	}
 	printed = answer.Content
+	if call.Name == crontool.CronToolName && hand.cron.Live() > 0 {
+		id := hand.config.Session
+		if _, err := hand.config.Sessions.Header(id); err != nil {
+			said := "the cron job is kept in session " + id + ": tofu tool cron with --session " + id + " reads it again, and tofu --continue fires it"
+			if err := hand.config.Sessions.Write(session.Header{ID: id, Root: id, At: time.Now()}, nil); err != nil {
+				said = "the cron job is kept, and tofu --continue does not find its session: " + err.Error()
+			}
+			notify(said)
+		}
+	}
 	_, _ = io.WriteString(out, printed)
 	if answer.ToolOutcome.Failed() {
 		return output.ExitVerdict
@@ -133,6 +145,7 @@ func toolVerb(args []string, out, errOut io.Writer) int {
 
 type handRun struct {
 	config    loop.Config
+	cron      *cron.Book
 	prompt    composedRun
 	board     leadForeseen
 	gateErr   error
@@ -216,7 +229,11 @@ func handConfig(opts wiring.RunOpts, recorded string, warm *warmProcesses, notif
 	}
 	sifter, scorer, siftErr := wiring.ShellSiftOn(opts.SiftArm, places.Log, keys.keyring())
 	hand.siftErr = siftErr
-	config, spawner, err := runConfig(opts, named, runtime{open: wiring.OpenWire, composed: &hand.prompt, foreseen: &hand.board, sessions: sessions, gate: gate, sift: sifter, scorer: scorer, keys: keys, places: places, notify: notify})
+	hand.cron = &cron.Book{}
+	config, spawner, err := runConfig(opts, named, runtime{open: wiring.OpenWire, composed: &hand.prompt, foreseen: &hand.board, sessions: sessions, gate: gate, sift: sifter, scorer: scorer, keys: keys, places: places, notify: notify, cron: hand.cron, now: time.Now})
+	if err == nil {
+		err = hand.cron.Load(filepath.Join(sessions.Dir(config.Session), konst.CronBookFile))
+	}
 	if err != nil || opts.Agent == "" {
 		hand.config = config
 		return hand, err

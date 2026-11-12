@@ -38,6 +38,37 @@ the schedule's, never as yours: it is not carried, remembered or learned as
 something you said. A job the orchestrator makes with its `cron` tool fires
 on time too, and a job keeps firing while one long turn runs.
 
+## While you are away
+
+Tell the orchestrator you are leaving, going to sleep or away from the
+computer, and that the work should go on. It makes a job for that work with
+`away` set, or sets `away` on a job you already have, with its `cron` tool.
+There is no command to type and no switch to remember: the job carries the
+value, and the crons view and the fire line say `away: decides what can be
+undone`.
+
+A turn an away job starts does not wait for you:
+
+- **A sub-agent's question is decided.** When a sub-agent reports its ticket
+  not possible, tofu takes the option it recommended and the ticket goes back
+  to work. The ticket's Log and its question say it was `decided while the
+  person was away`, which option, and why.
+- **What cannot be undone still waits.** Jev reads the recommended option
+  with the `away_decision` question `irreversible`: pushing to a shared
+  remote, deleting what nobody can restore, publishing, deploying, spending
+  or sending a message. At or above `irreversible_at` the question stays in
+  `needs-decision` and says why it was held, with Jev's reading. When Jev
+  cannot answer, or no classifier is bound, the question waits too.
+- **Catch up lists both.** `tofu boardy catchup` prints every decision taken
+  while you were away, with the ticket, the option and why, and each held
+  question with the reason it was held. `--json` carries the same under
+  `away`, and the catch-up file has a `Decided while you were away` section.
+- **The gate does not relax.** A tool call that would ask you is refused in
+  an away turn as in any job's turn, and `git push` stays blocked.
+
+A job without `away`, or a turn you start yourself, asks you as before. Tell
+the orchestrator you are back and it sets `away` to false.
+
 ## Guards
 
 - **An expiry on every job.** A job without one expires after 24 hours.

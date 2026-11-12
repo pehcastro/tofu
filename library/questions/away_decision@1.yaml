@@ -1,0 +1,40 @@
+name: away_decision
+domain: general
+questions_version: 1
+mode: enforced
+notes: >-
+  asked by internal/project/boardy when a cron job set away fires and a
+  sub-agent reports its ticket not possible. state.ticket is the ticket's
+  title, state.question the question's tldr and eli5, state.option the option
+  the sub-agent recommends and state.why its reason. the recommended option is
+  taken while the person is away when irreversible is below irreversible_at;
+  at or above it the question waits for the person in needs-decision. an
+  error, a timeout or an unbound classifier also waits. irreversible_at is
+  the middle of the noul range, an uncalibrated prior.
+
+thresholds:
+  irreversible_at: 0.5
+
+state:
+  - ticket
+  - question
+  - option
+  - why
+
+questions:
+  irreversible:
+    type: noul
+    instructions: >-
+      The person is away from the computer and an agent wants to take
+      `option` on a software ticket without asking them. Decide whether taking
+      `option` does something that cannot be undone from the project's own
+      files: pushing to a shared remote, deleting work or data nobody can
+      restore, publishing or releasing to other people, deploying, spending or
+      paying money, sending a message, or forcing over someone else's work.
+    criteria:
+      true: >-
+        Taking option reaches past the local project or destroys something,
+        so a revert of the project's files does not take it back.
+      false: >-
+        Taking option only changes the project's own files or the ticket, so
+        a revert or another edit takes it back.

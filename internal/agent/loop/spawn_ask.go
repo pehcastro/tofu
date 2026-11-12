@@ -195,7 +195,29 @@ func leadOf(site spawnSite, asking string) (string, bool) {
 	return runs[at].ParentAgent, true
 }
 
+type personAwayKey struct{}
+
+func WithPersonAway(ctx context.Context) context.Context {
+	return context.WithValue(ctx, personAwayKey{}, true)
+}
+
+func (t *SpawnTool) decidedAway(ticket boardy.Ticket, q boardy.Question) string {
+	decided, err := t.base.Board.DecideAway(ticket.ID, q, t.ticketActor(ticket.ID))
+	if err != nil {
+		return fmt.Sprintf("\n\nthe person is away, and taking Q%d's recommended option on %s failed, so it stays %s for them: %v", q.ID, ticket.ID, ticket.Status, err)
+	}
+	at := slices.IndexFunc(decided.Questions, func(left boardy.Question) bool { return left.ID == q.ID })
+	if decided.Status == boardy.NeedsDecision {
+		return fmt.Sprintf("\n\n%s is %s on Q%d: %s. go on with other work and take no option for them", ticket.ID, decided.Status, q.ID, decided.Questions[at].Away)
+	}
+	return fmt.Sprintf("\n\nthe person is away, so tofu took Q%d %q on %s: %s. %s is %s again: carry the work on with that option and say so in your reply",
+		q.ID, q.TLDR, ticket.ID, decided.Questions[at].Answer, ticket.ID, decided.Status)
+}
+
 func (t *SpawnTool) askThePerson(ctx context.Context, agent string, ticket boardy.Ticket, q boardy.Question) string {
+	if away, _ := ctx.Value(personAwayKey{}).(bool); away {
+		return t.decidedAway(ticket, q)
+	}
 	reason := strings.ReplaceAll(q.ELI5, "\n", " ")
 	note := fmt.Sprintf("\n\n%s reports %s not possible, so %s is %s on Q%d and the person decides it: no move of yours takes it out until they answer, and you take no option for them:\nQ%d %s\nreason: %s",
 		agent, ticket.ID, ticket.ID, ticket.Status, q.ID, q.ID, q.TLDR, reason)

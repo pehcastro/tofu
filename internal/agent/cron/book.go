@@ -27,6 +27,8 @@ const (
 const (
 	idPrefix    = "c"
 	expiredWord = "expired "
+	whileAway   = "the person is away while this job runs, so nobody answers in this turn: keep working, and where a question has a recommended option that can be undone, " +
+		"take it and say in your reply what you took and why. anything that pushes, deletes, publishes or spends waits for the person"
 )
 
 var (
@@ -43,6 +45,7 @@ type Spec struct {
 	Expires  time.Time `json:"expires"`
 	Until    string    `json:"until,omitempty"`
 	Paused   bool      `json:"paused,omitempty"`
+	Away     bool      `json:"away,omitempty"`
 }
 
 type Version struct {
@@ -101,6 +104,7 @@ type Change struct {
 	Expires  time.Time
 	Until    string
 	Paused   *bool
+	Away     *bool
 }
 
 type Book struct {
@@ -265,6 +269,9 @@ func (b *Book) Update(id string, change Change, by By, reason string, now time.T
 	}
 	if change.Paused != nil {
 		after.Paused = *change.Paused
+	}
+	if change.Away != nil {
+		after.Away = *change.Away
 	}
 	stretch := personExpiry(*job).Add(konst.CronExpiryHours * time.Hour)
 	expired := strings.HasPrefix(job.Ended, expiredWord)
@@ -443,6 +450,10 @@ func fire(one pending, now time.Time) Fire {
 	if one.checked != "" {
 		prompt += "\n\nits check is not met yet: " + one.checked
 		line += " · not met: " + said
+	}
+	if spec.Away {
+		prompt += "\n\n" + whileAway
+		line += " · " + awayWord
 	}
 	return Fire{ID: job.ID, Prompt: prompt, Line: line}
 }

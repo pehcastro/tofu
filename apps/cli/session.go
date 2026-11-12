@@ -24,6 +24,7 @@ import (
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/platform/credential"
@@ -780,7 +781,7 @@ func sessionKeeps(store *session.Store, header session.Header, head string, life
 		return "it is the head"
 	}
 	var book cron.Book
-	if err := book.Load(filepath.Join(store.Dir(header.ID), "cron.json")); err != nil {
+	if err := book.Load(filepath.Join(store.Dir(header.ID), konst.CronBookFile)); err != nil {
 		return err.Error()
 	}
 	if book.Live() > 0 {

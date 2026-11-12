@@ -281,7 +281,7 @@ func (r *replayReport) rescoreSet(row ledger.Row, sets map[string]float64) error
 }
 
 func deniesAtOrAbove(questions string) bool {
-	return questions == "done_reason" || questions == "ticket_feasibility"
+	return questions == "done_reason" || questions == "ticket_feasibility" || questions == "away_decision"
 }
 
 func (r *replayReport) rule(ref string, load func() replayRule) *replayRule {

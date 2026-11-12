@@ -152,9 +152,13 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	watch := &watcher{held: h.roster, spent: h.spent, emit: emit, now: h.now, turnID: live.Turn, seen: h.shown, stop: &leadStop{}}
 	var prepared Prepared
 	person, asking := awaitPerson(emit, h.asks, &prepared.Config), loop.WithQuestionsBlock(loop.WithShellRegistry(remember.WithMemoryKept(context.WithValue(ctx, cronFiredKey{}, h.cronFired), keptMemory(emit)), h.shells), h.questionsBlock)
-	if live.Unattended {
+	fired, err := h.cron.Job(live.Origin.ID)
+	switch {
+	case live.Unattended && err == nil && fired.Spec().Away:
+		person, asking = unattended, loop.WithPersonAway(asking)
+	case live.Unattended:
 		person = unattended
-	} else {
+	default:
 		asking = loop.WithPersonForm(remember.WithMemoryPick(asking, pickMemory(emit, h.memoryPicks)), askForm(emit, h.questions))
 	}
 	prepared, err = h.engine.Prepare(Turn{ID: watch.turnID, Session: id, Task: task, Pick: pick, Images: images}, Hooks{

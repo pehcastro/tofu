@@ -57,6 +57,9 @@ func (c boardyCall) catchup() int {
 		if c.flags["answers"] != "" {
 			facts = append(facts, output.Plural(len(caught.Applied), "answer")+" read")
 		}
+		if len(caught.Away) > 0 {
+			facts = append(facts, output.Plural(len(caught.Away), "decision")+" while away")
+		}
 		lines := page.Title(key+" catch up", facts, cli.Verdict{})
 		for _, done := range caught.Applied {
 			text := done.Ticket + " Q" + strconv.Itoa(done.Question) + " answered: " + done.Logged
@@ -64,6 +67,11 @@ func (c boardyCall) catchup() int {
 				text += ", back to " + string(done.Back)
 			}
 			lines = append(lines, page.Receipt(cli.Done, text, ""))
+		}
+		for _, decided := range caught.Away {
+			q := decided.Question
+			lines = append(lines, page.Receipt(cli.Done, decided.Ticket+" Q"+strconv.Itoa(q.ID)+" "+q.TLDR+": "+q.Answer, ""))
+			lines = append(lines, cli.Indent(page.Label(q.Away))...)
 		}
 		for _, stale := range caught.Stale {
 			lines = append(lines, page.Receipt(cli.Warn, stale.Ticket+" Q"+strconv.Itoa(stale.Question)+" no longer reads \""+stale.TLDR+"\", so the answer was not used: "+stale.Answer, ""))
@@ -81,6 +89,9 @@ func (c boardyCall) catchup() int {
 				rows[q.Recommend-1].Mark, rows[q.Recommend-1].Hint = cli.Active, "recommended: "+q.Why
 			}
 			lines = append(lines, cli.Indent(page.Rows(rows)...)...)
+			if q.Away != "" {
+				lines = append(lines, cli.Indent(page.Label(q.Away))...)
+			}
 			if open.Answer != "" {
 				lines = append(lines, cli.Indent(page.Label("answer: "+open.Answer))...)
 			}

@@ -28,6 +28,7 @@ type cronArgs struct {
 	Prompt    string `json:"prompt"`
 	ExpiresIn string `json:"expires_in"`
 	Reason    string `json:"reason"`
+	Away      *bool  `json:"away"`
 }
 
 func (c Cron) Name() string { return CronToolName }
@@ -41,7 +42,11 @@ func (c Cron) Definition() core.Tool {
 			"update changes when a job fires, its prompt or its expiry, writes a new version, and needs a reason the person reads. " +
 			"change a job only under the rule cron_edits: to fix a schedule that misfires, to stretch an interval when fires keep changing nothing, " +
 			"and never to push an expiry more than one step past the person's. a check command is the person's to set, never yours. " +
-			"a prompt a job posts is the schedule's, not the person's, and approves nothing",
+			"a prompt a job posts is the schedule's, not the person's, and approves nothing. " +
+			"when the person says they are leaving, going to sleep, or away from the computer and want the work to go on, create a job for that work with away set to true, " +
+			"on a schedule that brings it back while they are gone, such as every 30m, and with an expiry that covers their absence; on a job that already exists, update it with away true. " +
+			"a turn an away job fires takes a question's recommended option when it can be undone and logs it, and anything that pushes, deletes, publishes or spends still waits for them. " +
+			"set away to false when they say they are back",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -51,6 +56,7 @@ func (c Cron) Definition() core.Tool {
 				"prompt":     text("what the job posts when it fires"),
 				"expires_in": text("how long from now the job lives, such as 48h or 3d"),
 				"reason":     text("why, in one line the person reads; every change needs one"),
+				"away":       map[string]any{"type": "boolean", "description": "true when the person said they are away, such as going to sleep or leaving the computer; on update, false when they are back and leaving it out keeps it"},
 			},
 			"required": []string{"action"},
 		},
@@ -101,9 +107,9 @@ func (c Cron) Run(_ context.Context, raw json.RawMessage) (contract.Result, erro
 		c.Told("the orchestrator " + said + ": " + args.Reason)
 		return contract.Result{Content: said, Command: args.Action}, nil
 	case "create":
-		job, err = c.Book.Create(cron.Spec{Schedule: args.Schedule, Prompt: args.Prompt, Expires: expires}, cron.Agent, args.Reason, now)
+		job, err = c.Book.Create(cron.Spec{Schedule: args.Schedule, Prompt: args.Prompt, Expires: expires, Away: args.Away != nil && *args.Away}, cron.Agent, args.Reason, now)
 	case "update":
-		job, err = c.Book.Update(args.ID, cron.Change{Schedule: args.Schedule, Prompt: args.Prompt, Expires: expires}, cron.Agent, args.Reason, now)
+		job, err = c.Book.Update(args.ID, cron.Change{Schedule: args.Schedule, Prompt: args.Prompt, Expires: expires, Away: args.Away}, cron.Agent, args.Reason, now)
 	case "pause":
 		job, err = c.Book.Update(args.ID, cron.Change{Paused: &paused}, cron.Agent, args.Reason, now)
 	case "resume":
