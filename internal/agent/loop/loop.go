@@ -326,15 +326,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			}
 			return calls
 		}
-		timed, cancel := context.WithTimeout(ctx, konst.ShadowSnapshotTimeoutMillis*time.Millisecond)
-		begun, err := shadow.At(config.Places.State, config.Project).Begin(timed, turn, calls)
-		cancel()
-		if err != nil {
-			row.Warnings = append(row.Warnings, "the shadow store did not record where this turn started, so changes cannot list what it edits: "+err.Error())
-		} else {
-			turnFiles = &begun
-			ctx = begun.Into(ctx)
-		}
+		begun := shadow.At(config.Places.State, config.Project).Begin(ctx, turn, calls)
+		turnFiles, ctx = &begun, begun.Into(ctx)
 	}
 
 	hooks, untrustedHooks := hookEngine(ctx, config, origin)
@@ -345,6 +338,15 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		in.Session, in.Turn = row.Session, row.ID
 		if config.SpawnedFrom != "" {
 			in.Agent, in.AgentType = origin, config.AgentType
+		}
+		beforeAnyTool := in.Event == hook.SessionStart || in.Event == hook.UserPromptSubmit
+		if beforeAnyTool && slices.ContainsFunc(hooks.Hooks(), func(one hook.Hook) bool { return one.Event == in.Event }) {
+			if turnFiles != nil {
+				_ = turnFiles.Begun()
+			}
+			if recorded != nil {
+				recorded.undoStarted()
+			}
 		}
 		verdict := hooks.Fire(ctx, in)
 		hookWarnings.Lock()
@@ -743,7 +745,10 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			notes, err := turnFiles.End(timed)
 			cancel()
 			row.Warnings = append(row.Warnings, notes...)
-			if err != nil {
+			switch begun := turnFiles.Begun(); {
+			case begun != nil:
+				row.Warnings = append(row.Warnings, "the shadow store did not record where this turn started, so changes cannot list what it edits: "+begun.Error())
+			case err != nil:
 				row.Warnings = append(row.Warnings, "the shadow store did not commit this turn's edits, so changes cannot list them: "+err.Error())
 			}
 		}
@@ -1332,6 +1337,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				holdFor(&stepRow, "the lead called a tool before answering the person")
 				keep(stepRow)
 				continue
+			}
+			if turnFiles != nil {
+				_ = turnFiles.Begun()
 			}
 			pending, batches := decision.ToolCalls, 0
 			forgetting, noting := forget.Hold(messages, artifacts.preview), note.Hold(messages)

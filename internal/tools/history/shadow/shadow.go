@@ -13,14 +13,16 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"tofu/internal/konst"
+	platformfs "tofu/internal/platform/fs"
 )
 
 const TurnRefs = "refs/tofu/turns"
 
-const alwaysExcluded = "node_modules/\n.venv/\n__pycache__/\n"
+const alwaysExcluded = "node_modules/\n.venv/\n__pycache__/\n/*/**/" + platformfs.StateDirName + "/\n/*/**/" + platformfs.LegacyStateDirName + "/\n"
 
 type Store struct {
 	gitDir string
@@ -69,21 +71,27 @@ type Started struct {
 	Store  Store
 	Turn   Turn
 	Calls  func() []Call
-	commit string
+	begun  *begun
 	parent *Started
+}
+
+type begun struct {
+	done   chan struct{}
+	commit string
+	err    error
 }
 
 type startedKey struct{}
 
 func (s Started) Into(ctx context.Context) context.Context {
-	if parent, inTurn := StartedIn(ctx); inTurn {
+	if parent, inTurn := ctx.Value(startedKey{}).(Started); inTurn {
 		s.parent = &parent
 	}
 	return context.WithValue(ctx, startedKey{}, s)
 }
 
 func (s Started) Parent() (Started, bool) {
-	if s.parent == nil {
+	if s.parent == nil || s.parent.Begun() != nil {
 		return Started{}, false
 	}
 	parent := *s.parent
@@ -93,49 +101,65 @@ func (s Started) Parent() (Started, bool) {
 
 func StartedIn(ctx context.Context) (Started, bool) {
 	started, ok := ctx.Value(startedKey{}).(Started)
-	return started, ok
+	return started, ok && started.Begun() == nil
 }
 
-func (s Store) Begin(ctx context.Context, turn Turn, calls func() []Call) (Started, error) {
-	tree, err := s.Snapshot(ctx)
-	if err != nil {
-		return Started{}, err
-	}
-	commit, err := s.git(ctx, message(turn, nil), "commit-tree", tree)
-	if err != nil {
-		return Started{}, err
-	}
-	if _, err := s.git(ctx, "", "update-ref", TurnRefs+"/"+turn.ID, commit); err != nil {
-		return Started{}, err
-	}
-	return Started{Store: s, Turn: turn, Calls: calls, commit: commit}, nil
+func (s Store) Begin(ctx context.Context, turn Turn, calls func() []Call) Started {
+	started := Started{Store: s, Turn: turn, Calls: calls, begun: &begun{done: make(chan struct{})}}
+	go func() {
+		defer close(started.begun.done)
+		timed, cancel := context.WithTimeout(context.WithoutCancel(ctx), konst.ShadowSnapshotTimeoutMillis*time.Millisecond)
+		defer cancel()
+		tree, err := s.Snapshot(timed)
+		if err != nil {
+			started.begun.err = err
+			return
+		}
+		commit, err := s.git(timed, message(turn, nil), "commit-tree", tree)
+		if err == nil {
+			_, err = s.git(timed, "", "update-ref", TurnRefs+"/"+turn.ID, commit)
+		}
+		started.begun.commit, started.begun.err = commit, err
+	}()
+	return started
+}
+
+func (s Started) Begun() error {
+	<-s.begun.done
+	return s.begun.err
 }
 
 func (s Started) End(ctx context.Context) ([]string, error) {
+	if err := s.Begun(); err != nil {
+		return nil, err
+	}
 	tree, err := s.Store.Snapshot(ctx)
 	if err != nil {
 		return nil, err
 	}
-	files, err := s.Store.diff(ctx, s.commit, tree, s.Calls())
+	files, err := s.Store.diff(ctx, s.begun.commit, tree, s.Calls())
 	if err != nil {
 		return nil, err
 	}
-	commit, err := s.Store.git(ctx, message(s.Turn, files), "commit-tree", tree, "-p", s.commit)
+	commit, err := s.Store.git(ctx, message(s.Turn, files), "commit-tree", tree, "-p", s.begun.commit)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.Store.git(ctx, "", "update-ref", TurnRefs+"/"+s.Turn.ID, commit, s.commit); err != nil {
+	if _, err := s.Store.git(ctx, "", "update-ref", TurnRefs+"/"+s.Turn.ID, commit, s.begun.commit); err != nil {
 		return nil, err
 	}
 	return s.Store.prune(ctx)
 }
 
 func (s Started) Live(ctx context.Context) (Changed, error) {
+	if err := s.Begun(); err != nil {
+		return Changed{}, err
+	}
 	tree, err := s.Store.Snapshot(ctx)
 	if err != nil {
 		return Changed{}, err
 	}
-	files, err := s.Store.diff(ctx, s.commit, tree, s.Calls())
+	files, err := s.Store.diff(ctx, s.begun.commit, tree, s.Calls())
 	return Changed{Turn: s.Turn, Files: files}, err
 }
 
@@ -338,7 +362,7 @@ func (s Store) gitIndexed(ctx context.Context, index, stdin string, args ...stri
 	}
 	cmd := exec.CommandContext(ctx, "git", append(flags, args...)...)
 	cmd.Dir = s.work
-	cmd.Stdin = strings.NewReader(stdin)
+	cmd.Stdin, cmd.WaitDelay = strings.NewReader(stdin), konst.BashWaitDelayMillis*time.Millisecond
 	cmd.Env = slices.DeleteFunc(os.Environ(), func(entry string) bool { return strings.HasPrefix(strings.ToUpper(entry), "GIT_") })
 	cmd.Env = append(cmd.Env, "GIT_AUTHOR_NAME=tofu", "GIT_AUTHOR_EMAIL=tofu@localhost", "GIT_COMMITTER_NAME=tofu", "GIT_COMMITTER_EMAIL=tofu@localhost")
 	if index != "" {

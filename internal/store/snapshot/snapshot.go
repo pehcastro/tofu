@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	platformfs "tofu/internal/platform/fs"
 )
 
 const (
@@ -356,7 +357,7 @@ func (r Repo) git(ctx context.Context, stdin string, args ...string) ([]byte, er
 func (r Repo) command(ctx context.Context, stdin string, args ...string) (*exec.Cmd, *bytes.Buffer) {
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-c", "core.autocrlf=false", "-c", "core.fsmonitor=false", "-c", "core.longpaths=true",
 		"-c", "core.quotepath=false", "-c", "core.excludesFile=" + r.path(excludeName), "--git-dir", r.gitDir(), "--work-tree", r.Tree}, args...)...)
-	cmd.Dir, cmd.Stdin = r.Tree, strings.NewReader(stdin)
+	cmd.Dir, cmd.Stdin, cmd.WaitDelay = r.Tree, strings.NewReader(stdin), konst.BashWaitDelayMillis*time.Millisecond
 	cmd.Env = append(slices.DeleteFunc(os.Environ(), func(variable string) bool { return strings.HasPrefix(strings.ToUpper(variable), "GIT_") }),
 		"GIT_INDEX_FILE="+r.path(indexName))
 	var stderr bytes.Buffer
@@ -510,6 +511,10 @@ func (r Repo) readLevel(level []visit, was, now walk) (next []visit, fresh []str
 			continue
 		}
 		seen := walkedDir{Changed: info.ModTime().UnixNano(), Ignore: stamp}
+		if at.dir != "." && slices.ContainsFunc(entries, func(one fs.DirEntry) bool { return one.Name() == ".git" }) {
+			now.Dirs[at.dir] = seen
+			continue
+		}
 		for _, one := range entries {
 			name, child := one.Name(), path.Join(at.dir, one.Name())
 			switch {
@@ -517,7 +522,7 @@ func (r Repo) readLevel(level []visit, was, now walk) (next []visit, fresh []str
 				if _, err := os.Readlink(filepath.Join(full, name)); err == nil {
 					seen.Links = append(seen.Links, name)
 				}
-			case !one.IsDir() || name == ".git":
+			case !one.IsDir() || name == ".git" || at.dir != "." && (name == platformfs.StateDirName || name == platformfs.LegacyStateDirName):
 			case trusted && slices.Contains(cached.Children, name):
 				seen.Children = append(seen.Children, name)
 				next = append(next, visit{dir: child, trusted: true})
@@ -584,7 +589,7 @@ func (asker *ignoreAsker) close() {
 }
 
 func (r Repo) exclude(skipped []string) error {
-	var lines []string
+	lines := []string{"/*/**/" + platformfs.StateDirName + "/", "/*/**/" + platformfs.LegacyStateDirName + "/"}
 	if own, err := os.ReadFile(filepath.Join(r.Tree, ".git", "info", "exclude")); err == nil {
 		lines = append(lines, string(own))
 	}
