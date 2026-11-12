@@ -177,7 +177,7 @@ func (f *Formatter) styleToSVG(style *chroma.Style) map[chroma.TokenType]string 
 	converted := map[chroma.TokenType]string{}
 	bg := style.Get(chroma.Background)
 
-	for t := range chroma.StandardTypes {
+	for t := range chroma.StandardTypes() {
 		entry := style.Get(t)
 		if t != chroma.Background {
 			entry = entry.Sub(bg)

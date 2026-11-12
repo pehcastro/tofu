@@ -15,27 +15,32 @@ import (
 	"github.com/odvcencio/gotreesitter"
 )
 
-// externalScannerRegistry maps language names (e.g. "javascript") to their
-// hand-written external scanners. Populated by zzz_scanner_attachments.go
-// init() before any Language function is called.
-var externalScannerRegistry = map[string]gotreesitter.ExternalScanner{}
-
-// externalLexStatesRegistry maps language names to their external lex states
-// tables, matching C tree-sitter's ts_external_scanner_states. Populated by
-// zzz_scanner_attachments.go init() for grammars that need precise external
-// token validity filtering.
-var externalLexStatesRegistry = map[string][][]bool{}
-
-// RegisterExternalScanner registers an external scanner for a language name.
-// This is called during init() by zzz_scanner_attachments.go.
-func RegisterExternalScanner(name string, s gotreesitter.ExternalScanner) {
-	externalScannerRegistry[name] = s
+var externalSupport = struct {
+	sync.RWMutex
+	scanners  map[string]gotreesitter.ExternalScanner
+	lexStates map[string][][]bool
+}{
+	scanners:  map[string]gotreesitter.ExternalScanner{},
+	lexStates: map[string][][]bool{},
 }
 
-// RegisterExternalLexStates registers the external lex states table for a
-// language, matching C tree-sitter's ts_external_scanner_states.
+func RegisterExternalScanner(name string, s gotreesitter.ExternalScanner) {
+	externalSupport.Lock()
+	defer externalSupport.Unlock()
+	externalSupport.scanners[name] = s
+}
+
 func RegisterExternalLexStates(name string, states [][]bool) {
-	externalLexStatesRegistry[name] = states
+	externalSupport.Lock()
+	defer externalSupport.Unlock()
+	externalSupport.lexStates[name] = states
+}
+
+func registeredExternalScanner(name string) (gotreesitter.ExternalScanner, bool) {
+	externalSupport.RLock()
+	defer externalSupport.RUnlock()
+	s, ok := externalSupport.scanners[name]
+	return s, ok
 }
 
 // ReservedWordTable holds one language's ABI 15 reserved-word data
@@ -513,16 +518,15 @@ func stopEmbeddedLanguageJanitorLocked() {
 	embeddedLanguageJanitorAlive = false
 }
 
-// LookupExternalScanner returns the registered hand-written external scanner
-// for the given language name (e.g. "python"), or nil if none is registered.
 func LookupExternalScanner(name string) gotreesitter.ExternalScanner {
-	return externalScannerRegistry[name]
+	s, _ := registeredExternalScanner(name)
+	return s
 }
 
-// LookupExternalLexStates returns the registered external lex states table
-// for the given language name, or nil if none is registered.
 func LookupExternalLexStates(name string) [][]bool {
-	return externalLexStatesRegistry[name]
+	externalSupport.RLock()
+	defer externalSupport.RUnlock()
+	return externalSupport.lexStates[name]
 }
 
 type languageBoundExternalScanner interface {
@@ -530,7 +534,7 @@ type languageBoundExternalScanner interface {
 }
 
 func attachExternalScannerForLanguage(name string, lang *gotreesitter.Language) bool {
-	s, ok := externalScannerRegistry[name]
+	s, ok := registeredExternalScanner(name)
 	if !ok || lang == nil {
 		return false
 	}
@@ -556,19 +560,16 @@ func AdaptScannerForLanguage(name string, targetLang *gotreesitter.Language) boo
 	}
 
 	lookupName := name
-	if _, ok := externalScannerRegistry[lookupName]; !ok {
-		lowerName := strings.ToLower(name)
-		if _, ok := externalScannerRegistry[lowerName]; ok {
-			lookupName = lowerName
-		}
+	s, ok := registeredExternalScanner(lookupName)
+	if !ok {
+		lookupName = strings.ToLower(name)
+		s, ok = registeredExternalScanner(lookupName)
 	}
-	if _, ok := externalScannerRegistry[lookupName]; !ok {
+	if !ok {
 		return false
 	}
-	if s, ok := externalScannerRegistry[lookupName]; ok {
-		if bound, ok := s.(languageBoundExternalScanner); ok {
-			targetLang.ExternalScanner = bound.ExternalScannerForLanguage(targetLang)
-		}
+	if bound, ok := s.(languageBoundExternalScanner); ok {
+		targetLang.ExternalScanner = bound.ExternalScannerForLanguage(targetLang)
 	}
 	if targetLang.ExternalScanner != nil {
 		attachRegisteredExternalLexStates(lookupName, targetLang)
@@ -611,7 +612,7 @@ func attachRegisteredExternalLexStates(name string, targetLang *gotreesitter.Lan
 	if targetLang == nil {
 		return
 	}
-	els := externalLexStatesRegistry[name]
+	els := LookupExternalLexStates(name)
 	if len(els) > 0 && len(targetLang.ExternalLexStates) == 0 {
 		targetLang.ExternalLexStates = els
 	}

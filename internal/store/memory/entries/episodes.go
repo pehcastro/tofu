@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"tofu/internal/agent/subagents"
+	platformfs "tofu/internal/platform/fs"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/memory/tree"
 )
@@ -21,7 +21,7 @@ const (
 	leftOut       = "(the %d oldest lines are left out to fit this context; recall finds their words)\n"
 )
 
-var erroredSubAgentReport = regexp.MustCompile(`^sub-agent \S+ is ` + subagents.Errored.String() + `: `)
+var erroredSubAgentReport = platformfs.LazyRegexp(`^sub-agent \S+ is ` + subagents.Errored.String() + `: `)
 
 func episodesLog(project string) (string, error) {
 	full, err := filepath.Abs(project)
@@ -45,7 +45,7 @@ func openEpisodes(project string) (*tree.Store, error) {
 }
 
 func KeepEpisode(project string, item tree.Item) error {
-	if item.Kind == tree.KindWork && erroredSubAgentReport.MatchString(item.Text) {
+	if item.Kind == tree.KindWork && erroredSubAgentReport().MatchString(item.Text) {
 		return nil
 	}
 	store, err := openEpisodes(project)

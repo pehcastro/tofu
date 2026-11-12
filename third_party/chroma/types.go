@@ -1,5 +1,7 @@
 package chroma
 
+import "sync"
+
 //go:generate enumer -text -type TokenType
 
 type TokenType int
@@ -194,8 +196,8 @@ const (
 	NumberOct         = LiteralNumberOct
 )
 
-var (
-	StandardTypes = map[TokenType]string{
+var StandardTypes = sync.OnceValue(func() map[TokenType]string {
+	return map[TokenType]string{
 		Background:       "bg",
 		PreWrapper:       "chroma",
 		Line:             "line",
@@ -294,7 +296,7 @@ var (
 		GenericTraceback:  "gt",
 		GenericUnderline:  "gl",
 	}
-)
+})
 
 func (t TokenType) Parent() TokenType {
 	if t%100 != 0 {

@@ -1,21 +1,16 @@
 package grammarruntime
 
 import (
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 )
 
-// ExternalScannerSourceFile identifies an upstream scanner-facing source file.
-// The hash is SHA-256 over the exact file bytes at ExternalScannerSpec.UpstreamCommit.
 type ExternalScannerSourceFile struct {
 	Path   string
 	SHA256 string
 }
 
-// ExternalScannerSpec records the source contract for a hand-written external
-// scanner port. It lets updater tooling distinguish grammar-only changes from
-// external token or scanner-source changes that require scanner review.
 type ExternalScannerSpec struct {
 	Language       string
 	UpstreamRepo   string
@@ -24,26 +19,17 @@ type ExternalScannerSpec struct {
 	Externals      []string
 }
 
-var externalScannerSpecRegistry = struct {
+var externalScannerSpecRegistry struct {
 	sync.RWMutex
-	byName map[string]ExternalScannerSpec
-}{
-	byName: map[string]ExternalScannerSpec{},
+	registered []ExternalScannerSpec
 }
 
-// RegisterExternalScannerSpec records scanner-source metadata for a language.
 func RegisterExternalScannerSpec(spec ExternalScannerSpec) {
-	name := normalizeExternalScannerSpecName(spec.Language)
-	if name == "" {
-		return
-	}
-	spec.Language = name
 	externalScannerSpecRegistry.Lock()
 	defer externalScannerSpecRegistry.Unlock()
-	externalScannerSpecRegistry.byName[name] = cloneExternalScannerSpec(spec)
+	externalScannerSpecRegistry.registered = append(externalScannerSpecRegistry.registered, spec)
 }
 
-// LookupExternalScannerSpec returns scanner-source metadata for a language.
 func LookupExternalScannerSpec(name string) (ExternalScannerSpec, bool) {
 	name = normalizeExternalScannerSpecName(name)
 	if name == "" {
@@ -51,34 +37,35 @@ func LookupExternalScannerSpec(name string) (ExternalScannerSpec, bool) {
 	}
 	externalScannerSpecRegistry.RLock()
 	defer externalScannerSpecRegistry.RUnlock()
-	spec, ok := externalScannerSpecRegistry.byName[name]
-	if !ok {
-		return ExternalScannerSpec{}, false
+	registered := externalScannerSpecRegistry.registered
+	for i := len(registered) - 1; i >= 0; i-- {
+		if spec := registered[i]; normalizeExternalScannerSpecName(spec.Language) == name {
+			return cloneExternalScannerSpec(spec, name), true
+		}
 	}
-	return cloneExternalScannerSpec(spec), true
+	return ExternalScannerSpec{}, false
 }
 
-// ExternalScannerSpecs returns all registered scanner-source specs, sorted by language.
 func ExternalScannerSpecs() []ExternalScannerSpec {
 	externalScannerSpecRegistry.RLock()
 	defer externalScannerSpecRegistry.RUnlock()
-	out := make([]ExternalScannerSpec, 0, len(externalScannerSpecRegistry.byName))
-	for _, spec := range externalScannerSpecRegistry.byName {
-		out = append(out, cloneExternalScannerSpec(spec))
+	var out []ExternalScannerSpec
+	registered := externalScannerSpecRegistry.registered
+	for i := len(registered) - 1; i >= 0; i-- {
+		spec := registered[i]
+		name := normalizeExternalScannerSpecName(spec.Language)
+		if name != "" && !slices.ContainsFunc(out, func(kept ExternalScannerSpec) bool { return kept.Language == name }) {
+			out = append(out, cloneExternalScannerSpec(spec, name))
+		}
 	}
-	sort.Slice(out, func(i, j int) bool {
-		return out[i].Language < out[j].Language
-	})
+	slices.SortFunc(out, func(a, b ExternalScannerSpec) int { return strings.Compare(a.Language, b.Language) })
 	return out
 }
 
-func cloneExternalScannerSpec(spec ExternalScannerSpec) ExternalScannerSpec {
-	if len(spec.SourceFiles) > 0 {
-		spec.SourceFiles = append([]ExternalScannerSourceFile(nil), spec.SourceFiles...)
-	}
-	if len(spec.Externals) > 0 {
-		spec.Externals = append([]string(nil), spec.Externals...)
-	}
+func cloneExternalScannerSpec(spec ExternalScannerSpec, name string) ExternalScannerSpec {
+	spec.Language = name
+	spec.SourceFiles = slices.Clone(spec.SourceFiles)
+	spec.Externals = slices.Clone(spec.Externals)
 	return spec
 }
 

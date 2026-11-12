@@ -7,7 +7,6 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -351,11 +350,11 @@ func WordsAtMost(subject, text string, most int) error {
 }
 
 var (
-	personDescribed = regexp.MustCompile(`(?i)\b(?:the\s+(?:person|user|owner|human|developer)|(?:person|user|owner)'s)\b`)
-	personNamed     = regexp.MustCompile(`(?:(?i:\b(?:he|she|they))|^\s*\p{Lu}\pL*)\s+(?i:wants?|prefers?|likes?|asks?|asked|said|says|needs?|expects?|hates?|told|keeps)\b`)
+	personDescribed = platformfs.LazyRegexp(`(?i)\b(?:the\s+(?:person|user|owner|human|developer)|(?:person|user|owner)'s)\b`)
+	personNamed     = platformfs.LazyRegexp(`(?:(?i:\b(?:he|she|they))|^\s*\p{Lu}\pL*)\s+(?i:wants?|prefers?|likes?|asks?|asked|said|says|needs?|expects?|hates?|told|keeps)\b`)
 )
 
 func PersonIn(statement string) (string, bool) {
-	found := personDescribed.FindString(statement) + personNamed.FindString(statement)
+	found := personDescribed().FindString(statement) + personNamed().FindString(statement)
 	return found, found != ""
 }

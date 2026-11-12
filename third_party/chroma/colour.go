@@ -5,45 +5,48 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 )
 
-var ANSI2RGB = map[string]string{
-	"#ansiblack":     "000000",
-	"#ansidarkred":   "7f0000",
-	"#ansidarkgreen": "007f00",
-	"#ansibrown":     "7f7fe0",
-	"#ansidarkblue":  "00007f",
-	"#ansipurple":    "7f007f",
-	"#ansiteal":      "007f7f",
-	"#ansilightgray": "e5e5e5",
+var ANSI2RGB = sync.OnceValue(func() map[string]string {
+	return map[string]string{
+		"#ansiblack":     "000000",
+		"#ansidarkred":   "7f0000",
+		"#ansidarkgreen": "007f00",
+		"#ansibrown":     "7f7fe0",
+		"#ansidarkblue":  "00007f",
+		"#ansipurple":    "7f007f",
+		"#ansiteal":      "007f7f",
+		"#ansilightgray": "e5e5e5",
 
-	"#ansidarkgray":  "555555",
-	"#ansired":       "ff0000",
-	"#ansigreen":     "00ff00",
-	"#ansiyellow":    "ffff00",
-	"#ansiblue":      "0000ff",
-	"#ansifuchsia":   "ff00ff",
-	"#ansiturquoise": "00ffff",
-	"#ansiwhite":     "ffffff",
+		"#ansidarkgray":  "555555",
+		"#ansired":       "ff0000",
+		"#ansigreen":     "00ff00",
+		"#ansiyellow":    "ffff00",
+		"#ansiblue":      "0000ff",
+		"#ansifuchsia":   "ff00ff",
+		"#ansiturquoise": "00ffff",
+		"#ansiwhite":     "ffffff",
 
-	"#black":     "000000",
-	"#darkred":   "7f0000",
-	"#darkgreen": "007f00",
-	"#brown":     "7f7fe0",
-	"#darkblue":  "00007f",
-	"#purple":    "7f007f",
-	"#teal":      "007f7f",
-	"#lightgray": "e5e5e5",
+		"#black":     "000000",
+		"#darkred":   "7f0000",
+		"#darkgreen": "007f00",
+		"#brown":     "7f7fe0",
+		"#darkblue":  "00007f",
+		"#purple":    "7f007f",
+		"#teal":      "007f7f",
+		"#lightgray": "e5e5e5",
 
-	"#darkgray":  "555555",
-	"#red":       "ff0000",
-	"#green":     "00ff00",
-	"#yellow":    "ffff00",
-	"#blue":      "0000ff",
-	"#fuchsia":   "ff00ff",
-	"#turquoise": "00ffff",
-	"#white":     "ffffff",
-}
+		"#darkgray":  "555555",
+		"#red":       "ff0000",
+		"#green":     "00ff00",
+		"#yellow":    "ffff00",
+		"#blue":      "0000ff",
+		"#fuchsia":   "ff00ff",
+		"#turquoise": "00ffff",
+		"#white":     "ffffff",
+	}
+})
 
 type Colour int32
 
@@ -150,7 +153,7 @@ func (c Colours) Swap(i, j int)      { c[i], c[j] = c[j], c[i] }
 func (c Colours) Less(i, j int) bool { return c[i] < c[j] }
 
 func normaliseColour(colour string) string {
-	if ansi, ok := ANSI2RGB[colour]; ok {
+	if ansi, ok := ANSI2RGB()[colour]; ok {
 		return ansi
 	}
 	if strings.HasPrefix(colour, "#") {

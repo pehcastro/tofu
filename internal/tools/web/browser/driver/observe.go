@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/fs"
 )
 
 const cursorTag = "data-tofu-ci"
@@ -108,7 +108,7 @@ func (d *Driver) FindTarget(role, name string, nth int) (ref string, fits []stri
 	return "", fits, nil
 }
 
-var refLine = regexp.MustCompile(`ref=(e\d+)[,\]]`)
+var refLine = fs.LazyRegexp(`ref=(e\d+)[,\]]`)
 
 func (d *Driver) matches(role, name string) (exact, loose []string, err error) {
 	snapshot, err := d.observe(time.Now().Add(konst.BrowserObserveTimeoutMillis*time.Millisecond), true)
@@ -118,7 +118,7 @@ func (d *Driver) matches(role, name string) (exact, loose []string, err error) {
 	wanted := strings.ToLower(name)
 	var starting, containing []string
 	for line := range strings.Lines(snapshot) {
-		found := refLine.FindStringSubmatch(line)
+		found := refLine().FindStringSubmatch(line)
 		if found == nil {
 			continue
 		}
@@ -155,7 +155,7 @@ func changes(before, after string) string {
 		var order []string
 		byRef := map[string]string{}
 		for line := range strings.Lines(snapshot) {
-			if found := refLine.FindStringSubmatch(line); found != nil {
+			if found := refLine().FindStringSubmatch(line); found != nil {
 				order = append(order, found[1])
 				byRef[found[1]] = strings.TrimSpace(line)
 			}

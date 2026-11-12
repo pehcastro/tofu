@@ -8,13 +8,13 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/fs"
 )
 
 type MoveKind string
@@ -227,13 +227,13 @@ type pageState struct {
 	Heading  string `json:"heading"`
 }
 
-var errorHeading = regexp.MustCompile(`(?im)^\s*[45]\d\d\b|\b(error|not found|forbidden|unavailable|bad gateway)\b`)
+var errorHeading = fs.LazyRegexp(`(?im)^\s*[45]\d\d\b|\b(error|not found|forbidden|unavailable|bad gateway)\b`)
 
 func (p pageState) errorPage() string {
 	if p.Status >= 400 {
 		return fmt.Sprintf("HTTP %d", p.Status)
 	}
-	if errorHeading.MatchString(p.Heading) {
+	if errorHeading().MatchString(p.Heading) {
 		return "titled " + strconv.Quote(strings.TrimSpace(strings.ReplaceAll(p.Heading, "\n", " ")))
 	}
 	return ""
