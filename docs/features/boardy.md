@@ -421,6 +421,7 @@ the lead gives it.
 | `tofu boardy catchup [--board KEY] [--answers]` | lists open questions and writes `catchup.md`; `--answers` applies what the person wrote |
 | `tofu boardy lint [--board KEY]` | checks every ticket, exits 1 on a finding |
 | `tofu boardy boards` | lists the project's boards |
+| `tofu boardy cost <ticket> --claude`, `tofu boardy cost --session <id> [--fork N] --claude` | reads the Claude Code transcripts that worked on a ticket or a session and prints, per agent, wall, busy, model and thinking time, requests and tokens, builds and tests with their time, reads, spawns and resumes |
 
 Every subcommand takes `--json`. Settings: `projectManagement` (`off` or
 `boardy`) and `boardFlow` (`jira` or `linear`).

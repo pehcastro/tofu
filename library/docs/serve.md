@@ -41,7 +41,7 @@ context. `tofu docs serve-methods` lists every request; this page is what serve 
   `agent` and `instance`, live and replayed; `tool.started` the bash `title` the model gave, and
   `tool.completed` a `summary`: `exit`, `durationMs`, `hits` for a search, `added` and `removed` lines. Both carry `card`, the call drawn as a row (`family`, `doing`, `verb`, `object`, `meta`, `tone`, and on a ticket move `from` and `to`), its `group`, and `groupSummary`, the turn's group row: `calls`, `failed`, its `head` and its `open` lines
 - `agent.ended`: `endedAt`, `durationMs`, the `turn` that spawned it;
-  `turn.steered`: the lead read a message sent mid-turn, until then queued; `usage.updated`, per turn and agent after each call, the running `tokensIn`, `tokensOut`, `cacheRead`, `cacheWrite5m`, `cacheWrite1h`, `costUsd`, `decisions`
+  `turn.steered`: the lead read a message sent mid-turn, until then queued; `usage.updated`, per turn and agent after each call, the running `tokensIn`, `tokensOut`, `cacheRead`, `cacheWrite5m`, `cacheWrite1h`, `costUsd`, `decisions`, and `tokensPerSecond`, the output rate, at most once a second while text streams and `0` during a tool call (also on `session.state`, for the lead and each agent)
 - `quota.updated`: on open, after each turn, on an account move, every five minutes, and once a `retry_at`
   passes; each window's `percent`, `source`, `account_id` (as `query.accounts`), `read_at` and `stale`, true
   for a last good reading kept through a failed poll; `windows: []`, none answered

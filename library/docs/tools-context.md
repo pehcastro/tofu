@@ -17,6 +17,9 @@ work before you read about it.
 - `budget` reports calls, weighted tokens, USD and model and wall time for
   the turn, the session, the lead and each sub-agent, counted as `tofu
   session drain` counts them.
+- `estimate_time` says how long a piece of work will take, with no model
+  call: the estimate, the done-by promise and its basis from earlier runs
+  of the same model here, or in other projects on a first run.
 - `forget` drops results the model names by call id, each left as one
   line, and says the tokens freed and the cache cost. Only a result after
   the last cache breakpoint can go. When a request passes 70% of the

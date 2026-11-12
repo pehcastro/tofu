@@ -27,6 +27,8 @@ three. `thinkingSummary` picks the thinking a request asks for: `summarized`,
 the default, or `omitted`, the body Claude Code and codex send. A spawn asking
 for an effort the model lacks runs at the nearest one it has.
 
+While text streams, the footer shows the output rate, such as `128.4 tok/s`, weighted to the last 20 seconds and blank during a tool call or under 200 tokens or 4 seconds; after a request, its output tokens over send to last byte.
+
 ## Where it lives
 
 - `~/.tofu/agent.db`: what `tofu login` stores, the subscriptions and each

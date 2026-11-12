@@ -117,7 +117,9 @@ started it.
   `tofu session request` prints it.
 - `usage.updated` after each model call, one per turn and agent, with the running `model`,
   `tokensIn`, `tokensOut`, `cacheRead`, `cacheWrite5m`, `cacheWrite1h`, `costUsd` and `decisions`, so
-  a client shows what a turn costs as it runs.
+  a client shows what a turn costs as it runs. It also carries `tokensPerSecond`, the output rate,
+  sent at most once a second while text streams and `0` during a tool call; `session.state` carries
+  it for the lead and for each agent.
 - `quota.updated` when a session opens, after each turn, when a turn moves to another account, every
   five minutes, and as soon as a rate-limited account may be asked again. Each window says when it
   was read, whether it is a last good reading kept through a failed poll (`stale`), and the `source`

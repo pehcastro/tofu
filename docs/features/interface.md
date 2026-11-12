@@ -100,6 +100,12 @@ when something changed, and the welcome animations share one clock.
   request and shows the fullest subscription window, and `read 12m ago`
   beside a stale reading. See [Subscription
   quota](/docs/llms/quota).
+- **See how fast the model writes**: while text streams, the footer shows
+  the output rate, such as `128.4 tok/s`. It counts the last 20 seconds
+  most, the way oh-my-pi does, and reads blank during a tool call and
+  under 200 tokens or 4 seconds of output. After the request it shows the
+  request's own rate: output tokens over the time from send to the last
+  byte.
 - **Leave it in another tab**: tofu reports working, waiting on you, done or
   failed to the terminal over OSC 7501, so a terminal that shows it tells
   you when a turn needs you. See [Program status](/docs/features/status).

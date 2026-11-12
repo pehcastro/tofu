@@ -10,6 +10,22 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+## 0.5.23 - 2026-11-12
+
+Time estimates that say how long work takes and whether they held, and the model's output rate in the footer.
+
+### Added
+
+- The footer shows the model's output rate while text streams, such as `128.4 tok/s`, weighted to the last 20 seconds and blank during a tool call; after a request it shows that request's rate. `tofu serve` carries it as `tokensPerSecond` on `usage.updated` and `session.state`, at most once a second.
+- Every lead turn and every sub-agent run records a time estimate from earlier runs of the same model in the same project, and a done-by promise: the estimate times 1.5, or plus one minute under two minutes, padded to 1.75 or 70 seconds on a first run here. `tofu session trace <s> --kind estimate` lists each one with what it took, in time or late, and the split of model, tools, tests and builds, permission wait and queue; `tofu session info` counts them.
+- `estimate_time` answers how long a piece of work takes before it starts, with no model call, so asking the lead how long something will take gets these numbers.
+- `tofu boardy cost <ticket> --claude` and `--session <id> --claude` read what a ticket or a session took from Claude Code transcripts: wall and model time, tokens, builds and tests, reads and spawns, per agent.
+
+### Changed
+
+- A sub-agent's spawn estimate uses the same estimator as a lead turn, in place of the median of earlier runs.
+- `codemod` parses on a smaller core: Go parses about 17 percent faster and a parse holds about half the memory.
+
 ## 0.5.22 - 2026-11-07
 
 Tools that hand the model the answer rather than the log, in Go, Rust, Python and TypeScript, and `tofu tool` to run any of them by hand.

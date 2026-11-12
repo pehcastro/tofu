@@ -6,10 +6,11 @@ updated: 2026-11-06
 ---
 
 These tools let the model look after its own context window. `context` says
-what fills it, `budget` says what the work has cost, `forget` drops a result
-it no longer needs, `note` keeps a fact through every fork and compaction,
-and `digest` answers a question about a long result without reading it
-again. All five are tofu's own Go code.
+what fills it, `budget` says what the work has cost, `estimate_time` says
+how long work will take, `forget` drops a result it no longer needs, `note`
+keeps a fact through every fork and compaction, and `digest` answers a
+question about a long result without reading it again. All six are tofu's
+own Go code.
 
 ## Why they exist
 
@@ -84,6 +85,26 @@ session: 6 calls, 83539.50000000001 weighted tokens, 0 USD, model 29835 ms, wall
 lead: 6 calls, 83539.50000000001 weighted tokens, 0 USD, model 29835 ms, wall 36851 ms
 memory writer, outside the session total: 0 calls, 0 weighted tokens, 0 USD
 sub-agents: 0 of 0
+```
+
+## estimate_time
+
+`estimate_time` answers how long a piece of work will take before it
+starts, so asking the lead "how long will this take?" gets numbers, not a
+guess. It makes no model call and runs nothing: it reads earlier runs of
+the same model in this project, the ones whose task was closest in length,
+and on a first run here the same model's runs in other projects. It names
+the estimate, the done-by promise, where the figure came from, and the part
+spent in tests and builds. The call is recorded and settled when the next
+lead turn ends, so `tofu session trace <s> --kind estimate` shows whether it
+held.
+
+```bash
+tofu tool estimate_time '{"work":"add a --json flag to tofu session reads","model":"claude-sub/claude-opus-5"}' --dir .
+```
+
+```text
+estimate for the lead on claude-sub/claude-opus-5: about 47s, done by 1m47s, from 20 earlier runs in this project on this model (agent 47s, tests and builds 0s: no test or build call recorded)
 ```
 
 Model time is summed over the requests. Wall time runs from the first event
@@ -208,6 +229,9 @@ model runs in.
 |---|---|---|
 | `context` | `session` | the session to read |
 | `budget` | `session` | the session to count |
+| `estimate_time` | `work` | what the work is; required |
+| `estimate_time` | `agent` | the sub-agent definition that runs it; the lead when left out |
+| `estimate_time` | `model` | the model that runs it; the turn's model when left out |
 | `forget` | `calls` | the call ids to drop, as `context` lists them; required |
 | `note` | `text` | adds one note, one line, at most 500 bytes |
 | `note` | `done` | drops the note with that id |

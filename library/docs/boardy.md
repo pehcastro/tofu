@@ -106,6 +106,8 @@ more statuses hold. An owns entry may be an absolute path outside the
 project, such as `F:/work/other-repo/**` or `/home/me/other-repo/**`; it
 is checked the same way, case-folded on Windows and macOS. A move to doing reads the callers: when the ticket's title, scope or acceptance names an exported Go or Rust item declared in a file it owns, a use of that item in a file outside the owns refuses the move, naming each file and line and the `tofu boardy set --owns` that adds them. A reason starting `not-owned-on-purpose` moves it anyway and records the files.
 
+`tofu boardy cost DEMO-1 --claude`, or `--session <id> [--fork N] --claude`, reads the Claude Code transcripts behind a ticket or a session and prints per agent its wall, busy, model and thinking time, tokens, builds, tests, reads and spawns.
+
 A ticket waiting on the person's call is `needs-decision`; `tofu boardy
 ask` and `tofu boardy catchup` are in `tofu docs boardy-rules`.
 

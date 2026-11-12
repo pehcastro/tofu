@@ -255,7 +255,7 @@ one line each, and filters combine: `--since`, `--from` and `--to` (`1h`,
 `--grep`, `--last N`, and `--kind` with any of `turn`, `stop`, `error`,
 `spawn`, `report`, `message`, `insert`, `cron`, `request`, `memory`, `call`,
 `shell`, `gate`, `hook`, `cache`, `compaction`, `list`, `fork`, `read`,
-`startup`, `notice`, `attachment` and `library`. `--kind fork` lists every
+`startup`, `notice`, `attachment`, `library` and `estimate`. `--kind fork` lists every
 fork across the session's generations, each with its agent, the step it
 forked after, its messages before and after, and the files it carried
 whole, such as `after step 3 · 16 to 5 messages · carried no file whole`;
@@ -290,6 +290,22 @@ session's shell, and a board hook's move while the session ran, such as
 `tofu session trace`, the spawn call, the spawn and end rows, the report
 row and the `ticket_move` call row carry `ticket` beside `agent`. An id no
 row carries prints `no row carries DEMO-9` and exits 0.
+
+`--kind estimate` lists every time estimate tofu made, for each lead turn
+and each sub-agent run, and whether it held:
+
+```text
+lead turn · from 6 earlier runs here on claude-sub/claude-opus-5 · said 4m · done by 6m · took 5m 12s · done · in time · model 3m 40s, tools 1m 32s, tests and builds 48s in 3 calls, permission 0s left out of the verdict, queue 0s
+```
+
+The estimate comes from earlier runs of the same model in the same
+project, the ones whose task was closest in length. The promise is the estimate
+times 1.5, or the estimate plus one minute when it is under two minutes.
+On a first run here, tofu reads the same model's runs in other projects
+and pads more: times 1.75, or plus 70 seconds. With no run of that model
+anywhere it promises nothing. Time spent waiting for your answer on a
+gate is left out of the verdict. `tofu session info` counts them:
+`estimates  3 estimates, 2 done by the promised time, 1 late by up to 40s`.
 
 `--kind library` lists what the library and your own files gave each agent,
 under that agent's name, each with the file it came from:
