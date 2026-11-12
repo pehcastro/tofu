@@ -321,6 +321,13 @@ under that agent's name, each with the file it came from:
 - every Jev question set asked in the session's turns, with its verdict, the
   questions, and the set's file, such as `jev tool_gate asked 4 questions,
   allow · ... · library/questions/tool_gate@7.yaml`
+- every Jev question asked about a message you sent, before its turn began
+  or while the lead worked, such as `request_open` and `steer_answered`, at
+  the moment it was asked, matched by the session id its ledger row carries.
+  A row Jev couldn't answer says why: `jev request_open asked 1 question,
+  allow · open · library/questions/request_open@2.yaml · jev could not
+  answer, so the request is not restated and the lead starts on it: ...
+  dial tcp 127.0.0.1:9: connectex: No connection could be made ...`
 
 A prompt is recorded again only when it changes, so a turn whose prompt
 matches the last one adds no rows. A session from an older tofu lists only

@@ -21,9 +21,9 @@ import (
 
 const leakWords = 4
 
-func shippedOpenQuestion(t *testing.T) OpenQuestion {
+func shippedOpenQuestion(t *testing.T, ref string) OpenQuestion {
 	t.Helper()
-	asked, err := OpenQuestionIn([]question.Layer{{Name: "library", Origin: "library/questions", FS: questions.Files()}})
+	asked, err := OpenQuestionIn(ref, []question.Layer{{Name: "library", Origin: "library/questions", FS: questions.Files()}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func corpus(t *testing.T) []Case {
 }
 
 func TestNoRequestSharesARunOfWordsWithTheQuestion(t *testing.T) {
-	asked := shippedOpenQuestion(t)
+	asked := shippedOpenQuestion(t, RequestOpen)
 	wording := " " + strings.Join(strings.Fields(strings.ToLower(asked.Asked.Instructions+" "+asked.Asked.True+" "+asked.Asked.False)), " ") + " "
 	shared := func(request string) string {
 		said := strings.Fields(strings.ToLower(strings.Trim(request, ".?!")))
@@ -55,26 +55,41 @@ func TestNoRequestSharesARunOfWordsWithTheQuestion(t *testing.T) {
 		t.Fatalf("a request copied from the question's own wording is not caught, so this check proves nothing: %q", planted)
 	}
 	for _, c := range corpus(t) {
-		if run := shared(c.Said); run != "" {
-			t.Errorf("%q shares %q with the question, which answers it for free", c.Said, run)
+		for _, text := range []string{c.Said, c.Replied, c.Task} {
+			if run := shared(text); run != "" {
+				t.Errorf("%q shares %q with the question, which answers it for free", text, run)
+			}
 		}
 	}
 }
 
 type arm struct {
-	name                    string
-	right, restated, missed int
+	name       string
+	right      int
+	restatedOf map[string]int
+	of         map[string]int
+}
+
+func newArm(name string) arm {
+	return arm{name: name, restatedOf: map[string]int{}, of: map[string]int{}}
 }
 
 func (a *arm) count(c Case, open bool) {
-	switch {
-	case open == c.Open:
-		a.right++
-	case open:
-		a.restated++
-	default:
-		a.missed++
+	a.of[c.Kind]++
+	if open {
+		a.restatedOf[c.Kind]++
 	}
+	if open == c.Open {
+		a.right++
+	}
+}
+
+func (a arm) byKind() string {
+	var kinds []string
+	for _, kind := range slices.Sorted(maps.Keys(a.of)) {
+		kinds = append(kinds, kind+" restated "+strconv.Itoa(a.restatedOf[kind])+" of "+strconv.Itoa(a.of[kind]))
+	}
+	return strings.Join(kinds, ", ")
 }
 
 func TestRequestOpenAgainstAnArmThatAlwaysRestates(t *testing.T) {
@@ -94,36 +109,38 @@ func TestRequestOpenAgainstAnArmThatAlwaysRestates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	asked, cases := shippedOpenQuestion(t), corpus(t)
-	always := arm{name: "always restate"}
+	cases := corpus(t)
+	always := newArm("always restate")
 	for _, c := range cases {
 		always.count(c, true)
 	}
-	for pass := 1; pass <= 2; pass++ {
-		judged := arm{name: "jev at open_at " + strconv.FormatFloat(asked.Threshold, 'f', -1, 64)}
-		var latencies []time.Duration
-		var cost float64
-		builds, failed := map[string]bool{}, 0
-		for _, c := range cases {
-			got, err := asked.Ask(context.Background(), client, c.Said)
-			if err != nil {
-				failed++
-				t.Logf("pass %d failed on %q: %v", pass, c.Said, err)
-				continue
+	t.Logf("%s: right %d of %d, %s", always.name, always.right, len(cases), always.byKind())
+	for _, ref := range []string{RequestOpenBefore, RequestOpen} {
+		asked := shippedOpenQuestion(t, ref)
+		for pass := 1; pass <= 2; pass++ {
+			judged := newArm(ref + " on " + strings.Join(asked.State, "+") + " at " + strconv.FormatFloat(asked.Threshold, 'f', -1, 64))
+			var latencies []time.Duration
+			var cost float64
+			builds, failed := map[string]bool{}, 0
+			for _, c := range cases {
+				got, err := asked.Ask(context.Background(), client, c)
+				if err != nil {
+					failed++
+					t.Logf("%s pass %d failed on %q: %v", ref, pass, c.Said, err)
+					continue
+				}
+				judged.count(c, got.Score >= asked.Threshold)
+				latencies, cost, builds[got.Build] = append(latencies, got.Latency), cost+got.Cost, true
+				if (got.Score >= asked.Threshold) != c.Open {
+					t.Logf("%s pass %d wrong: %.2f on %q, labelled open=%v (%s, %s)", ref, pass, got.Score, c.Said, c.Open, c.Kind, c.Shape)
+				}
 			}
-			judged.count(c, got.Score >= asked.Threshold)
-			latencies, cost, builds[got.Build] = append(latencies, got.Latency), cost+got.Cost, true
-			if (got.Score >= asked.Threshold) != c.Open {
-				t.Logf("pass %d wrong: %.2f on %q, labelled open=%v (%s)", pass, got.Score, c.Said, c.Open, c.Shape)
+			slices.Sort(latencies)
+			t.Logf("%s pass %d: %d cases, %d failed, builds %v, cost USD %.6f", ref, pass, len(cases), failed, slices.Sorted(maps.Keys(builds)), cost)
+			if len(latencies) > 0 {
+				t.Logf("%s pass %d latency: p50 %s, p99 %s", ref, pass, latencies[len(latencies)/2].Round(time.Millisecond), latencies[len(latencies)*99/100].Round(time.Millisecond))
 			}
-		}
-		slices.Sort(latencies)
-		t.Logf("pass %d: %d cases, %d failed, builds %v, cost USD %.6f", pass, len(cases), failed, slices.Sorted(maps.Keys(builds)), cost)
-		if len(latencies) > 0 {
-			t.Logf("pass %d latency: p50 %s, p99 %s", pass, latencies[len(latencies)/2].Round(time.Millisecond), latencies[len(latencies)*99/100].Round(time.Millisecond))
-		}
-		for _, a := range []arm{judged, always} {
-			t.Logf("pass %d %-22s right %d of %d (%.1f%%), closed restated %d, open missed %d", pass, a.name, a.right, len(cases), 100*float64(a.right)/float64(len(cases)), a.restated, a.missed)
+			t.Logf("%s: right %d of %d, %s", judged.name, judged.right, len(cases), judged.byKind())
 		}
 	}
 }

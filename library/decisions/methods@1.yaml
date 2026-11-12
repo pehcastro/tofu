@@ -61,8 +61,8 @@ methods:
     cost: one jev call each time a prompt is composed for a task, the lead's and each spawn's, p50 192 ms, p95 226 ms, worst 302 ms and a mean $0.0000257 list charge over 80 calls
   request_open:
     method: judged
-    why: jev reads 37 and 36 of 40 mocked requests right on two passes, and 36 of 40 on a third, against 20 of 40 for the arm that always restates, which restates all 20 closed requests; jev restates 1 to 2 closed ones and misses 2 open ones a pass. the corpus is 40 requests written by one author, so this is a ceiling rather than a rate
-    cost: one jev call per message the person types to the lead, p50 178 to 198 ms, p99 228 to 261 ms over those passes; the dollar cost is not measured
+    why: request_open@2 reads said beside the end of the lead's last reply and the task in hand, and over 54 mocked conversations on two passes restates 0 of 14 continuations and 0 of 10 approvals and 20 and 19 of 20 open requests, against 9 and 10 of those 24 restated by request_open@1 on said alone and all 54 by the arm that always restates; it restates 2 of 10 precise requests a pass. the corpus was written by one author, so this is a ceiling rather than a rate
+    cost: one jev call per message the person types or steers to the lead, p50 183 to 198 ms, p99 250 to 356 ms over those passes; the dollar cost is not measured
   done_reason:
     method: judged
     why: not measured against labels. no hand-labelled sample exists and no free arm, such as a phrase list over except, later and follow up, has been run beside it. a replay of the board's past done moves refuses 94 of 1740 reasons, 5.4 percent, against 27 to 41 percent a hand count found admitting an open part, and open_at 0.5 is an uncalibrated prior until a labelled sample moves it

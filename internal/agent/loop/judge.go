@@ -27,8 +27,8 @@ func newSteerJudge(project, log string) (*oneQuestion, error) {
 }
 
 func newOpenJudge(project, log string) (*oneQuestion, error) {
-	return newOneQuestion(questionAt{ref: "request_open@1", name: "open", builder: "request_open_state@1", onReach: ledger.VerdictAsk,
-		unanswered: "jev could not answer, so the request is taken as open and restated: "}, project, log)
+	return newOneQuestion(questionAt{ref: "request_open@2", name: "open", builder: "request_open_state@2", onReach: ledger.VerdictAsk,
+		unanswered: "jev could not answer, so the request is not restated and the lead starts on it: "}, project, log)
 }
 
 type oneQuestion struct {
@@ -65,27 +65,27 @@ func newOneQuestion(at questionAt, project, log string) (*oneQuestion, error) {
 	return &oneQuestion{questionAt: at, client: client, set: set, asked: asked.ToJev(), threshold: threshold, ledger: ledger.NewWriter(log)}, nil
 }
 
-func (j *oneQuestion) reached(ctx context.Context, state any) (bool, error) {
+func (j *oneQuestion) reached(ctx context.Context, session string, state any) (bool, error) {
 	body, err := json.Marshal(state)
 	if err != nil {
-		return j.onReach == ledger.VerdictAsk, err
+		return false, err
 	}
 	asked := []core.Question{j.asked}
-	row := ledger.Row{Point: j.set.Name, Questions: j.set.Name, Version: j.set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: j.builder, State: body,
+	row := ledger.Row{Point: j.set.Name, Questions: j.set.Name, Version: j.set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: j.builder, State: body, SessionID: session,
 		Verdict: ledger.VerdictAsk, Reason: &ledger.Reason{Question: j.name, Comparison: ">= " + strconv.FormatFloat(j.threshold, 'f', -1, 64), Threshold: j.threshold, Mode: ledger.ModeEnforced}}
-	decision, err := j.client.Ask(ctx, core.Request{State: json.RawMessage(body), Questions: asked})
-	if err != nil {
-		failed := j.unanswered + err.Error()
+	decision, asking := j.client.Ask(ctx, core.Request{State: json.RawMessage(body), Questions: asked})
+	reached := false
+	if asking != nil {
+		failed := j.unanswered + asking.Error()
 		row.Reason.ModeReason = &failed
-		_, unwritten := j.ledger.Append(row)
-		return j.onReach == ledger.VerdictAsk, errors.Join(err, unwritten)
+	} else {
+		decision.Record(&row, asked, j.set.QuestionsVersion)
+		row.Reason.Value = row.Answers[0].Noul
+		reached = row.Reason.Value >= j.threshold
 	}
-	decision.Record(&row, asked, j.set.QuestionsVersion)
-	row.Reason.Value = row.Answers[0].Noul
-	reached := row.Reason.Value >= j.threshold
 	if reached == (j.onReach == ledger.VerdictAllow) {
 		row.Verdict = ledger.VerdictAllow
 	}
-	_, err = j.ledger.Append(row)
-	return reached, err
+	_, unwritten := j.ledger.Append(row)
+	return reached, errors.Join(asking, unwritten)
 }

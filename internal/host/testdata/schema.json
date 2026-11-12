@@ -3049,6 +3049,9 @@
         "schema": {
           "type": "integer"
         },
+        "session_id": {
+          "type": "string"
+        },
         "state": {},
         "state_builder": {
           "type": "string"
@@ -15982,6 +15985,9 @@
         },
         "schema": {
           "type": "integer"
+        },
+        "session_id": {
+          "type": "string"
         },
         "state": {},
         "state_builder": {

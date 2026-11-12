@@ -970,7 +970,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				return false, err
 			}
 		}
-		return steer.reached(ctx, struct {
+		return steer.reached(ctx, cmp.Or(row.Session, config.Session), struct {
 			Said  string `json:"said"`
 			Reply string `json:"reply"`
 		}{asked.said, reply})
@@ -992,7 +992,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				steeredAt = step
 				said := inserted(core.Origin{Source: core.SourceSteer}, steered)
 				if config.Inbox != nil {
-					notes := config.Inbox.notesOn(ctx, config.Sessions, cmp.Or(row.Session, config.Session), steered)
+					notes := config.Inbox.notesOn(ctx, config.Sessions, cmp.Or(row.Session, config.Session), steered, messages, config.Task)
 					asked.restated = asked.restated || strings.Contains(notes, requestOpenNote)
 					said.Content += notesOn([]string{notes})
 				}

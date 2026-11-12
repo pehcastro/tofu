@@ -256,6 +256,7 @@ type Row struct {
 	ReplayOf      string          `json:"replay_of,omitempty"`
 	Outcome       *Outcome        `json:"outcome,omitempty"`
 	TurnID        string          `json:"turn_id,omitempty"`
+	SessionID     string          `json:"session_id,omitempty"`
 	Bench         string          `json:"bench,omitempty"`
 }
 

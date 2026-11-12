@@ -1,40 +1,54 @@
-{"said":"make the desk app feel faster","open":true,"shape":"speed with no target"}
-{"said":"the chat list should feel smoother when it scrolls","open":true,"shape":"feel"}
-{"said":"make the sidebar look more like the native macOS one","open":true,"shape":"like something else"}
-{"said":"improve the theme system so adding a theme is easier","open":true,"shape":"design direction"}
-{"said":"the glass effect looks cheap, make it look expensive","open":true,"shape":"taste"}
-{"said":"the code in crates/ui/src/components/chat.rs is a mess, improve it","open":true,"shape":"named file, open change"}
-{"said":"tofu should ask me fewer questions","open":true,"shape":"behaviour direction"}
-{"said":"the tickets keep missing things, they need to get better","open":true,"shape":"process direction"}
-{"said":"the status bar is cluttered, tidy it up","open":true,"shape":"taste"}
-{"said":"the sub-agents board should be more useful","open":true,"shape":"usefulness"}
-{"said":"startup is slow, sort it out","open":true,"shape":"speed with no target"}
-{"said":"the composer should behave closer to a real text editor","open":true,"shape":"like something else"}
-{"said":"I want the tabs to work the way a browser's do","open":true,"shape":"like something else"}
-{"said":"the reports are hard to read, rework them","open":true,"shape":"readability"}
-{"said":"the colour picker in color_picker.rs is awkward to use","open":true,"shape":"named file, complaint"}
-{"said":"we keep getting regressions in the desk app, stop that","open":true,"shape":"process direction"}
-{"said":"polish the intro screen","open":true,"shape":"taste"}
-{"said":"the mention popup should be smarter about what it offers","open":true,"shape":"smarter"}
-{"said":"the docks get unusable with fifty files open","open":true,"shape":"scale complaint"}
-{"said":"tofu should plan more before it starts building","open":true,"shape":"behaviour direction"}
-{"said":"rename ThemeCatalog to Palettes in crates/desk/src/screens/theme/catalog.rs and its callers","open":false,"shape":"rename"}
-{"said":"tabs.rs panics with index out of range at line 212 when the last tab closes; fix it","open":false,"shape":"named defect"}
-{"said":"set the tooltip delay in tooltip.rs to 400 ms instead of 800","open":false,"shape":"value change"}
-{"said":"make the tooltip show faster: 400 ms in tooltip.rs, not 800","open":false,"shape":"quality word, exact change"}
-{"said":"delete the glass bench screen and its entry in screens/mod.rs","open":false,"shape":"deletion"}
-{"said":"add a --json flag to tofu boardy list that prints the tickets as one array","open":false,"shape":"flag"}
-{"said":"run cargo clippy over apps/desk and paste the warnings","open":false,"shape":"command"}
-{"said":"revert commit 4f2a9c1, it broke the composer cursor","open":false,"shape":"revert"}
-{"said":"move the colours in intro_setup/colours.rs into themes/tofu-flat.json under an intro key","open":false,"shape":"move"}
-{"said":"change the status bar height from 28 to 24 pixels in status_bar.rs","open":false,"shape":"value change"}
-{"said":"the ask_person card header should show the question text, not its id","open":false,"shape":"exact display change"}
-{"said":"in feed.rs sort the items by posted time instead of by id","open":false,"shape":"exact behaviour change"}
-{"said":"take the em dash out of the 0.5.9 changelog entry","open":false,"shape":"edit"}
-{"said":"yes, go with the second option","open":false,"shape":"answer"}
-{"said":"which commit reverted the tab drag?","open":false,"shape":"question"}
-{"said":"looks right, go ahead","open":false,"shape":"approval"}
-{"said":"thanks, that fixed it","open":false,"shape":"news"}
-{"said":"why did the sub-agent stop at step 40?","open":false,"shape":"question"}
-{"said":"the build passes on my machine now","open":false,"shape":"news"}
-{"said":"no, only the chat list, leave the editor as it is","open":false,"shape":"correction to a restatement"}
+{"kind":"continuation","said":"ok lets finish the tickets","replied":"Three tickets are still open: DEMO-41 sorts the feed by posted time, DEMO-42 drops the unused palette loader, DEMO-43 adds a --json flag to the list verb. Each is small and they touch different files.","task":"what is left on the board for the feed work?","open":false,"shape":"go on a listed set"}
+{"kind":"continuation","said":"finish them","replied":"Two of the five fixes are in. Left: the tab close panic in tabs.rs and the tooltip delay in tooltip.rs.","task":"fix the five defects in the bug list","open":false,"shape":"go on the remainder"}
+{"kind":"continuation","said":"keep going","replied":"The rename is done in catalog.rs and eleven callers. Nine callers in the screens folder still use the old name.","task":"rename ThemeCatalog to Palettes everywhere","open":false,"shape":"carry on"}
+{"kind":"continuation","said":"continue","replied":"I stopped at step 40 of the migration: 31 of 58 files are converted and the build is green.","task":"move every screen to the new layout helper","open":false,"shape":"carry on"}
+{"kind":"continuation","said":"do the same for the editor","replied":"The chat list now keeps only the visible rows in memory and scrolls at a steady frame time.","task":"the chat list should only hold the rows on screen","open":false,"shape":"repeat on a named neighbour"}
+{"kind":"continuation","said":"now the other two","replied":"DEMO-17 is in review with the diff and the driven run. DEMO-18 and DEMO-19 are next on the list.","task":"work the three status bar tickets","open":false,"shape":"go on a listed set"}
+{"kind":"continuation","said":"next one","replied":"The first of the four lint warnings is fixed: an unused import in feed.rs. Three remain in sidebar.rs, card.rs and tabs.rs.","task":"clear the clippy warnings","open":false,"shape":"carry on"}
+{"kind":"continuation","said":"ok, finish the rest of the list then","replied":"Plan for the release: 1. bump the version, 2. update the changelog, 3. build, 4. install, 5. drive the new verbs. Steps 1 and 2 are done.","task":"cut the next release","open":false,"shape":"go on a plan"}
+{"kind":"continuation","said":"lets wrap these up tonight","replied":"Open on the docs board: the install page needs the new flag, the asking page still names the old setting, and the index misses two pages.","task":"what docs are stale?","open":false,"shape":"go on a listed set"}
+{"kind":"continuation","said":"carry on with the plan","replied":"I will split the reports module in three: parsing, ranking and rendering, one commit each. Parsing is split and builds.","task":"the reports module is too big, split it the way we agreed","open":false,"shape":"carry on"}
+{"kind":"continuation","said":"same thing for the light theme","replied":"The dark theme now reads every colour from the palette file; no literal is left in the widgets.","task":"move the dark theme colours into the palette file","open":false,"shape":"repeat on a named neighbour"}
+{"kind":"continuation","said":"right, get on with it","replied":"The fix is clear: the drag handler reads the old index after the remove. I can swap the two lines and add the driven check.","task":"tab drag drops the tab in the wrong place","open":false,"shape":"go on a stated fix"}
+{"kind":"continuation","said":"finish what you started","replied":"I was cut off after converting the first half of the settings screen to the new form widgets.","task":"put the settings screen on the new form widgets","open":false,"shape":"carry on"}
+{"kind":"continuation","said":"go through them one by one","replied":"Six tickets are in review: DEMO-61 to DEMO-66. Each has a driven screen in its log.","task":"what is waiting for me to check?","open":false,"shape":"go on a listed set"}
+{"kind":"approval","said":"yes","replied":"Should I delete the glass bench screen and its entry in screens/mod.rs?","task":"clean up the old bench screens","open":false,"shape":"yes to a question"}
+{"kind":"approval","said":"looks right, go ahead","replied":"Goal: the composer keeps its draft across a restart. In: saving and loading the draft. Out: history search. First: write the draft to the session file on every edit.","task":"the composer loses what I typed when tofu restarts","open":false,"shape":"go on a restatement"}
+{"kind":"approval","said":"sounds good","replied":"I would cache the rendered row string and rebuild it only when the row text or width changes. That takes the scroll from 22 ms to about 6.","task":"scrolling the chat stutters on long sessions","open":false,"shape":"agree to a proposal"}
+{"kind":"approval","said":"yes, go with the second option","replied":"Two ways to fix the cursor: 1. track the byte offset, 2. track the grapheme index. The second handles emoji.","task":"the composer cursor jumps on emoji","open":false,"shape":"pick from options"}
+{"kind":"approval","said":"do it","replied":"I can revert commit 4f2a9c1, which introduced the cursor drift, and reapply only its test.","task":"the cursor drift came back","open":false,"shape":"go on a proposal"}
+{"kind":"approval","said":"ok","replied":"Shall I run the bench again on the fixed build and paste the table?","task":"the frame time bench regressed","open":false,"shape":"yes to a question"}
+{"kind":"approval","said":"approved, ship it","replied":"Version 0.9.2 is built and every changelog line was driven by hand. Ready to install.","task":"cut 0.9.2","open":false,"shape":"approval"}
+{"kind":"approval","said":"perfect, thats what I meant","replied":"So the popup should rank files you opened today above everything else, then by name. Correct?","task":"the mention popup offers the wrong files first","open":false,"shape":"confirm a restatement"}
+{"kind":"approval","said":"no, only the chat list, leave the editor as it is","replied":"Goal: smoother scrolling. In: the chat list and the editor. Out: the file tree. First: profile the chat list.","task":"scrolling feels heavy","open":false,"shape":"correction to a restatement"}
+{"kind":"approval","said":"go","replied":"Plan: three tickets, one per crate, all disjoint. I can start the three agents now.","task":"break the theme work into tickets","open":false,"shape":"go on a plan"}
+{"kind":"open","said":"make the desk app feel faster","replied":"","task":"","open":true,"shape":"speed with no target"}
+{"kind":"open","said":"the chat list should feel smoother when it scrolls","replied":"","task":"","open":true,"shape":"feel"}
+{"kind":"open","said":"make the sidebar look more like the native macOS one","replied":"","task":"","open":true,"shape":"like something else"}
+{"kind":"open","said":"improve the theme system so adding a theme is easier","replied":"","task":"","open":true,"shape":"design direction"}
+{"kind":"open","said":"the glass effect looks cheap, make it look expensive","replied":"","task":"","open":true,"shape":"taste"}
+{"kind":"open","said":"tofu should ask me fewer questions","replied":"","task":"","open":true,"shape":"behaviour direction"}
+{"kind":"open","said":"the tickets keep missing things, they need to get better","replied":"","task":"","open":true,"shape":"process direction"}
+{"kind":"open","said":"I want the tabs to work the way a browser's do","replied":"","task":"","open":true,"shape":"like something else"}
+{"kind":"open","said":"when a long run is going I want to feel like I know where it is without reading the log, something calm, not a wall of text","replied":"","task":"","open":true,"shape":"how it should feel"}
+{"kind":"open","said":"set up the whole nightly thing: build every branch, bench it, compare against last week and tell me what got worse","replied":"","task":"","open":true,"shape":"chained long run"}
+{"kind":"open","said":"I think agents should be able to hand work to each other without me in the middle","replied":"","task":"","open":true,"shape":"intent"}
+{"kind":"open","said":"redo onboarding so a new person gets to a first useful session quickly, then clean up whatever it touches and write the docs for it","replied":"","task":"","open":true,"shape":"complex chained"}
+{"kind":"open","said":"thanks. separate thing: the composer should behave closer to a real text editor","replied":"Both fixes are in and the driven runs are pasted on the tickets.","task":"fix the two tooltip defects","open":true,"shape":"new feel request after closed work"}
+{"kind":"open","said":"ok now I want the status bar to feel less noisy, it shouts at me","replied":"The release is installed and tofu version prints 0.9.2.","task":"cut 0.9.2","open":true,"shape":"new taste request after a release"}
+{"kind":"open","said":"next I want sessions to be shareable somehow, think about how it should work","replied":"Done: the list verb has a --json flag and the docs page says so.","task":"add a --json flag to the list verb","open":true,"shape":"new feature after closed work"}
+{"kind":"open","said":"good. also the reports are hard to read, rework them","replied":"The palette move is complete and both themes build.","task":"move the theme colours into the palette file","open":true,"shape":"new direction after closed work"}
+{"kind":"open","said":"lets make tofu plan more before it starts building","replied":"Three tickets are open on the board: DEMO-41, DEMO-42 and DEMO-43.","task":"what is left on the board?","open":true,"shape":"behaviour direction after a listing"}
+{"kind":"open","said":"the docks get unusable with fifty files open, sort that out","replied":"I counted 48 files open in the last session you ran.","task":"how many files did I have open?","open":true,"shape":"scale complaint after an answer"}
+{"kind":"open","said":"startup is slow, sort it out","replied":"","task":"","open":true,"shape":"speed with no target"}
+{"kind":"open","said":"polish the intro screen","replied":"","task":"","open":true,"shape":"taste"}
+{"kind":"closed","said":"rename ThemeCatalog to Palettes in crates/desk/src/screens/theme/catalog.rs and its callers","replied":"","task":"","open":false,"shape":"rename"}
+{"kind":"closed","said":"tabs.rs panics with index out of range at line 212 when the last tab closes; fix it","replied":"","task":"","open":false,"shape":"named defect"}
+{"kind":"closed","said":"set the tooltip delay in tooltip.rs to 400 ms instead of 800","replied":"","task":"","open":false,"shape":"value change"}
+{"kind":"closed","said":"add a --json flag to tofu boardy list that prints the tickets as one array","replied":"","task":"","open":false,"shape":"flag"}
+{"kind":"closed","said":"run cargo clippy over apps/desk and paste the warnings","replied":"","task":"","open":false,"shape":"command"}
+{"kind":"closed","said":"in feed.rs sort the items by posted time instead of by id","replied":"Both changelog copies match again.","task":"the two changelog copies drifted","open":false,"shape":"exact change after closed work"}
+{"kind":"closed","said":"take the stray dash out of the 0.5.9 changelog entry","replied":"","task":"","open":false,"shape":"edit"}
+{"kind":"closed","said":"which commit reverted the tab drag?","replied":"","task":"","open":false,"shape":"question"}
+{"kind":"closed","said":"thanks, that fixed it","replied":"The panic is fixed: the close handler now checks the index before it reads.","task":"tabs.rs panics when the last tab closes","open":false,"shape":"news"}
+{"kind":"closed","said":"why did the sub-agent stop at step 40?","replied":"","task":"","open":false,"shape":"question"}

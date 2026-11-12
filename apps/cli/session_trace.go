@@ -237,7 +237,7 @@ func sessionTraceArgs(args []string, now time.Time) (traceAsk, error) {
 	return ask, nil
 }
 
-func jevRows(events []session.Event, since time.Time) ([]traceRow, error) {
+func jevRows(sessionID string, events []session.Event, since time.Time) ([]traceRow, error) {
 	turns, agents := map[string]bool{}, map[string]bool{}
 	for _, event := range events {
 		turns[event.Turn], turns[event.Agent], agents[event.Agent] = true, true, true
@@ -248,7 +248,10 @@ func jevRows(events []session.Event, since time.Time) ([]traceRow, error) {
 		return nil, err
 	}
 	var rows []traceRow
-	_, err = ledger.NewReader(dir).Each(ledger.Filter{Turns: turns, Since: since}, func(decided ledger.Row) error {
+	_, err = ledger.NewReader(dir).Each(ledger.Filter{Since: since}, func(decided ledger.Row) error {
+		if !turns[decided.TurnID] && (decided.TurnID != "" || decided.SessionID != sessionID) {
+			return nil
+		}
 		set := decided.Questions + "@" + strconv.Itoa(decided.Version)
 		file := "library/questions/" + set + ".yaml"
 		if _, missing := fs.Stat(questions.Files(), set+".yaml"); missing != nil {
@@ -258,8 +261,15 @@ func jevRows(events []session.Event, since time.Time) ([]traceRow, error) {
 		for i, answer := range decided.Answers {
 			asked[i] = answer.Question
 		}
+		if len(asked) == 0 && decided.Reason != nil {
+			asked = []string{decided.Reason.Question}
+		}
+		modeReason := ""
+		if decided.Reason != nil && decided.Reason.ModeReason != nil {
+			modeReason = output.OneLine(*decided.Reason.ModeReason)
+		}
 		row := traceRow{At: decided.At.Local(), Kind: kindLibrary, Turn: decided.TurnID, ID: decided.ID, State: "asked",
-			Text: traced("jev "+decided.Point+" asked "+output.Plural(len(asked), "question")+", "+decided.Verdict.String(), strings.Join(asked, ", "), file)}
+			Text: traced("jev "+decided.Point+" asked "+output.Plural(len(asked), "question")+", "+decided.Verdict.String(), strings.Join(asked, ", "), file, modeReason)}
 		if agents[decided.TurnID] {
 			row.Agent = decided.TurnID
 		}
@@ -320,7 +330,7 @@ func sessionTimeline(store *session.Store, handle string, filter traceFilter) (t
 	carried := func(event session.Event) bool { return header.CarriedFrom != nil && event.Turn == header.ID }
 	rows := traceRows(slices.DeleteFunc(slices.Clone(events), carried), exchanges)
 	if slices.Contains(filter.Kinds, kindLibrary) {
-		asked, err := jevRows(events, header.At)
+		asked, err := jevRows(header.ID, events, header.At)
 		if err != nil {
 			return traceTimeline{}, err
 		}

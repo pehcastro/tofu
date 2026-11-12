@@ -502,7 +502,7 @@ func (c Config) notifyNoJev(unseen string, err error) {
 const requestOpenNote = "this request is open: it leaves to you what the work is. before any tool call, restate it in your own words with the goal, what is in, what is out and what you would do first, " +
 	"then end the turn and wait for the person's go or correction, as the rule restate_open says."
 
-func (b *Inbox) notesOn(ctx context.Context, store *session.Store, id, said string) string {
+func (b *Inbox) notesOn(ctx context.Context, store *session.Store, id, said string, conversation []core.Message, task string) string {
 	notes := b.repeatNote(store, id, said)
 	b.mu.Lock()
 	judge := b.opens
@@ -510,9 +510,18 @@ func (b *Inbox) notesOn(ctx context.Context, store *session.Store, id, said stri
 	if said = beforeCronFire(said); judge == nil || said == "" {
 		return notes
 	}
-	if open, _ := judge.reached(ctx, struct {
-		Said string `json:"said"`
-	}{said}); !open {
+	replied := ""
+	for _, message := range slices.Backward(conversation) {
+		if message.Role == core.RoleAssistant && strings.TrimSpace(message.Content) != "" {
+			replied = strings.TrimSpace(message.Content)
+			break
+		}
+	}
+	if open, _ := judge.reached(ctx, id, struct {
+		Said    string `json:"said"`
+		Replied string `json:"replied"`
+		Task    string `json:"task"`
+	}{said, runeSafeTail(replied, konst.CarrySaidMessageBytes), runeSafeHead(beforeCronFire(task), konst.CarrySaidMessageBytes)}); !open {
 		return notes
 	}
 	if notes == "" {
@@ -1134,7 +1143,7 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 	config.Inbox.mu.Unlock()
 	config.Inbox.openJudges(config)
 	if config.TaskOrigin.Source == "" || saidByThePerson(config.TaskOrigin) {
-		config.Notes = []string{config.Inbox.notesOn(ctx, config.Sessions, config.Session, config.Task)}
+		config.Notes = []string{config.Inbox.notesOn(ctx, config.Sessions, config.Session, config.Task, config.History, "")}
 	}
 	for {
 		config.Inbox.mu.Lock()
@@ -1154,7 +1163,7 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 			if heard != nil {
 				heard(said)
 			}
-			note = config.Inbox.notesOn(ctx, config.Sessions, cmp.Or(row.Session, config.Session), said)
+			note = config.Inbox.notesOn(ctx, config.Sessions, cmp.Or(row.Session, config.Session), said, row.Conversation, config.Task)
 			if config.Steering != nil {
 				said = strings.Join(append([]string{said}, config.Steering()...), "\n\n")
 			}

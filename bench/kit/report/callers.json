@@ -56,7 +56,7 @@
   },
   {
     "point": "request_open",
-    "file": "internal/agent/loop/inbox.go",
+    "file": "internal/agent/loop/judge.go",
     "symbol": "newOpenJudge"
   },
   {
