@@ -47,7 +47,7 @@ func (t *SpawnTool) estimateStart(site spawnSite, agent, model, task string) (*o
 		return &openEstimate{at: at, body: body}, err
 	}
 	event, err := site.log.Append(session.Event{At: at, Turn: site.turn, Agent: site.agent, Call: site.call, Kind: session.EventEstimate}, body)
-	return &openEstimate{id: event.ID, at: at, body: body}, err
+	return &openEstimate{id: event.ID, at: at, body: body, state: t.base.settledState()}, err
 }
 
 func (s spawnTrace) settle(id string, outcome session.EstimateOutcome, began time.Time, ran []Row) error {

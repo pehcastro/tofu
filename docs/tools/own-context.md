@@ -99,6 +99,12 @@ spent in tests and builds. The call is recorded and settled when the next
 lead turn ends, so `tofu session trace <s> --kind estimate` shows whether it
 held.
 
+The earlier runs come from one file per project, `estimates.jsonl` beside
+its sessions, with one line for each turn or sub-agent that finished. A
+call reads that file and no session, so it answers in a few milliseconds
+however long the history is. A project that has no such file yet gets it
+built once from its sessions, and standard error says so.
+
 ```bash
 tofu tool estimate_time '{"work":"add a --json flag to tofu session reads","model":"claude-sub/claude-opus-5"}' --dir .
 ```

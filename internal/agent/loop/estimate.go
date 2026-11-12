@@ -7,13 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
-	"path/filepath"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 	"unicode/utf8"
@@ -45,12 +41,6 @@ type estimateFor struct {
 	task  string
 }
 
-type historyRun struct {
-	chars  int
-	tookMS int64
-	split  *session.EstimateSplit
-}
-
 const noTestsRecorded = "no test or build call recorded"
 
 func (c Config) estimate(asked estimateFor) (session.EstimateBody, error) {
@@ -61,8 +51,8 @@ func (c Config) estimate(asked estimateFor) (session.EstimateBody, error) {
 	}
 	body.Project = c.Sessions.Project()
 	sameModel := func(model string) bool { return model == asked.model || strings.HasSuffix(asked.model, "/"+model) }
-	here := func(header session.Header) bool { return header.Project == "" || header.Project == body.Project }
-	runs, err := historyIn(c.Sessions, here, sameModel)
+	here := func(project string) bool { return project == "" || project == body.Project }
+	runs, built, err := settledRuns(c.Sessions.State(), here, sameModel)
 	if err != nil {
 		return body, err
 	}
@@ -72,10 +62,14 @@ func (c Config) estimate(asked estimateFor) (session.EstimateBody, error) {
 		if err != nil {
 			return body, err
 		}
-		if runs, err = historyElsewhere(places.State, func(header session.Header) bool { return !here(header) }, sameModel); err != nil {
+		elsewhere, builtThere, err := historyElsewhere(places.State, func(project string) bool { return !here(project) }, sameModel)
+		if err != nil {
 			return body, err
 		}
-		body.Basis = session.EstimateFirstRun
+		runs, built, body.Basis = elsewhere, built+builtThere, session.EstimateFirstRun
+	}
+	if built > 0 && c.Notify != nil {
+		c.Notify(fmt.Sprintf("estimates: the run history was built once by reading %d sessions into %s, and each finished run adds one line to it from now on", built, settledRunsName))
 	}
 	if len(runs) == 0 {
 		body.Basis = session.EstimateNoHistory
@@ -95,23 +89,30 @@ func (c Config) estimate(asked estimateFor) (session.EstimateBody, error) {
 	return body, nil
 }
 
+func (c Config) settledState() string {
+	if c.Sessions == nil {
+		return ""
+	}
+	return c.Sessions.State()
+}
+
 func saidFrom(runs []historyRun, chars int) (int64, int64, string) {
 	distance := func(run historyRun) float64 {
-		return math.Abs(math.Log1p(float64(run.chars)) - math.Log1p(float64(chars)))
+		return math.Abs(math.Log1p(float64(run.Chars)) - math.Log1p(float64(chars)))
 	}
 	near := slices.SortedStableFunc(slices.Values(runs), func(a, b historyRun) int { return cmp.Compare(distance(a), distance(b)) })[:(len(runs)+1)/2]
 	agent, counts := make([]float64, len(near)), []float64(nil)
 	for i, run := range near {
-		agent[i] = float64(run.tookMS)
-		if run.split != nil {
-			agent[i] -= float64(run.split.TestMS + run.split.PermissionMS)
-			counts = append(counts, float64(run.split.TestCalls))
+		agent[i] = float64(run.TookMS)
+		if run.Split {
+			agent[i] -= float64(run.TestMS + run.PermissionMS)
+			counts = append(counts, float64(run.TestCalls))
 		}
 	}
 	var testMS, calls int64
 	for _, run := range runs {
-		if run.split != nil {
-			testMS, calls = testMS+run.split.TestMS, calls+int64(run.split.TestCalls)
+		if run.Split {
+			testMS, calls = testMS+run.TestMS, calls+int64(run.TestCalls)
 		}
 	}
 	if calls == 0 || len(counts) == 0 {
@@ -120,111 +121,6 @@ func saidFrom(runs []historyRun, chars int) (int64, int64, string) {
 	each, count := testMS/calls, median(counts)
 	return int64(median(agent)), int64(float64(each) * count), fmt.Sprintf("%d earlier test and build calls in this history, %s each, %s a run",
 		calls, roundedMS(each), strconv.FormatFloat(count, 'f', -1, 64))
-}
-
-func historyElsewhere(state string, keep func(session.Header) bool, model func(string) bool) ([]historyRun, error) {
-	root := filepath.Dir(state)
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		return nil, err
-	}
-	type project struct {
-		state   string
-		changed time.Time
-	}
-	var projects []project
-	for _, entry := range entries {
-		dir := filepath.Join(root, entry.Name())
-		if sessions, err := os.Stat(session.SessionsDir(dir)); err == nil && entry.IsDir() && dir != filepath.Clean(state) {
-			projects = append(projects, project{state: dir, changed: sessions.ModTime()})
-		}
-	}
-	slices.SortFunc(projects, func(a, b project) int { return b.changed.Compare(a.changed) })
-	var runs []historyRun
-	for _, other := range projects {
-		found, err := historyIn(session.OpenAt(other.state), keep, model)
-		if err != nil {
-			return nil, err
-		}
-		if runs = append(runs, found...); len(runs) >= konst.SpawnEstimateRunsMost {
-			break
-		}
-	}
-	return runs[:min(len(runs), konst.SpawnEstimateRunsMost)], nil
-}
-
-func historyIn(store *session.Store, keep func(session.Header) bool, model func(string) bool) ([]historyRun, error) {
-	once := store.ReadOnce()
-	listing, err := once.Listing()
-	if err != nil {
-		return nil, err
-	}
-	headers := slices.DeleteFunc(listing.Sessions, func(header session.Header) bool {
-		return !keep(header) || !model(header.Model) && !slices.ContainsFunc(header.Models, model) &&
-			!slices.ContainsFunc(header.Agents, func(run session.AgentRun) bool { return model(run.Model) })
-	})
-	slices.SortFunc(headers, func(a, b session.Header) int { return b.At.Compare(a.At) })
-	var runs []historyRun
-	for read, wide := 0, 1; read < len(headers) && len(runs) < konst.SpawnEstimateRunsMost; read, wide = read+wide, min(wide*2, runtime.GOMAXPROCS(0)) {
-		window := headers[read:min(read+wide, len(headers))]
-		found, failed := make([][]historyRun, len(window)), make([]error, len(window))
-		var reading sync.WaitGroup
-		for at, header := range window {
-			reading.Go(func() { found[at], failed[at] = runsIn(once, header, model) })
-		}
-		reading.Wait()
-		if err := errors.Join(failed...); err != nil {
-			return nil, err
-		}
-		runs = append(runs, slices.Concat(found...)...)
-	}
-	return runs[:min(len(runs), konst.SpawnEstimateRunsMost)], nil
-}
-
-func runsIn(store *session.Store, header session.Header, model func(string) bool) ([]historyRun, error) {
-	events, err := store.EventsOf(header.ID, session.EventTurnEnd, session.EventToolCall, session.EventEstimate, session.EventEstimateSettled)
-	if err != nil {
-		return nil, err
-	}
-	estimated, err := session.Estimates(events)
-	if err != nil {
-		return nil, err
-	}
-	var runs []historyRun
-	counted := map[string]bool{}
-	for _, one := range estimated {
-		if one.Settled != nil && one.Settled.Outcome == session.EstimateDone && model(one.Model) && one.Scope != session.EstimateCall {
-			runs = append(runs, historyRun{chars: one.PromptChars, tookMS: one.Settled.TookMS, split: &one.Settled.EstimateSplit})
-			counted[cmp.Or(one.Agent, one.Event.Turn)] = true
-		}
-	}
-	briefs := map[string]int{}
-	for _, event := range events {
-		switch event.Kind {
-		case session.EventToolCall:
-			var call session.CallBody
-			var args spawnArgs
-			if json.Unmarshal(event.Body, &call) == nil && call.Tool == SpawnToolName && json.Unmarshal(call.Args, &args) == nil {
-				briefs[event.Call] = utf8.RuneCountInString(args.Task)
-			}
-		case session.EventTurnEnd:
-			var ended struct {
-				Task        string          `json:"task"`
-				Model       string          `json:"model"`
-				Outcome     session.Outcome `json:"outcome"`
-				WallClockMS int64           `json:"wall_clock_ms"`
-			}
-			if event.Agent == "" && !counted[event.Turn] && json.Unmarshal(event.Body, &ended) == nil && ended.Outcome == session.OutcomeStopped && model(ended.Model) {
-				runs = append(runs, historyRun{chars: utf8.RuneCountInString(ended.Task), tookMS: ended.WallClockMS})
-			}
-		}
-	}
-	for _, run := range header.Agents {
-		if !counted[run.Agent] && run.EndedAt != nil && run.Status == subagents.Finished.String() && model(run.Model) {
-			runs = append(runs, historyRun{chars: briefs[run.SpawnCall], tookMS: run.EndedAt.Sub(run.StartedAt).Milliseconds()})
-		}
-	}
-	return runs, nil
 }
 
 func median(values []float64) float64 {
@@ -316,9 +212,10 @@ func (e EstimateTime) Run(ctx context.Context, raw json.RawMessage) (contract.Re
 }
 
 type openEstimate struct {
-	id   string
-	at   time.Time
-	body session.EstimateBody
+	id    string
+	at    time.Time
+	body  session.EstimateBody
+	state string
 }
 
 func (r *record) estimate(config Config, at time.Time) *openEstimate {
@@ -330,7 +227,7 @@ func (r *record) estimate(config Config, at time.Time) *openEstimate {
 		r.note(errors.New("the estimate for this turn: " + err.Error()))
 		return nil
 	}
-	return &openEstimate{id: r.add(session.Event{At: at, Kind: session.EventEstimate}, body).ID, at: at, body: body}
+	return &openEstimate{id: r.add(session.Event{At: at, Kind: session.EventEstimate}, body).ID, at: at, body: body, state: config.settledState()}
 }
 
 func (r *record) carry(estimate *openEstimate) {
@@ -381,7 +278,11 @@ func (o *openEstimate) settle(log *session.Log, at session.Event, outcome sessio
 	at.Kind = session.EventEstimateSettled
 	_, err := log.Append(at, session.EstimateSettledBody{Estimate: o.id, Outcome: outcome, TookMS: took.Milliseconds(), EstimateSplit: split})
 	o.id = ""
-	return err
+	if err != nil || o.state == "" || outcome != session.EstimateDone || o.body.Scope == session.EstimateCall {
+		return err
+	}
+	return appendSettled(o.state, historyRun{Project: log.Header().Project, Model: o.body.Model, Chars: o.body.PromptChars, TookMS: took.Milliseconds(),
+		Split: true, TestMS: split.TestMS, PermissionMS: split.PermissionMS, TestCalls: split.TestCalls})
 }
 
 func splitOf(rows []Row) session.EstimateSplit {

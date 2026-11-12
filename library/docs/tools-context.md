@@ -19,7 +19,9 @@ work before you read about it.
   session drain` counts them.
 - `estimate_time` says how long a piece of work will take, with no model
   call: the estimate, the done-by promise and its basis from earlier runs
-  of the same model here, or in other projects on a first run.
+  of the same model here, or in other projects on a first run. The runs
+  are read from the project's `estimates.jsonl`, one line per finished
+  run, built once from the sessions when it is missing.
 - `forget` drops results the model names by call id, each left as one
   line, and says the tokens freed and the cache cost. Only a result after
   the last cache breakpoint can go. When a request passes 70% of the
