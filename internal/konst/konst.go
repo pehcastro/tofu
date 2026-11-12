@@ -660,6 +660,15 @@ const (
 
 const SpawnEstimateRunsMost = 20
 
+const (
+	TokenRateMinTokens      = 200
+	TokenRateMinMillis      = 4_000
+	TokenRateHalfLifeMillis = 20_000
+	TokenRateBucketMillis   = 250
+	TokenRateCharsPerToken  = 4
+	TokenRatePushMillis     = 1_000
+)
+
 const TestCPUs = 4
 
 const FormatRunMillis = 60_000

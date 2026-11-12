@@ -196,6 +196,7 @@ func (w *Wire) send(ctx context.Context, request Request, token string, oauth bo
 		return w.post(ctx, dump, oauth, request.OnDelta, request.OnThinking)
 	})
 	result.FirstTokenMS = core.MillisSince(sent, result.firstDelta)
+	result.LastByteMS = core.MillisSince(sent, result.lastDelta)
 	result.Warnings = append(warnings, result.Warnings...)
 	return result, dump, err
 }

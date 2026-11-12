@@ -148,6 +148,11 @@ the way a model's does, in deltas, so a reply is half written until it returns:
 A reply's text can arrive in the deltas it names instead, joined into its text:
   {"deltas":["the answer arrives in ","two parts"]}
 
+deltaEvery spaces those deltas out, and usage.output reports the output tokens,
+so the footer's tok/s meter moves while it streams and settles on output tokens
+over the time from send to the last delta:
+  {"deltas":["one part ","and another"],"deltaEvery":"250ms","usage":{"output":400}}
+
 A reply's thinking streams before its text and shows only on the sub-agents screen.
 
 A reply can report the usage a provider would, in tokens, the way anthropic
@@ -221,6 +226,7 @@ type cassetteReply struct {
 	Agent         string   `json:"agent"`
 	Unfinished    bool     `json:"unfinished"`
 	HoldAfterStop string   `json:"holdAfterStop"`
+	DeltaEvery    string   `json:"deltaEvery"`
 	Refused       *struct {
 		Status  int               `json:"status"`
 		Detail  string            `json:"detail"`
@@ -234,6 +240,7 @@ type cassetteReply struct {
 	} `json:"tools"`
 	Usage struct {
 		Input      int `json:"input"`
+		Output     int `json:"output"`
 		CacheRead  int `json:"cache_read"`
 		CacheWrite int `json:"cache_write"`
 	} `json:"usage"`
@@ -245,6 +252,7 @@ type recordedReply struct {
 	thinking      string
 	unfinished    bool
 	holdAfterStop time.Duration
+	deltaEvery    time.Duration
 	refused       error
 	caller        string
 }
@@ -347,7 +355,7 @@ func readCassette(path string) (*cassette, error) {
 			reply.Deltas = []string{reply.Text}
 		}
 		decision := core.Decision{Build: wiring.CassetteBuild, Outcome: core.OutcomeMessage, Content: strings.Join(reply.Deltas, ""), FirstTokenMS: recordedFlight.Milliseconds(),
-			Usage: core.Usage{InputTokens: reply.Usage.Input}, PromptAccounting: core.PromptExcludesCacheReads,
+			Usage: core.Usage{InputTokens: reply.Usage.Input, OutputTokens: reply.Usage.Output}, PromptAccounting: core.PromptExcludesCacheReads,
 			CacheReadTokens: reply.Usage.CacheRead, CacheWriteTokens: reply.Usage.CacheWrite, Thinking: core.Thinking{Text: reply.Thinking}}
 		for index, one := range reply.Tools {
 			decision.Outcome = core.OutcomeToolCalls
@@ -364,6 +372,11 @@ func readCassette(path string) (*cassette, error) {
 			}
 			if recorded.holdAfterStop, err = time.ParseDuration(reply.HoldAfterStop); err != nil {
 				return nil, fmt.Errorf("%s line %d: holdAfterStop: %w", path, number+1, err)
+			}
+		}
+		if reply.DeltaEvery != "" {
+			if recorded.deltaEvery, err = time.ParseDuration(reply.DeltaEvery); err != nil {
+				return nil, fmt.Errorf("%s line %d: deltaEvery: %w", path, number+1, err)
 			}
 		}
 		if refused := reply.Refused; refused != nil {
@@ -537,6 +550,7 @@ func appendLines(path string, lines []string) error {
 }
 
 func (c *cassette) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
+	sent := time.Now()
 	select {
 	case <-ctx.Done():
 		return core.Decision{}, ctx.Err()
@@ -557,13 +571,22 @@ func (c *cassette) Ask(ctx context.Context, request core.Request) (core.Decision
 	if request.OnThinking != nil && reply.thinking != "" {
 		request.OnThinking(reply.thinking)
 	}
-	for _, delta := range reply.deltas {
+	for index, delta := range reply.deltas {
+		if index > 0 && reply.deltaEvery > 0 {
+			select {
+			case <-ctx.Done():
+				return core.Decision{}, ctx.Err()
+			case <-time.After(reply.deltaEvery):
+			}
+		}
 		if request.OnDelta != nil {
 			request.OnDelta(delta)
 		}
 	}
 	if !reply.unfinished {
-		return reply.decision, nil
+		decision := reply.decision
+		decision.LastByteMS = time.Since(sent).Milliseconds()
+		return decision, nil
 	}
 	<-ctx.Done()
 	time.Sleep(reply.holdAfterStop)

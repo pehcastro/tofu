@@ -75,7 +75,7 @@ func twoSourcesInUse() Status {
 func TestEverySourceInUseKeepsItsPercentageAtEveryWidth(t *testing.T) {
 	right := ChatRight("claude-sub/claude-opus-5", "medium")
 	for _, width := range []int{160, 150, 149, 140, 120, 110, 100, 90, 82, 81, 60} {
-		line := ansi.Strip(Footer(twoSourcesInUse(), width, right))
+		line := ansi.Strip(Footer(twoSourcesInUse(), 0, width, right))
 		t.Logf("%3d |%s|", width, line)
 		if got := ansi.StringWidth(line); got != width {
 			t.Errorf("%d-column footer is %d cells: %q", width, got, line)
@@ -98,7 +98,7 @@ func TestEverySourceInUseKeepsItsPercentageAtEveryWidth(t *testing.T) {
 func TestOneSourceInUseKeepsItsFullLabelBelowTheSecondSourceWidth(t *testing.T) {
 	status := twoSourcesInUse()
 	status.InUse = []string{"claude-sub"}
-	line := ansi.Strip(Footer(status, 140, ChatRight("claude-sub/claude-opus-5", "medium")))
+	line := ansi.Strip(Footer(status, 0, 140, ChatRight("claude-sub/claude-opus-5", "medium")))
 	if !strings.Contains(line, "claude-sub 5h 62%") || strings.Contains(line, "codex") {
 		t.Errorf("one source in use at 140 columns drew %q, want claude-sub 5h 62%% and no codex", line)
 	}
@@ -115,6 +115,6 @@ func BenchmarkTopAndFooter(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		_, _ = Top(testHead, testTabs, 0, 120)
-		_ = Footer(status, 120, right)
+		_ = Footer(status, 0, 120, right)
 	}
 }

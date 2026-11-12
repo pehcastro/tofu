@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
+	"math"
 	"reflect"
 	"slices"
 	"strconv"
@@ -214,12 +215,27 @@ func (a *watcher) askThrough(ctx context.Context, inner loop.Model, request core
 		}
 	}
 	thinking := a.eventID(asker, "thinking "+a.recordedTurn()+" "+strconv.FormatInt(a.thoughts.Add(1), 10))
+	sent := time.Now()
+	meter := liveRate{sent: sent, at: sent}
+	streaming := func(text string) {
+		now := time.Now()
+		meter.push(len(text), now)
+		if now.Sub(meter.pushed) < konst.TokenRatePushMillis*time.Millisecond {
+			return
+		}
+		if rate := meter.perSecond(now); rate > 0 {
+			meter.pushed = now
+			a.emit(a.stats(asker, "", rate))
+		}
+	}
 	request.OnThinking = func(text string) {
 		a.emit(Event{Kind: EventThinking, ID: thinking, Agent: asker, Text: text})
+		streaming(text)
 	}
 	streamed := false
 	request.OnRetry = func() {
 		streamed = false
+		meter = liveRate{sent: sent, at: time.Now(), pushed: meter.pushed}
 		a.emit(Event{Kind: EventStreamReset, ID: thinking, Agent: asker})
 	}
 	a.sendSubAgents()
@@ -231,10 +247,16 @@ func (a *watcher) askThrough(ctx context.Context, inner loop.Model, request core
 		request.OnDelta = func(text string) {
 			streamed = true
 			a.emit(Event{Kind: EventTextDelta, Text: text})
+			streaming(text)
 		}
+	} else {
+		request.OnDelta = streaming
 	}
 	decision, err := inner.Ask(ctx, request)
 	if err != nil {
+		if !meter.pushed.IsZero() {
+			a.emit(a.stats(asker, "", 0))
+		}
 		return decision, err
 	}
 	fresh := decision.PromptAccounting.FreshTokens(decision.Usage.InputTokens, decision.CacheReadTokens)
@@ -245,13 +267,9 @@ func (a *watcher) askThrough(ctx context.Context, inner loop.Model, request core
 	a.write5m += drain.FiveMinuteWrites(decision.CacheWriteTokens, decision.CacheWrite5m, decision.CacheWrite1h)
 	a.write1h += decision.CacheWrite1h
 	a.costUSD += decision.Usage.Cost
-	stats := Event{Kind: EventStats, Agent: asker, Model: decision.Build, TokensIn: a.in, TokensOut: a.out, CacheRead: a.cacheRead, CacheWrite5m: a.write5m, CacheWrite1h: a.write1h, CostUSD: a.costUSD}
 	a.marks.Unlock()
 	a.noteSubAgentsAsk(asker, fresh+decision.Usage.OutputTokens, decision.ToolCalls)
-	if a.decisions != nil {
-		stats.Decisions = a.decisions()
-	}
-	a.emit(stats)
+	a.emit(a.stats(asker, decision.Build, requestRate(decision)))
 	if text := strings.TrimSpace(decision.Content); text != "" && inChat {
 		a.endLeadRow()
 		if !streamed {
@@ -262,6 +280,60 @@ func (a *watcher) askThrough(ctx context.Context, inner loop.Model, request core
 		a.called(call, asker)
 	}
 	return decision, nil
+}
+
+func (a *watcher) stats(asker, model string, perSecond float64) Event {
+	a.marks.Lock()
+	stats := Event{Kind: EventStats, Agent: asker, Model: model, TokensIn: a.in, TokensOut: a.out, CacheRead: a.cacheRead, CacheWrite5m: a.write5m, CacheWrite1h: a.write1h, CostUSD: a.costUSD, TokenRate: perSecond}
+	a.marks.Unlock()
+	if a.decisions != nil {
+		stats.Decisions = a.decisions()
+	}
+	return stats
+}
+
+func requestRate(decision core.Decision) float64 {
+	if decision.Usage.OutputTokens < konst.TokenRateMinTokens || decision.LastByteMS < konst.TokenRateMinMillis {
+		return 0
+	}
+	return float64(decision.Usage.OutputTokens) * float64(time.Second/time.Millisecond) / float64(decision.LastByteMS)
+}
+
+type liveRate struct {
+	sent    time.Time
+	at      time.Time
+	pushed  time.Time
+	tokens  float64
+	spanMS  float64
+	counted float64
+	bucket  int64
+	pending int
+}
+
+func (r *liveRate) push(chars int, now time.Time) {
+	if bucket := now.Sub(r.sent).Milliseconds() / konst.TokenRateBucketMillis; bucket != r.bucket {
+		r.flush(now)
+		r.bucket = bucket
+	}
+	r.pending += chars
+}
+
+func (r *liveRate) flush(now time.Time) {
+	elapsed := float64(now.Sub(r.at).Milliseconds())
+	kept := math.Exp2(-elapsed / konst.TokenRateHalfLifeMillis)
+	added := float64(r.pending) / konst.TokenRateCharsPerToken
+	r.tokens = r.tokens*kept + added
+	r.spanMS = r.spanMS*kept + konst.TokenRateHalfLifeMillis/math.Ln2*(1-kept)
+	r.counted += added
+	r.at, r.pending = now, 0
+}
+
+func (r *liveRate) perSecond(now time.Time) float64 {
+	r.flush(now)
+	if r.counted < konst.TokenRateMinTokens || now.Sub(r.sent).Milliseconds() < konst.TokenRateMinMillis {
+		return 0
+	}
+	return r.tokens * float64(time.Second/time.Millisecond) / r.spanMS
 }
 
 func (a *watcher) spawning(tool string) bool {

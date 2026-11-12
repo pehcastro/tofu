@@ -274,6 +274,7 @@ type App struct {
 	running        int
 	pressedAt      time.Time
 	steered        map[string]string
+	rates          map[string]float64
 	steeredUnread  []string
 	earlier        *host.Earlier
 	sentNow        bool
@@ -390,6 +391,7 @@ func New(options Options) *App {
 		moves:         map[string]movement{},
 		openedFolded:  map[string]bool{},
 		steered:       map[string]string{},
+		rates:         map[string]float64{},
 		happenedIndex: map[string]int{},
 		lengthenedIDs: map[string]string{},
 		serving:       map[string]string{},

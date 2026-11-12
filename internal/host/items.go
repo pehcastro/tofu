@@ -50,10 +50,18 @@ type items struct {
 	numbered int
 	unlogged []awaiting
 	logged   map[string]string
+	usage    map[string]UsageUpdated
 }
 
 func newItems(session string) items {
-	return items{session: session, tools: map[string]openTool{}, agents: map[string]SubAgentRow{}, logged: map[string]string{}}
+	return items{session: session, tools: map[string]openTool{}, agents: map[string]SubAgentRow{}, logged: map[string]string{}, usage: map[string]UsageUpdated{}}
+}
+
+func (s *items) blankRate(agent string) {
+	if usage, seen := s.usage[agent]; seen {
+		usage.TokensPerSecond = 0
+		s.usage[agent] = usage
+	}
 }
 
 func (s *items) awaitLog(item, role, text string) {
@@ -170,6 +178,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 			Title string `json:"title"`
 		}
 		_ = json.Unmarshal(event.Args, &args)
+		s.blankRate(event.Agent)
 		s.tools[event.ID] = openTool{tool: event.Tool, path: args.Path, at: now}
 		return append(out, notify("tool.started", &ToolStarted{Identity: id, Instance: event.Agent, Tool: event.Tool, Title: args.Title, Args: wholeJSON(event.Args), StartedAt: now, Card: event.Card, Group: event.Group}))
 	case EventToolResult:
@@ -193,8 +202,10 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		return append(out, kept("failure", s.said(id, event, SaidFailure)))
 	case EventStats:
 		id.Item = session.EventIDFor(s.turn, "usage "+event.Agent)
-		return append(out, merged("usage.updated", event.Agent, &UsageUpdated{Identity: id, Model: event.Model, TokensIn: event.TokensIn, TokensOut: event.TokensOut, CacheRead: event.CacheRead,
-			CacheWrite5m: event.CacheWrite5m, CacheWrite1h: event.CacheWrite1h, CostUSD: event.CostUSD, Decisions: event.Decisions}))
+		usage := UsageUpdated{Identity: id, Model: cmp.Or(event.Model, s.usage[event.Agent].Model), TokensIn: event.TokensIn, TokensOut: event.TokensOut, CacheRead: event.CacheRead,
+			CacheWrite5m: event.CacheWrite5m, CacheWrite1h: event.CacheWrite1h, CostUSD: event.CostUSD, Decisions: event.Decisions, TokensPerSecond: event.TokenRate}
+		s.usage[event.Agent] = usage
+		return append(out, merged("usage.updated", event.Agent, &usage))
 	case EventContext:
 		id.Item = session.EventIDFor(s.turn, "context "+event.Agent)
 		used := ContextUse{Used: event.Context.Used, Budget: event.Context.Budget}
@@ -260,7 +271,10 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		return append(out, kept("turn.account", &spent))
 	case EventMembers:
 		return append(out, merged("session.member", "", &SessionMembers{Identity: s.identity("", session.EventIDFor(s.session, "members")), Members: append([]Member{}, event.Members...)}))
-	case EventForkStart, EventResumed, EventRequesting:
+	case EventRequesting:
+		s.blankRate("")
+		return out
+	case EventForkStart, EventResumed:
 		return out
 	}
 	panic("host: unknown event kind " + strconv.Itoa(int(event.Kind)))

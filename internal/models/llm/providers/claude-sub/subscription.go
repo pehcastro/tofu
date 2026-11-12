@@ -58,6 +58,7 @@ func (s Subscription) Ask(ctx context.Context, request core.Request) (core.Decis
 		CacheWrite5m:     result.Usage.CacheWrite5m,
 		CacheWrite1h:     result.Usage.CacheWrite1h,
 		FirstTokenMS:     result.FirstTokenMS,
+		LastByteMS:       result.LastByteMS,
 		Warnings:         result.Warnings,
 	}
 	if decision.Outcome == core.OutcomeRefusal {

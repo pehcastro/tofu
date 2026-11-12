@@ -602,6 +602,7 @@ func (a *App) absorb(event Event) {
 		if !a.leading {
 			a.leadTurnBegins()
 		}
+		a.rates[""] = 0
 		a.view.Requesting()
 	case EventTask:
 		drawnWhenFired := slices.Index(a.firesDrawn, event.Text)
@@ -630,6 +631,7 @@ func (a *App) absorb(event Event) {
 		}
 		a.thought(event, at)
 	case EventToolCall:
+		a.rates[event.Agent] = 0
 		a.called(event, at)
 	case EventToolResult:
 		a.answered(event, at)
@@ -711,7 +713,7 @@ func (a *App) absorb(event Event) {
 		a.forking = false
 	case EventStats:
 		a.status.TokensIn, a.status.TokensOut, a.status.CacheRead = event.TokensIn, event.TokensOut, event.CacheRead
-		a.status.Decisions = event.Decisions
+		a.status.Decisions, a.rates[event.Agent] = event.Decisions, event.TokenRate
 	case host.EventAccount:
 		a.followSource(event.Account)
 		a.followAccount(event.Account)

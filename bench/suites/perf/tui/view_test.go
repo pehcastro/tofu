@@ -433,7 +433,7 @@ func BenchmarkTopAndFooter(b *testing.B) {
 	b.ReportAllocs()
 	for b.Loop() {
 		_, _ = frame.Top(head, tabs, 0, benchWidth)
-		_ = frame.Footer(status, benchWidth, right)
+		_ = frame.Footer(status, 0, benchWidth, right)
 	}
 }
 

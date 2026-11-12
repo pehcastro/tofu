@@ -58,7 +58,7 @@ type sentItem struct {
 	Role string `json:"role"`
 }
 
-func (w *Wire) overSocket(ctx context.Context, dump Dump, onThinking func(string)) (Result, error) {
+func (w *Wire) overSocket(ctx context.Context, dump Dump, onDelta, onThinking func(string)) (Result, error) {
 	if dump.URL != SubscriptionBaseURL+SubscriptionPath || !w.socket.busy.TryLock() {
 		return Result{}, errNoSocket
 	}
@@ -88,7 +88,7 @@ func (w *Wire) overSocket(ctx context.Context, dump Dump, onThinking func(string
 			note.Change(func(attempt *core.Attempt) { attempt.HeadersMS = time.Since(attempt.At).Milliseconds() })
 		}
 		return payload, w.socketEvent(payload, note)
-	}, onThinking)
+	}, onDelta, onThinking)
 	if err == nil {
 		w.socket.properties, w.socket.input, w.socket.response = properties, input, result.ID
 		return result, nil

@@ -613,14 +613,15 @@ type ContextUse struct {
 
 type UsageUpdated struct {
 	Identity
-	Model        string  `json:"model"`
-	TokensIn     int     `json:"tokensIn"`
-	TokensOut    int     `json:"tokensOut"`
-	CacheRead    int     `json:"cacheRead"`
-	CacheWrite5m int     `json:"cacheWrite5m"`
-	CacheWrite1h int     `json:"cacheWrite1h"`
-	CostUSD      float64 `json:"costUsd"`
-	Decisions    int     `json:"decisions"`
+	Model           string  `json:"model"`
+	TokensIn        int     `json:"tokensIn"`
+	TokensOut       int     `json:"tokensOut"`
+	CacheRead       int     `json:"cacheRead"`
+	CacheWrite5m    int     `json:"cacheWrite5m"`
+	CacheWrite1h    int     `json:"cacheWrite1h"`
+	CostUSD         float64 `json:"costUsd"`
+	Decisions       int     `json:"decisions"`
+	TokensPerSecond float64 `json:"tokensPerSecond"`
 }
 
 type QuotaUpdated struct {
@@ -1044,19 +1045,20 @@ type SessionSettings struct {
 }
 
 type SessionState struct {
-	Session   string            `json:"session"`
-	Running   bool              `json:"running"`
-	Turn      *RunningTurn      `json:"turn,omitempty"`
-	Asking    AskingMode        `json:"asking,omitempty"`
-	Pick      ModelPick         `json:"pick"`
-	Approvals []ApprovalRequest `json:"approvals"`
-	Standing  []StandingAnswer  `json:"standing"`
-	Questions []QuestionRequest `json:"questions"`
-	Agents    []AgentNow        `json:"agents"`
-	Shells    []ShellNow        `json:"shells"`
-	Members   []Member          `json:"members"`
-	Context   *ContextUse       `json:"context,omitempty"`
-	Cron      CronState         `json:"cron"`
+	Session         string            `json:"session"`
+	Running         bool              `json:"running"`
+	Turn            *RunningTurn      `json:"turn,omitempty"`
+	Asking          AskingMode        `json:"asking,omitempty"`
+	Pick            ModelPick         `json:"pick"`
+	Approvals       []ApprovalRequest `json:"approvals"`
+	Standing        []StandingAnswer  `json:"standing"`
+	Questions       []QuestionRequest `json:"questions"`
+	Agents          []AgentNow        `json:"agents"`
+	Shells          []ShellNow        `json:"shells"`
+	Members         []Member          `json:"members"`
+	Context         *ContextUse       `json:"context,omitempty"`
+	Cron            CronState         `json:"cron"`
+	TokensPerSecond float64           `json:"tokensPerSecond"`
 }
 
 type RunningTurn struct {
@@ -1066,15 +1068,16 @@ type RunningTurn struct {
 }
 
 type AgentNow struct {
-	Instance  string     `json:"instance"`
-	Kind      string     `json:"kind"`
-	Task      string     `json:"task"`
-	Owns      []string   `json:"owns"`
-	Model     string     `json:"model"`
-	State     AgentState `json:"state"`
-	Steps     int        `json:"steps"`
-	Tokens    int        `json:"tokens"`
-	StartedAt time.Time  `json:"startedAt"`
+	Instance        string     `json:"instance"`
+	Kind            string     `json:"kind"`
+	Task            string     `json:"task"`
+	Owns            []string   `json:"owns"`
+	Model           string     `json:"model"`
+	State           AgentState `json:"state"`
+	Steps           int        `json:"steps"`
+	Tokens          int        `json:"tokens"`
+	StartedAt       time.Time  `json:"startedAt"`
+	TokensPerSecond float64    `json:"tokensPerSecond"`
 }
 
 type ShellNow struct {

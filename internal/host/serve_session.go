@@ -213,7 +213,7 @@ func (s *server) state() SessionState {
 	if running && focus.items.turn == turn {
 		state.Turn = &RunningTurn{ID: turn, Task: focus.items.task, StartedAt: focus.items.began}
 	}
-	state.Context = focus.items.context
+	state.Context, state.TokensPerSecond = focus.items.context, focus.items.usage[""].TokensPerSecond
 	state.Approvals, state.Questions = []ApprovalRequest{}, []QuestionRequest{}
 	for _, asked := range seen.Asks {
 		id := focus.items.identity(asked.Agent, asked.ID)
@@ -228,7 +228,7 @@ func (s *server) state() SessionState {
 	state.Agents = []AgentNow{}
 	for _, row := range focus.items.agents {
 		state.Agents = append(state.Agents, AgentNow{Instance: row.Name, Kind: row.Agent, Task: row.Doing, Owns: row.Owns, Model: row.Model,
-			State: AgentState(row.State.String()), Steps: row.Steps, Tokens: row.Tokens, StartedAt: row.Started})
+			State: AgentState(row.State.String()), Steps: row.Steps, Tokens: row.Tokens, StartedAt: row.Started, TokensPerSecond: focus.items.usage[row.Name].TokensPerSecond})
 	}
 	slices.SortFunc(state.Agents, func(a, b AgentNow) int {
 		return cmp.Or(a.StartedAt.Compare(b.StartedAt), strings.Compare(a.Instance, b.Instance))

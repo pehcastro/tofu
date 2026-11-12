@@ -188,6 +188,7 @@ func (c CodexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 		SummaryOff:       request.OmitThinkingSummary,
 		Verbosity:        string(c.Verbosity),
 		ReasoningContext: string(c.ReasoningContext),
+		OnDelta:          request.OnDelta,
 		OnThinking:       request.OnThinking,
 		OnRetry:          request.OnRetry,
 	})
@@ -207,6 +208,7 @@ func (c CodexTurn) Ask(ctx context.Context, request llm.Request) (llm.Decision, 
 		PromptAccounting: llm.PromptAccountingFor(codex.Name),
 		CacheReadTokens:  result.Usage.CacheRead,
 		FirstTokenMS:     result.FirstTokenMS,
+		LastByteMS:       result.LastByteMS,
 		Warnings:         result.Warnings,
 	}
 	if decision.Outcome == llm.OutcomeRefusal {

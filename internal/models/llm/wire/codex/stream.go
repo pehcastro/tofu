@@ -48,9 +48,11 @@ type Result struct {
 	Usage              Usage
 	TurnState          string
 	FirstTokenMS       int64
+	LastByteMS         int64
 	Warnings           []string
 
 	firstDelta time.Time
+	lastDelta  time.Time
 }
 
 type streamItem struct {
@@ -110,6 +112,7 @@ type streamState struct {
 	text        strings.Builder
 	refusal     strings.Builder
 	thinking    strings.Builder
+	onDelta     func(string)
 	onThinking  func(string)
 	blankDeltas int
 	blankBytes  int
@@ -117,6 +120,10 @@ type streamState struct {
 }
 
 func ReadStream(body io.Reader, onThinking func(string)) (Result, error) {
+	return readStream(body, nil, onThinking)
+}
+
+func readStream(body io.Reader, onDelta, onThinking func(string)) (Result, error) {
 	scanner := bufio.NewScanner(body)
 	scanner.Buffer(make([]byte, 0, konst.StreamReadBytes), konst.StreamLineBytes)
 	return readEvents(func() ([]byte, error) {
@@ -130,11 +137,11 @@ func ReadStream(body io.Reader, onThinking func(string)) (Result, error) {
 			return nil, transport.Fail("codex.ReadStream", transport.KindProvider, fmt.Errorf("%w: %w", core.ErrStreamBroke, err), "reading the stream")
 		}
 		return nil, io.EOF
-	}, onThinking)
+	}, onDelta, onThinking)
 }
 
-func readEvents(next func() ([]byte, error), onThinking func(string)) (result Result, err error) {
-	state := streamState{open: map[int]*openItem{}, onThinking: onThinking}
+func readEvents(next func() ([]byte, error), onDelta, onThinking func(string)) (result Result, err error) {
+	state := streamState{open: map[int]*openItem{}, onDelta: onDelta, onThinking: onThinking}
 	defer func() { err = core.CutAfter(result.Content, err) }()
 	for !state.terminal {
 		payload, err := next()
@@ -158,8 +165,11 @@ func readEvents(next func() ([]byte, error), onThinking func(string)) (result Re
 }
 
 func (s *streamState) handle(event streamEvent) error {
-	if s.result.firstDelta.IsZero() && strings.HasSuffix(event.Type, ".delta") {
-		s.result.firstDelta = time.Now()
+	if strings.HasSuffix(event.Type, ".delta") {
+		s.result.lastDelta = time.Now()
+		if s.result.firstDelta.IsZero() {
+			s.result.firstDelta = s.result.lastDelta
+		}
 	}
 	switch event.Type {
 	case "error", "response.failed":
@@ -192,6 +202,9 @@ func (s *streamState) handle(event streamEvent) error {
 
 	case "response.output_text.delta":
 		s.text.WriteString(event.Delta)
+		if s.onDelta != nil && event.Delta != "" {
+			s.onDelta(event.Delta)
+		}
 
 	case "response.refusal.delta":
 		s.refusal.WriteString(event.Delta)

@@ -21,7 +21,9 @@ const (
 	rightSeparator      = "  ·  "
 )
 
-func Footer(status Status, width int, right string) string {
+type TokenRate float64
+
+func Footer(status Status, rate TokenRate, width int, right string) string {
 	switch status.Mode {
 	case StatusHidden:
 		return draw([]span{fill(width, look.Panel)})
@@ -33,7 +35,7 @@ func Footer(status Status, width int, right string) string {
 		right = ""
 	}
 	rights := []string{right}
-	if bare, _ := footerLeft(status, width, noQuota); cells(bare) <= roomBeside(width, right) {
+	if bare, _ := footerLeft(status, rate, width, noQuota); cells(bare) <= roomBeside(width, right) {
 		for shorter := right; shorter != ""; {
 			shorter = shorterRight(shorter)
 			rights = append(rights, shorter)
@@ -41,12 +43,12 @@ func Footer(status Status, width int, right string) string {
 	}
 	for _, kept := range rights {
 		for form := fullLabel; form < noQuota; form++ {
-			if head, tail := footerLeft(status, width, form); cells(head) <= roomBeside(width, kept) {
+			if head, tail := footerLeft(status, rate, width, form); cells(head) <= roomBeside(width, kept) {
 				return footerRow(slices.Concat(head, tail), width, kept)
 			}
 		}
 	}
-	head, tail := footerLeft(status, width, noQuota)
+	head, tail := footerLeft(status, rate, width, noQuota)
 	return footerRow(slices.Concat(head, tail), width, right)
 }
 
@@ -96,26 +98,30 @@ func (form quotaLabel) of(quota Quota) string {
 	panic("frame: unknown quota label " + strconv.Itoa(int(form)))
 }
 
-func footerLeft(status Status, width int, form quotaLabel) (head, tail []span) {
+func footerLeft(status Status, rate TokenRate, width int, form quotaLabel) (head, tail []span) {
 	if status.Note != "" {
 		return []span{panel(" "+status.Note, look.Text)}, nil
 	}
-	head, tail = contextAndQuota(status, width, form)
+	head, tail = contextAndQuota(status, rate, width, form)
 	if status.Crons > 0 {
 		head = append(head, panel(footerSeparator+"cron "+strconv.Itoa(status.Crons), look.Mint))
 	}
 	return head, tail
 }
 
-func contextAndQuota(status Status, width int, form quotaLabel) (head, tail []span) {
+func contextAndQuota(status Status, rate TokenRate, width int, form quotaLabel) (head, tail []span) {
 	head = []span{panel(" ctx ", look.Blue)}
+	var rated []span
+	if rate > 0 {
+		rated = []span{panel(footerSeparator+strconv.FormatFloat(float64(rate), 'f', 1, 64)+" tok/s", look.Text)}
+	}
 	switch {
 	case status.Context.Budget <= 0:
-		return append(head, panel("unread", look.FaintColor)), nil
+		return slices.Concat(head, []span{panel("unread", look.FaintColor)}, rated), nil
 	case status.Fresh:
 		return append(head, panel("0/"+render.Count(status.Context.Budget), look.Text), panel(footerSeparator+"new session", look.FaintColor)), nil
 	}
-	head = append(head, panel(render.Count(status.Context.Used)+"/"+render.Count(status.Context.Budget), look.Text))
+	head = slices.Concat(head, []span{panel(render.Count(status.Context.Used)+"/"+render.Count(status.Context.Budget), look.Text)}, rated)
 	shown := firstAccountPerSource(status.Quotas, status.InUse)
 	if len(shown) == 0 && form != noQuota {
 		head = append(head, panel(footerSeparator+"quota unread", look.FaintColor))

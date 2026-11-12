@@ -50,6 +50,7 @@ type Decision struct {
 	CacheWrite5m     int
 	CacheWrite1h     int
 	FirstTokenMS     int64
+	LastByteMS       int64
 	Warnings         []string
 }
 

@@ -67,6 +67,7 @@ type Event struct {
 	CacheWrite5m int
 	CacheWrite1h int
 	CostUSD      float64
+	TokenRate    float64
 	Decisions    int
 	Decision     *Decision
 	Context      Context

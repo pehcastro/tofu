@@ -137,11 +137,18 @@ func (a *App) base() string {
 	if a.current == screenChat {
 		right = frame.ChatRight(a.slug(), string(a.shownEffort()))
 	}
-	framed := top + "\n" + strings.Repeat(" ", a.width) + "\n" + a.body() + "\n" + frame.Footer(status, a.width, right)
+	framed := top + "\n" + strings.Repeat(" ", a.width) + "\n" + a.body() + "\n" + frame.Footer(status, frame.TokenRate(a.rates[a.focusedAgent()]), a.width, right)
 	if track, scrolls := a.track(); scrolls && a.current != screenChat {
 		return pointer.Overlay(framed, a.width, track)
 	}
 	return framed
+}
+
+func (a *App) focusedAgent() string {
+	if at := a.happenedAt(a.feed.Selected()); a.current == screenAgents && at >= 0 && a.happened[at].Actor != orchestrator {
+		return a.happened[at].Actor
+	}
+	return ""
 }
 
 func (a *App) runningShells() int {

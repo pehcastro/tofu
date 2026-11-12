@@ -45,9 +45,11 @@ type Result struct {
 	ToolCalls         []core.ToolCall
 	Usage             Usage
 	FirstTokenMS      int64
+	LastByteMS        int64
 	Warnings          []string
 
 	firstDelta time.Time
+	lastDelta  time.Time
 }
 
 type streamEvent struct {
@@ -188,8 +190,11 @@ func ReadStream(body io.Reader, oauth bool, onDelta, onThinking func(string)) (r
 				result.Warnings = append(result.Warnings, "a delta arrived for a block that never started")
 				continue
 			}
-			if result.firstDelta.IsZero() && event.Delta.Type != "signature_delta" {
-				result.firstDelta = time.Now()
+			if event.Delta.Type != "signature_delta" {
+				result.lastDelta = time.Now()
+				if result.firstDelta.IsZero() {
+					result.firstDelta = result.lastDelta
+				}
 			}
 			switch event.Delta.Type {
 			case "text_delta":

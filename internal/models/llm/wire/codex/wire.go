@@ -194,12 +194,13 @@ func (w *Wire) send(ctx context.Context, request Request, token string) (Result,
 
 	sent := time.Now()
 	result, err := core.RetryQuiet(ctx, w.config.Transport, request.OnRetry, func() (Result, error) {
-		if result, err := w.overSocket(ctx, dump, request.OnThinking); !errors.Is(err, errNoSocket) {
+		if result, err := w.overSocket(ctx, dump, request.OnDelta, request.OnThinking); !errors.Is(err, errNoSocket) {
 			return result, err
 		}
-		return w.post(ctx, dump, request.OnThinking)
+		return w.post(ctx, dump, request.OnDelta, request.OnThinking)
 	})
 	result.FirstTokenMS = core.MillisSince(sent, result.firstDelta)
+	result.LastByteMS = core.MillisSince(sent, result.lastDelta)
 	var refused *transport.Error
 	if errors.As(err, &refused) {
 		refused.Account = w.config.Account
@@ -239,7 +240,7 @@ func (w *Wire) endpoint(subscription bool) string {
 	return KeyBaseURL + KeyPath
 }
 
-func (w *Wire) post(ctx context.Context, dump Dump, onThinking func(string)) (Result, error) {
+func (w *Wire) post(ctx context.Context, dump Dump, onDelta, onThinking func(string)) (Result, error) {
 	request, err := http.NewRequestWithContext(ctx, dump.Method, dump.URL, strings.NewReader(string(dump.Body)))
 	if err != nil {
 		return Result{}, transport.Fail("codex.Ask", transport.KindBadRequest, err, "building the request")
@@ -266,7 +267,7 @@ func (w *Wire) post(ctx context.Context, dump Dump, onThinking func(string)) (Re
 
 	body := core.WatchIdle(response.Body, w.config.StreamIdle)
 	defer func() { _ = body.Close() }()
-	result, err := ReadStream(body, onThinking)
+	result, err := readStream(body, onDelta, onThinking)
 	if turnState := response.Header.Get(HeaderTurnState); turnState != "" {
 		result.TurnState = turnState
 	}

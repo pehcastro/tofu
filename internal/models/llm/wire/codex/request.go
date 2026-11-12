@@ -38,6 +38,7 @@ type Request struct {
 	TurnState        string
 	MaxOutputTokens  int
 	Sampling         Sampling
+	OnDelta          func(string)
 	OnThinking       func(string)
 	OnRetry          func()
 }
