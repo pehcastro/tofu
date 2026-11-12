@@ -216,7 +216,11 @@ func sessionVerbRecalling(recent *session.Recent, args []string, in io.Reader, o
 	lifetime := sessionLifetime(".", o.ErrOut)
 	switch args[0] {
 	case "list":
-		report, err := sessionListing(store)
+		listed := sessionBriefListing
+		if o.AsJSON {
+			listed = sessionListing
+		}
+		report, err := listed(store)
 		if err != nil {
 			return o.Fail(err)
 		}
@@ -597,14 +601,37 @@ func sessionHeadRow(store *session.Store, header session.Header) sessionRow {
 }
 
 func sessionListing(store *session.Store) (sessionListReport, error) {
-	return sessionListingOf(store, sessionDetail, func(sessionRow) bool { return false })
-}
-
-func sessionListingOf(store *session.Store, rowOf func(*session.Store, string) (sessionRow, error), enough func(sessionRow) bool) (sessionListReport, error) {
 	listing, err := store.Listing()
 	if err != nil {
 		return sessionListReport{}, err
 	}
+	return sessionListingOf(store, listing, sessionDetail, func(sessionRow) bool { return false }), nil
+}
+
+func sessionBriefListing(store *session.Store) (sessionListReport, error) {
+	briefed, listing, err := store.Briefed(func(id string) error {
+		_, err := sessionDetail(store, id)
+		return err
+	})
+	if err != nil {
+		return sessionListReport{}, err
+	}
+	return sessionListingOf(briefed, listing, func(briefed *session.Store, id string) (sessionRow, error) {
+		header, err := sessionHeader(store, id)
+		if err != nil {
+			return sessionRow{}, err
+		}
+		steps, last, err := briefed.Steps(id)
+		if err != nil {
+			return sessionRow{}, err
+		}
+		row := sessionHeadRow(briefed, header)
+		row.Steps, row.lastAt = steps, sessionActivity(store, header, []session.Event{{At: last}})
+		return row, nil
+	}, func(sessionRow) bool { return false }), nil
+}
+
+func sessionListingOf(store *session.Store, listing session.Listing, rowOf func(*session.Store, string) (sessionRow, error), enough func(sessionRow) bool) sessionListReport {
 	report := sessionListReport{Sessions: []sessionRow{}}
 	if head, err := store.Head(); err == nil {
 		report.Head, report.HeadDerived = head.ID, head.Derived
@@ -624,7 +651,7 @@ func sessionListingOf(store *session.Store, rowOf func(*session.Store, string) (
 			break
 		}
 	}
-	return report, nil
+	return report
 }
 
 const (

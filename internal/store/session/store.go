@@ -45,9 +45,9 @@ type Store struct {
 	readFile func(path string) ([]byte, error)
 	rename   func(from, to string) error
 	parsed   map[string][]Event
-	headers  map[string]Header
 	redactor func() credential.KeyRedactor
 	recent   *Recent
+	briefs   map[string]indexLine
 }
 
 type Recent struct {
@@ -55,12 +55,6 @@ type Recent struct {
 	kept    []*recalled
 	lineage map[string]bool
 	walked  map[string]bool
-	headers map[string]recalledHeader
-}
-
-type recalledHeader struct {
-	at     fileStamp
-	header Header
 }
 
 type recalled struct {
@@ -74,17 +68,27 @@ type recalled struct {
 }
 
 type fileStamp struct {
-	size  int64
-	mod   int64
-	found bool
+	Size int64 `json:"size"`
+	Mod  int64 `json:"mod"`
 }
+
+func (f fileStamp) found() bool { return f.Mod != 0 }
 
 func stampOf(path string) fileStamp {
 	info, err := os.Stat(path)
 	if err != nil {
 		return fileStamp{}
 	}
-	return fileStamp{size: info.Size(), mod: info.ModTime().UnixNano(), found: true}
+	return fileStamp{Size: info.Size(), Mod: info.ModTime().UnixNano()}
+}
+
+func firstStamp(paths ...string) fileStamp {
+	for _, path := range paths {
+		if at := stampOf(path); at.found() {
+			return at
+		}
+	}
+	return fileStamp{}
 }
 
 func (s *Store) Recalls(recent *Recent) { s.recent = recent }
@@ -102,7 +106,7 @@ func (r *Recent) slot(id string) *recalled {
 func (r *Recent) recall(id string, at fileStamp) ([]Event, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if kept := r.slot(id); kept != nil && at.found && kept.events == at {
+	if kept := r.slot(id); kept != nil && at.found() && kept.events == at {
 		return kept.parsed, true
 	}
 	return nil, false
@@ -140,22 +144,6 @@ func (r *Recent) prune() {
 	r.kept = held
 }
 
-func (r *Recent) header(id string, at fileStamp) (Header, bool) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	kept, found := r.headers[id]
-	return kept.header, found && at.found && kept.at == at
-}
-
-func (r *Recent) keepHeader(id string, at fileStamp, header Header) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.headers == nil {
-		r.headers = map[string]recalledHeader{}
-	}
-	r.headers[id] = recalledHeader{at: at, header: header}
-}
-
 func (r *Recent) saidOf(id string, events []Event, blobs fileStamp, settings Settings) (Reading, int, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -180,11 +168,11 @@ func sameEvents(a, b []Event) bool {
 
 func (s *Store) ReadOnce() *Store {
 	once := *s
-	once.parsed, once.headers = map[string][]Event{}, map[string]Header{}
+	once.parsed = map[string][]Event{}
 	return &once
 }
 
-func (s *Store) ForgetRead() { s.parsed, s.headers = nil, nil }
+func (s *Store) ForgetRead() { s.parsed = nil }
 
 func NewStore(dir string) *Store {
 	return &Store{dir: dir, settings: DefaultSettings(), readFile: os.ReadFile, rename: os.Rename, redactor: sync.OnceValue(credential.LoadKeyRedactor)}
@@ -281,13 +269,16 @@ func (s *Store) AppendEvent(id string, kind EventKind, body any) error {
 	return errors.Join(err, log.Close())
 }
 
-func (s *Store) writeHeader(header Header, redact credential.KeyRedactor) error {
+func (s *Store) writeHeader(header Header, redact credential.KeyRedactor) (indexLine, error) {
 	body, err := json.MarshalIndent(header, "", "  ")
 	if err != nil {
-		return err
+		return indexLine{}, err
 	}
-	delete(s.headers, header.ID)
-	return s.writeWhole(filepath.Join(s.Dir(header.ID), headerName), []byte(redact.Redact(string(body))))
+	redacted, path := []byte(redact.Redact(string(body))), filepath.Join(s.Dir(header.ID), headerName)
+	if err := s.writeWhole(path, redacted); err != nil {
+		return indexLine{}, err
+	}
+	return indexLine{ID: header.ID, At: stampOf(path), Brief: briefOf(header)}, nil
 }
 
 func appendLines(path string, lines []byte) error {
@@ -351,7 +342,11 @@ func (s *Store) edit(id string, change func(*Header)) (Header, error) {
 		return Header{}, err
 	}
 	change(&header)
-	return header, s.writeHeader(header, s.redactor())
+	line, err := s.writeHeader(header, s.redactor())
+	if err == nil {
+		err = s.appendIndex(line)
+	}
+	return header, err
 }
 
 func (s *Store) SetName(id, given string) (Header, error) {
@@ -585,10 +580,7 @@ func logLineage(head string, lineage []Generation) {
 	_ = appendLines(path, []byte(lines.String()))
 }
 
-func (s *Store) Unread(id string) {
-	delete(s.parsed, id)
-	delete(s.headers, id)
-}
+func (s *Store) Unread(id string) { delete(s.parsed, id) }
 
 func (s *Store) Spawns(id string) ([]Event, error) {
 	raw, err := s.readFile(s.EventsPath(id))
@@ -603,72 +595,6 @@ func (s *Store) Spawns(id string) ([]Event, error) {
 		}
 	}
 	return spawns, nil
-}
-
-func (s *Store) holding(handle string) (string, string) {
-	id, part, _ := strings.Cut(handle, TurnMark)
-	if _, err := s.read(id); part != "" || err == nil {
-		return id, part
-	}
-	listing, err := s.Listing()
-	if err != nil {
-		return id, ""
-	}
-	quoted, _ := json.Marshal(id)
-	mentioned := s.mentioning(listing.Sessions, quoted)
-	for i, header := range listing.Sessions {
-		if !mentioned[i] {
-			continue
-		}
-		events, err := s.Events(header.ID)
-		if err != nil {
-			continue
-		}
-		for _, event := range events {
-			if event.Turn == id || event.Agent == id {
-				return header.ID, id
-			}
-		}
-	}
-	return id, ""
-}
-
-func (s *Store) mentioning(sessions []Header, quoted []byte) []bool {
-	mentioned, next := make([]bool, len(sessions)), make(chan int)
-	var readers sync.WaitGroup
-	for range max(runtime.GOMAXPROCS(0)/konst.CPUsPerReadWorker, 1) {
-		readers.Go(func() {
-			window := make([]byte, len(quoted)+bufio.MaxScanTokenSize)
-			for i := range next {
-				mentioned[i] = mentions(s.EventsPath(sessions[i].ID), quoted, window)
-			}
-		})
-	}
-	for i := range sessions {
-		next <- i
-	}
-	close(next)
-	readers.Wait()
-	return mentioned
-}
-
-func mentions(path string, quoted, window []byte) bool {
-	file, err := os.Open(path)
-	if err != nil {
-		return true
-	}
-	defer func() { _ = file.Close() }()
-	kept := 0
-	for {
-		n, err := file.Read(window[kept:])
-		if bytes.Contains(window[:kept+n], quoted) {
-			return true
-		}
-		if err != nil {
-			return !errors.Is(err, io.EOF)
-		}
-		kept = copy(window, window[max(0, kept+n-len(quoted)+1):kept+n])
-	}
 }
 
 func (s *Store) Events(id string) ([]Event, error) {
@@ -702,7 +628,7 @@ func (s *Store) events(id string) ([]Event, error) {
 		return nil, fmt.Errorf("session: %s has no events: %w", id, err)
 	}
 	events, err := parseEvents(raw, id)
-	if err == nil && at.found {
+	if err == nil && at.found() {
 		s.recent.keep(id, at, events)
 	}
 	return events, err
@@ -963,12 +889,7 @@ func (s *Store) scanEvents(id string, held func(Event) bool, scanned func(line [
 }
 
 func (s *Store) Listing() (Listing, error) {
-	return s.listingBy(func(entry sessionEntry) (Header, error) {
-		if header, kept := s.headers[entry.id]; kept {
-			return header, nil
-		}
-		return s.readEntry(entry)
-	}, s.heldHeader)
+	return s.listingBy(s.readEntry, func(_ string, header Header) Header { return header })
 }
 
 func (s *Store) listingBy(read func(sessionEntry) (Header, error), keep func(id string, header Header) Header) (Listing, error) {
@@ -1095,14 +1016,13 @@ func (s *Store) SetModel(id, wire, model string) (Header, error) {
 }
 
 func (s *Store) read(id string) (Header, error) {
-	if header, kept := s.headers[id]; kept {
-		return header, nil
+	if s.briefs == nil {
+		return s.readEntry(sessionEntry{id: id})
 	}
-	header, err := s.readEntry(sessionEntry{id: id})
-	if err != nil {
-		return Header{}, err
+	if line, found := s.briefs[id]; found {
+		return line.Brief.header(id), nil
 	}
-	return s.heldHeader(id, header), nil
+	return Header{}, fmt.Errorf("session: %s is not listed here: %w", id, fs.ErrNotExist)
 }
 
 func (s *Store) readEntry(entry sessionEntry) (Header, error) {
@@ -1114,27 +1034,9 @@ func (s *Store) readEntry(entry sessionEntry) (Header, error) {
 		header, _, err := s.singleFile(id)
 		return header, err
 	}
-	path := filepath.Join(s.Dir(id), headerName)
-	var at fileStamp
-	if s.recent != nil {
-		at = stampOf(path)
-		if header, found := s.recent.header(id, at); found {
-			return header, nil
-		}
-	}
-	raw, err := s.readSettled(path)
+	raw, err := s.readSettled(filepath.Join(s.Dir(id), headerName))
 	if err == nil {
-		var header Header
-		if err := json.Unmarshal(raw, &header); err != nil {
-			return Header{}, fmt.Errorf("session: the session.json of %s does not parse: %w", id, err)
-		}
-		if header.CarriedFrom != nil {
-			header.Parent = header.CarriedFrom.Session
-		}
-		if at.found {
-			s.recent.keepHeader(id, at, header)
-		}
-		return header, nil
+		return headerOf(raw, id)
 	}
 	if !errors.Is(err, fs.ErrNotExist) {
 		return Header{}, err
@@ -1142,9 +1044,13 @@ func (s *Store) readEntry(entry sessionEntry) (Header, error) {
 	return s.legacyHeader(id)
 }
 
-func (s *Store) heldHeader(id string, header Header) Header {
-	if s.headers != nil {
-		s.headers[id] = header
+func headerOf(raw []byte, id string) (Header, error) {
+	var header Header
+	if err := json.Unmarshal(raw, &header); err != nil {
+		return Header{}, fmt.Errorf("session: the session.json of %s does not parse: %w", id, err)
 	}
-	return header
+	if header.CarriedFrom != nil {
+		header.Parent = header.CarriedFrom.Session
+	}
+	return header, nil
 }

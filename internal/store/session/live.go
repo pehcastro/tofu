@@ -34,7 +34,7 @@ type Log struct {
 	eventBytes int64
 	side       map[string]*os.File
 	watch      func(Event)
-	saved      fs.FileInfo
+	saved      fileStamp
 }
 
 func (l *Log) Observe(watch func(Event)) {
@@ -69,13 +69,14 @@ func (s *Store) Reopen(header Header, closed *Log) (log *Log, err error) {
 	}()
 	log = &Log{store: s, lock: lock, last: map[string]string{}, prompts: map[string][sha256.Size]byte{}, redact: s.redactor(), side: map[string]*os.File{}}
 	kept, err := s.read(header.ID)
+	created := errors.Is(err, fs.ErrNotExist)
 	switch {
 	case err == nil:
 		log.header, log.header.Agents = kept, slices.Clone(kept.Agents)
 		if err := log.resume(closed); err != nil {
 			return nil, err
 		}
-	case errors.Is(err, fs.ErrNotExist):
+	case created:
 		log.header = s.fresh(header)
 	default:
 		return nil, err
@@ -85,7 +86,11 @@ func (s *Store) Reopen(header Header, closed *Log) (log *Log, err error) {
 		return nil, err
 	}
 	log.file = file
-	if err := log.save(); err != nil {
+	line, err := log.save()
+	if err == nil && created {
+		err = s.appendIndex(line)
+	}
+	if err != nil {
 		_ = file.Close()
 		return nil, err
 	}
@@ -244,7 +249,8 @@ func (l *Log) Edit(change func(*Header)) error {
 	l.mu.Lock()
 	change(&l.header)
 	l.mu.Unlock()
-	return l.save()
+	_, err := l.save()
+	return err
 }
 
 func (l *Log) Close() error {
@@ -252,7 +258,8 @@ func (l *Log) Close() error {
 	side := l.closeSide()
 	l.leaveResumable()
 	l.mu.Unlock()
-	closed := errors.Join(l.save(), l.file.Close(), side)
+	_, saved := l.save()
+	closed := errors.Join(saved, l.file.Close(), side)
 	if l.lock == nil {
 		return closed
 	}
@@ -270,25 +277,19 @@ func (l *Log) leaveResumable() {
 	}
 }
 
-func (l *Log) save() error {
+func (l *Log) save() (indexLine, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	path := filepath.Join(l.store.Dir(l.header.ID), headerName)
-	if !l.unchangedSinceSaved(path) {
-		delete(l.store.headers, l.header.ID)
+	if at := stampOf(filepath.Join(l.store.Dir(l.header.ID), headerName)); !at.found() || at != l.saved {
 		if kept, err := l.store.read(l.header.ID); err == nil {
 			l.header.Name = cmp.Or(kept.Name, l.header.Name)
 			l.header.Chosen = cmp.Or(kept.Chosen, l.header.Chosen)
 		}
 	}
-	if err := l.store.writeHeader(l.header, l.redact); err != nil {
-		return err
+	line, err := l.store.writeHeader(l.header, l.redact)
+	if err != nil {
+		return indexLine{}, err
 	}
-	l.saved, _ = os.Stat(path)
-	return nil
-}
-
-func (l *Log) unchangedSinceSaved(path string) bool {
-	now, err := os.Stat(path)
-	return err == nil && l.saved != nil && now.ModTime().Equal(l.saved.ModTime()) && now.Size() == l.saved.Size()
+	l.saved = line.At
+	return line, nil
 }

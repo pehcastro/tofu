@@ -207,7 +207,11 @@ func serveSessions(open string, wanted host.SessionListParams) (host.SessionList
 	opened, _ := store.Identity(open)
 	members := host.MembersOf(store.Project())
 	list, matched := host.SessionList{Sessions: []host.SessionRow{}}, 0
-	report, err := sessionListingOf(store, func(store *sessionstore.Store, handle string) (sessionRow, error) {
+	listing, err := store.Listing()
+	if err != nil {
+		return host.SessionList{}, err
+	}
+	report := sessionListingOf(store, listing, func(store *sessionstore.Store, handle string) (sessionRow, error) {
 		header, err := sessionHeader(store, handle)
 		if err != nil {
 			return sessionRow{}, err
@@ -236,7 +240,7 @@ func serveSessions(open string, wanted host.SessionListParams) (host.SessionList
 		return wanted.Limit > 0 && matched == wanted.Limit
 	})
 	list.Head = report.Head
-	return list, err
+	return list, nil
 }
 
 func serveBranch(p host.SessionBranchParams) (host.SessionBranchResult, error) {
