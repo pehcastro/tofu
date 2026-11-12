@@ -32,7 +32,7 @@ type Recorded struct {
 func (r Recorded) Ended() bool { return r.End != "" }
 
 func (s Store) Recorded(ctx context.Context, newest int) ([]Recorded, error) {
-	if _, err := os.Stat(filepath.Join(s.gitDir, "HEAD")); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(filepath.Join(s.Dir(), "HEAD")); errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
 	listed, err := s.git(ctx, "", "for-each-ref", "--sort=-refname", "--sort=-committerdate", "--count="+strconv.Itoa(newest), "--format=%00%(objectname) %(parent) %(committerdate:unix)%0a%(contents)", TurnRefs)
@@ -117,11 +117,11 @@ func (s Store) rawChange(meta, path string) (Change, error) {
 }
 
 func (s Store) badRaw(field string) error {
-	return fmt.Errorf("git diff-tree in the shadow store %s printed %q where a mode, blob and status line belongs", s.gitDir, field)
+	return fmt.Errorf("git diff-tree in the shadow store %s printed %q where a mode, blob and status line belongs", s.Dir(), field)
 }
 
 func (s Store) Restore(ctx context.Context, change Change) error {
-	target := filepath.Join(s.work, filepath.FromSlash(change.Path))
+	target := filepath.Join(s.Work(), filepath.FromSlash(change.Path))
 	if change.FromMode == AbsentMode {
 		if err := os.Remove(target); err != nil && !os.IsNotExist(err) {
 			return err

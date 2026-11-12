@@ -1,47 +1,35 @@
 package shadow
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 
 	"tofu/internal/konst"
-	platformfs "tofu/internal/platform/fs"
+	"tofu/internal/store/snapshot"
 )
 
-const (
-	TurnRefs      = "refs/tofu/turns"
-	packEveryBlob = "core.bigFileThreshold=1"
-)
+const TurnRefs = "refs/tofu/turns"
 
-const alwaysExcluded = "node_modules/\n.venv/\n__pycache__/\n/*/**/" + platformfs.StateDirName + "/\n/*/**/" + platformfs.LegacyStateDirName + "/\n"
-
-type Store struct {
-	gitDir string
-	work   string
-}
+type Store struct{ snapshot.Files }
 
 func At(state, work string) Store {
 	if abs, err := filepath.Abs(work); err == nil {
 		work = abs
 	}
-	return Store{gitDir: filepath.Join(state, "shadow"), work: work}
+	return Store{snapshot.Files{State: state, Tree: work}}
 }
 
-func (s Store) Dir() string { return s.gitDir }
-
-func (s Store) Work() string { return s.work }
+func (s Store) Work() string { return s.Tree }
 
 type Turn struct {
 	ID        string
@@ -118,7 +106,7 @@ func (s Store) Begin(ctx context.Context, turn Turn, calls func() []Call) Starte
 			started.begun.err = err
 			return
 		}
-		commit, err := s.git(timed, message(turn, nil), "commit-tree", tree)
+		commit, err := s.Commit(timed, message(turn, nil), tree)
 		if err == nil {
 			_, err = s.git(timed, "", "update-ref", TurnRefs+"/"+turn.ID, commit)
 		}
@@ -144,7 +132,7 @@ func (s Started) End(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	commit, err := s.Store.git(ctx, message(s.Turn, files), "commit-tree", tree, "-p", s.begun.commit)
+	commit, err := s.Store.Commit(ctx, message(s.Turn, files), tree, s.begun.commit)
 	if err != nil {
 		return nil, err
 	}
@@ -189,49 +177,6 @@ func (s Store) Turns(ctx context.Context, count int) ([]Changed, error) {
 	return turns, nil
 }
 
-func (s Store) Snapshot(ctx context.Context) (string, error) {
-	if _, err := os.Stat(filepath.Join(s.gitDir, "HEAD")); errors.Is(err, os.ErrNotExist) {
-		if err := os.MkdirAll(s.gitDir, 0o700); err != nil {
-			return "", err
-		}
-		if _, err := s.git(ctx, "", "init", "--quiet", "--bare"); err != nil {
-			return "", err
-		}
-	}
-	projectExcludes, _ := os.ReadFile(filepath.Join(s.work, ".git", "info", "exclude"))
-	if err := os.MkdirAll(filepath.Join(s.gitDir, "info"), 0o700); err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(filepath.Join(s.gitDir, "info", "exclude"), append([]byte(alwaysExcluded), projectExcludes...), 0o600); err != nil {
-		return "", err
-	}
-	shared := filepath.Join(s.gitDir, "index")
-	own, err := os.CreateTemp(s.gitDir, "index-*")
-	if err != nil {
-		return "", err
-	}
-	index := own.Name()
-	_ = own.Close()
-	defer func() { _ = os.Remove(index) }()
-	add := []string{"add", "--all", "."}
-	kept, err := os.ReadFile(shared)
-	if err != nil {
-		_ = os.Remove(index)
-		add = append([]string{"-c", packEveryBlob}, add...)
-	} else if err := os.WriteFile(index, kept, 0o600); err != nil {
-		return "", err
-	}
-	if _, err := s.gitIndexed(ctx, index, "", add...); err != nil {
-		return "", err
-	}
-	tree, err := s.gitIndexed(ctx, index, "", "write-tree")
-	if err != nil {
-		return "", err
-	}
-	_ = os.Rename(index, shared)
-	return strings.TrimSpace(tree), nil
-}
-
 func (s Store) diff(ctx context.Context, from, to string, calls []Call) ([]File, error) {
 	out, err := s.git(ctx, "", "diff-tree", "-r", "-z", "--numstat", "--no-renames", from, to)
 	if err != nil {
@@ -252,7 +197,7 @@ func (s Store) diff(ctx context.Context, from, to string, calls []Call) ([]File,
 
 func (s Store) namedBy(path string, calls []Call) []string {
 	var by []string
-	work := filepath.ToSlash(s.work) + "/"
+	work := filepath.ToSlash(s.Work()) + "/"
 	for _, call := range calls {
 		var args any
 		if json.Unmarshal(call.Args, &args) != nil || slices.Contains(by, call.ID) {
@@ -309,18 +254,21 @@ func mentions(said, path string) bool {
 }
 
 func (s Store) prune(ctx context.Context) ([]string, error) {
-	listed, err := s.git(ctx, "", "for-each-ref", "--sort=refname", "--sort=committerdate", "--format=%(refname)", TurnRefs)
-	if err != nil {
+	var listed, counted string
+	var listing, counting error
+	var asking sync.WaitGroup
+	asking.Go(func() {
+		listed, listing = s.git(ctx, "", "for-each-ref", "--sort=refname", "--sort=committerdate", "--format=%(refname)", TurnRefs)
+	})
+	asking.Go(func() { counted, counting = s.git(ctx, "", "count-objects", "-v") })
+	asking.Wait()
+	if err := errors.Join(listing, counting); err != nil {
 		return nil, err
 	}
 	refs := strings.Fields(listed)
 	dropped, notes := max(len(refs)-konst.ShadowTurnsKept, 0), []string{}
 	if dropped > 0 {
 		notes = append(notes, fmt.Sprintf("the shadow store keeps its last %d turns, so it dropped the %d oldest", konst.ShadowTurnsKept, dropped))
-	}
-	counted, err := s.git(ctx, "", "count-objects", "-v")
-	if err != nil {
-		return notes, err
 	}
 	held := 0
 	for line := range strings.Lines(counted) {
@@ -344,42 +292,16 @@ func (s Store) prune(ctx context.Context) ([]string, error) {
 			return notes, err
 		}
 	}
-	if packing {
-		_, err = s.git(ctx, "", "gc", "--quiet", "--prune="+strconv.Itoa(konst.ShadowSnapshotTimeoutMillis/1000)+".seconds.ago")
+	if !packing {
+		return notes, nil
 	}
+	_, err := s.git(ctx, "", "gc", "--quiet", "--prune="+snapshot.PruneGrace)
 	return notes, err
 }
 
 func (s Store) git(ctx context.Context, stdin string, args ...string) (string, error) {
 	out, err := s.Git(ctx, stdin, args...)
 	return strings.TrimSpace(out), err
-}
-
-func (s Store) Git(ctx context.Context, stdin string, args ...string) (string, error) {
-	return s.gitIndexed(ctx, "", stdin, args...)
-}
-
-func (s Store) gitIndexed(ctx context.Context, index, stdin string, args ...string) (string, error) {
-	flags := []string{"--git-dir", s.gitDir, "-c", "core.autocrlf=false", "-c", "core.safecrlf=false", "-c", "core.fsmonitor=false",
-		"-c", "core.quotepath=false", "-c", "core.longpaths=true", "-c", "core.logAllRefUpdates=false", "-c", "commit.gpgsign=false", "-c", "gc.auto=0"}
-	if args[0] != "init" {
-		flags = append(flags, "--work-tree", s.work)
-	}
-	cmd := exec.CommandContext(ctx, "git", append(flags, args...)...)
-	cmd.Dir = s.work
-	cmd.Stdin, cmd.WaitDelay = strings.NewReader(stdin), konst.BashWaitDelayMillis*time.Millisecond
-	cmd.Env = slices.DeleteFunc(os.Environ(), func(entry string) bool { return strings.HasPrefix(strings.ToUpper(entry), "GIT_") })
-	cmd.Env = append(cmd.Env, "GIT_AUTHOR_NAME=tofu", "GIT_AUTHOR_EMAIL=tofu@localhost", "GIT_COMMITTER_NAME=tofu", "GIT_COMMITTER_EMAIL=tofu@localhost")
-	if index != "" {
-		cmd.Env = append(cmd.Env, "GIT_INDEX_FILE="+index)
-	}
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	out, err := cmd.Output()
-	if err != nil {
-		return "", fmt.Errorf("git %s in the shadow store %s: %w: %s", args[0], s.gitDir, err, strings.TrimSpace(stderr.String()))
-	}
-	return string(out), nil
 }
 
 func message(turn Turn, files []File) string {

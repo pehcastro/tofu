@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -35,22 +36,45 @@ type indexed struct {
 	path string
 	mode uint32
 	id   []byte
+	raw  []byte
 }
 
-func (r Repo) writeTree(ctx context.Context) (string, error) {
-	if id, ok := r.writeTreeHere(); ok {
+func (f Files) writeTree(ctx context.Context) (string, error) {
+	if id, ok := f.writeTreeHere(); ok {
 		return id, nil
 	}
-	tree, err := r.git(ctx, "", "write-tree")
-	return strings.TrimSpace(string(tree)), err
+	tree, err := f.Git(ctx, "", "write-tree")
+	return strings.TrimSpace(tree), err
 }
 
-func (r Repo) writeTreeHere() (string, bool) {
-	config, err := os.ReadFile(filepath.Join(r.gitDir(), "config"))
-	if err != nil || bytes.Contains(bytes.ToLower(config), []byte(objectFormatOption)) {
+func (f Files) Commit(ctx context.Context, message, tree string, parents ...string) (string, error) {
+	if !f.sha1Objects() {
+		args := []string{"commit-tree", tree}
+		for _, parent := range parents {
+			args = append(args, "-p", parent)
+		}
+		commit, err := f.Git(ctx, message, args...)
+		return strings.TrimSpace(commit), err
+	}
+	body := "tree " + tree + "\n"
+	for _, parent := range parents {
+		body += "parent " + parent + "\n"
+	}
+	signed := "tofu <tofu@localhost> " + strconv.FormatInt(time.Now().Unix(), 10) + " +0000\n"
+	id, err := f.writeObject("commit", []byte(body+"author "+signed+"committer "+signed+"\n"+message))
+	return hex.EncodeToString(id), err
+}
+
+func (f Files) sha1Objects() bool {
+	config, err := os.ReadFile(f.path("config"))
+	return err == nil && !bytes.Contains(bytes.ToLower(config), []byte(objectFormatOption))
+}
+
+func (f Files) writeTreeHere() (string, bool) {
+	if !f.sha1Objects() {
 		return "", false
 	}
-	raw, err := os.ReadFile(r.path(indexName))
+	raw, err := os.ReadFile(f.path(indexName))
 	if err != nil {
 		return "", false
 	}
@@ -58,7 +82,7 @@ func (r Repo) writeTreeHere() (string, bool) {
 	if !ok {
 		return "", false
 	}
-	id, err := r.writeTreeOf(entries, "")
+	id, err := f.writeTreeOf(entries, "")
 	return hex.EncodeToString(id), err == nil
 }
 
@@ -81,9 +105,10 @@ func readIndex(raw []byte) ([]indexed, bool) {
 		if flags&(indexStageBits|indexExtendedFlag) != 0 || named < 0 {
 			return nil, false
 		}
+		next := at + (indexEntryBytes+named+indexEntryAlign)&^(indexEntryAlign-1)
 		entries = append(entries, indexed{path: string(raw[at+indexEntryBytes : at+indexEntryBytes+named]),
-			mode: binary.BigEndian.Uint32(raw[at+indexModeAt : at+indexModeAt+4]), id: raw[at+indexIDAt : at+indexFlagsAt]})
-		at += (indexEntryBytes + named + indexEntryAlign) &^ (indexEntryAlign - 1)
+			mode: binary.BigEndian.Uint32(raw[at+indexModeAt : at+indexModeAt+4]), id: raw[at+indexIDAt : at+indexFlagsAt], raw: raw[at:next]})
+		at = next
 	}
 	for at+8 <= end {
 		if signature := string(raw[at : at+4]); signature == "link" || signature == "sdir" {
@@ -94,7 +119,28 @@ func readIndex(raw []byte) ([]indexed, bool) {
 	return entries, at == end
 }
 
-func (r Repo) writeTreeOf(entries []indexed, prefix string) ([]byte, error) {
+func joinIndexes(parts [][]byte) ([]byte, bool) {
+	var entries []indexed
+	for _, raw := range parts {
+		if raw == nil {
+			continue
+		}
+		read, ok := readIndex(raw)
+		if !ok {
+			return nil, false
+		}
+		entries = append(entries, read...)
+	}
+	slices.SortFunc(entries, func(a, b indexed) int { return strings.Compare(a.path, b.path) })
+	joined := binary.BigEndian.AppendUint32(binary.BigEndian.AppendUint32([]byte(indexSignature), 2), uint32(len(entries)))
+	for _, one := range entries {
+		joined = append(joined, one.raw...)
+	}
+	sum := sha1.Sum(joined)
+	return append(joined, sum[:]...), true
+}
+
+func (f Files) writeTreeOf(entries []indexed, prefix string) ([]byte, error) {
 	type entry struct {
 		mode, name string
 		id         []byte
@@ -112,7 +158,7 @@ func (r Repo) writeTreeOf(entries []indexed, prefix string) ([]byte, error) {
 		for j < len(entries) && strings.HasPrefix(entries[j].path, inside) {
 			j++
 		}
-		id, err := r.writeTreeOf(entries[i:j], inside)
+		id, err := f.writeTreeOf(entries[i:j], inside)
 		if err != nil {
 			return nil, err
 		}
@@ -125,14 +171,14 @@ func (r Repo) writeTreeOf(entries []indexed, prefix string) ([]byte, error) {
 		body.WriteString(one.mode + " " + strings.TrimSuffix(one.name, "/") + "\x00")
 		body.Write(one.id)
 	}
-	return r.writeTreeObject(body.Bytes())
+	return f.writeObject("tree", body.Bytes())
 }
 
-func (r Repo) writeTreeObject(body []byte) ([]byte, error) {
-	object := append([]byte("tree "+strconv.Itoa(len(body))+"\x00"), body...)
+func (f Files) writeObject(kind string, body []byte) ([]byte, error) {
+	object := append([]byte(kind+" "+strconv.Itoa(len(body))+"\x00"), body...)
 	sum := sha1.Sum(object)
 	name := hex.EncodeToString(sum[:])
-	dir := filepath.Join(r.gitDir(), "objects", name[:2])
+	dir := filepath.Join(f.Dir(), "objects", name[:2])
 	if _, err := os.Stat(filepath.Join(dir, name[2:])); err == nil {
 		return sum[:], nil
 	}
