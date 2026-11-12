@@ -4,7 +4,7 @@ Library · 4 layers                                                   ✗ 1 refu
 
   models         21
   subscriptions  2
-  questions      24
+  questions      25
   docs           45 pages · 140 index entries
   proxy          rtk · library
 
@@ -15,9 +15,9 @@ layers
   project   refused\.tofu
 
 domains · the binary
-  ✓ dev      138 rules · 3 skills · 9 agents · 40 references
-  ✓ general  33 rules · 5 thresholds · 2 agents · 4 references
-  ✓ qa       9 rules · 2 skills · 1 agent · 4 references
+  ✓ dev      143 rules · 3 skills · 9 agents · 40 references
+  ✓ general  34 rules · 5 thresholds · 2 agents · 4 references
+  ✓ qa       10 rules · 2 skills · 1 agent · 5 references
   ✓ shell    1 threshold
 
 refused

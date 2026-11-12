@@ -27,7 +27,7 @@ exit 0
     "models": 21,
     "subscriptions": 2,
     "roles": 0,
-    "questions": 24,
+    "questions": 25,
     "doc_pages": 45,
     "doc_entries": 140,
     "proxy": "rtk",
@@ -37,7 +37,7 @@ exit 0
     "domains": [
       {
         "name": "dev",
-        "rules": 138,
+        "rules": 143,
         "thresholds": 0,
         "skills": 3,
         "agents": 9,
@@ -46,7 +46,7 @@ exit 0
       },
       {
         "name": "general",
-        "rules": 33,
+        "rules": 34,
         "thresholds": 5,
         "skills": 0,
         "agents": 2,
@@ -55,11 +55,11 @@ exit 0
       },
       {
         "name": "qa",
-        "rules": 9,
+        "rules": 10,
         "thresholds": 0,
         "skills": 2,
         "agents": 1,
-        "references": 4,
+        "references": 5,
         "refused": 0
       },
       {

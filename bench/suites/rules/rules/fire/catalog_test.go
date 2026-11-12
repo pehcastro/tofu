@@ -5,16 +5,16 @@ import (
 	"testing"
 )
 
-func TestStructuralCatalogFindsExactlySevenRules(t *testing.T) {
+func TestStructuralCatalogFindsExactlyNineRules(t *testing.T) {
 	dir := filepath.Join(repoRoot, "library")
 	catalog, err := StructuralCatalog(dir)
 	if err != nil {
 		t.Fatalf("StructuralCatalog: %v", err)
 	}
-	if len(catalog) != 7 {
-		t.Fatalf("structural rules = %d, want 7: %+v", len(catalog), catalog)
+	want := []string{"comments", "em_dash", "go_regex_once", "no_worktree", "ownership", "test_assertion", "test_boundary_cases", "test_mock_boundary", "ts_regex_once"}
+	if len(catalog) != len(want) {
+		t.Fatalf("structural rules = %d, want %d: %+v", len(catalog), len(want), catalog)
 	}
-	want := []string{"comments", "em_dash", "no_worktree", "ownership", "test_assertion", "test_boundary_cases", "test_mock_boundary"}
 	for i, id := range want {
 		if catalog[i].ID != id {
 			t.Fatalf("catalog[%d].ID = %q, want %q", i, catalog[i].ID, id)

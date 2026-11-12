@@ -107,11 +107,22 @@ func patternFiles(rules []rule.Rule, root string) ([]string, error) {
 	if !slices.ContainsFunc(rules, func(r rule.Rule) bool { return r.Pattern != nil }) {
 		return nil, nil
 	}
-	listed, err := exec.Command("git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", root).Output()
-	if err != nil {
-		return nil, fmt.Errorf("a pattern rule reads the files git lists under %s, and git ls-files failed: %w", root, err)
+	if listed, err := exec.Command("git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", root).Output(); err == nil {
+		return strings.FieldsFunc(string(listed), func(r rune) bool { return r == 0 }), nil
 	}
-	return strings.FieldsFunc(string(listed), func(r rune) bool { return r == 0 }), nil
+	var walked []string
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return err
+		case entry.IsDir() && path != root && (rule.NeverWalked(entry.Name()) || filepath.Dir(path) == filepath.Clean(root) && entry.Name() == "rtk"):
+			return filepath.SkipDir
+		case !entry.IsDir():
+			walked = append(walked, path)
+		}
+		return nil
+	})
+	return walked, err
 }
 
 func (report checkReport) lines(page cli.Page) []string {

@@ -68,6 +68,7 @@ type Task struct {
 	Languages  []string
 	Judged     map[string]Judged
 	judged     *Judged
+	leadWrites bool
 }
 
 type Judged struct {
@@ -79,7 +80,7 @@ func (t Task) leadMaySpawn() bool {
 	return t.Role == RoleOrchestrator && t.Verb != VerbPlan && !t.Alone
 }
 
-func (t Task) judgesTouches() bool { return t.Role == RoleSubAgent || t.Alone || t.leadMaySpawn() }
+func (r Rule) leadWrites(t Task) bool { return t.leadMaySpawn() && r.forTheWriterOnly() }
 
 func (t Task) touchesTests() bool {
 	notAWord := func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) }
@@ -347,12 +348,12 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 		}
 		why = append(why, fmt.Sprintf("the condition %s matched %q", t.condition, found))
 	}
-	if t.touches != nil && (task.judgesTouches() || t.frameworks == nil) {
+	if t.touches != nil && (task.Role == RoleSubAgent || task.Alone || task.leadWrites || t.frameworks == nil) {
 		found := t.touches.FindString(strings.Join(append([]string{task.Text}, task.Paths...), "\n"))
 		switch {
 		case task.Role != RoleSubAgent && !task.Alone && found == "":
 			return false, fmt.Sprintf("the touches %s matches nothing in the task or its paths, so Jev is not asked", t.touches)
-		case task.leadMaySpawn() && task.judged == nil:
+		case task.leadWrites && task.judged == nil:
 			return false, fmt.Sprintf("Jev did not judge the touches %s for a lead that may spawn, and the keyword alone never reaches one", t.touches)
 		case task.judged != nil && !task.judged.Applies:
 			return false, task.judged.Why
@@ -471,6 +472,7 @@ func Index(rules []Rule, task Task) []Match {
 	index := make([]Match, len(rules))
 	for i, r := range rules {
 		ruled := task
+		ruled.leadWrites = r.leadWrites(task)
 		if judged, asked := task.Judged[r.ID]; asked {
 			ruled.judged = &judged
 		}
@@ -484,9 +486,9 @@ func Index(rules []Rule, task Task) []Match {
 			fires, why = true, "the task plans work, and a qa rule scoped to paths reaches the plan before the paths exist"
 		case !fires && task.touchesTests() && r.Domain == DomainQA && r.Trigger.onlyPaths():
 			fires, why = true, "the task works on tests, and a qa rule scoped to paths reaches the test before its file is named"
-		case fires && task.leadMaySpawn() && r.forTheWriterOnly() && r.Trigger.touches != nil:
+		case fires && ruled.leadWrites && r.Trigger.touches != nil:
 			why += ", and a lead that may spawn writes code too, so Jev's judgment of the touches reaches it"
-		case fires && task.leadMaySpawn() && r.forTheWriterOnly():
+		case fires && ruled.leadWrites:
 			fires, reason, why = false, ReasonRole, "a rule for how code is written reaches the agent that writes it, a lead that plans or a lead that works alone, and the prompt is the orchestrator's on a task that plans nothing and may spawn"
 		case fires && task.Alone && r.forTheWriterOnly():
 			reason, why = ReasonRole, why+", and the lead works alone, so it writes the code itself"
@@ -499,7 +501,7 @@ func Index(rules []Rule, task Task) []Match {
 func AskedOfTheTask(rules []Rule, agentDomain string, task Task) []Rule {
 	task.Judged = map[string]Judged{}
 	for _, r := range rules {
-		if r.Trigger.touches != nil && task.judgesTouches() {
+		if r.Trigger.touches != nil && (task.Role == RoleSubAgent || task.Alone || r.leadWrites(task)) {
 			task.Judged[r.ID] = Judged{Applies: true}
 		}
 	}
