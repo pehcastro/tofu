@@ -339,6 +339,9 @@
         },
         "tokens": {
           "type": "integer"
+        },
+        "tokensPerSecond": {
+          "type": "number"
         }
       },
       "required": [
@@ -350,7 +353,8 @@
         "state",
         "steps",
         "tokens",
-        "startedAt"
+        "startedAt",
+        "tokensPerSecond"
       ],
       "type": "object"
     },
@@ -1781,6 +1785,18 @@
         "spend_limit": {
           "type": "string"
         },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/DoctorStep"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "total_ms": {
+          "type": "integer"
+        },
         "verdict": {
           "enum": [
             "ready",
@@ -1817,7 +1833,9 @@
         "browser",
         "root",
         "go",
-        "os"
+        "os",
+        "steps",
+        "total_ms"
       ],
       "type": "object"
     },
@@ -1859,6 +1877,26 @@
         "point",
         "mode",
         "thresholds"
+      ],
+      "type": "object"
+    },
+    "DoctorStep": {
+      "additionalProperties": false,
+      "properties": {
+        "ms": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "ms",
+        "ok"
       ],
       "type": "object"
     },
@@ -3044,6 +3082,9 @@
         },
         "schema": {
           "type": "integer"
+        },
+        "session_id": {
+          "type": "string"
         },
         "state": {},
         "state_builder": {
@@ -6240,6 +6281,9 @@
             "null"
           ]
         },
+        "tokensPerSecond": {
+          "type": "number"
+        },
         "turn": {
           "$ref": "#/$defs/RunningTurn"
         }
@@ -6254,7 +6298,8 @@
         "agents",
         "shells",
         "members",
-        "cron"
+        "cron",
+        "tokensPerSecond"
       ],
       "type": "object"
     },
@@ -9066,6 +9111,9 @@
         "tokensOut": {
           "type": "integer"
         },
+        "tokensPerSecond": {
+          "type": "number"
+        },
         "turn": {
           "type": "string"
         }
@@ -9082,7 +9130,8 @@
         "cacheWrite5m",
         "cacheWrite1h",
         "costUsd",
-        "decisions"
+        "decisions",
+        "tokensPerSecond"
       ],
       "type": "object"
     },
@@ -10668,6 +10717,9 @@
       "additionalProperties": false,
       "properties": {
         "answer": {
+          "type": "string"
+        },
+        "away": {
           "type": "string"
         },
         "eli5": {
@@ -15971,6 +16023,9 @@
         "schema": {
           "type": "integer"
         },
+        "session_id": {
+          "type": "string"
+        },
         "state": {},
         "state_builder": {
           "type": "string"
@@ -17611,6 +17666,9 @@
         },
         "parent": {
           "type": "string"
+        },
+        "permission_wait_ms": {
+          "type": "integer"
         },
         "proxy": {
           "$ref": "#/$defs/turn.ProxyRow"

@@ -297,6 +297,14 @@ type DoctorReport struct {
 	Root        string              `json:"root"`
 	Go          string              `json:"go"`
 	OS          string              `json:"os"`
+	Steps       []DoctorStep        `json:"steps"`
+	TotalMS     int64               `json:"total_ms"`
+}
+
+type DoctorStep struct {
+	Name string `json:"name"`
+	MS   int64  `json:"ms"`
+	OK   bool   `json:"ok"`
 }
 
 type DoctorBlocker struct {

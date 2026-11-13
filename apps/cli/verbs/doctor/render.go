@@ -39,6 +39,15 @@ func reportPage(page cli.Page, report host.DoctorReport) []string {
 	return append(lines, cli.Indent(page.Facts([]cli.Fact{{Label: "calibration", Text: calibration}, {Label: "ledger", Text: report.Ledger}})...)...)
 }
 
+func stepLines(page cli.Page, report host.DoctorReport) []string {
+	facts, unattributed := make([]cli.Fact, 0, len(report.Steps)+2), report.TotalMS
+	for _, step := range report.Steps {
+		facts, unattributed = append(facts, cli.Fact{Label: step.Name, Text: strconv.FormatInt(step.MS, 10) + " ms"}), unattributed-step.MS
+	}
+	facts = append(facts, cli.Fact{Label: "unattributed", Text: strconv.FormatInt(unattributed, 10) + " ms"}, cli.Fact{Label: "total", Text: strconv.FormatInt(report.TotalMS, 10) + " ms"})
+	return append([]string{"", page.Section("time", cli.Verdict{})}, cli.Indent(page.Facts(facts)...)...)
+}
+
 func boardLines(page cli.Page, unruled []cli.Problem, fixed []string) []string {
 	if len(unruled)+len(fixed) == 0 {
 		return nil

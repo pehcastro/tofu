@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -109,6 +110,8 @@ thresholds:
 
 var browserRow = regexp.MustCompile(`^  (⚠ .+? +no native host, so tofu cannot reach its tabs +→ tofu browser install|⚠ .+? +the native host is stale: it runs tofu itself or a copy that is gone +→ tofu browser install|✓ .+? +native host installed)$`)
 
+var doctorStepRow = regexp.MustCompile(`(?m)^  (\S.*?) +(\d+) ms$`)
+
 var envelopeMoment = regexp.MustCompile(`(?m)^  "at": "\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ"`)
 
 func normalEnvelope(printed string, values map[string]string) string {
@@ -148,6 +151,19 @@ func TestE2EDoctorReadsTheKeyAndTheRuleOfTheProjectItRunsIn(t *testing.T) {
 			if !found || !browserRow.MatchString(row) || !fresh {
 				t.Fatalf("%s: the browser section is\n%s\nwant one row per browser, and in a fresh home on %s no native host", step.name, section, goruntime.GOOS)
 			}
+		}
+		after, timed, _ := strings.Cut(after, "\ntime\n")
+		sum, total := int64(0), int64(-1)
+		for _, row := range doctorStepRow.FindAllStringSubmatch(timed, -1) {
+			ms, _ := strconv.ParseInt(row[2], 10, 64)
+			if row[1] == "total" {
+				total = ms
+				continue
+			}
+			sum += ms
+		}
+		if rows := strings.Count(timed, " ms\n"); rows < 17 || sum != total {
+			t.Fatalf("%s: the time section is\n%s\nwant 15 steps, unattributed and total, the rows summing to the total; %d rows sum to %d against %d", step.name, timed, rows, sum, total)
 		}
 		body = before + "\n" + after
 		testkit.SameText(t, step.name, body, strings.ReplaceAll(step.body, "RTK_INSTALL", doctorverb.RtkInstall()))

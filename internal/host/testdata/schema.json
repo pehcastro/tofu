@@ -1785,6 +1785,18 @@
         "spend_limit": {
           "type": "string"
         },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/DoctorStep"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "total_ms": {
+          "type": "integer"
+        },
         "verdict": {
           "enum": [
             "ready",
@@ -1821,7 +1833,9 @@
         "browser",
         "root",
         "go",
-        "os"
+        "os",
+        "steps",
+        "total_ms"
       ],
       "type": "object"
     },
@@ -1863,6 +1877,26 @@
         "point",
         "mode",
         "thresholds"
+      ],
+      "type": "object"
+    },
+    "DoctorStep": {
+      "additionalProperties": false,
+      "properties": {
+        "ms": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "ok": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "ms",
+        "ok"
       ],
       "type": "object"
     },
@@ -10683,6 +10717,9 @@
       "additionalProperties": false,
       "properties": {
         "answer": {
+          "type": "string"
+        },
+        "away": {
           "type": "string"
         },
         "eli5": {

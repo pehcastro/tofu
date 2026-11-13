@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"tofu/internal/platform/fs"
 	"tofu/internal/platform/project"
 	"tofu/internal/project/boardy"
+	"tofu/internal/store/walls"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/ui/tui/frame/frame"
 )
@@ -39,7 +41,7 @@ const (
 )
 
 func Verb(args []string, out, errOut io.Writer) int {
-	asJSON, imports, fix := output.JSONAsked(args), false, false
+	now, asJSON, imports, fix := time.Now(), output.JSONAsked(args), false, false
 	for _, arg := range args {
 		switch arg {
 		case output.JSONFlag:
@@ -54,16 +56,26 @@ func Verb(args []string, out, errOut io.Writer) int {
 	if imports {
 		return Imports(".", asJSON, out, errOut)
 	}
-	now := time.Now()
 	report := State(now)
 	ready := report.Verdict == host.DoctorReady
+	from := time.Now()
 	unruled, fixed := unruledBoards(report.Root, fix)
+	from = took(&report.Steps, "boards with no rules", from, true)
 	var err error
 	if asJSON {
+		report.TotalMS = time.Since(now).Milliseconds()
 		err = output.WriteJSON(out, cli.Envelope{Verb: "doctor", OK: ready, At: now, Data: report, Problems: append(blockerProblems(report.Blockers), unruled...)})
 	} else {
 		page := cli.Detect(out, os.Environ())
-		err = page.Print(out, append(reportPage(page, report), boardLines(page, unruled, fixed)...))
+		lines := append(reportPage(page, report), boardLines(page, unruled, fixed)...)
+		took(&report.Steps, "rendering", from, true)
+		report.TotalMS = time.Since(now).Milliseconds()
+		err = page.Print(out, append(lines, stepLines(page, report)...))
+	}
+	if places, placesErr := project.ResolvePlaces(report.Root); placesErr == nil {
+		for _, step := range report.Steps {
+			_ = walls.Append(places.State, walls.Wall{Op: walls.OpDoctorStep, Name: step.Name, MS: step.MS, At: now.UnixMilli(), OK: step.OK})
+		}
 	}
 	switch {
 	case err != nil:
@@ -87,35 +99,48 @@ func State(now time.Time) host.DoctorReport {
 	if err != nil {
 		root = "."
 	}
-	located, _ := wiring.LocateGateKey(core.ReadKeyring())
-	library, rules := wiring.ReadLibrary()
-	for i, point := range rules {
+	report := host.DoctorReport{
+		Version: frame.Release(build.Version(), build.BuildRevision()),
+		Verdict: host.DoctorReady,
+		Root:    root,
+		Go:      build.GoVersion(),
+		OS:      fs.OS() + "/" + fs.Arch(),
+	}
+	steps, from := &report.Steps, time.Now()
+	located, err := wiring.LocateGateKey(core.ReadKeyring())
+	report.Gate = host.DoctorGate{Variable: located.Name, Source: gateSource(located), Path: located.Path}
+	from = took(steps, "gate key", from, err == nil)
+	report.Library, report.Rules = wiring.ReadLibrary()
+	from = took(steps, "library", from, report.Library.Unreadable == "")
+	for i, point := range report.Rules {
 		if point.Point == wiring.ShellSiftPoint {
-			rules[i] = wiring.ShellSiftRule(point)
+			report.Rules[i] = wiring.ShellSiftRule(point)
 			continue
 		}
-		rules[i] = withLockStanding(point)
+		report.Rules[i] = withLockStanding(point)
 	}
+	from = took(steps, "rule locks", from, true)
+	report.Blockers = wiring.DoctorBlockers()
+	from = took(steps, "blockers", from, true)
+	report.Credentials = credentials(now)
+	from = took(steps, "credentials", from, !slices.ContainsFunc(report.Credentials, func(credential host.CredentialReport) bool {
+		return credential.State != wiring.UsageServingState
+	}))
+	report.Store = accounts.DoctorState(now, wiring.Specs())
+	from = took(steps, "credential store", from, true)
+	report.Calibration = wiring.CalibrationState()
+	from = took(steps, "calibration", from, true)
+	report.Ledger = wiring.LedgerState()
+	from = took(steps, "ledger", from, true)
+	report.SpendLimit = quota.SpendLimitLine()
+	from = took(steps, "spend limit", from, true)
+	report.Wires = wireSpends(located.Name)
+	from = took(steps, "wire spends", from, true)
+	report.Proxy = proxyState(root)
+	from = took(steps, "proxy", from, report.Proxy.Unreadable == "")
 	home, _ := os.UserHomeDir()
-	report := host.DoctorReport{
-		Version:     frame.Release(build.Version(), build.BuildRevision()),
-		Verdict:     host.DoctorReady,
-		Blockers:    wiring.DoctorBlockers(),
-		Credentials: credentials(now),
-		Store:       accounts.DoctorState(now, wiring.Specs()),
-		Gate:        host.DoctorGate{Variable: located.Name, Source: gateSource(located), Path: located.Path},
-		Library:     library,
-		Rules:       rules,
-		Calibration: wiring.CalibrationState(),
-		Ledger:      wiring.LedgerState(),
-		SpendLimit:  quota.SpendLimitLine(),
-		Wires:       wireSpends(located.Name),
-		Proxy:       proxyState(root),
-		Browser:     driver.Hosts(home, driver.ChromeHostsKey),
-		Root:        root,
-		Go:          build.GoVersion(),
-		OS:          fs.OS() + "/" + fs.Arch(),
-	}
+	report.Browser = driver.Hosts(home, driver.ChromeHostsKey)
+	from = took(steps, "browser hosts", from, true)
 	stack, err := wiring.StackRules("", root)
 	if err != nil {
 		report.Unreadable = err.Error()
@@ -123,10 +148,17 @@ func State(now time.Time) host.DoctorReport {
 	for _, found := range stack.Overrides {
 		report.Overrides = append(report.Overrides, *found.Listing())
 	}
+	took(steps, "stacked rules", from, err == nil)
 	if len(report.Blockers) > 0 {
 		report.Verdict = host.DoctorNotReady
 	}
 	return report
+}
+
+func took(steps *[]host.DoctorStep, name string, from time.Time, ok bool) time.Time {
+	now := time.Now()
+	*steps = append(*steps, host.DoctorStep{Name: name, MS: now.Sub(from).Milliseconds(), OK: ok})
+	return now
 }
 
 func withLockStanding(point host.DoctorRule) host.DoctorRule {
