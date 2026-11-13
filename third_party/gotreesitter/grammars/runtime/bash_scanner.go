@@ -353,12 +353,6 @@ func bshSkip(lexer *gotreesitter.ExternalLexer) {
 	lexer.Advance(true)
 }
 
-func bshSkipHorizontalSpace(lexer *gotreesitter.ExternalLexer) {
-	for lexer.Lookahead() == ' ' || lexer.Lookahead() == '\t' {
-		bshSkip(lexer)
-	}
-}
-
 // bshAdvanceWord consumes a POSIX "word" from the lexer, appending the
 // unquoted content to unquoted. Returns true if the word is non-empty.
 func bshAdvanceWord(lexer *gotreesitter.ExternalLexer) (unquoted []byte, ok bool) {
@@ -452,44 +446,6 @@ func bshDelimiterSize(d []byte) int {
 		}
 	}
 	return len(d)
-}
-
-func bshIsReservedWordBoundary(r rune) bool {
-	return r == 0 || bshIsSpace(r) || r == ';' || r == '&' || r == '|' || r == ')'
-}
-
-func bshScanOpeningParen(lexer *gotreesitter.ExternalLexer, validSymbols []bool, syms *[bshTokenCount]gotreesitter.Symbol) bool {
-	// Preserve the separator until EMPTY_VALUE can emit its zero-width token.
-	if !bshIsValid(validSymbols, bshTokConcat) && !bshIsValid(validSymbols, bshTokEmptyValue) {
-		bshSkipHorizontalSpace(lexer)
-	}
-	if lexer.Lookahead() != '(' {
-		return false
-	}
-
-	bshAdvance(lexer)
-	lexer.MarkEnd()
-	lexer.SetResultSymbol(syms[bshTokOpeningParen])
-	return true
-}
-
-func bshScanEsac(lexer *gotreesitter.ExternalLexer, validSymbols []bool, syms *[bshTokenCount]gotreesitter.Symbol) bool {
-	if !bshIsValid(validSymbols, bshTokConcat) {
-		bshSkipHorizontalSpace(lexer)
-	}
-	for _, want := range []rune{'e', 's', 'a', 'c'} {
-		if lexer.Lookahead() != want {
-			return false
-		}
-		bshAdvance(lexer)
-	}
-	if !bshIsReservedWordBoundary(lexer.Lookahead()) {
-		return false
-	}
-
-	lexer.MarkEnd()
-	lexer.SetResultSymbol(syms[bshTokEsac])
-	return true
 }
 
 // ---- heredoc scanning ----
@@ -1157,17 +1113,6 @@ func bshScanBraceStart(s *bshState, lexer *gotreesitter.ExternalLexer, validSymb
 // ---- main scan ----
 
 func bshScan(s *bshState, lexer *gotreesitter.ExternalLexer, validSymbols []bool, syms *[bshTokenCount]gotreesitter.Symbol) bool {
-	// OPENING_PAREN / ESAC
-	if bshIsValid(validSymbols, bshTokOpeningParen) && !bshInErrorRecovery(validSymbols) {
-		if bshScanOpeningParen(lexer, validSymbols, syms) {
-			return true
-		}
-	}
-	if bshIsValid(validSymbols, bshTokEsac) && !bshInErrorRecovery(validSymbols) {
-		if bshScanEsac(lexer, validSymbols, syms) {
-			return true
-		}
-	}
 
 	// CONCAT
 	if bshIsValid(validSymbols, bshTokConcat) && !bshInErrorRecovery(validSymbols) {

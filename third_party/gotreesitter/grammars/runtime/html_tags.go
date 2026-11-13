@@ -133,7 +133,7 @@ func htmlTagCanContain(parent, child *htmlTag) bool {
 	case htmlTagDt, htmlTagDd:
 		return child.tagType != htmlTagDt && child.tagType != htmlTagDd
 	case htmlTagP:
-		return !htmlIsBlockElement(child.tagType)
+		return !htmlNotAllowedInParagraph(child.tagType)
 	case htmlTagColgroup:
 		return child.tagType == htmlTagCol
 	case htmlTagRb, htmlTagRt, htmlTagRp:
@@ -149,15 +149,14 @@ func htmlTagCanContain(parent, child *htmlTag) bool {
 	}
 }
 
-func htmlIsBlockElement(t htmlTagType) bool {
+func htmlNotAllowedInParagraph(t htmlTagType) bool {
 	switch t {
 	case htmlTagAddress, htmlTagArticle, htmlTagAside, htmlTagBlockquote,
 		htmlTagDetails, htmlTagDiv, htmlTagDl, htmlTagFieldset, htmlTagFigcaption,
 		htmlTagFigure, htmlTagFooter, htmlTagForm, htmlTagH1, htmlTagH2,
 		htmlTagH3, htmlTagH4, htmlTagH5, htmlTagH6, htmlTagHeader,
-		htmlTagHgroup, htmlTagHr, htmlTagMain, htmlTagNav,
-		htmlTagNoscript, htmlTagOl, htmlTagP, htmlTagPre, htmlTagScript,
-		htmlTagSection, htmlTagTable, htmlTagTemplate, htmlTagUl:
+		htmlTagHr, htmlTagMain, htmlTagNav, htmlTagOl, htmlTagP, htmlTagPre,
+		htmlTagSection:
 		return true
 	}
 	return false
