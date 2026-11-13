@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/outside"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/learn/repeat"
@@ -290,8 +291,15 @@ func WithPersonForm(ctx context.Context, form PersonForm) context.Context {
 }
 
 func PersonFormFrom(ctx context.Context) PersonForm {
-	form, _ := ctx.Value(personFormKey{}).(PersonForm)
-	return form
+	if form, _ := ctx.Value(personFormKey{}).(PersonForm); form != nil {
+		return form.clocked
+	}
+	return nil
+}
+
+func (f PersonForm) clocked(ctx context.Context, questions []PersonQuestion, wait time.Duration) ([]PersonReply, error) {
+	defer outside.Wait(ctx, outside.Person)()
+	return f(ctx, questions, wait)
 }
 
 func (b *Inbox) stillAsked() []string {

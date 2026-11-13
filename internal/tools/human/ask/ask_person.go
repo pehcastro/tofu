@@ -199,7 +199,7 @@ func (a AskPerson) reply(ctx context.Context, raw json.RawMessage, questions []l
 	if a.Person == nil {
 		return personReply{err: loop.QuestionUndelivered{Why: "no person can answer here"}}
 	}
-	answer, err := a.Person(ctx, loop.GateRequest{Tool: loop.AskPersonToolName, Args: raw}, loop.GateDecision{Verdict: ledger.VerdictAsk})
+	answer, err := a.Person.Clocked(ctx, loop.GateRequest{Tool: loop.AskPersonToolName, Args: raw}, loop.GateDecision{Verdict: ledger.VerdictAsk})
 	if err != nil {
 		return personReply{err: err}
 	}

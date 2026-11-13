@@ -25,6 +25,7 @@ import (
 	toolgate "tofu/internal/judge/points/tool_gate"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/outside"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit"
@@ -118,6 +119,11 @@ func (a PersonAnswer) Outcome() ledger.Outcome {
 }
 
 type Person func(ctx context.Context, request GateRequest, decision GateDecision) (PersonAnswer, error)
+
+func (p Person) Clocked(ctx context.Context, request GateRequest, decision GateDecision) (PersonAnswer, error) {
+	defer outside.Wait(ctx, outside.Person)()
+	return p(ctx, request, decision)
+}
 
 func (p Person) RunsWhatJevAsks() Person {
 	return p.Asking(func() bool { return false })

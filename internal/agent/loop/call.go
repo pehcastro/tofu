@@ -107,6 +107,7 @@ type gatedCall struct {
 	hooks   []HookRun
 	before  []hooks.Context
 	waited  *atomic.Int64
+	held    *outside.Clock
 }
 
 type shadowVerdict struct {
@@ -123,8 +124,12 @@ func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, 
 	} else if spawner, spawning := tools.byName[g.call.Name].(*SpawnTool); spawning {
 		spawner.refused(g.call.ID)
 	}
-	outsideMS := clock.Outside().Milliseconds()
-	row.OutsideMS = &outsideMS
+	var held time.Duration
+	if g.held != nil {
+		held = g.held.Outside()
+	}
+	outsideMS := (clock.Outside() + held).Milliseconds()
+	row.OutsideMS, row.DurationMS = &outsideMS, row.DurationMS+held.Milliseconds()
 	answer.Content += hookMarked(core.SourcePreTool, g.before)
 	verdict, gateErr := g.verdict, g.gateErr
 	select {

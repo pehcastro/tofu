@@ -86,7 +86,7 @@ func (o RuleOverride) Run(ctx context.Context, raw json.RawMessage) (contract.Re
 	if err != nil {
 		return contract.Result{}, err
 	}
-	answer, err := o.Ask(ctx, loop.GateRequest{Tool: loop.RuleOverrideToolName, Args: shown}, loop.GateDecision{Verdict: ledger.VerdictAsk})
+	answer, err := o.Ask.Clocked(ctx, loop.GateRequest{Tool: loop.RuleOverrideToolName, Args: shown}, loop.GateDecision{Verdict: ledger.VerdictAsk})
 	if err != nil {
 		return contract.Result{Content: "the person could not be asked, so nothing was written: " + err.Error() + ". " + within}, nil
 	}

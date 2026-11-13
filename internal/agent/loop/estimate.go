@@ -292,10 +292,11 @@ func splitOf(rows []Row) session.EstimateSplit {
 			split.ModelMS += step.DurationMS
 			for _, call := range step.ToolCalls {
 				split.PermissionMS += call.PermissionWaitMS
+				ran := max(call.DurationMS-call.PermissionWaitMS, 0)
 				if runsACheck(call) {
-					split.TestMS, split.TestCalls = split.TestMS+call.DurationMS, split.TestCalls+1
+					split.TestMS, split.TestCalls = split.TestMS+ran, split.TestCalls+1
 				} else {
-					split.ToolsMS += call.DurationMS
+					split.ToolsMS += ran
 				}
 			}
 		}

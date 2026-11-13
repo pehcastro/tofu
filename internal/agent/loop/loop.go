@@ -26,6 +26,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/transport"
 	"tofu/internal/platform/credential"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
@@ -180,6 +181,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	if config.ResultBytesCap <= 0 {
 		return Row{}, errors.New("turn: no tool result byte cap")
+	}
+	if config.Person != nil {
+		config.Person = config.Person.Clocked
 	}
 	if config.SpawnedFrom == "" {
 		ctx = context.WithValue(ctx, leadPersonKey{}, config.Person)
@@ -1411,7 +1415,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					call, pre, request := heard[i].call, heard[i].pre, heard[i].request
 					keepHooks(call.ID, pre)
 					asking, waited := withPersonWait(ctx)
-					gated := gatedCall{call: call, asked: asked, proxy: heard[i].proxy, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model, fire: fire, hooks: hookRunOf(hook.PreToolUse, pre), before: pre.Context, waited: waited}
+					asking, held := outside.Open(asking, time.Now)
+					gated := gatedCall{call: call, asked: asked, proxy: heard[i].proxy, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model, fire: fire, hooks: hookRunOf(hook.PreToolUse, pre), before: pre.Context, waited: waited, held: held}
 					code, asksCode := heard[i].code, heard[i].asksCode
 					gated.refusal = heard[i].boundary
 					if gated.refusal == "" {
