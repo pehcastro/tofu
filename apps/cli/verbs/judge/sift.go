@@ -74,7 +74,7 @@ type siftReport struct {
 	Text       string  `json:"text"`
 }
 
-func SiftVerb(args []string, in io.Reader, out, errOut io.Writer) int {
+func SiftVerb(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) int {
 	if len(args) > 0 && (args[0] == "--help" || args[0] == "-h") {
 		_, _ = io.WriteString(out, SiftUsage)
 		return output.ExitOK
@@ -109,7 +109,7 @@ func SiftVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	}
 
 	started := time.Now()
-	marks, cost, err := siftMarks(parts, opts)
+	marks, cost, err := siftMarks(ctx, parts, opts)
 	if err != nil {
 		return wiring.Failed(o, err)
 	}
@@ -129,9 +129,9 @@ func SiftVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	return output.Protocol(o, output.ExitOK, report, report.Text)
 }
 
-func siftMarks(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
+func siftMarks(ctx context.Context, parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	if opts.arm == armJev {
-		return siftJev(parts, opts)
+		return siftJev(ctx, parts, opts)
 	}
 	judge := sift.Length
 	switch opts.arm {
@@ -147,7 +147,7 @@ func siftMarks(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	return marks, 0, nil
 }
 
-func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
+func siftJev(ctx context.Context, parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	marks := make([]sift.Mark, len(parts))
 	set, err := wiring.ResolveLibrary(siftPoint, "")
 	if err != nil {
@@ -169,7 +169,7 @@ func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	for i := range parts {
 		wg.Go(func() {
 			errs[i] = project.Crashed(".", safe.Call(nil, "sift", func() (err error) {
-				marks[i], costs[i], err = siftOne(client, set, parts, i, opts, rule)
+				marks[i], costs[i], err = siftOne(ctx, client, set, parts, i, opts, rule)
 				return err
 			}))
 		})
@@ -186,13 +186,13 @@ func siftJev(parts []sift.Part, opts siftOpts) ([]sift.Mark, float64, error) {
 	return marks, total, nil
 }
 
-func siftOne(client *core.Client, set wiring.Battery, parts []sift.Part, index int, opts siftOpts, rule sift.Rule) (sift.Mark, float64, error) {
+func siftOne(ctx context.Context, client *core.Client, set wiring.Battery, parts []sift.Part, index int, opts siftOpts, rule sift.Rule) (sift.Mark, float64, error) {
 	state, err := json.Marshal(sift.BuildState(parts, index, opts.task))
 	if err != nil {
 		return sift.Mark{}, 0, err
 	}
 	built := json.RawMessage(state)
-	decision, err := client.Ask(context.Background(), core.Request{State: built, Questions: set.Questions})
+	decision, err := client.Ask(ctx, core.Request{State: built, Questions: set.Questions})
 	if err != nil {
 		return sift.Mark{Keep: true, Reason: "kept: " + err.Error()}, 0, nil
 	}

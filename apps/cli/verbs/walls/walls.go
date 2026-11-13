@@ -21,7 +21,7 @@ import (
 	"tofu/internal/store/walls"
 )
 
-const Usage = "usage: tofu walls [--since <14d|36h>] [--op <op>] [--all] [--json]"
+const Usage = "usage: tofu walls [--since <14d|36h>] [--op <op>] [--own] [--tier <S|A|B|C|D|E>] [--all] [--json]"
 
 type wallRow struct {
 	Op   walls.Op `json:"op"`
@@ -30,20 +30,43 @@ type wallRow struct {
 	P50  int64    `json:"p50"`
 	P90  int64    `json:"p90"`
 	Max  int64    `json:"max"`
+	Tier string   `json:"tier,omitempty"`
 }
 
 type report struct {
-	Since    time.Time `json:"since"`
-	Projects int       `json:"projects"`
-	Rows     []wallRow `json:"rows"`
-	Bad      int       `json:"bad_lines"`
-	Unread   int       `json:"unread_files"`
+	Since          time.Time `json:"since"`
+	Projects       int       `json:"projects"`
+	Own            bool      `json:"own"`
+	Rows           []wallRow `json:"rows"`
+	Bad            int       `json:"bad_lines"`
+	Unread         int       `json:"unread_files"`
+	WithoutOutside int       `json:"without_outside_ms,omitempty"`
 }
 
 type options struct {
 	since time.Duration
 	op    walls.Op
 	all   bool
+	own   bool
+	tier  string
+}
+
+const tierLetters = "SABCDE"
+
+func tierOf(ms int64) string {
+	switch {
+	case ms < konst.WallTierSUnderMillis:
+		return "S"
+	case ms < konst.WallTierAUnderMillis:
+		return "A"
+	case ms < konst.WallTierBUnderMillis:
+		return "B"
+	case ms < konst.WallTierCUnderMillis:
+		return "C"
+	case ms < konst.WallTierDUnderMillis:
+		return "D"
+	}
+	return "E"
 }
 
 func Verb(args []string, out, errOut io.Writer) int {
@@ -56,7 +79,7 @@ func Verb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.Fail(err)
 	}
-	read := report{Since: time.Now().Add(-opts.since).UTC(), Projects: len(projects)}
+	read := report{Since: time.Now().Add(-opts.since).UTC(), Projects: len(projects), Own: opts.own}
 	var all []walls.Wall
 	for _, places := range projects {
 		reading, err := walls.ReadProject(places, read.Since)
@@ -65,10 +88,20 @@ func Verb(args []string, out, errOut io.Writer) int {
 		}
 		all, read.Bad, read.Unread = append(all, reading.Walls...), read.Bad+reading.Bad, read.Unread+reading.Unread
 	}
-	if opts.op != "" {
-		all = slices.DeleteFunc(all, func(wall walls.Wall) bool { return wall.Op != opts.op })
+	var kept []walls.Wall
+	for _, wall := range all {
+		switch {
+		case opts.op != "" && wall.Op != opts.op:
+		case !opts.own:
+			kept = append(kept, wall)
+		case wall.OutsideMS == nil:
+			read.WithoutOutside++
+		case wall.MS > *wall.OutsideMS || *wall.OutsideMS == 0:
+			wall.MS -= *wall.OutsideMS
+			kept = append(kept, wall)
+		}
 	}
-	read.Rows = rowsOf(all)
+	read.Rows = rowsOf(kept, opts)
 	return o.Done(true, read, func(page cli.Page) []string { return wallLines(page, read, opts) })
 }
 
@@ -76,19 +109,29 @@ func parseOptions(args []string) (options, error) {
 	opts := options{since: konst.WallsWindowDays * 24 * time.Hour}
 	for at := 0; at < len(args); at++ {
 		flag := args[at]
-		if flag == "--all" {
+		switch flag {
+		case "--all":
 			opts.all = true
 			continue
+		case "--own":
+			opts.own = true
+			continue
 		}
-		if at+1 >= len(args) || flag != "--since" && flag != "--op" {
+		if at+1 >= len(args) || !slices.Contains([]string{"--since", "--op", "--tier"}, flag) {
 			return opts, fmt.Errorf("unknown argument %q", flag)
 		}
 		at++
 		var err error
-		if flag == "--op" {
+		switch flag {
+		case "--op":
 			opts.op, err = walls.ParseOp(args[at])
-		} else {
+		case "--since":
 			opts.since, err = window(args[at])
+		case "--tier":
+			opts.tier, opts.own = args[at], true
+			if len(opts.tier) != 1 || !strings.Contains(tierLetters, opts.tier) {
+				err = fmt.Errorf("--tier %q is not a tier; one of S, A, B, C, D or E", opts.tier)
+			}
 		}
 		if err != nil {
 			return opts, err
@@ -131,7 +174,7 @@ func projectPlaces(all bool) ([]platformproject.Places, error) {
 	return projects, err
 }
 
-func rowsOf(all []walls.Wall) []wallRow {
+func rowsOf(all []walls.Wall, opts options) []wallRow {
 	type key struct {
 		op   walls.Op
 		name string
@@ -144,7 +187,13 @@ func rowsOf(all []walls.Wall) []wallRow {
 	rows := make([]wallRow, 0, len(grouped))
 	for at, ms := range grouped {
 		rounded := func(p float64) int64 { return int64(math.Round(stat.Percentile(ms, p))) }
-		rows = append(rows, wallRow{Op: at.op, Name: at.name, N: len(ms), P50: rounded(50), P90: rounded(90), Max: int64(slices.Max(ms))})
+		row := wallRow{Op: at.op, Name: at.name, N: len(ms), P50: rounded(50), P90: rounded(90), Max: int64(slices.Max(ms))}
+		if opts.own {
+			row.Tier = tierOf(row.P50)
+		}
+		if opts.tier == "" || row.Tier == opts.tier {
+			rows = append(rows, row)
+		}
 	}
 	slices.SortFunc(rows, func(a, b wallRow) int {
 		return cmp.Or(cmp.Compare(slices.Index(walls.Ops(), a.Op), slices.Index(walls.Ops(), b.Op)), cmp.Compare(b.N, a.N), strings.Compare(a.Name, b.Name))
@@ -157,16 +206,30 @@ func wallLines(page cli.Page, read report, opts options) []string {
 	if opts.all {
 		facts = append(facts, output.Plural(read.Projects, "project"))
 	}
+	if opts.own {
+		facts = append(facts, "own ms: ms minus outside_ms")
+	}
 	if read.Bad+read.Unread > 0 {
 		facts = append(facts, output.Plural(read.Bad, "line")+" and "+output.Plural(read.Unread, "file")+" not read")
 	}
+	var footer []string
+	if read.WithoutOutside > 0 {
+		footer = append([]string{""}, cli.Indent(output.Plural(read.WithoutOutside, "wall")+" recorded without outside_ms left out")...)
+	}
 	if len(read.Rows) == 0 {
-		return page.Title("Walls", facts, cli.Verdict{Mark: cli.Idle, Text: "nothing timed in the window"})
+		return append(page.Title("Walls", facts, cli.Verdict{Mark: cli.Idle, Text: "nothing timed in the window"}), footer...)
 	}
-	rows := []cli.Row{{Cells: []string{"op", "name", "n", "p50 ms", "p90 ms", "max ms"}}}
+	header := []string{"op", "name", "n", "p50 ms", "p90 ms", "max ms"}
+	if opts.own {
+		header = append(header, "tier")
+	}
+	rows := []cli.Row{{Cells: header}}
 	for _, row := range read.Rows {
-		rows = append(rows, cli.Row{Cells: []string{string(row.Op), row.Name, strconv.Itoa(row.N),
-			strconv.FormatInt(row.P50, 10), strconv.FormatInt(row.P90, 10), strconv.FormatInt(row.Max, 10)}})
+		cells := []string{string(row.Op), row.Name, strconv.Itoa(row.N), strconv.FormatInt(row.P50, 10), strconv.FormatInt(row.P90, 10), strconv.FormatInt(row.Max, 10)}
+		if opts.own {
+			cells = append(cells, row.Tier)
+		}
+		rows = append(rows, cli.Row{Cells: cells})
 	}
-	return append(append(page.Title("Walls", facts, cli.Verdict{}), ""), cli.Indent(page.Rows(rows)...)...)
+	return append(append(append(page.Title("Walls", facts, cli.Verdict{}), ""), cli.Indent(page.Rows(rows)...)...), footer...)
 }

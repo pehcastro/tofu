@@ -47,7 +47,7 @@ type questionFinding struct {
 	Detail   string         `json:"detail"`
 }
 
-func Verb(args []string, in io.Reader, out, errOut io.Writer) int {
+func Verb(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) int {
 	o := output.Verb{Name: "judge", UsageLine: Usage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	opts, err := parseJudgeArgs(args)
 	if err != nil {
@@ -109,7 +109,7 @@ func Verb(args []string, in io.Reader, out, errOut io.Writer) int {
 	if err != nil {
 		return wiring.Failed(o, err)
 	}
-	outcome, err := RunJudge(context.Background(), client, jevRequest, set, opts.noCache)
+	outcome, err := RunJudge(ctx, client, jevRequest, set, opts.noCache)
 	if err != nil {
 		return wiring.Failed(o, err)
 	}

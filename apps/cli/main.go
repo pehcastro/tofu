@@ -2,6 +2,7 @@ package main
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -36,6 +37,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/platform/console"
 	"tofu/internal/platform/credential"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/profile"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
@@ -172,9 +174,13 @@ func main() {
 	}
 	moveHomeKeys(os.Stderr)
 	pages := console.ReadConsolePages()
-	code := run(args, os.Stdin, os.Stdout, os.Stderr)
+	ctx, clock := outside.Open(context.Background(), time.Now)
+	code := runIn(ctx, args, os.Stdin, os.Stdout, os.Stderr)
 	if name, timed := verbWallName(args); timed {
-		appendVerbWall(dir, name, started, code)
+		if verbNamed(args[0]).clocked == nil {
+			clock = nil
+		}
+		appendVerbWall(dir, name, started, code, clock)
 	}
 	pages.Restore()
 	letGo()
@@ -185,7 +191,7 @@ func main() {
 
 func verbWallName(args []string) (string, bool) {
 	switch {
-	case len(args) == 0 || verbNamed(args[0]).run == nil || args[0] == "--continue" || args[0] == "serve" || hostRuns(args):
+	case len(args) == 0 || !verbNamed(args[0]).known() || args[0] == "--continue" || args[0] == "serve" || hostRuns(args):
 		return "", false
 	case len(args) > 1 && !strings.HasPrefix(args[1], "-") && (args[0] == "tool" || slices.Contains(usageWords(verbNamed(args[0]).usage), args[1])):
 		return args[0] + " " + args[1], true
@@ -193,11 +199,15 @@ func verbWallName(args []string) (string, bool) {
 	return args[0], true
 }
 
-func appendVerbWall(dir, name string, started time.Time, code int) {
-	places, err := platformproject.ResolvePlaces(cmp.Or(dir, "."))
-	if err == nil {
-		_ = walls.Append(places.State, walls.Wall{Op: walls.OpVerb, Name: name, MS: time.Since(started).Milliseconds(), At: started.UnixMilli(),
-			Session: os.Getenv(subagents.SessionEnv), OK: code == output.ExitOK})
+func appendVerbWall(dir, name string, started time.Time, code int, measured *outside.Clock) {
+	wall := walls.Wall{Op: walls.OpVerb, Name: name, At: started.UnixMilli(), Session: os.Getenv(subagents.SessionEnv), OK: code == output.ExitOK}
+	if measured != nil {
+		outsideMS := measured.Outside().Milliseconds()
+		wall.OutsideMS = &outsideMS
+	}
+	wall.MS = time.Since(started).Milliseconds()
+	if places, err := platformproject.ResolvePlaces(cmp.Or(dir, ".")); err == nil {
+		_ = walls.Append(places.State, wall)
 	}
 }
 
@@ -246,7 +256,11 @@ func moveHomeKeys(errOut io.Writer) {
 }
 
 func run(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
-	code := dispatch(args, in, out, errOut)
+	return runIn(context.Background(), args, in, out, errOut)
+}
+
+func runIn(ctx context.Context, args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
+	code := dispatch(ctx, args, in, out, errOut)
 	if code != output.ExitUsage || len(args) == 0 || slices.Contains(args, output.JSONFlag) {
 		return code
 	}
@@ -310,10 +324,15 @@ func usageWords(line string) []string {
 
 type verbRun = func(args []string, in io.Reader, out, errOut io.Writer) int
 
+type clockedRun = func(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) int
+
 type verb struct {
-	run   verbRun
-	usage string
+	run     verbRun
+	clocked clockedRun
+	usage   string
 }
+
+func (v verb) known() bool { return v.run != nil || v.clocked != nil }
 
 func withoutIn(run func(args []string, out, errOut io.Writer) int) verbRun {
 	return func(args []string, _ io.Reader, out, errOut io.Writer) int { return run(args, out, errOut) }
@@ -336,101 +355,101 @@ func verbNamed(name string) verb {
 	case "--continue":
 		return verb{run: continueVerb}
 	case "session":
-		return verb{sessionVerb, strings.Join([]string{sessionSubcommands, sessionBranchUsage, sessionDrainUsage, sessionFindUsage, sessionTraceUsage, sessionTranscriptUsage}, " ")}
+		return verb{run: sessionVerb, usage: strings.Join([]string{sessionSubcommands, sessionBranchUsage, sessionDrainUsage, sessionFindUsage, sessionTraceUsage, sessionTranscriptUsage}, " ")}
 	case "projects":
-		return verb{withoutIn(projectsVerb), projectsUsage}
+		return verb{run: withoutIn(projectsVerb), usage: projectsUsage}
 	case "shells":
 		return verb{run: withoutIn(shellsverb.Verb)}
 	case "hooks":
 		return verb{run: withoutIn(hooksverb.Verb)}
 	case "guard":
-		return verb{guardverb.Verb, guardverb.Usage}
+		return verb{run: guardverb.Verb, usage: guardverb.Usage}
 	case "undo":
-		return verb{withoutIn(undoVerb), undoUsage}
+		return verb{run: withoutIn(undoVerb), usage: undoUsage}
 	case "version":
 		return verb{run: withoutIn(version)}
 	case "update":
-		return verb{withoutIn(updateVerb), updateUsage}
+		return verb{run: withoutIn(updateVerb), usage: updateUsage}
 	case "changelog":
-		return verb{func(args []string, _ io.Reader, out, errOut io.Writer) int {
+		return verb{run: func(args []string, _ io.Reader, out, errOut io.Writer) int {
 			return changelogVerb(args, changelog.Markdown, out, errOut)
-		}, changelogUsage}
+		}, usage: changelogUsage}
 	case "docs":
-		return verb{withoutIn(libraryverb.DocsVerb), libraryverb.DocsUsage}
+		return verb{run: withoutIn(libraryverb.DocsVerb), usage: libraryverb.DocsUsage}
 	case "doctor":
-		return verb{withoutIn(doctorverb.Verb), doctorverb.Usage}
+		return verb{run: withoutIn(doctorverb.Verb), usage: doctorverb.Usage}
 	case "login":
-		return verb{loginVerb, loginverb.Usage + " " + loginverb.AsideUsage}
+		return verb{run: loginVerb, usage: loginverb.Usage + " " + loginverb.AsideUsage}
 	case "logout":
-		return verb{withoutIn(loginverb.LogoutVerb), loginverb.LogoutUsage}
+		return verb{run: withoutIn(loginverb.LogoutVerb), usage: loginverb.LogoutUsage}
 	case "usage":
-		return verb{withoutIn(loginverb.UsageVerb), loginverb.UsageFlags}
+		return verb{run: withoutIn(loginverb.UsageVerb), usage: loginverb.UsageFlags}
 	case "models":
-		return verb{withoutIn(modelsverb.Verb), modelsverb.Usage}
+		return verb{run: withoutIn(modelsverb.Verb), usage: modelsverb.Usage}
 	case "agents":
-		return verb{withoutIn(agentsVerb), strings.Join([]string{agentsUsage, agentsAddUsage, agentsSetUsage, agentsRemoveUsage}, " ")}
+		return verb{run: withoutIn(agentsVerb), usage: strings.Join([]string{agentsUsage, agentsAddUsage, agentsSetUsage, agentsRemoveUsage}, " ")}
 	case "why":
-		return verb{withClock(whyVerb), statusverb.WhyUsage}
+		return verb{run: withClock(whyVerb), usage: statusverb.WhyUsage}
 	case "frame":
-		return verb{withoutIn(frameVerb), frameUsage}
+		return verb{run: withoutIn(frameVerb), usage: frameUsage}
 	case "drive":
-		return verb{func(args []string, in io.Reader, out, errOut io.Writer) int {
+		return verb{run: func(args []string, in io.Reader, out, errOut io.Writer) int {
 			if len(args) > 0 && args[0] == "desk" {
 				return driveDeskVerb(args[1:], out, errOut)
 			}
 			return driveVerb(args, in, out, errOut)
-		}, driveUsage + "\n" + driveDeskUsage}
+		}, usage: driveUsage + "\n" + driveDeskUsage}
 	case "serve":
-		return verb{serveVerb, serveUsage}
+		return verb{run: serveVerb, usage: serveUsage}
 	case host.HubVerb:
-		return verb{withoutIn(projectHostVerb), projectHostUsage}
+		return verb{run: withoutIn(projectHostVerb), usage: projectHostUsage}
 	case "run":
 		return verb{run: withoutIn(runVerb)}
 	case "tool":
-		return verb{withoutIn(toolVerb), toolUsage}
+		return verb{run: withoutIn(toolVerb), usage: toolUsage}
 	case "judge":
-		return verb{judgeverb.Verb, judgeverb.Usage}
+		return verb{clocked: judgeverb.Verb, usage: judgeverb.Usage}
 	case "check":
-		return verb{withoutIn(judgeverb.CheckVerb), judgeverb.CheckUsage}
+		return verb{run: withoutIn(judgeverb.CheckVerb), usage: judgeverb.CheckUsage}
 	case "context":
 		return verb{run: withoutIn(contextVerb)}
 	case "sift":
-		return verb{run: judgeverb.SiftVerb}
+		return verb{clocked: judgeverb.SiftVerb}
 	case "label":
-		return verb{withClock(judgeverb.LabelVerb), judgeverb.LabelUsage}
+		return verb{run: withClock(judgeverb.LabelVerb), usage: judgeverb.LabelUsage}
 	case "calibrate":
-		return verb{withoutIn(judgeverb.CalibrateVerb), judgeverb.CalibrateUsage}
+		return verb{run: withoutIn(judgeverb.CalibrateVerb), usage: judgeverb.CalibrateUsage}
 	case "replay":
-		return verb{withClock(judgeverb.ReplayVerb), judgeverb.ReplayUsage}
+		return verb{run: withClock(judgeverb.ReplayVerb), usage: judgeverb.ReplayUsage}
 	case "library":
-		return verb{withoutIn(libraryverb.Verb(usageVerbs())), libraryverb.Usage}
+		return verb{run: withoutIn(libraryverb.Verb(usageVerbs())), usage: libraryverb.Usage}
 	case "catalog":
 		return verb{run: func(args []string, _ io.Reader, out, errOut io.Writer) int {
 			_, _ = fmt.Fprintln(errOut, "tofu catalog is now tofu library")
 			return libraryverb.Verb(usageVerbs())(args, out, errOut)
 		}}
 	case "lint":
-		return verb{withoutIn(lintverb.Verb), lintverb.Usage}
+		return verb{run: withoutIn(lintverb.Verb), usage: lintverb.Usage}
 	case "rules":
-		return verb{withoutIn(rulesverb.Verb(rulesverb.Deps{Agents: agentsIn, Why: rulesWhyVerb})), rulesverb.Usage + " " + rulesWhyUsage}
+		return verb{run: withoutIn(rulesverb.Verb(rulesverb.Deps{Agents: agentsIn, Why: rulesWhyVerb})), usage: rulesverb.Usage + " " + rulesWhyUsage}
 	case "boardy":
-		return verb{withoutIn(boardyverb.Verb), boardyverb.Usage}
+		return verb{run: withoutIn(boardyverb.Verb), usage: boardyverb.Usage}
 	case "scratch":
-		return verb{withoutIn(shellsverb.Scratch), shellsverb.ScratchUsage}
+		return verb{run: withoutIn(shellsverb.Scratch), usage: shellsverb.ScratchUsage}
 	case "memory":
-		return verb{withoutIn(memoryverb.Verb(wireOpener())), memoryverb.Usage + " " + memoryverb.TreeUsage}
+		return verb{run: withoutIn(memoryverb.Verb(wireOpener())), usage: memoryverb.Usage + " " + memoryverb.TreeUsage}
 	case "learn":
-		return verb{withoutIn(learnverb.Verb(learnverb.Deps{SetSetting: settingsverb.Verb, AddRule: rulesverb.AddVerb})), learnverb.Usage}
+		return verb{run: withoutIn(learnverb.Verb(learnverb.Deps{SetSetting: settingsverb.Verb, AddRule: rulesverb.AddVerb})), usage: learnverb.Usage}
 	case "settings":
-		return verb{withoutIn(settingsverb.Verb), settingsverb.Usage}
+		return verb{run: withoutIn(settingsverb.Verb), usage: settingsverb.Usage}
 	case "reload":
-		return verb{withoutIn(reloadVerb), reloadUsage}
+		return verb{run: withoutIn(reloadVerb), usage: reloadUsage}
 	case "migrate":
-		return verb{withoutIn(migrateVerb), migrateUsage}
+		return verb{run: withoutIn(migrateVerb), usage: migrateUsage}
 	case "browser":
 		return verb{run: withoutIn(browserverb.Verb)}
 	case "walls":
-		return verb{withoutIn(wallsverb.Verb), wallsverb.Usage}
+		return verb{run: withoutIn(wallsverb.Verb), usage: wallsverb.Usage}
 	case "preview":
 		return verb{run: withoutIn(previewVerb)}
 	case "help", "-h", "--help":
@@ -514,17 +533,20 @@ func subcommandOf(args []string) string {
 	return ""
 }
 
-func dispatch(args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
+func dispatch(ctx context.Context, args []string, in io.Reader, out io.Writer, errOut io.Writer) int {
 	if len(args) == 0 {
 		return appVerb(in, out, errOut, sessionResume{})
 	}
 	if strings.HasPrefix(args[0], "chrome-extension://") {
 		return browserverb.HostVerb(args[0], in, out, errOut)
 	}
-	if named := verbNamed(args[0]); named.run != nil {
+	if named := verbNamed(args[0]); named.known() {
 		if slices.Contains(args[1:], "--help") || slices.Contains(args[1:], "-h") {
 			_, _ = io.WriteString(out, verbHelp(args[0], args[1:]))
 			return output.ExitOK
+		}
+		if named.clocked != nil {
+			return named.clocked(ctx, args[1:], in, out, errOut)
 		}
 		return named.run(args[1:], in, out, errOut)
 	}

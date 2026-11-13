@@ -18,6 +18,11 @@ milliseconds. Every wall is the same record:
 - `at`: when it started, in UTC milliseconds.
 - `session`: the session it ran in, when there was one.
 - `ok`: whether it ended without an error.
+- `outside_ms`: the part of `ms` spent waiting on something tofu does
+  not run: a model, Jev, the network, a person or another process. Waits
+  that overlap count once, so it is never more than `ms`. Today the verb
+  walls of `tofu judge` and `tofu sift` carry it, counting their Jev
+  waits; any other wall has no `outside_ms` yet.
 
 tofu records the time and prints it. It does not call a time fast or
 slow; you judge that.
@@ -59,6 +64,13 @@ Walls · since 2026-10-30 09:12:40 · 3 rows
 - `--op hook` keeps one op. A name that is not an op is refused with the
   list of ops.
 - `--all` reads every project under `~/.tofu/projects`, not only this one.
+- `--own` prints own time, `ms` minus `outside_ms`, and a tier for each
+  row's own p50: S under 100, A under 300, B under 700, C under 1000, D
+  under 1500, E from 1500. A wall with no `outside_ms` is left out and
+  counted under the table; a wall whose whole time was outside is left
+  out.
+- `--tier S` keeps one tier and implies `--own`. A letter that is not a
+  tier is refused with the list.
 - `--json` prints one envelope whose `rows` carry `op`, `name`, `n`,
   `p50`, `p90` and `max`, plus `bad_lines` and `unread_files`: a line that
   does not parse is skipped and counted, never guessed.

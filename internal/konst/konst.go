@@ -18,6 +18,14 @@ const (
 	WallLineBytes   = 512
 )
 
+const (
+	WallTierSUnderMillis = 100
+	WallTierAUnderMillis = 300
+	WallTierBUnderMillis = 700
+	WallTierCUnderMillis = 1000
+	WallTierDUnderMillis = 1500
+)
+
 const BoardReportedSentencesMost = 2
 
 const (

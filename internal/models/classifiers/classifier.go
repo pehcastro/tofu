@@ -17,6 +17,7 @@ import (
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/transport"
 	"tofu/internal/platform/credential"
+	"tofu/internal/platform/outside"
 	shipped "tofu/library"
 )
 
@@ -123,6 +124,7 @@ func (r Route) config(concurrency int) providers.Config {
 			Retries:        konst.JudgeRetries,
 			Backoff:        konst.JudgeBackoffMillis * time.Millisecond,
 			Concurrency:    concurrency,
+			Waits:          outside.Jev,
 		},
 	}
 }

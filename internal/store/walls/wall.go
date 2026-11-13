@@ -65,12 +65,13 @@ func ParseOp(text string) (Op, error) {
 }
 
 type Wall struct {
-	Op      Op     `json:"op"`
-	Name    string `json:"name"`
-	MS      int64  `json:"ms"`
-	At      int64  `json:"at"`
-	Session string `json:"session,omitempty"`
-	OK      bool   `json:"ok"`
+	Op        Op     `json:"op"`
+	Name      string `json:"name"`
+	MS        int64  `json:"ms"`
+	At        int64  `json:"at"`
+	Session   string `json:"session,omitempty"`
+	OK        bool   `json:"ok"`
+	OutsideMS *int64 `json:"outside_ms,omitempty"`
 }
 
 const (

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
 )
 
 const (
@@ -33,6 +34,7 @@ type Config struct {
 	Now            func() time.Time
 	Sleep          func(context.Context, time.Duration) error
 	NewRequestID   func() string
+	Waits          outside.Kind
 }
 
 type Request struct {
@@ -100,6 +102,7 @@ func New(config Config) (*Client, error) {
 }
 
 func (c *Client) Do(ctx context.Context, request Request) (Response, error) {
+	defer outside.Wait(ctx, c.config.Waits)()
 	id := c.config.NewRequestID()
 	select {
 	case c.slots <- struct{}{}:
