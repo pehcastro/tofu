@@ -26,6 +26,7 @@ import (
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/store/snapshot"
+	"tofu/internal/store/walls"
 	"tofu/internal/tools/history/quote"
 	"tofu/internal/tools/shell/process"
 	"tofu/internal/ui/statusline"
@@ -84,6 +85,7 @@ type server struct {
 	labels   map[string]string
 	lanes    atomic.Pointer[[]*lane]
 	keeps    map[string]*following
+	wireLog  walls.Writer
 	replays  string
 	walk     historyWalk
 }
@@ -160,7 +162,7 @@ func Serve(cfg ServeConfig) error {
 		status: statusFeed{board: statusline.Board{Now: time.Now}, acked: map[string]bool{}}, requota: make(chan struct{}, 1), sight: make(chan bool, 1), accounts: map[string]AccountCondition{}, labels: map[string]string{}, keeps: map[string]*following{}}
 	s.seen.files = readSettingsFiles(cfg.Dir)
 	if state, err := platformproject.ProjectStateDirAt(cfg.Dir); err == nil {
-		s.replays = filepath.Join(state, replayDir)
+		s.wireLog.State, s.replays = state, filepath.Join(state, replayDir)
 		_ = os.RemoveAll(s.replays)
 	}
 	first := s.first()
@@ -213,7 +215,7 @@ func Serve(cfg ServeConfig) error {
 	}
 	s.mu.Unlock()
 	s.box.close()
-	return errors.Join(err, <-written)
+	return errors.Join(err, <-written, s.wireLog.Close())
 }
 
 func (s *server) read() error {
@@ -268,11 +270,13 @@ func (s *server) receive(line []byte) {
 
 func (s *server) answer(id json.RawMessage, method string, params json.RawMessage) {
 	var result any
+	started := time.Now()
 	err := safe.Call(s.report, method, func() (err error) {
 		result, err = s.call(method, params)
 		return err
 	})
 	s.respond(id, result, err)
+	_ = s.wireLog.Append(walls.Wall{Op: walls.OpWire, Name: method, MS: time.Since(started).Milliseconds(), At: started.UnixMilli(), OK: err == nil})
 }
 
 func (s *server) report(p safe.Panic) {
@@ -524,7 +528,7 @@ type Compacted struct {
 
 const nothingToFork = "nothing to fork: this session carries no history yet"
 
-func (h *Host) Fork(ask HandFork) (Compacted, error) {
+func (h *Host) Fork(ask HandFork) (_ Compacted, err error) {
 	if err := h.reachHost(); err != nil {
 		return Compacted{}, err
 	}
@@ -542,7 +546,10 @@ func (h *Host) Fork(ask HandFork) (Compacted, error) {
 	if turn, running := h.Turn(); running {
 		return Compacted{}, turnRunning(turn)
 	}
-	id, carried := h.ID(), h.Carried()
+	id, carried, compacting := h.ID(), h.Carried(), time.Now()
+	defer func() {
+		h.wall(walls.Wall{Op: walls.OpCompaction, Name: string(ask.Kind), MS: time.Since(compacting).Milliseconds(), At: compacting.UnixMilli(), Session: id, OK: err == nil})
+	}()
 	if id == "" || len(carried) == 0 {
 		if ask.Kind == loop.ForkCompact {
 			return Compacted{}, nil

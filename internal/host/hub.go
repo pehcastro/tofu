@@ -25,8 +25,10 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
+	"tofu/internal/store/walls"
 )
 
 const (
@@ -266,7 +268,7 @@ func StopHub(project string) (HubStatus, error) {
 	return stopped.HubStatus, fmt.Errorf("the tofu host %d was asked to stop and its registry %s is still there", stopped.PID, place.registry)
 }
 
-func EnsureHub(project string) (HubStatus, error) {
+func EnsureHub(project string) (_ HubStatus, err error) {
 	place, err := placeOf(project)
 	if err != nil {
 		return HubStatus{}, err
@@ -274,6 +276,7 @@ func EnsureHub(project string) (HubStatus, error) {
 	if status, err := askStatus(place); err == nil {
 		return status, nil
 	}
+	starting := time.Now()
 	exe, err := os.Executable()
 	if err != nil {
 		return HubStatus{}, err
@@ -281,6 +284,9 @@ func EnsureHub(project string) (HubStatus, error) {
 	if testing.Testing() {
 		return HubStatus{}, fmt.Errorf("no tofu host answers on %s and this process, %s, is a go test binary, so it will not start itself as the host: it would run the whole suite again, detached and with no timeout. Start the host in the test", place.socket, exe)
 	}
+	defer func() {
+		projectWall(place.project, walls.Wall{Op: walls.OpHostStart, Name: HubVerb + " " + HubRunVerb, MS: time.Since(starting).Milliseconds(), At: starting.UnixMilli(), OK: err == nil})
+	}()
 	if err := os.MkdirAll(filepath.Dir(place.log), 0o700); err != nil {
 		return HubStatus{}, err
 	}
@@ -322,7 +328,17 @@ func EnsureHub(project string) (HubStatus, error) {
 	return HubStatus{}, fmt.Errorf("the tofu host did not answer on %s within %s, its log is %s", place.socket, ready, place.log)
 }
 
-func joinHub(project, id string, member Member) (net.Conn, *json.Decoder, hubJoined, error) {
+func projectWall(project string, wall walls.Wall) {
+	if state, err := platformproject.ProjectStateDirAt(project); err == nil {
+		_ = walls.Append(state, wall)
+	}
+}
+
+func joinHub(project, id string, member Member) (_ net.Conn, _ *json.Decoder, _ hubJoined, err error) {
+	joining := time.Now()
+	defer func() {
+		projectWall(project, walls.Wall{Op: walls.OpHostJoin, Name: string(member.Kind), MS: time.Since(joining).Milliseconds(), At: joining.UnixMilli(), Session: id, OK: err == nil})
+	}()
 	status, err := EnsureHub(project)
 	if err != nil {
 		return nil, nil, hubJoined{HubStatus: status}, err

@@ -29,6 +29,7 @@ import (
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 )
@@ -156,9 +157,14 @@ type pendingImage struct {
 	Recorded bool
 }
 
-func New(cfg Config) (*Host, []string) {
+func New(cfg Config) (h *Host, troubles []string) {
+	opening, op := time.Now(), walls.OpSessionOpen
+	if cfg.Resumed.Session != "" && !cfg.Unrecorded {
+		op = walls.OpSessionResume
+	}
+	defer func() { h.opened(op, opening, len(troubles) == 0) }()
 	cronMove := make(chan struct{}, 1)
-	h := &Host{
+	h = &Host{
 		dir:         cfg.Dir,
 		engine:      cfg.Engine,
 		play:        cfg.Play,
@@ -190,7 +196,6 @@ func New(cfg Config) (*Host, []string) {
 	if h.play == nil {
 		h.play = h.run
 	}
-	var troubles []string
 	if err := h.restorePick(cfg.Resumed); err != nil {
 		troubles = append(troubles, err.Error())
 	}
@@ -377,11 +382,13 @@ func (h *Host) Settings() (AskingMode, Pick) {
 	return h.asking, h.pick
 }
 
-func (h *Host) OpenFresh() (string, error) {
+func (h *Host) OpenFresh() (id string, err error) {
+	opening := time.Now()
+	defer func() { h.opened(walls.OpSessionOpen, opening, err == nil) }()
 	if err := h.freshAlone(); err != nil {
 		return "", err
 	}
-	id := h.pendingID()
+	id = h.pendingID()
 	if h.joins {
 		return id, nil
 	}
@@ -473,6 +480,27 @@ func appendNotice(dir, id string, event session.Event, body session.StopBody) er
 	}
 	_, err = log.Append(event, body)
 	return errors.Join(err, log.Close())
+}
+
+func (h *Host) opened(op walls.Op, opening time.Time, ok bool) {
+	if h.ID() == "" {
+		return
+	}
+	role := "host"
+	if h.joins {
+		role = "member"
+	}
+	h.wall(walls.Wall{Op: op, Name: role, MS: time.Since(opening).Milliseconds(), At: opening.UnixMilli(), OK: ok})
+}
+
+func (h *Host) wall(wall walls.Wall) {
+	h.mu.Lock()
+	id, inbox := cmp.Or(wall.Session, h.id), h.inbox
+	h.mu.Unlock()
+	wall.Session = id
+	if written, _ := inbox.Record(id, session.Event{Kind: session.EventWall}, wall); !written {
+		projectWall(h.dir, wall)
+	}
 }
 
 func (h *Host) Cancelled() bool {
@@ -873,7 +901,9 @@ func (h *Host) freshAlone() error {
 	return h.cron.Load("")
 }
 
-func (h *Host) Resume(carry Carry) (Opened, error) {
+func (h *Host) Resume(carry Carry) (_ Opened, err error) {
+	opening := time.Now()
+	defer func() { h.opened(walls.OpSessionResume, opening, err == nil) }()
 	h.mu.Lock()
 	h.dropCheckIn()
 	turn, running := h.turn, h.running
@@ -884,7 +914,7 @@ func (h *Host) Resume(carry Carry) (Opened, error) {
 	h.forget()
 	h.mu.Lock()
 	was := h.pick
-	err := h.restorePick(carry)
+	err = h.restorePick(carry)
 	h.mu.Unlock()
 	if err == nil {
 		err = h.enter(carry.Session)

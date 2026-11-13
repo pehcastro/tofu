@@ -12,6 +12,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 )
 
 func (h *Host) CronCommand(line string) (cron.Reply, error) {
@@ -159,6 +160,9 @@ func (h *Host) finishRead() {
 
 func (h *Host) finish(fired []string, answer string) {
 	for _, id := range fired {
+		if job, err := h.cron.Job(id); err == nil {
+			h.wall(walls.Wall{Op: walls.OpCron, Name: id, MS: h.now().Sub(job.LastFired).Milliseconds(), At: job.LastFired.UnixMilli(), OK: true})
+		}
 		if note := h.cron.Finished(id, answer); note != "" {
 			h.note(note)
 		}
