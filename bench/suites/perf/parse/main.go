@@ -120,12 +120,16 @@ func use(engine string) error {
 	return os.Unsetenv(ts.CCoreSwitchEnv)
 }
 
-func (g *gate) declined(src []byte) bool {
-	tree, ok := g.parser.ParseNewCore(src)
-	if ok {
-		tree.Release()
+func (g *gate) declineReason(src []byte) string {
+	if g.engine == "old" {
+		return ""
 	}
-	return !ok
+	tree, status := g.parser.ParseNewCore(src)
+	if tree == nil {
+		return status.String()
+	}
+	tree.Release()
+	return ""
 }
 
 func (g *gate) sexpOf(tree *ts.Tree) string {
@@ -192,8 +196,10 @@ func (g *gate) compare(files []file, sexp, incremental bool) error {
 		if err != nil {
 			return fmt.Errorf("%s: %w", f.path, err)
 		}
+		reason := g.declineReason(f.src)
 		switch {
-		case g.engine == "default" && g.declined(f.src):
+		case reason != "":
+			fmt.Printf("declined, %s: %s\n", reason, f.path)
 			declined = append(declined, f)
 		case slices.Equal(nodeList(tree.RootNode(), g.lang), want[f.path]):
 			same++

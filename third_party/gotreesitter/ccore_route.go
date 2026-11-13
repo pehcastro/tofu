@@ -56,7 +56,8 @@ func (p *Parser) parseCCore(source []byte) (*Tree, bool) {
 	if ccoreSwitchedOff() {
 		return nil, false
 	}
-	return p.ParseNewCore(source)
+	tree, _ := p.ParseNewCore(source)
+	return tree, tree != nil
 }
 
 func builtByNewCore(t *Tree) bool {
@@ -67,16 +68,18 @@ func (p *Parser) incrementalParsesFresh(oldTree *Tree) bool {
 	return builtByNewCore(oldTree) || (!ccoreSwitchedOff() && p.ccoreBinding() != nil)
 }
 
-func (p *Parser) ParseNewCore(source []byte) (*Tree, bool) {
+type NewCoreStatus = ccore.Status
+
+func (p *Parser) ParseNewCore(source []byte) (*Tree, NewCoreStatus) {
 	b := p.ccoreBinding()
 	if b == nil {
-		return nil, false
+		return nil, ccore.Unbound
 	}
 	work := b.works.Get().(*ccore.Work)
 	defer b.works.Put(work)
-	result, ok := p.parseCCoreInto(b, work, source)
-	if !ok {
-		return nil, false
+	result, status := p.parseCCoreInto(b, work, source)
+	if status != ccore.Accepted {
+		return nil, status
 	}
 	return b.materialize(result, source)
 }
@@ -96,7 +99,8 @@ func (p *Parser) ParseFlat(source []byte, into []FlatNode) ([]FlatNode, *Tree, e
 func (p *Parser) ParseFlatWith(work *FlatWork, source []byte, into []FlatNode) ([]FlatNode, *Tree, error) {
 	if b := p.ccoreBinding(); b != nil && work != nil && !ccoreSwitchedOff() {
 		defer p.enterParseBudget()()
-		result, ok := p.parseCCoreInto(b, work, source)
+		result, status := p.parseCCoreInto(b, work, source)
+		ok := status == ccore.Accepted
 		if ok {
 			into, ok = b.flatten(result, into)
 		}
@@ -108,7 +112,7 @@ func (p *Parser) ParseFlatWith(work *FlatWork, source []byte, into []FlatNode) (
 	return into, tree, err
 }
 
-func (p *Parser) parseCCoreInto(b *ccoreBinding, work *ccore.Work, source []byte) (*ccore.Result, bool) {
+func (p *Parser) parseCCoreInto(b *ccoreBinding, work *ccore.Work, source []byte) (*ccore.Result, ccore.Status) {
 	var stop func() bool
 	if p.needsParseBudget() {
 		stop = func() bool { return p.activeParseStopReason() != ParseStopNone }
@@ -119,8 +123,7 @@ func (p *Parser) parseCCoreInto(b *ccoreBinding, work *ccore.Work, source []byte
 		defer s.Destroy(cs.payload)
 		scanner = cs
 	}
-	result, status := work.Parse(b.tables, source, scanner, stop)
-	return result, status == ccore.Accepted
+	return work.Parse(b.tables, source, scanner, stop)
 }
 
 type ccoreScanner struct {

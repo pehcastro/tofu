@@ -35,7 +35,7 @@ func (m *ccoreBuilder) point(at uint32) Point {
 	return Point{Row: uint32(row), Column: at - m.lines[row]}
 }
 
-func (b *ccoreBinding) materialize(r *ccore.Result, source []byte) (*Tree, bool) {
+func (b *ccoreBinding) materialize(r *ccore.Result, source []byte) (*Tree, ccore.Status) {
 	total := 1 + b.countVisible(r, r.Root)
 	arena := acquireNodeArena(arenaClassFull)
 	arena.ensureNodeCapacity(total)
@@ -45,13 +45,13 @@ func (b *ccoreBinding) materialize(r *ccore.Result, source []byte) (*Tree, bool)
 	m.build(root, r.Root, r.Trees[r.Root].Symbol, 0)
 	if m.unmapped {
 		arena.Release()
-		return nil, false
+		return nil, ccore.UnmappedSymbol
 	}
 	tree := NewTree(root, source, b.target)
 	tree.arena = arena
 	tree.incrementalReuseDisabled = true
 	tree.incrementalReuseUnsupportedClause = newCoreIncrementalReuseClause
-	return tree, true
+	return tree, ccore.Accepted
 }
 
 func (b *ccoreBinding) childSymbol(r *ccore.Result, parent uint32, structural int, child *ccore.Subtree) uint16 {

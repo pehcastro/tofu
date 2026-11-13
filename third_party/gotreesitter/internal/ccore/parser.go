@@ -9,9 +9,17 @@ type Status uint8
 
 const (
 	Accepted Status = iota
-	Declined
 	Stopped
+	RecoveryNeeded
+	NoVersionsLeft
+	TooWide
+	Unbound
+	UnmappedSymbol
 )
+
+func (s Status) String() string {
+	return [...]string{"accepted", "stopped", "recovery needed", "no versions left", "too wide", "unbound", "unmapped symbol"}[s]
+}
 
 const (
 	maxVersionCount         = 6
@@ -65,7 +73,7 @@ func (w *Work) Parse(t *Tables, src []byte, scanner Scanner, stop func() bool) (
 		return nil, p.outcome
 	}
 	if p.r.tooWide {
-		return nil, Declined
+		return nil, TooWide
 	}
 	p.r.Root = p.finished
 	return &p.r, Accepted
@@ -90,8 +98,11 @@ func (p *parser) run() bool {
 		if p.finished != 0 && (!sawUnpaused || needsRecovery) {
 			return true
 		}
-		if needsRecovery || len(p.s.heads) == 0 {
-			return p.decline()
+		if needsRecovery {
+			return p.decline(RecoveryNeeded)
+		}
+		if len(p.s.heads) == 0 {
+			return p.decline(NoVersionsLeft)
 		}
 	}
 }
@@ -188,8 +199,8 @@ func (p *parser) checkStop() bool {
 	return true
 }
 
-func (p *parser) decline() bool {
-	p.outcome = Declined
+func (p *parser) decline(reason Status) bool {
+	p.outcome = reason
 	return false
 }
 
@@ -234,7 +245,7 @@ func (p *parser) advance(v int) bool {
 				p.accept(v, lookahead)
 				return true
 			case ActionRecover:
-				return p.decline()
+				return p.decline(RecoveryNeeded)
 			}
 		}
 		if lastReduction != noVersion {
@@ -258,7 +269,7 @@ func (p *parser) advance(v int) bool {
 			}
 		}
 		if state == errorState {
-			return p.decline()
+			return p.decline(RecoveryNeeded)
 		}
 		p.s.heads[v].status = paused
 		return true

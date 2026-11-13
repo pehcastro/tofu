@@ -431,23 +431,11 @@ func jsScanTernaryQmark(lexer *gotreesitter.ExternalLexer, symbols *[jsTokenCoun
 		return false
 	}
 	lexer.Advance(false)
-
-	// Optional chaining
-	if lexer.Lookahead() == '?' || lexer.Lookahead() == '.' {
+	if lexer.Lookahead() == '?' {
 		return false
 	}
-
 	lexer.MarkEnd()
 	lexer.SetResultSymbol(symbols[jsTokTernaryQmark])
-
-	for unicode.IsSpace(lexer.Lookahead()) {
-		lexer.Advance(false)
-	}
-
-	if lexer.Lookahead() == ':' || lexer.Lookahead() == ')' || lexer.Lookahead() == ',' {
-		return false
-	}
-
 	if lexer.Lookahead() == '.' {
 		lexer.Advance(false)
 		return unicode.IsDigit(lexer.Lookahead())
