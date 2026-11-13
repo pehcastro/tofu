@@ -213,7 +213,7 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 			}
 			if places, err := platformproject.ResolvePlaces(dir); err == nil {
 				_ = walls.Append(places.State, walls.Wall{Op: walls.OpFirstFrame, Name: name, MS: time.Since(launch.started).Milliseconds(),
-					At: launch.started.UnixMilli(), Session: live.ID(), OK: true})
+					At: launch.started.UnixMilli(), Session: live.ID(), OK: true, OutsideMS: new(int64)})
 			}
 		},
 	}

@@ -20,6 +20,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/platform/fs"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 )
 
 func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow {
@@ -33,6 +34,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 	calls, asked := map[string]int{}, map[string]session.CallBody{}
 	libraryFiles, tickets := map[string]string{}, map[string]string{}
 	forked := map[string]*loop.Fork{}
+	walled, startup, stepSeparator := map[walledBy]int64{}, -1, ""
 	estimates := map[string]session.Estimated{}
 	if joined, err := session.Estimates(events); err == nil {
 		for _, estimated := range joined {
@@ -41,7 +43,33 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 	}
 	for _, event := range events {
 		row := traceRow{At: event.At, Agent: event.Agent, Turn: event.Turn, ID: event.ID}
+		by := walledBy{turn: event.Turn, agent: event.Agent}
 		switch event.Kind {
+		case session.EventWall:
+			var wall walls.Wall
+			if json.Unmarshal(event.Body, &wall) != nil {
+				continue
+			}
+			switch wall.Op {
+			case walls.OpStartup:
+				row.Kind, row.Text = kindStartup, "startup took "+exactSpan(wall.MS)+" before the first request"
+				if outsideMS := *cmp.Or(wall.OutsideMS, new(int64)); outsideMS > 0 {
+					row.Text += ", " + exactSpan(outsideMS) + " of it outside tofu"
+				}
+				startup, stepSeparator = len(rows), ": "
+			case walls.OpStartupStep:
+				if startup >= 0 {
+					rows[startup].Text += stepSeparator + wall.Name + " " + exactSpan(wall.MS)
+					stepSeparator = " · "
+				}
+				continue
+			case walls.OpTurn, walls.OpAdvisor:
+				by.op = wall.Op
+				walled[by] = wall.MS
+				continue
+			default:
+				continue
+			}
 		case session.EventEstimate:
 			row = estimateRow(row, estimates[event.ID])
 		case session.EventPrompt:
@@ -83,7 +111,9 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			if !finished {
 				row.Text += " on " + row.State
 			}
-			row.Text = traced(row.Text, servedOn(ended.Wire, ended.Account), took(ended.WallClockMS), spent(ended.CostUSD), output.OneLine(ended.Error))
+			by.op = walls.OpTurn
+			row.Text = traced(row.Text, servedOn(ended.Wire, ended.Account), took(cmp.Or(walled[by], ended.WallClockMS)), spent(ended.CostUSD), output.OneLine(ended.Error))
+			delete(walled, by)
 			row.Outcome = traceProblem(!finished && ended.Outcome != session.OutcomeError && ended.Outcome != session.OutcomeForked, ended.Error)
 		case session.EventRequest:
 			var step struct {
@@ -248,8 +278,16 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			var advised session.AdvisorNotice
 			if json.Unmarshal(event.Body, &advised) == nil && advised.Advisor != nil {
 				read := advised.Advisor
+				var before struct {
+					Advisor struct {
+						DurationMS int64 `json:"duration_ms"`
+					} `json:"advisor"`
+				}
+				_ = json.Unmarshal(event.Body, &before)
+				by.op = walls.OpAdvisor
 				row.Kind, row.Agent, row.State = kindAdvisor, read.Agent, "read"
-				row.Text, row.Outcome = traced(output.OneLine(advised.Text), read.Model, took(read.DurationMS), spent(read.CostUSD)), traceProblem(false, read.Error)
+				row.Text, row.Outcome = traced(output.OneLine(advised.Text), read.Model, took(cmp.Or(walled[by], before.Advisor.DurationMS)), spent(read.CostUSD)), traceProblem(false, read.Error)
+				delete(walled, by)
 				rows = append(rows, row)
 				row.Outcome = ""
 				for _, missing := range read.Missing {
@@ -429,6 +467,13 @@ func spent(usd float64) string {
 }
 
 func spanOf(ms int64) string { return render.Until(time.Duration(ms) * time.Millisecond) }
+
+func exactSpan(ms int64) string { return (time.Duration(ms) * time.Millisecond).String() }
+
+type walledBy struct {
+	turn, agent string
+	op          walls.Op
+}
 
 func estimateRow(row traceRow, estimated session.Estimated) traceRow {
 	said := estimated.EstimateBody

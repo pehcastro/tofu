@@ -377,7 +377,7 @@ func verbNamed(name string) verb {
 	case "docs":
 		return verb{run: withoutIn(libraryverb.DocsVerb), usage: libraryverb.DocsUsage}
 	case "doctor":
-		return verb{run: withoutIn(doctorverb.Verb), usage: doctorverb.Usage}
+		return verb{clocked: doctorverb.Clocked, usage: doctorverb.Usage}
 	case "login":
 		return verb{clocked: loginverb.Verb(loginverb.Deps{Status: statusverb.LoginVerb}), usage: loginverb.Usage + " " + loginverb.AsideUsage}
 	case "logout":

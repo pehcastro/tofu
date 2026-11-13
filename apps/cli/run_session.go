@@ -37,7 +37,7 @@ func resumeRun(dir, handle string, say func(string)) (resumed runResumed, err er
 	defer func() {
 		if places, placesErr := platformproject.ResolvePlaces(dir); placesErr == nil {
 			_ = walls.Append(places.State, walls.Wall{Op: walls.OpSessionResume, Name: "run", MS: time.Since(started).Milliseconds(), At: started.UnixMilli(),
-				Session: resumed.carry.Session, OK: err == nil})
+				Session: resumed.carry.Session, OK: err == nil, OutsideMS: new(int64)})
 		}
 	}()
 	store, err := session.OpenIn(dir)

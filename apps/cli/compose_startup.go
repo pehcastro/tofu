@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -12,24 +11,20 @@ import (
 	"tofu/internal/agent/loop"
 	cred "tofu/internal/models/llm/accounts"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/outside"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 )
 
-type startupStep struct {
-	name string
-	took time.Duration
-}
-
 type startupClock struct {
-	mu    sync.Mutex
-	began time.Time
-	last  time.Time
-	asked time.Time
-	steps []startupStep
-
-	usageAskedAlongside []time.Duration
+	mu        sync.Mutex
+	began     time.Time
+	last      time.Time
+	asked     time.Time
+	steps     []walls.Wall
+	alongside []walls.Wall
 }
 
 func clockFromNow() *startupClock {
@@ -40,14 +35,16 @@ func clockFromNow() *startupClock {
 func clockFromProcessStart() *startupClock {
 	clock := clockFromNow()
 	if started, known := processStarted(); known && started.Before(clock.last) {
-		clock.began, clock.steps = started, []startupStep{{name: "process start to tofu run", took: clock.last.Sub(started)}}
+		clock.began, clock.last = started, started
+		clock.add("process start to tofu run", 0)
 	}
 	return clock
 }
 
-func (c *startupClock) add(name string) {
-	now := time.Now()
-	c.steps, c.last = append(c.steps, startupStep{name: name, took: now.Sub(c.last)}), now
+func (c *startupClock) add(name string, waited time.Duration) {
+	now, outsideMS := time.Now(), waited.Milliseconds()
+	c.steps = append(c.steps, walls.Wall{Op: walls.OpStartupStep, Name: name, MS: now.Sub(c.last).Milliseconds(), At: c.last.UnixMilli(), OK: true, OutsideMS: &outsideMS})
+	c.last = now
 }
 
 func (c *startupClock) step(name string) {
@@ -57,7 +54,7 @@ func (c *startupClock) step(name string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.asked.IsZero() {
-		c.add(name)
+		c.add(name, 0)
 	}
 }
 
@@ -68,7 +65,8 @@ func (c *startupClock) picking(accounts loop.Accounts, store *cred.Store) loop.A
 	}
 	accounts.Pick = func(ctx context.Context) (loop.Account, error) {
 		c.step("turn opening")
-		account, err := pick(ctx)
+		picking, clock := outside.Open(ctx, time.Now)
+		account, err := pick(picking)
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		if !c.asked.IsZero() {
@@ -81,7 +79,7 @@ func (c *startupClock) picking(accounts loop.Accounts, store *cred.Store) loop.A
 				name += ", and the token was refreshed"
 			}
 		}
-		c.add(name)
+		c.add(name, clock.Outside())
 		return account, err
 	}
 	return accounts
@@ -105,8 +103,8 @@ func (c *startupClock) checkUsageAlongside(a *wiring.Accounts) (wait func()) {
 			c.mu.Lock()
 			defer c.mu.Unlock()
 			for _, result := range results {
-				if !result.Report.FetchedAt.Before(began) {
-					c.usageAskedAlongside = append(c.usageAskedAlongside, result.Report.FetchedAt.Sub(began))
+				if answered := result.Report.FetchedAt.Sub(began).Milliseconds(); answered >= 0 {
+					c.alongside = append(c.alongside, walls.Wall{Op: walls.OpStartupStep, Name: "usage check alongside", MS: answered, At: began.UnixMilli(), OK: true, OutsideMS: &answered})
 				}
 			}
 			return nil
@@ -123,7 +121,7 @@ type firstRequestModel struct {
 func (m firstRequestModel) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
 	m.clock.mu.Lock()
 	if m.clock.asked.IsZero() {
-		m.clock.add("turn before the first request: session, hooks and prompt")
+		m.clock.add("turn before the first request: session, hooks and prompt", 0)
 		m.clock.asked = m.clock.last
 	}
 	m.clock.mu.Unlock()
@@ -140,20 +138,19 @@ func (c *startupClock) record(store *session.Store, id string) error {
 	if c.asked.IsZero() {
 		return nil
 	}
-	said := make([]string, len(c.steps))
-	for i, step := range c.steps {
-		said[i] = step.name + " " + step.took.Round(time.Millisecond).String()
+	var outsideMS int64
+	for _, step := range c.steps {
+		outsideMS += *step.OutsideMS
 	}
-	for _, took := range c.usageAskedAlongside {
-		said = append(said, "alongside, a usage check asked the endpoint and answered in "+took.Round(time.Millisecond).String())
-	}
+	whole := walls.Wall{Op: walls.OpStartup, Name: "to first request", MS: c.asked.Sub(c.began).Milliseconds(), At: c.began.UnixMilli(), OK: true, OutsideMS: &outsideMS}
 	log, err := store.Open(session.Header{ID: id})
 	if err != nil {
 		return err
 	}
 	head := log.Header().Head
-	_, err = log.Append(session.Event{Kind: session.EventNotice, At: c.asked},
-		session.NoticeBody{Text: "startup took " + c.asked.Sub(c.began).Round(time.Millisecond).String() + " before the first request: " + strings.Join(said, " · "),
-			From: loop.RecordedOrigin(core.Origin{Source: core.SourceNotice})})
+	for _, wall := range slices.Concat([]walls.Wall{whole}, c.steps, c.alongside) {
+		_, appended := log.Append(session.Event{Kind: session.EventWall, At: c.asked}, wall)
+		err = errors.Join(err, appended)
+	}
 	return errors.Join(err, log.Edit(func(header *session.Header) { header.Head = head }), log.Close())
 }

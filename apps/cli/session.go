@@ -33,6 +33,7 @@ import (
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
+	"tofu/internal/store/walls"
 	"tofu/internal/ui/tui/panels/trace"
 )
 
@@ -1192,7 +1193,13 @@ func startedAfter(ms int64) string { return "start_ms " + strconv.FormatInt(ms, 
 func traceBody(store *session.Store, id string, events []session.Event, keep func(agent string, at time.Time) bool) (sessionTraceReport, error) {
 	report := sessionTraceReport{Requests: []traceRequest{}, Calls: []traceCall{}}
 	events = slices.DeleteFunc(slices.Clone(events), func(event session.Event) bool { return !keep(event.Agent, event.At) })
-	placed, firstCallOf := map[string]int{}, map[string]time.Time{}
+	placed, firstCallOf, sentAt := map[string]int{}, map[string]time.Time{}, map[string]int64{}
+	for _, event := range events {
+		var wall walls.Wall
+		if event.Kind == session.EventWall && json.Unmarshal(event.Body, &wall) == nil && wall.Op == walls.OpRequest {
+			sentAt[event.Request] = wall.At
+		}
+	}
 	for _, event := range events {
 		switch event.Kind {
 		case session.EventRequest:
@@ -1203,7 +1210,7 @@ func traceBody(store *session.Store, id string, events []session.Event, keep fun
 			}
 			_ = json.Unmarshal(event.Body, &step)
 			answered := cmp.Or(firstCallOf[event.ID], event.At)
-			request := traceRequest{Request: event.ID, Agent: event.Agent, Turn: event.Turn, Model: step.Model, CostUSD: step.CostUSD, StartMS: answered.UnixMilli() - step.DurationMS,
+			request := traceRequest{Request: event.ID, Agent: event.Agent, Turn: event.Turn, Model: step.Model, CostUSD: step.CostUSD, StartMS: cmp.Or(sentAt[event.ID], answered.UnixMilli()-step.DurationMS),
 				Usage: session.Usage{InputTokens: step.PromptTokens, OutputTokens: step.CompletionTokens, CacheReadTokens: step.CacheReadTokens, CacheWriteTokens: step.CacheWriteTokens}}
 			if step.Phase != "" {
 				request.Why = "phase " + string(step.Phase)
