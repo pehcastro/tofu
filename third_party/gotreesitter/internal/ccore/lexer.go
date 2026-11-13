@@ -113,17 +113,18 @@ func toDense(next int32, skip bool) denseEntry {
 	return e
 }
 
+func (e denseEntry) next() (int32, bool) { return int32(e>>1) - 1, e&1 != 0 }
+
 func (dfa *Lexer) step(state, c int32) (int32, bool) {
 	if uint32(c) < utf8.RuneSelf {
-		e := dfa.dense[int(state)*int(dfa.classCount)+int(dfa.classes[c])]
-		return int32(e>>1) - 1, e&1 != 0
+		return dfa.dense[int(state)*int(dfa.classCount)+int(dfa.classes[c])].next()
 	}
 	return dfa.scan(state, c)
 }
 
 func (dfa *Lexer) scan(state, c int32) (int32, bool) {
 	if c == invalidRune {
-		c = dfaInvalidRune
+		return dfa.dense[(int(state)+1)*int(dfa.classCount)-1].next()
 	}
 	st := &dfa.States[state]
 	for _, t := range dfa.Transitions[st.TransStart:st.TransEnd] {
@@ -132,6 +133,39 @@ func (dfa *Lexer) scan(state, c int32) (int32, bool) {
 		}
 	}
 	return -1, false
+}
+
+const largeCharacterRangeCount = 8
+
+func invalidRuneColumn(states []LexState, transitions []LexTransition) []denseEntry {
+	type negatedSet struct {
+		state int
+		first LexTransition
+	}
+	var sets []negatedSet
+	large := map[int32]bool{}
+	for s, st := range states {
+		trs := transitions[st.TransStart:st.TransEnd]
+		for start := 0; start < len(trs); {
+			first, end, negated := trs[start], start, false
+			for end < len(trs) && trs[end].Next == first.Next && trs[end].Skip == first.Skip {
+				negated = negated || trs[end].Hi == utf8.MaxRune
+				end++
+			}
+			if negated {
+				sets = append(sets, negatedSet{s, first})
+				large[first.Next] = large[first.Next] || end-start >= largeCharacterRangeCount
+			}
+			start = end
+		}
+	}
+	column := make([]denseEntry, len(states))
+	for i := len(sets) - 1; i >= 0; i-- {
+		if set := sets[i]; !large[set.first.Next] {
+			column[set.state] = toDense(set.first.Next, set.first.Skip)
+		}
+	}
+	return column
 }
 
 func NewLexer(states []LexState, transitions []LexTransition) Lexer {
@@ -165,6 +199,7 @@ func NewLexer(states []LexState, transitions []LexTransition) Lexer {
 		}
 		dfa.classes[b] = class
 	}
+	columns = append(columns, invalidRuneColumn(states, transitions))
 	dfa.classCount = uint32(len(columns))
 	dfa.dense = make([]denseEntry, len(states)*len(columns))
 	for k, col := range columns {
