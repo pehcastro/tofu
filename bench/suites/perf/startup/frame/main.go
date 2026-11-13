@@ -93,10 +93,12 @@ func login(exe, home string, env []string) error {
 	if out, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("mock login in %s: %v: %s", home, err, out)
 	}
-	bind := exec.Command(exe, "models", "bind", "classifier", "typesafe/jev-latest")
-	bind.Env = env
-	if out, err := bind.CombinedOutput(); err != nil {
-		return fmt.Errorf("binding the classifier in %s: %v: %s", home, err, out)
+	for _, role := range [][]string{{"classifier", "typesafe/jev-latest"}, {"orchestrator", "claude-sub/claude-opus-5"}} {
+		bind := exec.Command(exe, "models", "bind", role[0], role[1])
+		bind.Env = env
+		if out, err := bind.CombinedOutput(); err != nil {
+			return fmt.Errorf("binding the %s in %s: %v: %s", role[0], home, err, out)
+		}
 	}
 	return nil
 }
