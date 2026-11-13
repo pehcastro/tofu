@@ -211,12 +211,7 @@ func (s ErlangExternalScanner) symbolTable() *[erlangTokenCount]gotreesitter.Sym
 	return &s.symbols
 }
 
-// isErlangWhitespace matches the C scanner's whitespace range: 0x01-0x20 and 0x80-0xA0,
-// excluding newline (which is handled separately).
 func isErlangWhitespace(ch rune) bool {
-	if ch == '\n' {
-		return false
-	}
 	return (ch >= 0x01 && ch <= 0x20) || (ch >= 0x80 && ch <= 0xA0)
 }
 

@@ -159,6 +159,8 @@ func (scanner HclExternalScanner) remapValidSymbols(validSymbols []bool, semanti
 	return semanticValid[:]
 }
 
+const hclSerializationBufferSize = 1024
+
 func (HclExternalScanner) Serialize(payload any, buf []byte) int {
 	s := payload.(*hclState)
 	if len(s.contextStack) > 127 {
@@ -181,7 +183,7 @@ func (HclExternalScanner) Serialize(payload any, buf []byte) int {
 		}
 		// Need space for: uint32 type + uint32 idLen + id bytes.
 		needed := 4 + 4 + idLen
-		if size+needed > len(buf) {
+		if size+needed >= hclSerializationBufferSize || size+needed > len(buf) {
 			return 0
 		}
 		binary.LittleEndian.PutUint32(buf[size:], uint32(ctx.ctxType))

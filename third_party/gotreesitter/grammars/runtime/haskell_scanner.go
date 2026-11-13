@@ -431,12 +431,6 @@ func hsIsSymopChar(c rune) bool {
 
 // hsIsSpaceChar: Unicode space characters excluding newlines (horizontal space).
 func hsIsSpaceChar(c rune) bool {
-	if c == ' ' || c == '\t' {
-		return true
-	}
-	if c == '\n' || c == '\r' || c == '\f' {
-		return false
-	}
 	return unicode.Is(unicode.Zs, c)
 }
 
