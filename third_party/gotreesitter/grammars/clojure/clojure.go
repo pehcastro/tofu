@@ -14,7 +14,18 @@ const BlobSHA256 = "21f5731e530505f7489f3e8f75839ba07522a1275a168799a0e354544291
 
 var registered sync.Once
 
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.ClojureC())
+	if err != nil {
+		return nil
+	}
+	return lang
+}
+
 func Language() *gotreesitter.Language {
-	registered.Do(func() { grammarruntime.RegisterBlob("clojure", grammarblobs.Clojure) })
+	registered.Do(func() {
+		grammarruntime.RegisterBlob("clojure", grammarblobs.Clojure)
+		gotreesitter.RegisterCCoreLanguage("clojure", LanguageC)
+	})
 	return grammarruntime.Language("clojure.bin")
 }
