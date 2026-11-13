@@ -160,7 +160,6 @@ func (p PythonExternalScanner) Scan(payload any, lexer *gotreesitter.ExternalLex
 	if len(s.Indents) == 0 {
 		s.Indents = append(s.Indents, 0)
 	}
-	s.SyncInsideInterpolatedString()
 	symbols := p.symbolTable()
 	if len(p.externalToToken) > 0 {
 		var semanticValid [pyTokenCount]bool

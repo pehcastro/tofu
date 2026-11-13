@@ -77,7 +77,6 @@ func SerializeState(s *State, buf []byte) int {
 	if s == nil {
 		return 0
 	}
-	s.SyncInsideInterpolatedString()
 
 	indentCount := 0
 	if len(s.Indents) > 0 {
@@ -151,17 +150,8 @@ func DeserializeState(s *State, buf []byte) {
 		return
 	}
 
-	inside := false
 	for i := 0; i < delimCount; i++ {
-		delimiter := Delimiter(buf[2+i])
-		s.Delimiters = append(s.Delimiters, delimiter)
-		inside = inside || delimiter.IsFormat()
-	}
-	if encodedInside != inside {
-		// The flag is redundant, but an inconsistent checkpoint is not a
-		// complete state representation. Fail closed instead of guessing.
-		s.Delimiters = s.Delimiters[:0]
-		return
+		s.Delimiters = append(s.Delimiters, Delimiter(buf[2+i]))
 	}
 	size := indentCountOffset + 2
 	for i := 0; i < indentCount; i++ {
@@ -169,5 +159,5 @@ func DeserializeState(s *State, buf []byte) {
 		s.Indents = append(s.Indents, v)
 		size += 2
 	}
-	s.InsideInterpolatedString = inside
+	s.InsideInterpolatedString = encodedInside
 }
