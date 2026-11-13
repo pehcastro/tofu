@@ -9,5 +9,5 @@ wait LEADONREPORT
 key alt+2
 wait DEAD  2
 key alt+1
-wait LEADONREPORT
+wait LEADHEARSBOTH
 requests text
