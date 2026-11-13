@@ -8,6 +8,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 )
 
 type spawnSiteKey struct{}
@@ -90,6 +91,30 @@ func (s spawnTrace) end(id string, state subagents.State) error {
 	_, err := log.Append(session.Event{Turn: s.site.turn, Agent: id, Kind: session.EventAgentEnd}, ended)
 	at := time.Now()
 	return errors.Join(err, markRun(log, id, state, &at))
+}
+
+type spawnTiming struct {
+	clocked
+	last        time.Time
+	lastOutside time.Duration
+	steps       []walls.Wall
+}
+
+func (s *spawnTiming) took(step string) {
+	now, outside := time.Now(), s.clock.Outside()
+	stepOutside := (outside - s.lastOutside).Milliseconds()
+	s.steps = append(s.steps, walls.Wall{Op: walls.OpSpawnStep, Name: step, MS: now.Sub(s.last).Milliseconds(), At: s.last.UnixMilli(), OK: true, OutsideMS: &stepOutside})
+	s.last, s.lastOutside = now, outside
+}
+
+func (s *spawnTiming) write(site spawnSite, name string) {
+	if site.log == nil {
+		return
+	}
+	at := session.Event{Turn: site.turn, Agent: site.agent, Call: site.call, Kind: session.EventWall}
+	for _, wall := range append([]walls.Wall{clockedWall(walls.OpSpawn, name, s.clocked, true)}, s.steps...) {
+		_, _ = site.log.Append(at, wall)
+	}
 }
 
 func markRun(log *session.Log, id string, state subagents.State, ended *time.Time) error {

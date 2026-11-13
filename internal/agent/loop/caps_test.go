@@ -100,3 +100,35 @@ func TestASubAgentPastItsWallClockFinishesItsStepAndAnswersOnceRetired(t *testin
 		t.Errorf("the step running when the clock passed did not finish: %+v", tool)
 	}
 }
+
+type slowLeadModel struct {
+	stubModel
+	answering time.Duration
+}
+
+func (m *slowLeadModel) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
+	if strings.Contains(lastUserText(request), "asks you:") {
+		time.Sleep(m.answering)
+	}
+	return m.stubModel.Ask(ctx, request)
+}
+
+func TestASubAgentWaitingOnItsLeadsAnswerIsNotCountedTowardItsWallClock(t *testing.T) {
+	model := &slowLeadModel{answering: 3 * time.Second, stubModel: stubModel{decisions: []core.Decision{
+		toolCallDecision(core.ToolCall{ID: "call-ask", Name: "ask", Arguments: json.RawMessage(`{"question":"build now?","why":"it is slow","default":"build"}`)}),
+		{Build: "m1", Outcome: core.OutcomeMessage, Content: "yes, build"},
+		claimDecision("built after the lead said yes"),
+	}}}
+	config := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(), ResultBytesCap: 4096,
+		ArtifactDir: t.TempDir(), NewID: func() string { return "turn-orchestrator" }}
+	spawn := NewSpawnTool("turn-orchestrator", config, &subagents.Roster{})
+	spawn.Limits = func() SubAgentLimits { return SubAgentLimits{Running: 1, Depth: 1, WallClock: 2 * time.Second} }
+	if _, err := spawn.Run(context.Background(), json.RawMessage(`{"task":"ask, then build","owns":["build/**"]}`)); err != nil {
+		t.Fatal(err)
+	}
+	report := reported(t, spawn)
+	t.Logf("the lead waited %s to answer, and was told:\n%s", model.answering, report)
+	if strings.Contains(report, OutcomeRetiredWallClockCap.String()) || !strings.Contains(report, "built after the lead said yes") {
+		t.Errorf("the sub-agent was retired at its 2s cap for the 3s its lead took to answer")
+	}
+}

@@ -485,7 +485,8 @@ func (t *BashTool) runOrMove(ctx context.Context, registry *process.Registry, co
 	readBack := fmt.Sprintf("read it back with the shell tool: wait %s returns as soon as it ends, or after %d ms, with its exit code and last lines; logs %[1]s returns its last lines now. never wait on it with another bash call",
 		ran.Name, konst.ShellWaitMillis)
 	if inbox != nil {
-		inbox.watchShell(project.Crashes(string(t.root)), registry, ran.Name)
+		site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
+		inbox.watchShell(project.Crashes(string(t.root)), registry, ran.Name, site)
 		readBack = "its exit comes back to you as a message when it ends, so do not wait on it: answer the person, go on with other work, or end your turn. logs " + ran.Name + " returns its last lines now"
 		if got.Took < limit {
 			readBack = "the person wrote while it ran, so it moved before the " + limit.String() + " limit. " + readBack

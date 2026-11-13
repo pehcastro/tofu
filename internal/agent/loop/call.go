@@ -9,7 +9,6 @@ import (
 	"errors"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"tofu/internal/agent/hooks"
@@ -106,7 +105,6 @@ type gatedCall struct {
 	fire    func(context.Context, hooks.Input) hooks.Verdict
 	hooks   []HookRun
 	before  []hooks.Context
-	waited  *atomic.Int64
 	held    *outside.Clock
 }
 
@@ -126,10 +124,11 @@ func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, 
 	}
 	var held time.Duration
 	if g.held != nil {
-		held = g.held.Outside()
+		held, row.PermissionWaitMS = g.held.Outside(), g.held.OutsideOf(outside.Person).Milliseconds()
 	}
 	outsideMS := (clock.Outside() + held).Milliseconds()
 	row.OutsideMS, row.DurationMS = &outsideMS, row.DurationMS+held.Milliseconds()
+	answer.ToolDurationMS = row.DurationMS
 	answer.Content += hookMarked(core.SourcePreTool, g.before)
 	verdict, gateErr := g.verdict, g.gateErr
 	select {
@@ -141,9 +140,6 @@ func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, 
 	row.Refused, row.Hooks = g.refusal != "", append(g.hooks, row.Hooks...)
 	row.ParallelBatch = batch
 	row.Proxy = g.proxy
-	if g.waited != nil {
-		row.PermissionWaitMS = g.waited.Load()
-	}
 	row.Command = g.redact.Redact(row.Command)
 	if len(row.Args) > 0 {
 		row.Args = json.RawMessage(g.redact.Redact(string(row.Args)))

@@ -185,7 +185,7 @@ type AdvisorRead struct {
 	Missing    []string `json:"missing,omitempty"`
 	Extra      []string `json:"extra,omitempty"`
 	Error      string   `json:"error,omitempty"`
-	DurationMS int64    `json:"duration_ms"`
+	DurationMS int64    `json:"-"`
 	CostUSD    float64  `json:"cost_usd"`
 }
 

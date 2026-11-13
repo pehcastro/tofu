@@ -10,6 +10,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 )
 
 func TestASpawnWritesHowLongEachStepBeforeItRanTookIntoTheLeadsTrace(t *testing.T) {
@@ -32,18 +33,29 @@ func TestASpawnWritesHowLongEachStepBeforeItRanTookIntoTheLeadsTrace(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	var notices []string
+	var spawns []session.WallEvent
+	steps := map[string]bool{}
 	for _, event := range events {
-		if event.Kind == session.EventNotice && event.Agent == "turn-lead" && strings.Contains(string(event.Body), "spawn of sub-1") {
-			notices = append(notices, string(event.Body))
+		if event.Kind == session.EventNotice && strings.Contains(string(event.Body), "spawn of sub-1") {
+			t.Errorf("the spawn timing is still a notice: %s", event.Body)
+		}
+		wall, err := session.DecodeWall(event)
+		switch {
+		case err != nil || wall.Op != string(walls.OpSpawn) && wall.Op != string(walls.OpSpawnStep):
+		case wall.Agent != "turn-lead" || wall.Call != "call-spawn" || wall.OutsideMS == nil:
+			t.Errorf("a spawn wall is not the lead's spawn call with outside_ms: %+v", wall)
+		case wall.Op == string(walls.OpSpawn):
+			spawns = append(spawns, wall)
+		case wall.Op == string(walls.OpSpawnStep):
+			steps[wall.Name] = true
 		}
 	}
-	if len(notices) != 1 {
-		t.Fatalf("the lead's trace holds %d spawn timing notices, want 1: %q", len(notices), notices)
+	if len(spawns) != 1 {
+		t.Fatalf("the lead's trace holds %d spawn walls, want 1: %+v", len(spawns), spawns)
 	}
-	for _, step := range []string{"memory ", "ticket grant ", "hook ", "prompt ", "account pick ", "earlier siblings ", "scratch ", "brief "} {
-		if !strings.Contains(notices[0], step) {
-			t.Errorf("the timing notice names no %q step: %s", strings.TrimSpace(step), notices[0])
+	for _, step := range []string{"memory", "ticket grant", "hook", "prompt", "account pick", "earlier siblings", "scratch", "brief", "estimate"} {
+		if !steps[step] {
+			t.Errorf("no spawn_step wall names the %q step: %v", step, steps)
 		}
 	}
 }

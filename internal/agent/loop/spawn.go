@@ -417,7 +417,8 @@ func (a spawnArgs) mission() string {
 const unnamedAgent = "a sub-agent on the lead's model"
 
 func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
-	timing := startSpawnTiming()
+	began := clockFrom(ctx)
+	timing, ctx := &spawnTiming{clocked: began, last: began.started}, began.ctx
 	var args spawnArgs
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("spawn: arguments are not the expected shape: %w", err)
@@ -600,7 +601,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 		held.trace.estimate, said = estimated, said+estimateWords(definition.Name, estimated.body)
 	}
 	timing.took("estimate")
-	site.notice(site.agent, timing.words(subAgentID))
+	timing.write(site, cmp.Or(definition.Name, "sub-agent"))
 	started = true
 	t.Inbox.hold(held, site.log)
 	safe.Go(project.Crashes(t.Project), "sub-agent "+subAgentID, func() {

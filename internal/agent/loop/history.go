@@ -35,14 +35,13 @@ func (ForkKind) Enum() []string {
 }
 
 type Fork struct {
-	Step          int          `json:"step"`
-	Kind          ForkKind     `json:"kind"`
-	Into          string       `json:"into"`
-	TokensBefore  int          `json:"tokens_before"`
-	TokensAfter   int          `json:"tokens_after"`
-	BlockedMicros int64        `json:"blocked_micros"`
-	TailMessages  int          `json:"tail_messages,omitempty"`
-	Carry         recall.Carry `json:"carry"`
+	Step         int          `json:"step"`
+	Kind         ForkKind     `json:"kind"`
+	Into         string       `json:"into"`
+	TokensBefore int          `json:"tokens_before"`
+	TokensAfter  int          `json:"tokens_after"`
+	TailMessages int          `json:"tail_messages,omitempty"`
+	Carry        recall.Carry `json:"carry"`
 }
 
 type Compaction struct {
@@ -766,12 +765,11 @@ func forkHistory(artifacts Artifacts, budget recall.Budget, opening core.Message
 		return nil, messages, nil
 	}
 	return &Fork{
-		Kind:          kind,
-		TokensBefore:  before,
-		TokensAfter:   after,
-		BlockedMicros: time.Since(started).Microseconds(),
-		TailMessages:  held,
-		Carry:         carry,
+		Kind:         kind,
+		TokensBefore: before,
+		TokensAfter:  after,
+		TailMessages: held,
+		Carry:        carry,
 	}, begun, nil
 }
 

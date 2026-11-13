@@ -22,6 +22,7 @@ import (
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/store/snapshot"
+	"tofu/internal/store/walls"
 	"tofu/internal/tools/code/search"
 )
 
@@ -165,9 +166,9 @@ type StepRow struct {
 	CacheWrite5m     int               `json:"cache_write_5m_tokens,omitempty"`
 	CacheWrite1h     int               `json:"cache_write_1h_tokens,omitempty"`
 	CostUSD          float64           `json:"cost_usd"`
-	DurationMS       int64             `json:"duration_ms"`
-	FirstTokenMS     int64             `json:"first_token_ms"`
-	LastByteMS       int64             `json:"last_byte_ms,omitempty"`
+	DurationMS       int64             `json:"-"`
+	FirstTokenMS     int64             `json:"-"`
+	LastByteMS       int64             `json:"-"`
 	Warnings         []string          `json:"warnings,omitempty"`
 	Occupancy        *recall.Occupancy `json:"occupancy,omitempty"`
 	Bands            *recall.Bands     `json:"bands,omitempty"`
@@ -207,7 +208,7 @@ type Row struct {
 	Outcome      session.Outcome     `json:"outcome"`
 	Error        string              `json:"error,omitempty"`
 	TotalCostUSD float64             `json:"total_cost_usd"`
-	WallClockMS  int64               `json:"wall_clock_ms"`
+	WallClockMS  int64               `json:"-"`
 	DecisionIDs  []string            `json:"decision_ids,omitempty"`
 	SearchLinks  []search.SearchLink `json:"search_links,omitempty"`
 
@@ -784,7 +785,7 @@ func (r *record) sent(id, why string, request core.Request, preview recall.Confi
 	}
 }
 
-func (r *record) exchange(id, why, wire string, request core.Request, started time.Time, attempts []core.Attempt, decision core.Decision, failed error) {
+func (r *record) exchange(id, why, wire string, request core.Request, timing requestTiming, attempts []core.Attempt, decision core.Decision, failed error) {
 	if r == nil {
 		return
 	}
@@ -794,8 +795,8 @@ func (r *record) exchange(id, why, wire string, request core.Request, started ti
 		kept.hashes, kept.pictures = r.keptList(request.Messages)
 	}
 	messages, pictures := kept.hashes, kept.pictures
-	exchange := session.Exchange{Request: id, Agent: r.agent, Turn: r.turn, At: started, Why: why, Wire: wire, Model: decision.Build,
-		ToolChoice: request.ToolChoice.OpenAIValue(), Messages: messages, Tools: r.keptTools(request.Tools), DurationMS: time.Since(started).Milliseconds()}
+	exchange := session.Exchange{Request: id, Agent: r.agent, Turn: r.turn, At: timing.started, Why: why, Wire: wire, Model: decision.Build,
+		ToolChoice: request.ToolChoice.OpenAIValue(), Messages: messages, Tools: r.keptTools(request.Tools), DurationMS: timing.durationMS}
 	for _, attempt := range attempts {
 		body, err := r.log.KeepBody(attempt.Body, pictures)
 		r.note(err)
@@ -878,11 +879,14 @@ func (r *record) end(row Row) {
 	}))
 	failed := r.undoStartFailure()
 	if r.undo != nil {
-		timed, cancel := context.WithTimeout(context.Background(), konst.UndoSnapshotTimeoutMillis*time.Millisecond)
-		if err := r.undo.End(timed); err != nil {
+		ending := clockFrom(context.Background())
+		timed, cancel := context.WithTimeout(ending.ctx, konst.UndoSnapshotTimeoutMillis*time.Millisecond)
+		err := r.undo.End(timed)
+		cancel()
+		r.wall(session.Event{}, clockedWall(walls.OpUndoSnapshot, "undo end", ending, err == nil))
+		if err != nil {
 			failed = errors.New("the files at the end of the turn, for undo: " + err.Error())
 		}
-		cancel()
 	}
 	if failed != nil {
 		r.notice(failed.Error())

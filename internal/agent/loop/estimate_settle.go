@@ -18,6 +18,7 @@ import (
 	"tofu/internal/konst"
 	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 )
 
 const settledRunsName = "estimates.jsonl"
@@ -123,7 +124,7 @@ func buildSettled(state string) ([]byte, int, error) {
 	return written.Bytes(), len(listing.Sessions), platformfs.WriteFile(filepath.Join(state, settledRunsName), written.Bytes(), 0o644)
 }
 func runsIn(store *session.Store, header session.Header) ([]historyRun, error) {
-	events, err := store.EventsOf(header.ID, session.EventTurnEnd, session.EventToolCall, session.EventEstimate, session.EventEstimateSettled)
+	events, err := store.EventsOf(header.ID, session.EventTurnEnd, session.EventToolCall, session.EventEstimate, session.EventEstimateSettled, session.EventWall)
 	if err != nil {
 		return nil, err
 	}
@@ -140,9 +141,13 @@ func runsIn(store *session.Store, header session.Header) ([]historyRun, error) {
 			counted[cmp.Or(one.Agent, one.Event.Turn)] = true
 		}
 	}
-	briefs := map[string]int{}
+	briefs, turnMS := map[string]int{}, map[string]int64{}
 	for _, event := range events {
 		switch event.Kind {
+		case session.EventWall:
+			if wall, err := session.DecodeWall(event); err == nil && wall.Op == string(walls.OpTurn) && event.Agent == "" {
+				turnMS[event.Turn] = wall.MS
+			}
 		case session.EventToolCall:
 			var call session.CallBody
 			var args spawnArgs
@@ -157,7 +162,7 @@ func runsIn(store *session.Store, header session.Header) ([]historyRun, error) {
 				WallClockMS int64           `json:"wall_clock_ms"`
 			}
 			if event.Agent == "" && !counted[event.Turn] && json.Unmarshal(event.Body, &ended) == nil && ended.Outcome == session.OutcomeStopped {
-				runs = append(runs, historyRun{Project: header.Project, Model: ended.Model, Chars: utf8.RuneCountInString(ended.Task), TookMS: ended.WallClockMS})
+				runs = append(runs, historyRun{Project: header.Project, Model: ended.Model, Chars: utf8.RuneCountInString(ended.Task), TookMS: cmp.Or(turnMS[event.Turn], ended.WallClockMS)})
 			}
 		}
 	}

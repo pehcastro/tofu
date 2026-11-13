@@ -32,6 +32,7 @@ import (
 	platformclipboard "tofu/internal/platform/clipboard"
 	"tofu/internal/platform/credential"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	platformproject "tofu/internal/platform/project"
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
@@ -556,12 +557,14 @@ func appendLines(path string, lines []string) error {
 }
 
 func (c *cassette) Ask(ctx context.Context, request core.Request) (core.Decision, error) {
-	sent := time.Now()
+	sent, flying := time.Now(), outside.Wait(ctx, outside.Model)
 	select {
 	case <-ctx.Done():
+		flying()
 		return core.Decision{}, ctx.Err()
 	case <-time.After(recordedFlight):
 	}
+	flying()
 	reply, err := c.take(request)
 	if err != nil {
 		return core.Decision{}, err
@@ -579,11 +582,14 @@ func (c *cassette) Ask(ctx context.Context, request core.Request) (core.Decision
 	}
 	for index, delta := range reply.deltas {
 		if index > 0 && reply.deltaEvery > 0 {
+			streaming := outside.Wait(ctx, outside.Model)
 			select {
 			case <-ctx.Done():
+				streaming()
 				return core.Decision{}, ctx.Err()
 			case <-time.After(reply.deltaEvery):
 			}
+			streaming()
 		}
 		if request.OnDelta != nil {
 			request.OnDelta(delta)
@@ -594,6 +600,7 @@ func (c *cassette) Ask(ctx context.Context, request core.Request) (core.Decision
 		decision.LastByteMS = time.Since(sent).Milliseconds()
 		return decision, nil
 	}
+	defer outside.Wait(ctx, outside.Model)()
 	<-ctx.Done()
 	time.Sleep(reply.holdAfterStop)
 	return core.Decision{}, ctx.Err()

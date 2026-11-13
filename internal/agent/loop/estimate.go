@@ -10,7 +10,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -21,18 +20,7 @@ import (
 	"tofu/internal/tools/contract"
 )
 
-type personWaitKey struct{}
-
-func withPersonWait(ctx context.Context) (context.Context, *atomic.Int64) {
-	waited := new(atomic.Int64)
-	return context.WithValue(ctx, personWaitKey{}, waited), waited
-}
-
-func PersonWaited(ctx context.Context, took time.Duration) {
-	if waited, timed := ctx.Value(personWaitKey{}).(*atomic.Int64); timed {
-		waited.Add(took.Milliseconds())
-	}
-}
+func PersonWaited(context.Context, time.Duration) {}
 
 type estimateFor struct {
 	scope session.EstimateScope

@@ -14,6 +14,7 @@ import (
 	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 )
 
 const AdvisorAgent = "advisor"
@@ -37,7 +38,12 @@ func (t *SpawnTool) Advise(ctx context.Context, plan string) {
 			t.Inbox.mu.Unlock()
 			t.Inbox.signal()
 		}()
-		read := t.advised(reading, site.log, site.turn, words, plan)
+		advising := clockFrom(reading)
+		read := t.advised(advising.ctx, site.log, site.turn, words, plan)
+		walled := session.Event{Turn: site.turn, Agent: site.agent, Kind: session.EventWall}
+		if _, err := site.log.Append(walled, clockedWall(walls.OpAdvisor, AdvisorAgent, advising, read.Error == "")); err != nil && t.base.Notify != nil {
+			t.base.Notify("the advisor's wall was not recorded: " + err.Error())
+		}
 		said := fmt.Sprintf("the advisor read the plan against %d of the person's messages: %d missing, %d extra", read.Words, len(read.Missing), len(read.Extra))
 		if read.Error != "" {
 			said = "the advisor did not read the plan: " + read.Error
@@ -64,8 +70,6 @@ func personWords(conversation []core.Message) []string {
 
 func (t *SpawnTool) advised(ctx context.Context, log *session.Log, turnID string, words []string, plan string) (read session.AdvisorRead) {
 	read = session.AdvisorRead{Agent: AdvisorAgent, Words: len(words), Plan: plan}
-	started := time.Now()
-	defer func() { read.DurationMS = time.Since(started).Milliseconds() }()
 	failed := func(err error) session.AdvisorRead {
 		read.Error = err.Error()
 		return read
@@ -109,16 +113,16 @@ func (t *SpawnTool) advised(ctx context.Context, log *session.Log, turnID string
 		{Role: core.RoleUser, Content: brief, Origin: core.Origin{Source: core.SourceBrief, Name: t.orchestratorID}},
 	}}
 	tapped, tap := core.Tapped(within)
-	asked := time.Now()
-	decision, err := model.Ask(tapped, request)
+	decision, timing, err := askCountingAttempts(tapped, model, request)
 	read.Model, read.CostUSD = cmp.Or(decision.Build, read.Model), decision.Usage.Cost
 	recorded, id, why := &record{log: log, scope: turnID, turn: turnID, agent: AdvisorAgent, said: map[string]string{}, lastSent: &messagesKept{}}, session.NewEventID(), "reads the plan the lead set"
 	preview, previewErr := recall.LoadConfig()
 	recorded.note(previewErr)
 	recorded.sent(id, why, request, preview.OnWire(t.base.Wire))
-	recorded.exchange(id, why, t.base.Wire, request, asked, tap.Attempts(), decision, err)
+	recorded.exchange(id, why, t.base.Wire, request, timing, tap.Attempts(), decision, err)
+	recorded.requested(id, walls.OpRequest, read.Model, timing, decision, err)
 	if err == nil {
-		recorded.step(session.EventRequest, stepFrom(id, 0, requestTiming{attempt: len(tap.Attempts()), durationMS: time.Since(asked).Milliseconds()}, decision))
+		recorded.step(session.EventRequest, stepFrom(id, 0, timing, decision))
 	}
 	if len(recorded.failed) > 0 && t.base.Notify != nil {
 		t.base.Notify("the advisor's request was not wholly recorded: " + strings.Join(recorded.failed, "; "))

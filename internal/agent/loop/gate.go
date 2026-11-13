@@ -614,7 +614,7 @@ func (e CodeEntry) Record(log string) {
 	if err != nil {
 		return
 	}
-	_, _ = ledger.NewWriter(log).Append(ledger.Row{Point: inlineCodePoint, StateHash: ledger.HashOf(body), State: body, Verdict: e.Answer.verdict(), LatencyMS: e.Took.Milliseconds(), TurnID: e.Turn})
+	_, _ = ledger.NewWriter(log).Append(ledger.Row{Point: inlineCodePoint, StateHash: ledger.HashOf(body), State: body, Verdict: e.Answer.verdict(), TurnID: e.Turn})
 }
 
 func PersonOnly(project string, request GateRequest) bool {

@@ -23,6 +23,7 @@ import (
 	"tofu/internal/store/learn/words"
 	memory "tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -359,11 +360,13 @@ func (b *Inbox) whenTyped(report safe.Report) (typedNow <-chan struct{}, stop fu
 	return arrived, func() { close(stopped) }
 }
 
-func (b *Inbox) watchShell(report safe.Report, registry *process.Registry, name string) {
+func (b *Inbox) watchShell(report safe.Report, registry *process.Registry, name string, site spawnSite) {
 	b.mu.Lock()
 	b.watched[name] = true
+	b.keepOpen(site.log)
 	b.mu.Unlock()
 	safe.Go(report, "lead shell watch", func() {
+		defer b.letGo(site.log)
 		ended, err := registry.AwaitEnd(context.Background(), name, konst.ShellWaitMillis*time.Millisecond)
 		for err == nil && ended.State == process.Running && !ended.HeldByPerson() {
 			ended, err = registry.AwaitEnd(context.Background(), name, konst.ShellWaitMillis*time.Millisecond)
@@ -379,6 +382,11 @@ func (b *Inbox) watchShell(report safe.Report, registry *process.Registry, name 
 			now := time.Now()
 			timing := registry.Timing(ended, now)
 			exited.ID, exited.Ran = name, timing.Ran
+			if site.log != nil {
+				ran := timing.Ran.Milliseconds()
+				_, _ = site.log.Append(session.Event{Turn: site.turn, Agent: site.agent, Call: site.call, Kind: session.EventWall},
+					walls.Wall{Op: walls.OpShell, Name: name, MS: ran, At: now.Add(-timing.Ran).UnixMilli(), OK: exited.Exit != nil && *exited.Exit == 0, OutsideMS: &ran})
+			}
 			said = fmt.Sprintf("%s, your command moved to the background, exited %s, %s: %s\nits last lines:\n%s", name, code, timing.Words(now), ended.Command, tail)
 		}
 		b.mu.Lock()
@@ -990,6 +998,10 @@ func (b *Inbox) hold(held *heldSubAgent, log *session.Log) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	held.log = log
+	b.keepOpen(log)
+}
+
+func (b *Inbox) keepOpen(log *session.Log) {
 	if _, kept := b.logs[log]; kept {
 		b.logs[log]++
 	}

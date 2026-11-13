@@ -104,8 +104,9 @@ type Message struct {
 	ToolCalls       []ToolCall
 	ToolOutcome     ToolOutcome
 	ToolResultBytes int
-	ToolExitCode    *int `json:"-"`
-	ToolHits        *int `json:"-"`
+	ToolExitCode    *int  `json:"-"`
+	ToolHits        *int  `json:"-"`
+	ToolDurationMS  int64 `json:"-"`
 	Thinking        Thinking
 	Origin          Origin `json:"-"`
 	KeptHead        bool   `json:"-"`

@@ -16,10 +16,12 @@ import (
 	"tofu/internal/konst"
 	rule "tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
 	shipped "tofu/library"
@@ -72,7 +74,9 @@ func (a askTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 	asked := boardy.Event{At: t.clock().UTC().Truncate(time.Second), Kind: boardy.Asked, Author: boardy.SubAgentAuthor(t.base.Session, id), Agent: id,
 		Text: args.Question, Why: args.Why, Default: args.Default}
 	t.roster.Reached(id, subagents.WaitingAnswer, "asks: "+args.Question)
+	waited := outside.Wait(ctx, outside.Person)
 	answer, err := t.answer(ctx, a.asking, a.conversation, args)
+	waited()
 	t.roster.Reached(id, subagents.Working, "")
 	if err != nil {
 		asked.Unanswered = err.Error()
@@ -163,12 +167,11 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagents.SubAgent, conve
 	within, cancel := context.WithTimeout(ctx, konst.SubAgentAskMillis*time.Millisecond)
 	defer cancel()
 	tapped, tap := core.Tapped(within)
-	started := time.Now()
-	decision, err := model.Ask(tapped, request)
+	decision, timing, err := askCountingAttempts(tapped, model, request)
 	if errors.Is(err, context.DeadlineExceeded) {
 		err = fmt.Errorf("the orchestrator's model gave no answer within %v", konst.SubAgentAskMillis*time.Millisecond)
 	}
-	t.traceAnswer(ctx, asking.ID, request, started, tap.Attempts(), decision, err)
+	t.traceAnswer(ctx, asking.ID, request, timing, tap.Attempts(), decision, err)
 	if err != nil {
 		return "", err
 	}
@@ -262,7 +265,7 @@ func (t *SpawnTool) answeredOnBoard(id string, q boardy.Question, replies []Pers
 	return fmt.Sprintf("the person answered %s Q%d %q with %s, and %s is %s again", id, q.ID, q.TLDR, answer, id, ticket.Status)
 }
 
-func (t *SpawnTool) traceAnswer(ctx context.Context, asking string, request core.Request, started time.Time, attempts []core.Attempt, decision core.Decision, failed error) {
+func (t *SpawnTool) traceAnswer(ctx context.Context, asking string, request core.Request, timing requestTiming, attempts []core.Attempt, decision core.Decision, failed error) {
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	lead, recorded := leadOf(site, asking)
 	if !recorded {
@@ -276,8 +279,9 @@ func (t *SpawnTool) traceAnswer(ctx context.Context, asking string, request core
 	preview, err := recall.LoadConfig()
 	answering.note(err)
 	answering.sent(id, why, request, preview.OnWire(t.base.Wire))
-	answering.exchange(id, why, t.base.Wire, request, started, attempts, decision, failed)
+	answering.exchange(id, why, t.base.Wire, request, timing, attempts, decision, failed)
+	answering.requested(id, walls.OpRequest, cmp.Or(decision.Build, t.base.Wire), timing, decision, failed)
 	if failed == nil {
-		answering.step(session.EventRequest, stepFrom(id, 0, requestTiming{attempt: len(attempts), durationMS: time.Since(started).Milliseconds()}, decision))
+		answering.step(session.EventRequest, stepFrom(id, 0, timing, decision))
 	}
 }
