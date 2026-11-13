@@ -8,10 +8,12 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"tofu/internal/platform/outside"
 )
 
 func listeners(ctx context.Context) ([]listener, error) {
-	out, err := exec.CommandContext(ctx, "lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-Fpn").Output()
+	out, err := outside.Command(ctx, "lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-Fpn").Output()
 	var nothingListens *exec.ExitError
 	if err != nil && !errors.As(err, &nothingListens) {
 		return nil, err
@@ -33,6 +35,6 @@ func listeners(ctx context.Context) ([]listener, error) {
 }
 
 func commandOf(ctx context.Context, pid int) string {
-	out, _ := exec.CommandContext(ctx, "ps", "-o", "command=", "-p", strconv.Itoa(pid)).Output()
+	out, _ := outside.Command(ctx, "ps", "-o", "command=", "-p", strconv.Itoa(pid)).Output()
 	return strings.TrimSpace(string(out))
 }

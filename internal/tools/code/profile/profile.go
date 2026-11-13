@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/outside"
 	"tofu/internal/tools/contract"
 )
 
@@ -100,7 +101,7 @@ func (p Profile) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 	ctx, cancel := context.WithTimeout(ctx, p.limits.Run)
 	defer cancel()
 	argv := r.argv(args.Command, args.Kind, dir)
-	cmd := exec.CommandContext(ctx, program, argv[1:]...)
+	cmd := outside.Command(ctx, program, argv[1:]...)
 	cmd.Dir = string(p.root)
 	cmd.Env = append(os.Environ(), "GOMAXPROCS="+strconv.Itoa(p.limits.CPUs))
 	out, err := cmd.CombinedOutput()

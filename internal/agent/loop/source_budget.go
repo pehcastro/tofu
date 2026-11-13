@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
@@ -18,6 +17,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/outside"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/edit"
 	"tofu/internal/tools/files/edit/patch"
@@ -195,8 +195,8 @@ func scriptsOutsideSource(r contract.Root, steps []subagents.ShellStep) bool {
 		if err != nil {
 			return false
 		}
-		outside := relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator))
-		if !outside && exec.Command("git", "-C", string(r), "check-ignore", "-q", filepath.ToSlash(relative)).Run() != nil {
+		escapes := relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator))
+		if !escapes && outside.Command(context.Background(), "git", "-C", string(r), "check-ignore", "-q", filepath.ToSlash(relative)).Run() != nil {
 			return false
 		}
 	}

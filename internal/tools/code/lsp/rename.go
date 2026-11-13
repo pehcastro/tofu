@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
 	platformproject "tofu/internal/platform/project"
 )
 
@@ -81,6 +82,7 @@ func (c *Client) diagnosed(params json.RawMessage) {
 }
 
 func (c *Client) Errors(ctx context.Context, paths []string) (map[string][]Problem, []string) {
+	defer outside.Wait(ctx, outside.Process)()
 	if c.pulls {
 		found, missing := map[string][]Problem{}, []string(nil)
 		for _, path := range paths {

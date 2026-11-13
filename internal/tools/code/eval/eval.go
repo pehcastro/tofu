@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -19,6 +18,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/scratch"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/scratch/overlay"
@@ -171,12 +171,12 @@ func (e Eval) execute(ctx context.Context, prog program, marker string, made ove
 	ctx, cancel := context.WithTimeout(ctx, e.limits.Run)
 	defer cancel()
 	command := strings.Join(prog.argv, " ")
-	cmd := exec.CommandContext(ctx, prog.argv[0], prog.argv[1:]...)
+	cmd := outside.Command(ctx, prog.argv[0], prog.argv[1:]...)
 	cmd.Dir, cmd.Env, cmd.WaitDelay = prog.dir, prog.env, konst.BashWaitDelayMillis*time.Millisecond
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	started := time.Now()
-	tracked, err := process.StartTracked(cmd)
+	tracked, err := process.StartClocked(cmd)
 	if err != nil {
 		return contract.Failure(fmt.Sprintf("eval: %s did not start in %s: %v", prog.argv[0], prog.dir, err))
 	}

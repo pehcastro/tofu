@@ -16,6 +16,7 @@ type legacyBody struct {
 	Exit             int    `json:"exit"`
 	Text             string `json:"text"`
 	DurationMS       int64  `json:"duration_ms"`
+	OutsideMS        *int64 `json:"outside_ms"`
 	FirstTokenMS     int64  `json:"first_token_ms"`
 	LastByteMS       int64  `json:"last_byte_ms"`
 	PermissionWaitMS int64  `json:"permission_wait_ms"`
@@ -48,6 +49,7 @@ func legacyEvent(event session.Event, id, tool string) Reading {
 	switch event.Kind {
 	case session.EventToolResult:
 		took(OpTool, tool, body.DurationMS, body.Error == "")
+		walls[len(walls)-1].OutsideMS = body.OutsideMS
 		tookSome(OpPermissionWait, tool, body.PermissionWaitMS, true)
 	case session.EventRequest:
 		tookSome(OpRequest, body.Model, body.DurationMS, body.Error == "")

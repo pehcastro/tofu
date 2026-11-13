@@ -69,6 +69,7 @@ type ToolCallRow struct {
 	GateVerdict      string `json:"gate_verdict,omitempty"`
 	GateError        string `json:"gate_error,omitempty"`
 	DurationMS       int64  `json:"duration_ms"`
+	OutsideMS        *int64 `json:"outside_ms,omitempty"`
 	PermissionWaitMS int64  `json:"permission_wait_ms,omitempty"`
 	Error            string `json:"error,omitempty"`
 

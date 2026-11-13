@@ -16,6 +16,7 @@ import (
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/platform/credential"
+	"tofu/internal/platform/outside"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
 )
@@ -114,13 +115,16 @@ type shadowVerdict struct {
 }
 
 func (g gatedCall) run(ctx context.Context, tools Registry, resultBytesCap int, artifacts Artifacts, batch int) (ToolCallRow, core.Message, bool) {
+	clocked, clock := outside.Open(ctx, time.Now)
 	row, answer := rejectedCall(g.call, time.Now(), g.refusal, g.id, g.parent, g.author)
 	repeat := false
 	if g.refusal == "" {
-		row, answer, repeat = g.execute(ctx, tools, resultBytesCap, artifacts)
+		row, answer, repeat = g.execute(clocked, tools, resultBytesCap, artifacts)
 	} else if spawner, spawning := tools.byName[g.call.Name].(*SpawnTool); spawning {
 		spawner.refused(g.call.ID)
 	}
+	outsideMS := clock.Outside().Milliseconds()
+	row.OutsideMS = &outsideMS
 	answer.Content += hookMarked(core.SourcePreTool, g.before)
 	verdict, gateErr := g.verdict, g.gateErr
 	select {

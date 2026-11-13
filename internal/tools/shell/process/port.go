@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/safe"
 )
 
@@ -133,7 +134,7 @@ func procListeners() []listener {
 }
 
 func netstatListeners(ctx context.Context) []listener {
-	out, _ := exec.CommandContext(ctx, "netstat", "-ano").Output()
+	out, _ := outside.Command(ctx, "netstat", "-ano").Output()
 	var found []listener
 	for line := range strings.Lines(string(out)) {
 		fields := strings.Fields(line)
@@ -151,7 +152,7 @@ func netstatListeners(ctx context.Context) []listener {
 }
 
 func lsofListeners(ctx context.Context) []listener {
-	out, _ := exec.CommandContext(ctx, "lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-Fptn").Output()
+	out, _ := outside.Command(ctx, "lsof", "-nP", "-iTCP", "-sTCP:LISTEN", "-Fptn").Output()
 	var found []listener
 	var pid int
 	var ipv6 bool
@@ -177,10 +178,10 @@ func lsofListeners(ctx context.Context) []listener {
 
 func commandLine(ctx context.Context, pid int) string {
 	if runtime.GOOS != "windows" {
-		out, _ := exec.CommandContext(ctx, "ps", "-o", "command=", "-p", strconv.Itoa(pid)).Output()
+		out, _ := outside.Command(ctx, "ps", "-o", "command=", "-p", strconv.Itoa(pid)).Output()
 		return strings.TrimSpace(string(out))
 	}
-	out, _ := exec.CommandContext(ctx, "wmic", "process", "where", "processid="+strconv.Itoa(pid), "get", "CommandLine", "/value").Output()
+	out, _ := outside.Command(ctx, "wmic", "process", "where", "processid="+strconv.Itoa(pid), "get", "CommandLine", "/value").Output()
 	for line := range strings.Lines(string(out)) {
 		if value, found := strings.CutPrefix(strings.TrimSpace(line), "CommandLine="); found {
 			return html.UnescapeString(value)

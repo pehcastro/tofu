@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/platform/scratch"
@@ -68,7 +69,7 @@ func (t typechecker) prepared(ctx context.Context) error {
 	if len(t.prepare) == 0 {
 		return nil
 	}
-	cmd := exec.CommandContext(ctx, t.prepare[0], t.prepare[1:]...)
+	cmd := outside.Command(ctx, t.prepare[0], t.prepare[1:]...)
 	cmd.Dir, cmd.Env = t.dir, append(os.Environ(), scratch.ScratchEnv(ctx)...)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%s failed before the check: %w\n%s", strings.Join(t.prepare, " "), err, output)
@@ -318,9 +319,9 @@ func (w *tscWatch) run(lifetime context.Context, checker typechecker, argv []str
 	if err != nil {
 		return
 	}
-	cmd := exec.CommandContext(lifetime, argv[0], argv[1:]...)
+	cmd := outside.Command(lifetime, argv[0], argv[1:]...)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = checker.dir, input, input
-	tracked, err := process.StartTracked(cmd)
+	tracked, err := process.StartClocked(cmd)
 	_ = input.Close()
 	if err != nil {
 		_ = output.Close()
@@ -366,6 +367,7 @@ func (w *tscWatch) settle(update func()) {
 }
 
 func (w *tscWatch) next(ctx context.Context, since time.Time) (tscCycle, watchOutcome) {
+	defer outside.Wait(ctx, outside.Process)()
 	notice := time.After(konst.TypecheckWatchNoticeMillis * time.Millisecond)
 	noticed := false
 	for {
@@ -465,12 +467,12 @@ func coldTypecheck(ctx context.Context, checker typechecker, relative string) co
 	if err := checker.prepared(ctx); err != nil {
 		return contract.Failure("typecheck skipped: " + err.Error())
 	}
-	cmd := exec.CommandContext(ctx, checker.argv[0], checker.argv[1:]...)
+	cmd := outside.Command(ctx, checker.argv[0], checker.argv[1:]...)
 	cmd.Dir, cmd.WaitDelay, cmd.Env = checker.dir, konst.BashWaitDelayMillis*time.Millisecond, append(os.Environ(), scratch.ScratchEnv(ctx)...)
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
 	started := time.Now()
-	tracked, err := process.StartTracked(cmd)
+	tracked, err := process.StartClocked(cmd)
 	if err != nil {
 		return contract.Failure(fmt.Sprintf("typecheck skipped: %s did not start: %v", command, err))
 	}

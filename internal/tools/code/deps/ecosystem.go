@@ -13,6 +13,7 @@ import (
 
 	toml "github.com/pelletier/go-toml/v2"
 
+	"tofu/internal/platform/outside"
 	"tofu/internal/tools/contract"
 )
 
@@ -189,7 +190,7 @@ func (e ecosystem) program() (string, error) {
 func (e ecosystem) direct(ctx context.Context, dir string) ([]dependency, error) {
 	switch e {
 	case goModules:
-		command := exec.CommandContext(ctx, "go", "mod", "edit", "-json")
+		command := outside.Command(ctx, "go", "mod", "edit", "-json")
 		command.Dir = dir
 		out, err := command.Output()
 		if err != nil {

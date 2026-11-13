@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 
+	"tofu/internal/platform/outside"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/tools/code/jsonrpc"
@@ -36,7 +37,7 @@ type Event struct {
 
 type Client struct {
 	adapter Adapter
-	cmd     *exec.Cmd
+	cmd     *outside.Cmd
 	tree    process.Tree
 	closer  io.WriteCloser
 	wire    *jsonrpc.Wire
@@ -72,7 +73,7 @@ var ErrExited = errors.New("the debug adapter exited")
 func Start(ctx context.Context, adapter Adapter, dir string) (*Client, error) {
 	program, err := exec.LookPath(adapter.Program)
 	if err == nil && adapter.Probe != nil {
-		err = exec.CommandContext(ctx, program, adapter.Probe...).Run()
+		err = outside.Command(ctx, program, adapter.Probe...).Run()
 	}
 	if err != nil {
 		return nil, errors.New(strings.Join(append([]string{adapter.Program}, adapter.Args...), " ") + " is not installed, and tofu never installs it: install it with " + adapter.Install)
@@ -87,14 +88,14 @@ func Start(ctx context.Context, adapter Adapter, dir string) (*Client, error) {
 		c.socket = filepath.Join(socketDir, "dap.sock")
 		args = append(slices.Clone(args), "--listen", "unix:"+c.socket)
 	}
-	c.cmd = exec.Command(program, args...)
+	c.cmd = outside.Command(context.Background(), program, args...)
 	c.cmd.Dir = dir
 	input, inputErr := c.cmd.StdinPipe()
 	output, outputErr := c.cmd.StdoutPipe()
 	if err := errors.Join(inputErr, outputErr); err != nil {
 		return nil, err
 	}
-	if c.tree, err = process.StartTracked(c.cmd); err != nil {
+	if c.tree, err = process.StartClocked(c.cmd); err != nil {
 		return nil, fmt.Errorf("%s did not start: %w", adapter.Program, err)
 	}
 	var reader io.Reader = output
@@ -184,6 +185,7 @@ func (c *Client) Send(command string, arguments any) (Pending, error) {
 }
 
 func (p Pending) Wait(ctx context.Context, body any) error {
+	defer outside.Wait(ctx, outside.Process)()
 	got, err := p.client.pending.Await(ctx, p.seq, p.answer, p.client.exited)
 	switch {
 	case errors.Is(err, jsonrpc.ErrGone):
@@ -213,6 +215,7 @@ func (c *Client) Call(ctx context.Context, command string, arguments, body any) 
 }
 
 func (c *Client) Next(ctx context.Context) (Event, error) {
+	defer outside.Wait(ctx, outside.Process)()
 	for {
 		c.state.Lock()
 		if len(c.events) > 0 {

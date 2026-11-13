@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 
 	toml "github.com/pelletier/go-toml/v2"
+
+	"tofu/internal/platform/outside"
 )
 
 func tsInstalled(from, pkg string) (installed, error) {
@@ -98,7 +99,7 @@ func pythonInstalled(ctx context.Context, from, pkg string) (installed, error) {
 		if len(sites) > 0 {
 			break
 		}
-		out, err := exec.CommandContext(ctx, python, "-c", "import site, sysconfig; print(sysconfig.get_paths()['purelib']); print(site.getusersitepackages())").Output()
+		out, err := outside.Command(ctx, python, "-c", "import site, sysconfig; print(sysconfig.get_paths()['purelib']); print(site.getusersitepackages())").Output()
 		if err == nil {
 			sites = strings.Split(strings.TrimSpace(strings.ReplaceAll(string(out), "\r\n", "\n")), "\n")
 		}

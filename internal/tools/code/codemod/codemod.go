@@ -21,6 +21,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	platformfs "tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/tools/code/catgrep"
 	"tofu/internal/tools/code/catgrep/lang"
 	"tofu/internal/tools/code/catgrep/tree"
@@ -399,7 +400,7 @@ func (c Codemod) checked(ctx context.Context, lang string, changes []change) str
 		}
 		slices.Sort(packages)
 		command := "go vet " + strings.Join(packages, " ")
-		vet := exec.CommandContext(ctx, "go", append([]string{"vet"}, packages...)...)
+		vet := outside.Command(ctx, "go", append([]string{"vet"}, packages...)...)
 		vet.Dir, vet.WaitDelay = string(c.root), konst.CodemodRunMillis*time.Millisecond
 		out, err := vet.CombinedOutput()
 		var exit *exec.ExitError

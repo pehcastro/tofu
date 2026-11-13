@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 
+	"tofu/internal/platform/outside"
 	"tofu/internal/tools/contract"
 )
 
@@ -161,7 +162,7 @@ func standardPackagesNamed(ctx context.Context, code string, imports map[string]
 	if len(wanted) == 0 {
 		return nil
 	}
-	goroot, err := exec.CommandContext(ctx, "go", "env", "GOROOT").Output()
+	goroot, err := outside.Command(ctx, "go", "env", "GOROOT").Output()
 	if err != nil {
 		return nil
 	}

@@ -9,7 +9,6 @@ import (
 	"go/parser"
 	"go/token"
 	"maps"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -20,6 +19,7 @@ import (
 	"golang.org/x/tools/go/ast/astutil"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
 )
 
 type resolver struct {
@@ -133,7 +133,7 @@ func (r *resolver) resolve(ctx context.Context, name string) []string {
 		return r.paths[name]
 	}
 	r.stdLoaded = true
-	list := exec.CommandContext(ctx, "go", "list", "std")
+	list := outside.Command(ctx, "go", "list", "std")
 	list.Dir, list.WaitDelay = r.root, konst.CodemodRunMillis*time.Millisecond
 	out, _ := list.Output()
 	std := map[string][]string{}

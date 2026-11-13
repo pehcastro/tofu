@@ -22,6 +22,7 @@ import (
 	"tofu/internal/librarian/rules"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/platform/scratch"
@@ -187,7 +188,7 @@ type interpreterState struct {
 type toolchainRunner func(ctx context.Context, name string, args ...string) ([]byte, error)
 
 func realToolchainRunner(ctx context.Context, name string, args ...string) ([]byte, error) {
-	return exec.CommandContext(ctx, name, args...).Output()
+	return outside.Command(ctx, name, args...).Output()
 }
 
 const versionUnread = "present, version unread in time"
@@ -409,6 +410,7 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (contract.R
 	if registry == nil {
 		return contract.Result{}, errors.New("bash: background needs a shell registry and none is attached to this turn")
 	}
+	defer outside.Wait(ctx, outside.Process)()
 	cmd := t.command(context.Background(), ctx, args.Command)
 	got, err := registry.YieldReady(ctx, cmd, args.Command, contract.ShellOwnerFrom(ctx), process.Wait{
 		Within: konst.BackgroundReadyMillis * time.Millisecond,
@@ -625,13 +627,13 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 	if args.Background {
 		return t.runBackground(ctx, args)
 	}
-	before := t.onDisk()
+	before := t.onDisk(ctx)
 	result, err := t.runToEnd(ctx, args)
 	stillRunning := result.ExitCode == nil && result.Outcome == contract.ResultSucceeded
 	if err != nil || stillRunning {
 		return result, err
 	}
-	if changed := before.changedBy(t.onDisk()); changed != "" {
+	if changed := before.changedBy(t.onDisk(ctx)); changed != "" {
 		if result.Content != "" && !strings.HasSuffix(result.Content, "\n") {
 			result.Content += "\n"
 		}
@@ -641,6 +643,7 @@ func (t *BashTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 }
 
 func (t *BashTool) runToEnd(ctx context.Context, args bashArgs) (contract.Result, error) {
+	defer outside.Wait(ctx, outside.Process)()
 	millis, corrected := bashDeadline(args.TimeoutMS)
 	deadline := time.Duration(millis) * time.Millisecond
 	if registry := ShellRegistryFrom(ctx); registry != nil {
@@ -688,20 +691,21 @@ type diskState struct {
 	skipped string
 }
 
-func (t *BashTool) gitPrefix() (string, error) {
+func (t *BashTool) gitPrefix(ctx context.Context) (string, error) {
 	t.prefixOnce.Do(func() {
-		out, err := exec.Command("git", "-C", string(t.root), "rev-parse", "--show-prefix").Output()
+		out, err := outside.Command(ctx, "git", "-C", string(t.root), "rev-parse", "--show-prefix").Output()
 		t.prefix, t.prefixErr = strings.TrimSpace(string(out)), err
 	})
 	return t.prefix, t.prefixErr
 }
 
-func (t *BashTool) onDisk() diskState {
-	prefix, err := t.gitPrefix()
+func (t *BashTool) onDisk(ctx context.Context) diskState {
+	ctx = context.WithoutCancel(ctx)
+	prefix, err := t.gitPrefix(ctx)
 	if err != nil {
 		return walkDisk(t.root)
 	}
-	listed, err := exec.Command("git", "--no-optional-locks", "-C", string(t.root), "status", "--porcelain", "-z", "--untracked-files=all", "--no-renames", "--", ".").Output()
+	listed, err := outside.Command(ctx, "git", "--no-optional-locks", "-C", string(t.root), "status", "--porcelain", "-z", "--untracked-files=all", "--no-renames", "--", ".").Output()
 	if err != nil {
 		return walkDisk(t.root)
 	}
@@ -810,14 +814,14 @@ func (t inlineCodeTool) Run(ctx context.Context, _ json.RawMessage) (contract.Re
 	ctx, cancel := context.WithTimeout(ctx, deadline)
 	defer cancel()
 	argv := slices.Concat(codeFlags(code), []string{snapshot}, code.Args)
-	cmd := exec.CommandContext(ctx, code.Program, argv...)
+	cmd := outside.Command(ctx, code.Program, argv...)
 	tmp := filepath.Join(code.Cwd, "tmp")
 	cmd.Dir, cmd.WaitDelay = code.Cwd, konst.BashWaitDelayMillis*time.Millisecond
 	cmd.Env = process.CodeEnv("TMPDIR="+tmp, "TMP="+tmp, "TEMP="+tmp, "PYTHONUNBUFFERED=1", "PYTHONDONTWRITEBYTECODE=1", "AI_AGENT=tofu")
 	output := &heldOutput{}
 	cmd.Stdout, cmd.Stderr = output, output
 	started := time.Now()
-	tracked, err := process.StartTracked(cmd)
+	tracked, err := process.StartClocked(cmd)
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("bash: %w", err)
 	}

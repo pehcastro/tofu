@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/tools/code/typecheck/checkers"
@@ -278,7 +278,7 @@ func startTestRunner(dir string) (*testRunner, error) {
 		return nil, err
 	}
 	lifetime, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(lifetime, "node", "--input-type=module", "-e", testRunnerScript)
+	cmd := outside.Command(lifetime, "node", "--input-type=module", "-e", testRunnerScript)
 	cmd.Dir, cmd.Stdout, cmd.Stderr = dir, written, written
 	cmd.Env = append(os.Environ(), "TOFU_TEST_WORKERS="+strconv.Itoa(konst.TestRunnerWorkers))
 	input, err := cmd.StdinPipe()
@@ -287,7 +287,7 @@ func startTestRunner(dir string) (*testRunner, error) {
 		cancel()
 		return nil, err
 	}
-	tracked, err := process.StartTracked(cmd)
+	tracked, err := process.StartClocked(cmd)
 	_ = written.Close()
 	if err != nil {
 		_ = output.Close()
@@ -343,6 +343,7 @@ func (t *testRunner) lastSaid() []string {
 }
 
 func (t *testRunner) ask(ctx context.Context, files []string) (testReply, error) {
+	defer outside.Wait(ctx, outside.Process)()
 	slashed := make([]string, len(files))
 	for i, file := range files {
 		slashed[i] = filepath.ToSlash(file)

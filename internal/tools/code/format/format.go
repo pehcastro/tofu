@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/models/llm/core"
 	platformfs "tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/history/shadow"
 )
@@ -197,7 +198,7 @@ func formatted(ctx context.Context, path string, before []byte) (string, []byte,
 	if program == "" {
 		return tool, nil, errors.New(tool + " is not installed: " + install + ", then call format again")
 	}
-	command := exec.CommandContext(ctx, program, args...)
+	command := outside.Command(ctx, program, args...)
 	var stdout, stderr bytes.Buffer
 	command.Dir, command.Stdin, command.Stdout, command.Stderr = dir, bytes.NewReader(before), &stdout, &stderr
 	if err := command.Run(); err != nil {

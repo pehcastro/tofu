@@ -17,6 +17,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/outside"
 )
 
 const (
@@ -131,7 +132,7 @@ func (p *CommandProxy) rewrite(ctx context.Context, call core.ToolCall) (json.Ra
 func (p *CommandProxy) ask(ctx context.Context, command string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, p.binary, "rewrite", command).Output()
+	out, err := outside.Command(ctx, p.binary, "rewrite", command).Output()
 	if rewritten := strings.TrimSpace(string(out)); rewritten != "" {
 		return rewritten, nil
 	}
@@ -151,7 +152,7 @@ func (p *CommandProxy) InstalledVersion(ctx context.Context) (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, p.timeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, p.binary, "--version").Output()
+	out, err := outside.Command(ctx, p.binary, "--version").Output()
 	if err != nil {
 		return "", err
 	}

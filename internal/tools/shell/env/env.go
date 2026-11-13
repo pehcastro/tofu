@@ -19,6 +19,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/outside"
 	"tofu/internal/tools/contract"
 )
 
@@ -210,7 +211,7 @@ func probe(ctx context.Context, dir string, chain declared) (have string, found,
 		}
 		located = true
 		run, cancel := context.WithTimeout(ctx, konst.EnvProbeTimeoutMillis*time.Millisecond)
-		command := exec.CommandContext(run, path, chain.versionArgs...)
+		command := outside.Command(run, path, chain.versionArgs...)
 		command.Dir, command.Env = dir, append(os.Environ(), chain.probeEnv...)
 		out, err := command.Output()
 		cancel()

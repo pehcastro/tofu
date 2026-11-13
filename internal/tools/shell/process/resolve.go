@@ -15,6 +15,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/platform/credential"
+	"tofu/internal/platform/outside"
 )
 
 type Choice struct {
@@ -34,7 +35,7 @@ func (c Choice) Command(ctx context.Context, dir, command string, extraEnv ...st
 	case "pwsh", "powershell":
 		args = []string{"-NoProfile", "-NonInteractive", "-Command", powerShellUTF8Output + command}
 	}
-	cmd := exec.CommandContext(ctx, c.program(), args...)
+	cmd := outside.Command(ctx, c.program(), args...).Cmd
 	cmd.Dir = dir
 	cmd.Env = slices.DeleteFunc(os.Environ(), func(entry string) bool {
 		name, _, _ := strings.Cut(entry, "=")
@@ -99,7 +100,7 @@ func exists(path string) bool {
 func (c Choice) family() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), konst.ShellProbeTimeoutMillis*time.Millisecond)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, c.program(), "-c", "uname -o")
+	cmd := outside.Command(ctx, c.program(), "-c", "uname -o")
 	if c.bash != "" {
 		cmd.Env = gitLauncherEnv(os.Environ(), c.Path)
 	}

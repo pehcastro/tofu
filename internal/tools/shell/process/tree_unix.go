@@ -3,12 +3,15 @@
 package process
 
 import (
+	"context"
 	"errors"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
 	"syscall"
+
+	"tofu/internal/platform/outside"
 )
 
 type tree struct{}
@@ -39,7 +42,7 @@ func processAlive(pid int) bool {
 }
 
 func processesNamed(name string) []int {
-	listed, err := exec.Command("pgrep", "-x", processName(name)).Output()
+	listed, err := outside.Command(context.Background(), "pgrep", "-x", processName(name)).Output()
 	if err != nil {
 		return nil
 	}

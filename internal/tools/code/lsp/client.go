@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/tools/code/jsonrpc"
@@ -24,7 +25,7 @@ import (
 type Client struct {
 	server  Server
 	root    string
-	cmd     *exec.Cmd
+	cmd     *outside.Cmd
 	tree    process.Tree
 	input   io.WriteCloser
 	wire    *jsonrpc.Wire
@@ -73,7 +74,7 @@ func start(server Server, root string) (*Client, error) {
 	if err != nil {
 		return nil, errors.New(server.Program + " is not on PATH, and tofu never installs it: install it with " + server.Install)
 	}
-	cmd := exec.Command(program, server.Args...)
+	cmd := outside.Command(context.Background(), program, server.Args...)
 	printed := &stderrTail{}
 	cmd.Dir, cmd.Stderr = root, printed
 	input, inputErr := cmd.StdinPipe()
@@ -81,7 +82,7 @@ func start(server Server, root string) (*Client, error) {
 	if err := errors.Join(inputErr, outputErr); err != nil {
 		return nil, err
 	}
-	tree, err := process.StartTracked(cmd)
+	tree, err := process.StartClocked(cmd)
 	if err != nil {
 		return nil, fmt.Errorf("%s did not start: %w", server.Program, err)
 	}
@@ -246,7 +247,9 @@ func (c *Client) call(ctx context.Context, method string, params, result any) er
 		c.pending.Forget(id)
 		return err
 	}
+	stop := outside.Wait(ctx, outside.Process)
 	got, err := c.pending.Await(ctx, id, answered, c.exited)
+	stop()
 	switch {
 	case errors.Is(err, jsonrpc.ErrGone):
 		return fmt.Errorf("%s exited before it answered %s", c.server.Program, method)

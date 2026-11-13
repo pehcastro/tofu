@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/scratch"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/process"
@@ -203,18 +204,21 @@ func (c NativeCheck) run(ctx context.Context, limit time.Duration) (string, bool
 	defer cancel()
 	var output bytes.Buffer
 	var ran []string
-	started, failed := time.Now(), false
+	var running time.Duration
+	failed := false
 	for _, argv := range c.steps {
 		command := strings.Join(argv, " ")
 		ran = append(ran, command)
-		cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+		cmd := outside.Command(ctx, argv[0], argv[1:]...)
 		cmd.Dir, cmd.WaitDelay, cmd.Env = c.dir, konst.BashWaitDelayMillis*time.Millisecond, checkerEnv(ctx, c.dir)
 		cmd.Stdout, cmd.Stderr = &output, &output
-		tracked, err := process.StartTracked(cmd)
+		started := time.Now()
+		tracked, err := process.StartClocked(cmd)
 		if err != nil {
 			return fmt.Sprintf("typecheck skipped: %s did not start: %v", command, err), true
 		}
 		failed = cmd.Wait() != nil
+		running += time.Since(started)
 		tracked.Release()
 		switch {
 		case errors.Is(ctx.Err(), context.DeadlineExceeded):
@@ -227,7 +231,7 @@ func (c NativeCheck) run(ctx context.Context, limit time.Duration) (string, bool
 		}
 	}
 	run := c.parse(output.String())
-	run.Runner = fmt.Sprintf("typecheck: %s in %d ms", strings.Join(ran, " then "), time.Since(started).Milliseconds())
+	run.Runner = fmt.Sprintf("typecheck: %s in %d ms", strings.Join(ran, " then "), running.Milliseconds())
 	if failed && len(run.Problems) == 0 {
 		said := strings.Split(strings.TrimSpace(output.String()), "\n")
 		return run.Runner + " failed:\n" + strings.Join(said[:min(len(said), konst.TypecheckLinesCap)], "\n"), true

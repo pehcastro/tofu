@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/safe"
 )
 
@@ -149,6 +150,15 @@ type Tree struct{ inner tree }
 func StartTracked(cmd *exec.Cmd) (Tree, error) {
 	inner, err := startTree(cmd, DiesWithTofu)
 	return Tree{inner: inner}, err
+}
+
+func StartClocked(cmd *outside.Cmd) (Tree, error) {
+	var tracked Tree
+	err := cmd.StartWith(func(started *exec.Cmd) (err error) {
+		tracked, err = StartTracked(started)
+		return err
+	})
+	return tracked, err
 }
 
 func (t Tree) Release() { t.inner.release() }

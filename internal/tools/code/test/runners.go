@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/scratch"
 	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
@@ -283,12 +284,12 @@ func (c testCommand) run(ctx context.Context) (contract.Result, testOutcome) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, konst.TestRunDeadlineMillis*time.Millisecond)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, c.argv[0], c.argv[1:]...)
+	cmd := outside.Command(ctx, c.argv[0], c.argv[1:]...)
 	cmd.Dir, cmd.WaitDelay, cmd.Env = c.dir, konst.BashWaitDelayMillis*time.Millisecond, slices.Concat(os.Environ(), c.env, scratch.ScratchEnv(ctx))
 	var output bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &output, &output
 	started := time.Now()
-	tracked, err := process.StartTracked(cmd)
+	tracked, err := process.StartClocked(cmd)
 	if err != nil {
 		return contract.Failure(fmt.Sprintf("test skipped: %s did not start in %s: %v", command, c.dir, err)), testsNotRun
 	}
