@@ -91,7 +91,7 @@ func build(tofu, root, deck string, steps int) (string, error) {
 		return "", err
 	}
 	env := environment(home)
-	if err := verb(tofu, project, env, "boardy", "init", "--key", boardKey, "--name", "bench serve"); err != nil {
+	if err := verb(tofu, project, env, "boardy", "init", "--key", boardKey, "--name", "bench serve", "--mode", "empty"); err != nil {
 		return "", err
 	}
 	for ticket := 1; ticket <= boardTickets; ticket++ {
