@@ -14,10 +14,20 @@ const BlobSHA256 = "63543a55f1aa73865b6d4786a817a972c010faaea8e29397e3afd7da4bc9
 
 var registered sync.Once
 
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.C_sharpC())
+	if err != nil {
+		return nil
+	}
+	lang.ExternalScanner = grammarruntime.CSharpExternalScanner{}.ExternalScannerForLanguage(lang)
+	return lang
+}
+
 func Language() *gotreesitter.Language {
 	registered.Do(func() {
 		grammarruntime.RegisterC_sharpSupport()
 		grammarruntime.RegisterBlob("c_sharp", grammarblobs.C_sharp)
+		gotreesitter.RegisterCCoreLanguage("c_sharp", LanguageC)
 	})
 	return grammarruntime.Language("c_sharp.bin")
 }

@@ -16,7 +16,7 @@ import (
 	"github.com/odvcencio/gotreesitter"
 )
 
-var registeredScanner = regexp.MustCompile(`RegisterExternalScanner\("[^"]+", (\w+)\{\}\)`)
+var registeredScanner = regexp.MustCompile(`RegisterExternalScanner\("([^"]+)", (\w+)\{(.*)\}\)`)
 
 func main() {
 	check := flag.Bool("check", false, "name every generated file that differs without writing it")
@@ -45,11 +45,11 @@ func generate(check bool) error {
 		if err != nil {
 			return err
 		}
-		ccore, scanner, err := cCore(name)
+		ccore, attach, err := cCore(name)
 		if err != nil {
 			return err
 		}
-		source, err := wrapper(name, data, exists("grammars/runtime/support_"+name+".go"), ccore, scanner)
+		source, err := wrapper(name, data, exists("grammars/runtime/support_"+name+".go"), ccore, attach)
 		if err != nil {
 			return fmt.Errorf("format %s: %w", name, err)
 		}
@@ -82,7 +82,7 @@ func generate(check bool) error {
 	return nil
 }
 
-func cCore(name string) (ccore bool, scanner string, err error) {
+func cCore(name string) (ccore bool, attach string, err error) {
 	blob, err := os.ReadFile("grammars/grammar_blobs/" + name + "_c.bin")
 	if errors.Is(err, os.ErrNotExist) {
 		return false, "", nil
@@ -105,10 +105,13 @@ func cCore(name string) (ccore bool, scanner string, err error) {
 	if found == nil {
 		return false, "", fmt.Errorf("%s_c has external symbols and support_%s.go registers no scanner", name, name)
 	}
-	return true, string(found[1]), nil
+	if len(found[3]) == 0 {
+		return true, "lang.ExternalScanner = grammarruntime." + string(found[2]) + "{}.ExternalScannerForLanguage(lang)\n", nil
+	}
+	return true, fmt.Sprintf("bound, ok := grammarruntime.LookupExternalScanner(%q).(interface {\nExternalScannerForLanguage(*gotreesitter.Language) gotreesitter.ExternalScanner\n})\nif !ok {\nreturn nil\n}\nlang.ExternalScanner = bound.ExternalScannerForLanguage(lang)\n", found[1]), nil
 }
 
-func wrapper(name string, blob []byte, support, ccore bool, scanner string) ([]byte, error) {
+func wrapper(name string, blob []byte, support, ccore bool, attach string) ([]byte, error) {
 	accessor := accessorName(name)
 	pkg := name
 	if token.Lookup(pkg).IsKeyword() {
@@ -122,10 +125,6 @@ func wrapper(name string, blob []byte, support, ccore bool, scanner string) ([]b
 	languageC := ""
 	if ccore {
 		register = append(register, fmt.Sprintf("gotreesitter.RegisterCCoreLanguage(%q, LanguageC)", name))
-		attach := ""
-		if scanner != "" {
-			attach = "lang.ExternalScanner = grammarruntime." + scanner + "{}.ExternalScannerForLanguage(lang)\n"
-		}
 		languageC = "func LanguageC() *gotreesitter.Language {\nlang, err := gotreesitter.LoadLanguage(grammarblobs." + accessor + "C())\nif err != nil {\nreturn nil\n}\n" + attach + "return lang\n}\n\n"
 	}
 	once := "registered.Do(func() { " + register[0] + " })"

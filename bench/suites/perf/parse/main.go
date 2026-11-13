@@ -21,14 +21,22 @@ import (
 
 	ts "github.com/odvcencio/gotreesitter"
 	"github.com/odvcencio/gotreesitter/grammars/bash"
+	clang "github.com/odvcencio/gotreesitter/grammars/c"
+	csharp "github.com/odvcencio/gotreesitter/grammars/c_sharp"
+	"github.com/odvcencio/gotreesitter/grammars/cpp"
 	"github.com/odvcencio/gotreesitter/grammars/css"
 	golang "github.com/odvcencio/gotreesitter/grammars/go"
+	"github.com/odvcencio/gotreesitter/grammars/groovy"
 	"github.com/odvcencio/gotreesitter/grammars/html"
 	"github.com/odvcencio/gotreesitter/grammars/javascript"
 	"github.com/odvcencio/gotreesitter/grammars/json"
+	makefile "github.com/odvcencio/gotreesitter/grammars/make"
 	"github.com/odvcencio/gotreesitter/grammars/markdown"
+	"github.com/odvcencio/gotreesitter/grammars/objc"
+	"github.com/odvcencio/gotreesitter/grammars/powershell"
 	"github.com/odvcencio/gotreesitter/grammars/python"
 	"github.com/odvcencio/gotreesitter/grammars/rust"
+	"github.com/odvcencio/gotreesitter/grammars/sql"
 	"github.com/odvcencio/gotreesitter/grammars/toml"
 	"github.com/odvcencio/gotreesitter/grammars/tsx"
 	"github.com/odvcencio/gotreesitter/grammars/typescript"
@@ -71,6 +79,8 @@ func run() error {
 		"typescript": typescript.Language, "tsx": tsx.Language, "javascript": javascript.Language,
 		"json": json.Language, "css": css.Language, "toml": toml.Language, "yaml": yaml.Language,
 		"bash": bash.Language, "html": html.Language, "markdown": markdown.Language,
+		"c": clang.Language, "c_sharp": csharp.Language, "objc": objc.Language, "make": makefile.Language,
+		"powershell": powershell.Language, "cpp": cpp.Language, "groovy": groovy.Language, "sql": sql.Language,
 	}[*langName]
 	if !ok {
 		return fmt.Errorf("unknown -lang %q", *langName)
