@@ -31,11 +31,12 @@ mid-turn is restated too, and a correction to the running task is not. Jev
 reads your message beside the end of the lead's last reply and the task in
 hand, so `ok lets finish the tickets` after a ticket list, a `yes` to a
 proposal or a go on a plan starts the work with no playback. A precise
-request, such as a named rename, starts at once too. When Jev can't be
-reached nothing is restated, and the `request_open` row says why. On 54
-mocked conversations Jev restated none of the 24 continuations and
-approvals and 39 of 40 open requests over two passes, where reading your
-message alone restated 9 to 10 of those 24 a pass.
+request starts at once too, however many steps it has: a named rename, or
+a search, an edit to a named function and a reply in a given form. When
+Jev can't be reached nothing is restated, and the `request_open` row says
+why. On 59 mocked conversations Jev restated none of the 24 continuations
+and approvals, 1 of 15 precise requests and 19 of 20 open requests on each
+of two passes.
 
 **A reversible choice doesn't reach you at all in auto.** When the lead
 marks every question `reversible`, meaning its recommended option can be

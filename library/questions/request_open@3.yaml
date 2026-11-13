@@ -1,0 +1,57 @@
+name: request_open
+domain: general
+questions_version: 3
+mode: enforced
+notes: >-
+  asked by internal/agent/loop/inbox.go for each message the person types or
+  steers to the lead, before the lead acts on it. state.said is that message
+  without tofu's notes, state.replied is the end of the lead's last reply
+  before it, and state.task is the task the lead held before it; both are an
+  empty string when there is none, never missing, since a missing field is
+  answered anyway. at or above open_at the verdict is ask: the task carries a
+  note that the request is open, and the rule restate_open makes the first
+  reply restate it with what is in and out, then wait. below it the verdict
+  is allow and the lead proceeds. an error or a timeout gives allow and no
+  note, and the row's mode_reason says why, since the person re-reading a
+  playback costs more than one wrong start; with no Jev configured the
+  question is not asked. version 1 read said alone and restated continuations
+  such as a go on a listed set of tickets. version 2 named a request of many
+  linked steps as open and read a precise request of several named steps at
+  the middle of the range, 0.41 to 0.61, so it restated some. open_at is the
+  middle of the noul range, an uncalibrated prior.
+
+thresholds:
+  open_at: 0.5
+
+state:
+  - said
+  - replied
+  - task
+
+questions:
+  open:
+    type: noul
+    instructions: >-
+      A person typed said to a coding agent. replied is the end of the
+      agent's last reply before said and task is the work the agent held
+      before said; either may be empty. Decide whether said leaves the
+      outcome to the agent's taste: whether two careful engineers who both
+      did exactly what said asks could still end with different results.
+      Steps that name their files, functions, commands or values fix their
+      outcome, however many there are and whatever form the reply should
+      take. Words that carry on, accept, choose from or answer what replied
+      laid out, or that go on with task, are never open.
+    criteria:
+      true: >-
+        the result is left to taste: said asks for a feeling, a quality, a
+        direction or an intent, such as faster, smoother, nicer, better,
+        easier or like something else, or for a long run whose steps nobody
+        has named, and nothing in replied or task settles which change makes
+        it true or how much is enough.
+      false: >-
+        the result is fixed: each step said asks for names what it acts on
+        and what it changes it to, a search, an edit, a command or a reply in
+        a given form, so anyone would end with the same result; or said
+        accepts, chooses from, corrects or carries on what replied laid out
+        or what task holds; or said asks for no work, such as a question,
+        news or a greeting.

@@ -325,7 +325,7 @@ under that agent's name, each with the file it came from:
   or while the lead worked, such as `request_open` and `steer_answered`, at
   the moment it was asked, matched by the session id its ledger row carries.
   A row Jev couldn't answer says why: `jev request_open asked 1 question,
-  allow · open · library/questions/request_open@2.yaml · jev could not
+  allow · open · library/questions/request_open@3.yaml · jev could not
   answer, so the request is not restated and the lead starts on it: ...
   dial tcp 127.0.0.1:9: connectex: No connection could be made ...`
 

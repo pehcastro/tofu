@@ -67,7 +67,8 @@ Jev's `request_open` question, beside the end of the lead's last reply
 and the task in hand. When it judges the lead would have to guess what you
 want, the task carries a note and the rule `restate_open` has the first
 reply restate it, with what is in and out, and wait. A continuation, an
-approval or a go on a plan the lead laid out is never restated, and when
+approval, a go on a plan the lead laid out or a precise request of several
+named steps is never restated, and when
 Jev can't be reached nothing is restated. `tofu why --last 1 --point
 request_open` shows the row and, on a failure, the reason.
 

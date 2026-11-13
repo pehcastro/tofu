@@ -27,7 +27,7 @@ func newSteerJudge(project, log string) (*oneQuestion, error) {
 }
 
 func newOpenJudge(project, log string) (*oneQuestion, error) {
-	return newOneQuestion(questionAt{ref: "request_open@2", name: "open", builder: "request_open_state@2", onReach: ledger.VerdictAsk,
+	return newOneQuestion(questionAt{ref: "request_open@3", name: "open", builder: "request_open_state@2", onReach: ledger.VerdictAsk,
 		unanswered: "jev could not answer, so the request is not restated and the lead starts on it: "}, project, log)
 }
 
