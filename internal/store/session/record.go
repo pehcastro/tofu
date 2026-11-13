@@ -43,6 +43,7 @@ const (
 	EventSent            EventKind = "sent"
 	EventEstimate        EventKind = "estimate"
 	EventEstimateSettled EventKind = "estimate_settled"
+	EventWall            EventKind = "wall"
 )
 
 type NoticeBody struct {

@@ -49,7 +49,7 @@ func (s Settings) shown(events []Event, depth viewDepth, report safe.Report) ([]
 		for _, event := range part {
 			author := cmp.Or(event.Author, event.Agent, AuthorOrchestrator)
 			switch event.Kind {
-			case EventToolCall, EventCompaction, EventTurnStart, EventSpawn, EventAgentEnd, EventReport, EventEstimate, EventEstimateSettled:
+			case EventToolCall, EventCompaction, EventTurnStart, EventSpawn, EventAgentEnd, EventReport, EventEstimate, EventEstimateSettled, EventWall:
 			case EventMessage:
 				if made := madeBy[event.ID]; event.Request != "" && len(made) > 0 {
 					message := objectOf(event.Body)

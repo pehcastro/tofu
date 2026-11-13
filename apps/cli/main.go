@@ -29,7 +29,9 @@ import (
 	settingsverb "tofu/apps/cli/verbs/settings"
 	shellsverb "tofu/apps/cli/verbs/shells"
 	statusverb "tofu/apps/cli/verbs/status"
+	wallsverb "tofu/apps/cli/verbs/walls"
 	"tofu/apps/cli/wiring"
+	"tofu/internal/agent/subagents"
 	"tofu/internal/host"
 	"tofu/internal/konst"
 	"tofu/internal/platform/console"
@@ -38,6 +40,7 @@ import (
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/platform/text"
+	"tofu/internal/store/walls"
 	"tofu/library/changelog"
 )
 
@@ -124,6 +127,8 @@ Verbs:
             repository back its sessions
   browser   list the Chrome tabs tofu can reach, install or uninstall the extension,
             or open and close a background tab tofu owns
+  walls     print how long each kind of operation took, in ms: n, p50, p90 and max
+            over the last %d days, or --since, --op and --all
 
 Every verb that reports state takes --json and prints one JSON document.
 `
@@ -131,6 +136,10 @@ Every verb that reports state takes --json and prints one JSON document.
 func loadLocalTimeZone() { _ = time.Local.String() }
 
 func main() {
+	started, known := processStarted()
+	if !known {
+		started = time.Now()
+	}
 	stopProfile := profile.StartProfile()
 	reapTemporaryProjects(os.Stderr)
 	args, temporary := temporaryProject(os.Args[1:])
@@ -164,11 +173,32 @@ func main() {
 	moveHomeKeys(os.Stderr)
 	pages := console.ReadConsolePages()
 	code := run(args, os.Stdin, os.Stdout, os.Stderr)
+	if name, timed := verbWallName(args); timed {
+		appendVerbWall(dir, name, started, code)
+	}
 	pages.Restore()
 	letGo()
 	stopSnapshots()
 	stopProfile()
 	os.Exit(code)
+}
+
+func verbWallName(args []string) (string, bool) {
+	switch {
+	case len(args) == 0 || verbNamed(args[0]).run == nil || args[0] == "--continue" || args[0] == "serve" || hostRuns(args):
+		return "", false
+	case len(args) > 1 && !strings.HasPrefix(args[1], "-") && (args[0] == "tool" || slices.Contains(usageWords(verbNamed(args[0]).usage), args[1])):
+		return args[0] + " " + args[1], true
+	}
+	return args[0], true
+}
+
+func appendVerbWall(dir, name string, started time.Time, code int) {
+	places, err := platformproject.ResolvePlaces(cmp.Or(dir, "."))
+	if err == nil {
+		_ = walls.Append(places.State, walls.Wall{Op: walls.OpVerb, Name: name, MS: time.Since(started).Milliseconds(), At: started.UnixMilli(),
+			Session: os.Getenv(subagents.SessionEnv), OK: code == output.ExitOK})
+	}
 }
 
 func withoutProjectFlag(args []string, flag string) ([]string, bool) {
@@ -399,6 +429,8 @@ func verbNamed(name string) verb {
 		return verb{withoutIn(migrateVerb), migrateUsage}
 	case "browser":
 		return verb{run: withoutIn(browserverb.Verb)}
+	case "walls":
+		return verb{withoutIn(wallsverb.Verb), wallsverb.Usage}
 	case "preview":
 		return verb{run: withoutIn(previewVerb)}
 	case "help", "-h", "--help":
@@ -414,7 +446,7 @@ func verbHelp(name string, args []string) string {
 	text := verbNamed(name).usage
 	switch name {
 	case "help", "-h", "--help", "--continue":
-		return fmt.Sprintf(usage, konst.TemporaryProjectIdleHours)
+		return fmt.Sprintf(usage, konst.TemporaryProjectIdleHours, konst.WallsWindowDays)
 	case "run":
 		return runUsage()
 	case "sift":

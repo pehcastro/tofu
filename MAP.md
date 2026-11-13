@@ -47,7 +47,7 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 
 ## When two folders both seem to fit
 
-- `apps/cli/` or `internal/cli/`: a verb is a package in `apps/cli/verbs/` when it stands alone (boardy, browser, doctor, guard, hooks, judge, learn, library, lint, login, memory, models, rules, settings, shells, status); the verbs tied to the run and the session (run, session, drive, host, setup and the rest) live in `apps/cli/` itself; how a verb builds its run options, wires, classifier and names is in `apps/cli/wiring/`; what verbs print through is in `apps/cli/output/`; `internal/cli/` holds only `internal/cli/render/`, which `internal/ui/` imports too.
+- `apps/cli/` or `internal/cli/`: a verb is a package in `apps/cli/verbs/` when it stands alone (boardy, browser, doctor, guard, hooks, judge, learn, library, lint, login, memory, models, rules, settings, shells, status, walls); the verbs tied to the run and the session (run, session, drive, host, setup and the rest) live in `apps/cli/` itself; how a verb builds its run options, wires, classifier and names is in `apps/cli/wiring/`; what verbs print through is in `apps/cli/output/`; `internal/cli/` holds only `internal/cli/render/`, which `internal/ui/` imports too.
 - `internal/tools/registry/` or `internal/tools/<category>/`: which agent gets which tool, and the wrappers every call passes through, are in `internal/tools/registry/`; each tool is its own package in its category.
 - `internal/judge/` or `internal/models/classifiers/`: the decision and its question are in `internal/judge/`; the client that asks the classifier is in `internal/models/classifiers/`.
 - `library/` or `internal/librarian/`: a file a person edits is in `library/`; the code that loads it and picks what reaches a prompt is in `internal/librarian/`.
@@ -92,6 +92,7 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 | `apps/cli/verbs/settings/` | `tofu settings` |
 | `apps/cli/verbs/shells/` | `tofu shells`, scratch and cron |
 | `apps/cli/verbs/status/` | `tofu status` and `tofu why` |
+| `apps/cli/verbs/walls/` | `tofu walls`: n, p50, p90 and max per op and name |
 | `apps/cli/wiring/` | what a verb builds before it runs: accounts, registry, classifier, judge, guard, keys, names, quota, proxy |
 | `apps/desk/` | the desktop app, Rust and gpui; skipped by the Go build and checks |
 
@@ -197,6 +198,7 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 | `internal/store/memory/tree/` | the memory tree |
 | `internal/store/settings/` | settings: store, accessors, search |
 | `internal/store/snapshot/` | snapshots for undo |
+| `internal/store/walls/` | walls: the op enum, the record, the day file writer, and the reader that maps the older timing fields |
 | `internal/store/learn/` `repeat/` `words/` | learning from past sessions; `repeat/` finds repeated asks, `words/` the person's words |
 | `internal/project/boardy/` | the board: tickets, epics, sprints, flow, checks, hooks, catchup |
 | `internal/project/guard/` | the ownership guard behind the hooks: board, git, loc, shell, write, stamp |

@@ -12,6 +12,12 @@ const (
 
 const LeadBashSoftLimitMillis = 10000
 
+const (
+	WallsWindowDays = 14
+	WallDaysKept    = 30
+	WallLineBytes   = 512
+)
+
 const BoardReportedSentencesMost = 2
 
 const (
