@@ -347,7 +347,7 @@ func whyVerb(args []string, out, errOut io.Writer, now func() time.Time) int {
 }
 
 func loginVerb(args []string, in io.Reader, out, errOut io.Writer) int {
-	return loginverb.Verb(loginverb.Deps{Status: statusverb.LoginVerb})(args, in, out, errOut)
+	return verbNamed("login").clocked(context.Background(), args, in, out, errOut)
 }
 
 func verbNamed(name string) verb {
@@ -379,11 +379,11 @@ func verbNamed(name string) verb {
 	case "doctor":
 		return verb{run: withoutIn(doctorverb.Verb), usage: doctorverb.Usage}
 	case "login":
-		return verb{run: loginVerb, usage: loginverb.Usage + " " + loginverb.AsideUsage}
+		return verb{clocked: loginverb.Verb(loginverb.Deps{Status: statusverb.LoginVerb}), usage: loginverb.Usage + " " + loginverb.AsideUsage}
 	case "logout":
 		return verb{run: withoutIn(loginverb.LogoutVerb), usage: loginverb.LogoutUsage}
 	case "usage":
-		return verb{run: withoutIn(loginverb.UsageVerb), usage: loginverb.UsageFlags}
+		return verb{clocked: loginverb.UsageVerb, usage: loginverb.UsageFlags}
 	case "models":
 		return verb{run: withoutIn(modelsverb.Verb), usage: modelsverb.Usage}
 	case "agents":

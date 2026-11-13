@@ -76,7 +76,7 @@ func record(pagesDir, fastbrowse, hotel, home string) (err error) {
 	if _, err := driver.NewProfile(home, profile); err != nil {
 		return err
 	}
-	client, err := driver.Endpoint{Home: home, Profile: profile, Headless: true}.Dial()
+	client, err := driver.Endpoint{Home: home, Profile: profile, Headless: true}.Dial(context.Background())
 	if err != nil {
 		return err
 	}

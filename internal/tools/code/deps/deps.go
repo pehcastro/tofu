@@ -17,6 +17,7 @@ import (
 
 	"tofu/internal/models/llm/core"
 	platformfs "tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/tools/contract"
 )
 
@@ -50,7 +51,7 @@ type saved struct {
 
 func New(dir string, limits Limits) (contract.Tool, error) {
 	root, err := contract.NewRoot(dir)
-	return Deps{root: root, limits: limits, http: &http.Client{Timeout: limits.Request}}, err
+	return Deps{root: root, limits: limits, http: outside.Client(outside.Network, &http.Client{Timeout: limits.Request})}, err
 }
 
 func (Deps) Name() string { return Name }

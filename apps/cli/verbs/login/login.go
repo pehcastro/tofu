@@ -84,14 +84,14 @@ type Deps struct {
 	Status func(args []string, out, errOut io.Writer, now time.Time, urls map[quota.Provider]string) int
 }
 
-func Verb(deps Deps) func(args []string, in io.Reader, out, errOut io.Writer) int {
-	return func(args []string, in io.Reader, out, errOut io.Writer) int {
+func Verb(deps Deps) func(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) int {
+	return func(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) int {
 		now := time.Now()
 		if len(args) > 0 && args[0] == "--status" {
 			return deps.Status(args[1:], out, errOut, now, nil)
 		}
 		return answerVerb("login", args, out, errOut, now, func(args []string) (Receipt, *output.Refusal) {
-			return login(args, in, errOut, now)
+			return login(ctx, args, in, errOut, now)
 		})
 	}
 }
@@ -121,7 +121,7 @@ func answerVerb(verb string, args []string, out, errOut io.Writer, now time.Time
 	return output.ExitOK
 }
 
-func login(args []string, in io.Reader, prompts io.Writer, now time.Time) (Receipt, *output.Refusal) {
+func login(ctx context.Context, args []string, in io.Reader, prompts io.Writer, now time.Time) (Receipt, *output.Refusal) {
 	if len(args) == 0 {
 		return Receipt{}, output.UsageRefusal("no role named", Usage)
 	}
@@ -143,7 +143,7 @@ func login(args []string, in io.Reader, prompts io.Writer, now time.Time) (Recei
 		if len(args) > 2 {
 			return Receipt{}, output.UsageRefusal("a key is read from a prompt, never from an argument", facts.Hint())
 		}
-		return loginKey(facts, in, prompts)
+		return loginKey(ctx, facts, in, prompts)
 	}
 	paste := false
 	for _, arg := range args[2:] {
@@ -152,7 +152,7 @@ func login(args []string, in io.Reader, prompts io.Writer, now time.Time) (Recei
 		}
 		paste = true
 	}
-	return signIn(spec, paste, in, prompts, now)
+	return signIn(ctx, spec, paste, in, prompts, now)
 }
 
 func retiredLogin(word string) *output.Refusal {
@@ -304,7 +304,7 @@ func setCredentialAside(disable bool, number string, now time.Time) (Receipt, *o
 	return receiptOf(row, change), nil
 }
 
-func signIn(spec accounts.Spec, paste bool, in io.Reader, prompts io.Writer, now time.Time) (Receipt, *output.Refusal) {
+func signIn(ctx context.Context, spec accounts.Spec, paste bool, in io.Reader, prompts io.Writer, now time.Time) (Receipt, *output.Refusal) {
 	path, err := accounts.Path()
 	if err != nil {
 		return Receipt{}, output.Failure(err.Error(), "")
@@ -320,7 +320,7 @@ func signIn(spec accounts.Spec, paste bool, in io.Reader, prompts io.Writer, now
 		options.Open = nil
 		options.Paste = func() (string, error) { return promptPaste(in, prompts) }
 	}
-	credential, err := accounts.Login(context.Background(), options)
+	credential, err := accounts.Login(ctx, options)
 	if err != nil {
 		return Receipt{}, refusedBy(name, wiring.LoginHint(name), err)
 	}
@@ -339,7 +339,7 @@ func signIn(spec accounts.Spec, paste bool, in io.Reader, prompts io.Writer, now
 	return Receipt{}, output.Failure("the sign-in was stored and then not found", "tofu login --status")
 }
 
-func loginKey(facts wiring.KeyFacts, in io.Reader, prompts io.Writer) (Receipt, *output.Refusal) {
+func loginKey(ctx context.Context, facts wiring.KeyFacts, in io.Reader, prompts io.Writer) (Receipt, *output.Refusal) {
 	key, err := promptKey(in, prompts, facts.Name, facts.Variable)
 	if errors.As(err, &keyfield.Cancelled{}) {
 		return Receipt{}, output.UsageRefusal(err.Error(), facts.Hint())
@@ -347,7 +347,7 @@ func loginKey(facts wiring.KeyFacts, in io.Reader, prompts io.Writer) (Receipt, 
 	if err != nil {
 		return Receipt{}, output.Failure(err.Error(), facts.Hint())
 	}
-	return storeKey(context.Background(), facts.Status(func(string) string { return "" }), key)
+	return storeKey(ctx, facts.Status(func(string) string { return "" }), key)
 }
 
 func storeKey(ctx context.Context, stored host.KeyStatus, key string) (Receipt, *output.Refusal) {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 )
@@ -65,7 +66,7 @@ func newManager(store *Store, spec Spec, find func(time.Time) (Row, bool, error)
 		store:    store,
 		spec:     spec,
 		find:     find,
-		client:   &http.Client{},
+		client:   outside.Client(outside.Network, nil),
 		now:      time.Now,
 		save:     store.UpdateIfRefreshMatches,
 		note:     func(string) {},

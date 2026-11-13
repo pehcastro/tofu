@@ -84,10 +84,6 @@ func New(config Config) (*Client, error) {
 	if config.Concurrency < 1 {
 		return nil, Fail("transport.New", KindBadRequest, nil, "concurrency must be at least one")
 	}
-	client := config.HTTP
-	if client == nil {
-		client = &http.Client{}
-	}
 	if config.Now == nil {
 		config.Now = time.Now
 	}
@@ -96,7 +92,7 @@ func New(config Config) (*Client, error) {
 	}
 	return &Client{
 		config: config,
-		http:   client,
+		http:   outside.Client(config.Waits, config.HTTP),
 		slots:  make(chan struct{}, config.Concurrency),
 	}, nil
 }

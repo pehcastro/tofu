@@ -38,7 +38,7 @@ const (
 	windowScopeMark   = ":"
 )
 
-func UsageVerb(args []string, out, errOut io.Writer) int {
+func UsageVerb(ctx context.Context, args []string, _ io.Reader, out, errOut io.Writer) int {
 	o := output.Verb{Name: "usage", UsageLine: UsageFlags, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	for _, arg := range args {
 		if arg != output.JSONFlag && arg != historyFlag {
@@ -49,7 +49,7 @@ func UsageVerb(args []string, out, errOut io.Writer) int {
 		return usageHistoryVerb(out, errOut, o.AsJSON)
 	}
 	now := time.Now()
-	report, err := readUsage(now)
+	report, err := readUsage(ctx, now)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -114,8 +114,8 @@ func usageFail(errOut io.Writer, err error) int {
 	return output.PrintFailure(errOut, output.ExitVerdict, "tofu usage: "+err.Error(), "")
 }
 
-func readUsage(now time.Time) (host.UsageReport, error) {
-	results, err := wiring.PollCredentials(context.Background(), time.Now, nil)
+func readUsage(ctx context.Context, now time.Time) (host.UsageReport, error) {
+	results, err := wiring.PollCredentials(ctx, time.Now, nil)
 	if err != nil {
 		return host.UsageReport{}, err
 	}

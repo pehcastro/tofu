@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
 	"tofu/internal/tools/shell/process"
 )
 
@@ -61,7 +62,7 @@ func parseFor(registry *process.Registry, entry process.Shell, spec string) (con
 			if err != nil {
 				return "", false
 			}
-			response, err := http.DefaultClient.Do(request)
+			response, err := outside.Client(outside.Network, nil).Do(request)
 			if err != nil {
 				return "", false
 			}

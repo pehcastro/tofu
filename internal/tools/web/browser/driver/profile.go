@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/tools/shell/process"
@@ -29,7 +31,7 @@ type Endpoint struct {
 	Headless bool
 }
 
-func (e Endpoint) Dial() (*Client, error) {
+func (e Endpoint) Dial(ctx context.Context) (*Client, error) {
 	if e.Profile == "" {
 		return Dial(e.Home)
 	}
@@ -37,12 +39,12 @@ func (e Endpoint) Dial() (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := stopLeftover(dir); err != nil {
+	if err := stopLeftover(ctx, dir); err != nil {
 		return nil, err
 	}
-	conn, err := attachChrome(dir)
+	conn, err := attachChrome(ctx, dir)
 	if err != nil {
-		conn, err = launchChrome(dir, e.Headless)
+		conn, err = launchChrome(ctx, dir, e.Headless)
 	}
 	if err != nil {
 		return nil, err
@@ -119,23 +121,23 @@ func StopProfile(home, name string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return stopChrome(dir)
+	return stopChrome(context.Background(), dir)
 }
 
 func reapLeftovers(home string) {
 	profiles, _ := Profiles(home)
 	for _, profile := range profiles {
-		_ = stopLeftover(profile.Dir)
+		_ = stopLeftover(context.Background(), profile.Dir)
 	}
 }
 
-func stopLeftover(dir string) error {
+func stopLeftover(ctx context.Context, dir string) error {
 	raw, err := os.ReadFile(filepath.Join(dir, ownerFile))
 	unrecorded := errors.Is(err, os.ErrNotExist)
 	if !unrecorded && (err != nil || !headlessOwnerGone(string(raw))) {
 		return nil
 	}
-	conn, err := attachChrome(dir)
+	conn, err := attachChrome(ctx, dir)
 	if err != nil {
 		return nil
 	}
@@ -167,8 +169,8 @@ func headlessOwnerGone(record string) bool {
 	return runtime.GOOS != "windows" && owner.Signal(syscall.Signal(0)) != nil
 }
 
-func stopChrome(dir string) (bool, error) {
-	conn, err := attachChrome(dir)
+func stopChrome(ctx context.Context, dir string) (bool, error) {
+	conn, err := attachChrome(ctx, dir)
 	if err != nil {
 		return false, nil
 	}
@@ -190,7 +192,7 @@ func closeChrome(conn *cdpConn, dir string) error {
 func RemoveProfile(home, name string) error {
 	dir, err := profileDir(home, name)
 	if err == nil {
-		_, err = stopChrome(dir)
+		_, err = stopChrome(context.Background(), dir)
 	}
 	if err != nil {
 		return err
@@ -217,12 +219,13 @@ func LoginProfile(home, name, url string) error {
 	return command.Process.Release()
 }
 
-func attachChrome(dir string) (*cdpConn, error) {
+func attachChrome(ctx context.Context, dir string) (*cdpConn, error) {
 	raw, err := os.ReadFile(filepath.Join(dir, devToolsActivePort))
 	port, path, written := strings.Cut(strings.TrimSpace(string(raw)), "\n")
 	if err != nil || !written {
 		return nil, fmt.Errorf("no Chrome runs on the profile in %s", dir)
 	}
+	defer outside.Wait(ctx, outside.Network)()
 	address := net.JoinHostPort("127.0.0.1", strings.TrimSpace(port))
 	conn, err := net.DialTimeout("tcp", address, konst.BrowserDialTimeoutMillis*time.Millisecond)
 	if err != nil {
@@ -236,7 +239,7 @@ func attachChrome(dir string) (*cdpConn, error) {
 	return newCDPConn(ws), nil
 }
 
-func launchChrome(dir string, headless bool) (*cdpConn, error) {
+func launchChrome(ctx context.Context, dir string, headless bool) (*cdpConn, error) {
 	if profileHeld(dir) {
 		return nil, fmt.Errorf("a Chrome window holds the profile in %s, from tofu browser profile login: close it", dir)
 	}
@@ -268,7 +271,7 @@ func launchChrome(dir string, headless bool) (*cdpConn, error) {
 	report := project.Crashes(".")
 	safe.Go(report, "chrome wait", func() { exited <- safe.Call(report, "chrome wait", command.Wait) })
 	for until := time.Now().Add(konst.BrowserCallTimeoutMillis * time.Millisecond); time.Now().Before(until); {
-		if conn, err := attachChrome(dir); err == nil {
+		if conn, err := attachChrome(ctx, dir); err == nil {
 			return conn, nil
 		}
 		select {

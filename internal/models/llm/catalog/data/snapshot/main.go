@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"tofu/internal/models/llm/catalog"
+	"tofu/internal/platform/outside"
 )
 
 const (
@@ -34,7 +35,7 @@ func snapshot(vendors []string) error {
 		return errors.New("name the models.dev providers to keep, as in go run ./data/snapshot anthropic openai meta")
 	}
 	source := catalog.RegistrySource()
-	response, err := http.Get(source)
+	response, err := outside.Client(outside.Network, nil).Get(source)
 	if err != nil {
 		return err
 	}

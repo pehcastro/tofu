@@ -440,14 +440,14 @@ func tabToRead(tabs []browser.Tab, tab int) (browser.Tab, error) {
 
 func (o browserOutput) withBrowser(home string, use func(*browser.Client) error) error {
 	at := browserEndpoint(home)
-	client, err := at.Dial()
+	client, err := at.Dial(context.Background())
 	if errors.Is(err, browser.ErrRelayRestarting) && !o.asJSON {
 		_, _ = fmt.Fprintln(o.out, o.page.Glyph(cli.Changed)+" updating: the relay restarts on this build")
 	}
 	restarting := errors.Is(err, browser.ErrRelayRestarting)
 	for until := time.Now().Add(konst.BrowserCallTimeoutMillis * time.Millisecond); restarting && err != nil && time.Now().Before(until); {
 		time.Sleep(konst.BrowserDialTimeoutMillis * time.Millisecond)
-		client, err = at.Dial()
+		client, err = at.Dial(context.Background())
 	}
 	if err != nil {
 		return err

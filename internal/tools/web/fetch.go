@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 )
@@ -73,7 +74,7 @@ type flight struct {
 
 func NewClient(config Config) *Client {
 	return &Client{
-		http:     &http.Client{Timeout: time.Duration(config.TimeoutMS) * time.Millisecond},
+		http:     outside.Client(outside.Network, &http.Client{Timeout: time.Duration(config.TimeoutMS) * time.Millisecond}),
 		maxBytes: config.MaxPageBytes,
 		pages:    map[string]Page{},
 		flights:  map[string]*flight{},

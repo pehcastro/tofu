@@ -9,6 +9,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/transport"
+	"tofu/internal/platform/outside"
 )
 
 type retrying struct {
@@ -17,9 +18,9 @@ type retrying struct {
 }
 
 func StreamingClient(given *http.Client, plan transport.Config, headersWithin time.Duration) *http.Client {
-	client := &http.Client{}
+	var client http.Client
 	if given != nil {
-		*client = *given
+		client = *given
 	}
 	if client.Transport == nil {
 		bounded := http.DefaultTransport.(*http.Transport).Clone()
@@ -30,7 +31,7 @@ func StreamingClient(given *http.Client, plan transport.Config, headersWithin ti
 	if plan.Retries > 0 {
 		client.Transport = retrying{base: client.Transport, plan: plan}
 	}
-	return client
+	return outside.Client(outside.Model, &client)
 }
 
 func (r retrying) RoundTrip(request *http.Request) (*http.Response, error) {

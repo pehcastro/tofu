@@ -100,7 +100,7 @@ func (t *BrowserTabs) closeWhere(openedBy func(string) bool) {
 	if !slices.ContainsFunc(slices.Collect(maps.Values(t.opened)), openedBy) {
 		return
 	}
-	client, err := t.at.Dial()
+	client, err := t.at.Dial(context.Background())
 	if err != nil {
 		return
 	}
@@ -149,10 +149,10 @@ func (s *browserSession) driverOn(client *browser.Client) *browser.Driver {
 	return s.driver
 }
 
-func (s *browserSession) redial() (*browser.Driver, error) {
+func (s *browserSession) redial(ctx context.Context) (*browser.Driver, error) {
 	_ = s.client.Close()
 	s.client = nil
-	client, err := s.at.Dial()
+	client, err := s.at.Dial(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -160,8 +160,8 @@ func (s *browserSession) redial() (*browser.Driver, error) {
 	return s.driverOn(client), nil
 }
 
-func (s *browserSession) drive(tab int, use func(*browser.Driver) error) error {
-	return s.with(func(client *browser.Client) error {
+func (s *browserSession) drive(ctx context.Context, tab int, use func(*browser.Driver) error) error {
+	return s.with(ctx, func(client *browser.Client) error {
 		s.driverOn(client)
 		if tab != 0 && s.ownOnly {
 			found, err := driveTab(client, tab)
@@ -187,7 +187,7 @@ func (s *browserSession) drive(tab int, use func(*browser.Driver) error) error {
 
 func (s *browserSession) start(ctx context.Context, url string) (int, error) {
 	opened := 0
-	err := s.with(func(client *browser.Client) (err error) {
+	err := s.with(ctx, func(client *browser.Client) (err error) {
 		if _, err := driveTab(client, s.driverOn(client).Tab); err == nil {
 			return nil
 		}
@@ -200,11 +200,11 @@ func (s *browserSession) start(ctx context.Context, url string) (int, error) {
 	return opened, err
 }
 
-func (s *browserSession) with(use func(*browser.Client) error) error {
+func (s *browserSession) with(ctx context.Context, use func(*browser.Client) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.client == nil {
-		client, err := s.at.Dial()
+		client, err := s.at.Dial(ctx)
 		if err != nil {
 			return err
 		}
@@ -232,9 +232,9 @@ func (browserTabs) Definition() core.Tool {
 	}
 }
 
-func (t browserTabs) Run(context.Context, json.RawMessage) (contract.Result, error) {
+func (t browserTabs) Run(ctx context.Context, _ json.RawMessage) (contract.Result, error) {
 	var tabs []browser.Tab
-	err := t.session.with(func(client *browser.Client) (err error) {
+	err := t.session.with(ctx, func(client *browser.Client) (err error) {
 		tabs, err = client.Tabs()
 		return err
 	})
@@ -286,7 +286,7 @@ func (t browserRead) Run(ctx context.Context, raw json.RawMessage) (contract.Res
 		return contract.Result{}, fmt.Errorf("browser_read: arguments are not the expected shape: %w", err)
 	}
 	var page browser.Page
-	err := t.session.with(func(client *browser.Client) (err error) {
+	err := t.session.with(ctx, func(client *browser.Client) (err error) {
 		page, err = browser.SharedTab{Client: client, ID: args.Tab}.Snapshot(ctx)
 		return err
 	})
@@ -382,7 +382,7 @@ func (browserObserve) Definition() core.Tool {
 	}
 }
 
-func (t browserObserve) Run(_ context.Context, raw json.RawMessage) (contract.Result, error) {
+func (t browserObserve) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	var args struct {
 		Tab         int    `json:"tab"`
 		Interactive *bool  `json:"interactive"`
@@ -400,7 +400,7 @@ func (t browserObserve) Run(_ context.Context, raw json.RawMessage) (contract.Re
 		interactive = *args.Interactive
 	}
 	var snapshot, changes string
-	err := t.session.drive(args.Tab, func(driver *browser.Driver) (err error) {
+	err := t.session.drive(ctx, args.Tab, func(driver *browser.Driver) (err error) {
 		args.Tab = driver.Tab
 		if changes, err = sinceLastRead(driver); err == nil {
 			snapshot, err = driver.Observe(interactive)
@@ -851,7 +851,7 @@ func (t browserAct) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	}
 	if len(args.Actions) == 0 {
 		var snapshot string
-		err := t.session.drive(args.Tab, func(driver *browser.Driver) (err error) {
+		err := t.session.drive(ctx, args.Tab, func(driver *browser.Driver) (err error) {
 			args.Tab = driver.Tab
 			snapshot, err = driver.Observe(true)
 			return err
@@ -897,7 +897,7 @@ func (s *browserSession) batch(ctx context.Context, tab int, steps []browserStep
 			fmt.Fprintf(&report, "%d. %s: %s\n", ran, step, line)
 		}
 	}
-	err := s.drive(tab, func(driver *browser.Driver) (err error) {
+	err := s.drive(ctx, tab, func(driver *browser.Driver) (err error) {
 		if changes, err = sinceLastRead(driver); err != nil {
 			return err
 		}
@@ -975,7 +975,7 @@ func (s *browserSession) batch(ctx context.Context, tab int, steps []browserStep
 		}
 		tab = driver.Tab
 		if dropped {
-			if driver, err = s.redial(); err != nil {
+			if driver, err = s.redial(ctx); err != nil {
 				fmt.Fprintf(&report, "the page was not read after it: %v\n", err)
 				return nil
 			}
@@ -1104,7 +1104,7 @@ func (s *browserSession) capture(ctx context.Context, root, path string, takes i
 	}
 	var saved []motion.Take
 	tab := 0
-	err = s.with(func(client *browser.Client) error {
+	err = s.with(ctx, func(client *browser.Client) error {
 		driver := s.driverOn(client)
 		found, err := driveTab(client, cmp.Or(asked, driver.Tab))
 		switch {
@@ -1315,7 +1315,7 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 	}
 	var result jevloop.Result
 	closed := false
-	err = t.session.with(func(client *browser.Client) error {
+	err = t.session.with(ctx, func(client *browser.Client) error {
 		judge, err := t.judge()
 		if err != nil {
 			return fmt.Errorf("no action ran, jev is not reachable: %w", err)

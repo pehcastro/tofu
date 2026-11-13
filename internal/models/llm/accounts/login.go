@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"tofu/internal/platform/outside"
 )
 
 const loginTimeout = 5 * time.Minute
@@ -24,9 +26,7 @@ type LoginOptions struct {
 }
 
 func Login(ctx context.Context, opt LoginOptions) (Credential, error) {
-	if opt.Client == nil {
-		opt.Client = &http.Client{}
-	}
+	opt.Client = outside.Client(outside.Network, opt.Client)
 	if opt.Now == nil {
 		opt.Now = time.Now
 	}

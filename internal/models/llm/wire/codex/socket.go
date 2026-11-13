@@ -20,6 +20,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/transport"
+	"tofu/internal/platform/outside"
 )
 
 var errNoSocket = errors.New("the socket is busy, failed or not offered, so the request goes over http")
@@ -78,7 +79,9 @@ func (w *Wire) overSocket(ctx context.Context, dump Dump, onDelta, onThinking fu
 	heard := false
 	result, err := readEvents(func() ([]byte, error) {
 		_ = conn.SetReadDeadline(time.Now().Add(w.config.StreamIdle))
+		answered := outside.Wait(ctx, outside.Model)
 		_, payload, err := conn.ReadMessage()
+		answered()
 		note.Received(len(payload), err)
 		if err != nil {
 			return nil, transport.Fail("codex.Ask", transport.KindProvider, errors.Join(core.ErrStreamBroke, cmp.Or(ctx.Err(), err)), "reading the socket")
@@ -143,7 +146,9 @@ func (w *Wire) dial(ctx context.Context, dump Dump, note core.Note) error {
 		}
 	}
 	dialer := websocket.Dialer{Proxy: http.ProxyFromEnvironment, HandshakeTimeout: w.config.StreamIdle, EnableCompression: true}
+	opened := outside.Wait(ctx, outside.Model)
 	conn, response, err := dialer.DialContext(ctx, w.socket.url, header)
+	opened()
 	note.Change(func(attempt *core.Attempt) {
 		attempt.Status = 0
 		if response != nil {
