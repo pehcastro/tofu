@@ -41,6 +41,7 @@ import (
 	memory "tofu/internal/store/memory/entries"
 	sessionstore "tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
+	"tofu/internal/store/walls"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/files/glob"
 	"tofu/internal/tools/shell/process"
@@ -94,12 +95,17 @@ type appLaunch struct {
 	endSession    *func() []string
 	turnRunning   *func() (string, bool)
 	stopRestoring func()
+	started       time.Time
 }
 
 func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
+	started, known := processStarted()
+	if !known {
+		started = time.Now()
+	}
 	registry, registryErr := shellsverb.LaunchShellRegistry(dir)
 	home, _ := os.UserHomeDir()
-	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: browser.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), turnRunning: new(func() (string, bool)), stopRestoring: func() {}}
+	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: browser.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), turnRunning: new(func() (string, bool)), stopRestoring: func() {}, started: started}
 	safe.Go(platformproject.Crashes(dir), "state sweep", func() {
 		state, err := platformproject.ProjectStateDirAt(dir)
 		if err != nil {
@@ -200,6 +206,16 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 		Resumed: opening,
 		Keymap:  shortcuts,
 		Agents:  func() roster.Found { found, _ := discoverAgents(); return found },
+		FirstFrame: func() {
+			name := "resume"
+			if launch.fresh {
+				name = "fresh"
+			}
+			if places, err := platformproject.ResolvePlaces(dir); err == nil {
+				_ = walls.Append(places.State, walls.Wall{Op: walls.OpFirstFrame, Name: name, MS: time.Since(launch.started).Milliseconds(),
+					At: launch.started.UnixMilli(), Session: live.ID(), OK: true})
+			}
+		},
 	}
 }
 

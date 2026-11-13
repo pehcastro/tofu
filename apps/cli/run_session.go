@@ -3,12 +3,15 @@ package main
 import (
 	"cmp"
 	"slices"
+	"time"
 
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/hooks"
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 )
 
 const (
@@ -25,11 +28,18 @@ type runResumed struct {
 	release  func() error
 }
 
-func resumeRun(dir, handle string, say func(string)) (runResumed, error) {
+func resumeRun(dir, handle string, say func(string)) (resumed runResumed, err error) {
 	if handle == "" {
 		return runResumed{}, nil
 	}
 	dir = cmp.Or(dir, ".")
+	started := time.Now()
+	defer func() {
+		if places, placesErr := platformproject.ResolvePlaces(dir); placesErr == nil {
+			_ = walls.Append(places.State, walls.Wall{Op: walls.OpSessionResume, Name: "run", MS: time.Since(started).Milliseconds(), At: started.UnixMilli(),
+				Session: resumed.carry.Session, OK: err == nil})
+		}
+	}()
 	store, err := session.OpenIn(dir)
 	if err != nil {
 		return runResumed{}, err
@@ -46,7 +56,7 @@ func resumeRun(dir, handle string, say func(string)) (runResumed, error) {
 	if err != nil {
 		return runResumed{}, err
 	}
-	resumed := runResumed{carry: carry, prefix: &loop.Prefix{}, pick: pick, pickFrom: "the model tofu session set chose", release: release}
+	resumed = runResumed{carry: carry, prefix: &loop.Prefix{}, pick: pick, pickFrom: "the model tofu session set chose", release: release}
 	if pick.Model == "" {
 		resumed.pick, resumed.pickFrom = lastAsked(store, dir, carry.Session)
 	}

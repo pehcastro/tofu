@@ -70,6 +70,10 @@ func (a *App) View() tea.View {
 	}
 	var caret *tea.Cursor
 	if a.current == screenChat && len(a.dialogs) == 0 && !a.settingUp() {
+		if !a.framed {
+			a.framed = true
+			a.options.FirstFrame()
+		}
 		caret = a.view.Cursor()
 		if caret != nil {
 			caret.Y += bodyTop

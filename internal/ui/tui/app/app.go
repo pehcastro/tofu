@@ -180,6 +180,7 @@ type Options struct {
 	Pose          string
 	Keymap        string
 	PromptHistory string
+	FirstFrame    func()
 }
 
 type screen int
@@ -266,6 +267,7 @@ type App struct {
 	width          int
 	height         int
 	started        time.Time
+	framed         bool
 	busy           bool
 	leading        bool
 	afterTurn      []func() string
@@ -363,6 +365,9 @@ func New(options Options) *App {
 	}
 	if state, err := project.ProjectStateDirAt(options.Root); err == nil && options.Promotions == "" && options.Root != "" {
 		options.Promotions = isession.NewPromotionLog(state)
+	}
+	if options.FirstFrame == nil {
+		options.FirstFrame = func() {}
 	}
 	if options.Keymap == "" {
 		options.Keymap, _ = keymap.ShortcutsPath()
