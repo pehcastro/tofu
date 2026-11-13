@@ -29,6 +29,7 @@ import (
 	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 	"tofu/internal/tools/agents/done"
 	"tofu/internal/tools/agents/forget"
 	"tofu/internal/tools/agents/note"
@@ -409,6 +410,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			recording.Lock()
 			defer recording.Unlock()
 			compactions.exchange(id, why, wire, request, started, tap.Attempts(), decision, err)
+			into.wall(walls.OpMemoryRequest, "memory model", started, err)
 			if compactions != nil {
 				into.failed, compactions.failed = append(into.failed, compactions.failed...), nil
 			}
@@ -601,7 +603,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		return sessionStartMessages(hook.SessionCompact, fire(ctx, hook.Input{Event: hook.SessionStart, Source: hook.SessionCompact}).Context, now())
 	}
 	trims, shownReads := !config.NoCompaction && budget.Automatic, &contract.ReadWindow{}
-	trimFrom := func(step int, when string, from int) (*Compaction, error) {
+	trimFrom := func(step int, when string, from int, trigger string, started time.Time) (*Compaction, error) {
 		before := slices.Clone(messages)
 		compaction, shrink, err := trimRead(artifacts, budget, step, messages, from)
 		if compaction != nil {
@@ -612,6 +614,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			sent = len(messages)
 			recorded.listChange("compaction", when+": the conversation crossed its budget, so tofu "+shrink.String(), before, messages)
 			messages = append(messages, added...)
+		}
+		if compaction != nil || err != nil {
+			recorded.wall(walls.OpCompaction, trigger, started, err)
 		}
 		return compaction, err
 	}
@@ -628,6 +633,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 	}
 	trimUnderTarget := func(step int, when string) (*Compaction, error) {
+		started := time.Now()
 		if !trims {
 			sayCompactionOff(when, func() bool { return sentTokens(messages) > budget.Bands.Target() })
 			return nil, nil
@@ -636,9 +642,10 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			return nil, nil
 		}
 		firstMissing := sort.Search(len(messages)+1, func(from int) bool { return !landsFrom(step, from, budget.Bands.Target()) })
-		return trimFrom(step, when, max(firstMissing-1, 0))
+		return trimFrom(step, when, max(firstMissing-1, 0), "trim to target", started)
 	}
 	trim := func(step int, when string) (*Compaction, error) {
+		started := time.Now()
 		if !trims {
 			sayCompactionOff(when, func() bool { return landsFrom(step, 0, budget.Bands.Target()*konst.ContextTrimPercentOfTarget/100) })
 			return nil, nil
@@ -651,7 +658,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if !landsFrom(step, from, budget.Bands.Target()*konst.ContextTrimPercentOfTarget/100) {
 			return nil, nil
 		}
-		return trimFrom(step, when, from)
+		return trimFrom(step, when, from, "trim", started)
 	}
 	sayForkOff := func(when string) {
 		if !forkOffSaid && budget.Crossed(artifacts.preview, historyOf(messages)) {
@@ -747,9 +754,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			if config.Boundary != nil {
 				turnFiles.Turn.Owns = config.Boundary.Owns()
 			}
+			snapshotStarted := time.Now()
 			timed, cancel := context.WithTimeout(context.WithoutCancel(ctx), konst.ShadowSnapshotTimeoutMillis*time.Millisecond)
 			notes, err := turnFiles.End(timed)
 			cancel()
+			recorded.wall(walls.OpUndoSnapshot, "turn end", snapshotStarted, err)
 			row.Warnings = append(row.Warnings, notes...)
 			switch begun := turnFiles.Begun(); {
 			case begun != nil:
@@ -861,8 +870,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		return fmt.Sprintf("this turn stopped forking: fork %d leaves the conversation at %d tokens, over its %d token target and no smaller than the fork before it, so another fork would not help",
 			forks+1, fork.TokensAfter, budget.Bands.Target())
 	}
-	heldForStep := 0
+	heldForStep, forkStarted := 0, time.Time{}
 	forkFrom := func(forced ForkKind) (*Fork, []core.Message, error) {
+		forkStarted = time.Now()
 		landing := budget
 		heldForStep = 0
 		if forced == "" && budget.Crossed(artifacts.preview, historyOf(messages)) {
@@ -873,7 +883,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			heldForStep = stepHold(artifacts.preview, budget.Bands, step)
 			landing.Bands = budget.Bands.Less(heldForStep)
 		}
-		return forkHistory(artifacts, landing, config.forkOpening(taskOrigin), messages, forced, forks+1, config.Caps.MaxForks)
+		fork, begun, err := forkHistory(artifacts, landing, config.forkOpening(taskOrigin), messages, forced, forks+1, config.Caps.MaxForks)
+		if err != nil {
+			recorded.wall(walls.OpCompaction, "fork "+string(cmp.Or(forced, ForkContinuation)), forkStarted, err)
+		}
+		return fork, begun, err
 	}
 	var recordedGrants []subagents.Question
 	if config.Boundary != nil {
@@ -949,6 +963,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if drops := picturesLeftOut(beforeFork, messages); len(drops) > 0 {
 			recordPictureDrops(fork.Step, sentTokens(beforeFork), messages, drops)
 		}
+		recorded.wall(walls.OpCompaction, "fork "+string(fork.Kind), forkStarted, nil)
 	}
 	endForked := func(fork *Fork, when string, beforeFork, begun []core.Message, moved *Account, why string) Row {
 		forks++
@@ -1111,8 +1126,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			continue
 		}
 		if overflowed(err) {
-			before := slices.Clone(messages)
+			before, started := slices.Clone(messages), time.Now()
 			shrink, shrinkErr := shrinkOverflow(artifacts, messages, asSent.Total(), budget.WindowTokens)
+			recorded.wall(walls.OpCompaction, "overflow shrink", started, shrinkErr)
 			shownReads.Rebuilt()
 			flush()
 			recorded.listChange("overflow shrink", "the context window overflowed on step "+strconv.Itoa(step), before, messages)
@@ -1671,6 +1687,10 @@ func backgroundSurvivors(registry *process.Registry, before map[string]bool) str
 func overflowed(err error) bool {
 	var refused *recall.OverWindow
 	return transport.ContextOverflow(err) || errors.As(err, &refused)
+}
+
+func (r *record) wall(op walls.Op, name string, started time.Time, err error) {
+	r.add(session.Event{Kind: session.EventWall}, walls.Wall{Op: op, Name: name, MS: time.Since(started).Milliseconds(), At: started.UnixMilli(), OK: err == nil})
 }
 
 func (r *record) heldAgain() (*record, bool) {
