@@ -668,10 +668,8 @@ func kotlinScanAutoSemicolon(lexer *gotreesitter.ExternalLexer, validSymbols []b
 			for nestingDepth > 0 {
 				la := lexer.Lookahead()
 				if la == 0 {
-					// Unterminated block comment at EOF — produce it.
-					lexer.MarkEnd()
-					lexer.SetResultSymbol(symbols[kotlinTokMultilineComment])
-					return true
+					// Unterminated block comment at EOF — the loop ends and the ASI decision below runs, as in C.
+					break
 				}
 				switch la {
 				case '*':
