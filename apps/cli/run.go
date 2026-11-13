@@ -435,7 +435,7 @@ func dryRun(opts wiring.RunOpts, selected models.Model, dir string, say func(str
 }
 
 func runTurn(opts wiring.RunOpts, resumed runResumed, selected models.Model, clock *startupClock, out, errOut io.Writer) int {
-	places, err := platformproject.ResolvePlaces(".")
+	places, err := platformproject.ResolvePlaces(cmp.Or(opts.Dir, "."))
 	if err != nil {
 		return runFail(errOut, err)
 	}
