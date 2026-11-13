@@ -59,11 +59,11 @@ naming the file.
 
 ## The hooks a board starts with
 
-`tofu boardy init` with no `--mode` gives a board 23 hooks. The five
+`tofu boardy init` with no `--mode` gives a board 24 hooks. The five
 starter hooks are copied into the board's `rules/` folder, so each is a
-file you can edit. The eighteen library hooks ship in the binary, run
+file you can edit. The nineteen library hooks ship in the binary, run
 below the three scopes, and show as scope `library` in
-`tofu boardy rule list`. Only `callers_owned` takes a bypass.
+`tofu boardy rule list`. Only `callers_owned` and `walls_stamp` take a bypass.
 
 | Hook | Scope | Fires | Does | Bypass |
 |---|---|---|---|---|
@@ -90,6 +90,7 @@ below the three scopes, and show as scope `library` in
 | `done_reason` | library | before a close to done | refuses a reason Jev reads as naming an open part | none |
 | `callers_owned` | library | before a move to doing | refuses while a caller outside the owns is not owned | the person or the lead, accepted by nobody |
 | `before_on_time` | library | before `ticket.log` | refuses evidence logged ahead of the before capture, except a late one logged with `--late <commit or build>` | none |
+| `walls_stamp` | library | before a close to done | refuses a ticket owning Go source while HEAD's tree has no walls stamp, naming each op that left its tier with its before and after ms | the person or the lead, accepted by nobody, with a reason naming the op and why it cannot be faster |
 
 A bypass of `callers_owned` is
 `tofu boardy move DEMO-7 doing --bypass callers_owned --why "the caller is generated"`:

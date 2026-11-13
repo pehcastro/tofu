@@ -18,6 +18,8 @@ const (
 	FlowsStamps    = "flows"
 	TreewideStamps = "treewide"
 	DeskStamps     = "desk"
+	WallsStamps    = "walls"
+	WallsFailed    = "walls-failed"
 	deskArea       = fs.DeskRoot
 )
 
@@ -180,12 +182,8 @@ func (g DoneGate) owning(repo string, owns []string) DoneGate {
 	if g.Area == "" || g.Unread != "" {
 		return g
 	}
-	var pathspecs []string
-	for _, glob := range owns {
-		pathspecs = append(pathspecs, ":(glob,icase)"+glob)
-	}
 	var err error
-	if g.Dirty, err = uncommitted(repo, pathspecs...); err != nil {
+	if g.Dirty, err = uncommitted(repo, ownedPathspecs(owns)...); err != nil {
 		g.Unread = "the owned paths could not be checked for uncommitted work: " + err.Error()
 	}
 	return g
@@ -252,6 +250,46 @@ func flowsAreas(globs []string) []string {
 		}
 	}
 	return areas
+}
+
+func ownedPathspecs(owns []string) []string {
+	var pathspecs []string
+	for _, glob := range owns {
+		pathspecs = append(pathspecs, ":(glob,icase)"+glob)
+	}
+	return pathspecs
+}
+
+func (m Managed) wallsStamp(_ rules.Hook, s subject, _ string) (checked, error) {
+	why := wallsRefusal(m.Store.Root, s.ticket.ID, s.ticket.Owns)
+	return checked{detail: why, failed: why != ""}, nil
+}
+
+func wallsRefusal(repo, id string, owns []string) string {
+	if repo == "" || len(owns) == 0 {
+		return ""
+	}
+	tracked, _ := gitOut(repo, "", append([]string{"ls-files", "--"}, ownedPathspecs(owns)...)...)
+	if !slices.ContainsFunc(strings.Split(tracked, "\n"), func(path string) bool { return strings.HasSuffix(path, ".go") }) {
+		return ""
+	}
+	tree, run, err := Unstamped(repo, WallsStamps)
+	switch {
+	case err != nil:
+		return "HEAD's tree could not be read, so no walls stamp can be checked: " + err.Error()
+	case len(run) == 0:
+		return ""
+	}
+	why := "HEAD's tree " + tree + " has no passing walls stamp, and " + id + " owns Go source in " + strings.Join(owns, ", ") + "."
+	command := "TOFU_STAMP_DIR=" + StampDir(repo) + " " + run[0]
+	failed, _ := os.ReadFile(StampPath(repo, WallsFailed, tree))
+	if !stamped(repo, WallsFailed, tree) {
+		return why + "\nNo walls run on this tree is recorded. In a clean clone of HEAD, run: " + command + "\nIt times a fixed list of operations on cassettes and stamps the tree when no op's own time moves to a worse tier than bench/gates/walls/baseline.json."
+	}
+	_, ops, _ := strings.Cut(strings.ReplaceAll(string(failed), "\r\n", "\n"), "\n")
+	return why + "\nThe walls gate on this tree found ops that left their tier:\n  " + strings.ReplaceAll(strings.TrimSpace(ops), "\n", "\n  ") +
+		"\nGo back and make each op faster first, commit, and in a clean clone of HEAD run: " + command +
+		"\nWhen an op cannot be faster, because the app now does more there and the time is real, be realistic: tofu boardy move " + id + " done --bypass walls_stamp --why \"<op>: <why it cannot be faster>\", which records the reason on the ticket, then go run ./bench/gates/walls -update so the next ticket is measured against the new time."
 }
 
 func uncommitted(repo string, pathspecs ...string) ([]string, error) {

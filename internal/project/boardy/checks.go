@@ -42,6 +42,7 @@ func checks() map[string]namedCheck {
 		"evidence_chars":    Managed.evidenceChars,
 		"decidable":         Managed.decidableCheck,
 		checkDoneStamp:      Managed.doneStamp,
+		"walls_stamp":       Managed.wallsStamp,
 		checkEvidenced:      Managed.evidenced,
 		"before_captured":   Managed.beforeCaptured,
 		"before_on_time":    Managed.beforeOnTime,

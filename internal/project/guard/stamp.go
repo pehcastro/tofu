@@ -14,6 +14,8 @@ const (
 	FlowsStamps    = boardy.FlowsStamps
 	TreewideStamps = boardy.TreewideStamps
 	DeskStamps     = boardy.DeskStamps
+	WallsStamps    = boardy.WallsStamps
+	WallsFailed    = boardy.WallsFailed
 )
 
 func StampDir(repo string) string { return boardy.StampDir(repo) }

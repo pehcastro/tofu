@@ -1,0 +1,456 @@
+{
+  "machine": "DESKTOP-AHUN9RO",
+  "date": "2026-11-13T18:58:35-03:00",
+  "head": "419f8814",
+  "runs": 5,
+  "ops": [
+    {
+      "op": "compaction",
+      "name": "compact",
+      "n": 5,
+      "own_p50": 68,
+      "tier": "S"
+    },
+    {
+      "op": "doctor_step",
+      "name": "blockers",
+      "n": 5,
+      "own_p50": 5,
+      "tier": "S"
+    },
+    {
+      "op": "doctor_step",
+      "name": "boards with no rules",
+      "n": 5,
+      "own_p50": 0,
+      "tier": "S"
+    },
+    {
+      "op": "doctor_step",
+      "name": "browser hosts",
+      "n": 5,
+      "own_p50": 0,
+      "tier": "S"
+    },
+    {
+      "op": "doctor_step",
+      "name": "calibration",
+      "n": 5,
+      "own_p50": 0,
+      "tier": "S"
+    },
+    {
+      "op": "doctor_step",
+      "name": "credential store",
+      "n": 5,
+      "own_p50": 2,
+      "tier": "S"
+    },
+    {
+      "op": "doctor_step",
+      "name": "credentials",
+      "n": 5,
+      "own_p50": 2,
+      "tier": "S"
+    },
+    {
+      "op": "doctor_step",
+      "name": "gate key",
+      "n": 5,
+      "own_p50": 3,
+      "tier": "S"
+    },
+    {
+      "op": "doctor_step",
+      "name": "ledger",
+      "n": 5,
+      "own_p50": 0,
+      "tier": "S"
+    },
+    {
+      "op": "doctor_step",
+      "name": "library",
+      "n": 5,
+      "own_p50": 19,
+      "tier": "S"
+    },
+    {
+      "op": "doctor_step",
+      "name": "proxy",
+      "n": 5,
+      "own_p50": 16,
+      "tier": "S"
+    },
+    {
+      "op": "doctor_step",
+      "name": "rendering",
+      "n": 5,
+      "own_p50": 0,
+      "tier": "S"
+    },
+    {
+      "op": "doctor_step",
+      "name": "rule locks",
+      "n": 5,
+      "own_p50": 9,
+      "tier": "S"
+    },
+    {
+      "op": "doctor_step",
+      "name": "spend limit",
+      "n": 5,
+      "own_p50": 0,
+      "tier": "S"
+    },
+    {
+      "op": "doctor_step",
+      "name": "stacked rules",
+      "n": 5,
+      "own_p50": 8,
+      "tier": "S"
+    },
+    {
+      "op": "doctor_step",
+      "name": "wire spends",
+      "n": 5,
+      "own_p50": 0,
+      "tier": "S"
+    },
+    {
+      "op": "first_frame",
+      "name": "fresh",
+      "n": 5,
+      "own_p50": 129,
+      "tier": "A"
+    },
+    {
+      "op": "first_token",
+      "name": "cassette",
+      "n": 15,
+      "own_p50": 40,
+      "tier": "S"
+    },
+    {
+      "op": "host_join",
+      "name": "serve",
+      "n": 10,
+      "own_p50": 51,
+      "tier": "S"
+    },
+    {
+      "op": "host_start",
+      "name": "host run",
+      "n": 5,
+      "own_p50": 49,
+      "tier": "S"
+    },
+    {
+      "op": "jev",
+      "name": "keep_result",
+      "n": 5,
+      "own_p50": 0,
+      "tier": "S"
+    },
+    {
+      "op": "last_byte",
+      "name": "cassette",
+      "n": 15,
+      "own_p50": 41,
+      "tier": "S"
+    },
+    {
+      "op": "request",
+      "name": "cassette",
+      "n": 15,
+      "own_p50": 42,
+      "tier": "S"
+    },
+    {
+      "op": "session_open",
+      "name": "host",
+      "n": 5,
+      "own_p50": 13,
+      "tier": "S"
+    },
+    {
+      "op": "session_open",
+      "name": "member",
+      "n": 10,
+      "own_p50": 0,
+      "tier": "S"
+    },
+    {
+      "op": "session_resume",
+      "name": "host",
+      "n": 5,
+      "own_p50": 5,
+      "tier": "S"
+    },
+    {
+      "op": "session_resume",
+      "name": "member",
+      "n": 5,
+      "own_p50": 33,
+      "tier": "S"
+    },
+    {
+      "op": "startup",
+      "name": "to first request",
+      "n": 5,
+      "own_p50": 241,
+      "tier": "A"
+    },
+    {
+      "op": "startup_step",
+      "name": "account pick: credentials, token refresh and usage check",
+      "n": 5,
+      "own_p50": 0,
+      "tier": "S"
+    },
+    {
+      "op": "startup_step",
+      "name": "frameworks and prompt",
+      "n": 5,
+      "own_p50": 9,
+      "tier": "S"
+    },
+    {
+      "op": "startup_step",
+      "name": "gate and sift",
+      "n": 5,
+      "own_p50": 4,
+      "tier": "S"
+    },
+    {
+      "op": "startup_step",
+      "name": "instructions and environment",
+      "n": 5,
+      "own_p50": 1,
+      "tier": "S"
+    },
+    {
+      "op": "startup_step",
+      "name": "lead tools, board and spawn",
+      "n": 5,
+      "own_p50": 10,
+      "tier": "S"
+    },
+    {
+      "op": "startup_step",
+      "name": "memory",
+      "n": 5,
+      "own_p50": 2,
+      "tier": "S"
+    },
+    {
+      "op": "startup_step",
+      "name": "model catalogue",
+      "n": 5,
+      "own_p50": 1,
+      "tier": "S"
+    },
+    {
+      "op": "startup_step",
+      "name": "model choice and credentials",
+      "n": 5,
+      "own_p50": 0,
+      "tier": "S"
+    },
+    {
+      "op": "startup_step",
+      "name": "rules",
+      "n": 5,
+      "own_p50": 7,
+      "tier": "S"
+    },
+    {
+      "op": "startup_step",
+      "name": "settings",
+      "n": 5,
+      "own_p50": 40,
+      "tier": "S"
+    },
+    {
+      "op": "startup_step",
+      "name": "shell, tools and session store",
+      "n": 5,
+      "own_p50": 16,
+      "tier": "S"
+    },
+    {
+      "op": "startup_step",
+      "name": "skills",
+      "n": 5,
+      "own_p50": 1,
+      "tier": "S"
+    },
+    {
+      "op": "startup_step",
+      "name": "sub-agent definitions",
+      "n": 5,
+      "own_p50": 4,
+      "tier": "S"
+    },
+    {
+      "op": "startup_step",
+      "name": "turn before the first request: session, hooks and prompt",
+      "n": 5,
+      "own_p50": 113,
+      "tier": "A"
+    },
+    {
+      "op": "startup_step",
+      "name": "turn opening",
+      "n": 5,
+      "own_p50": 34,
+      "tier": "S"
+    },
+    {
+      "op": "tool",
+      "name": "edit",
+      "n": 10,
+      "own_p50": 1,
+      "tier": "S"
+    },
+    {
+      "op": "tool",
+      "name": "glob",
+      "n": 10,
+      "own_p50": 1,
+      "tier": "S"
+    },
+    {
+      "op": "tool",
+      "name": "read",
+      "n": 10,
+      "own_p50": 1,
+      "tier": "S"
+    },
+    {
+      "op": "tool",
+      "name": "search",
+      "n": 10,
+      "own_p50": 1,
+      "tier": "S"
+    },
+    {
+      "op": "turn",
+      "name": "lead",
+      "n": 5,
+      "own_p50": 429,
+      "tier": "B"
+    },
+    {
+      "op": "undo_snapshot",
+      "name": "turn end",
+      "n": 5,
+      "own_p50": 115,
+      "tier": "A"
+    },
+    {
+      "op": "verb",
+      "name": "boardy catchup",
+      "n": 5,
+      "own_p50": 20,
+      "tier": "S"
+    },
+    {
+      "op": "verb",
+      "name": "boardy list",
+      "n": 5,
+      "own_p50": 17,
+      "tier": "S"
+    },
+    {
+      "op": "verb",
+      "name": "doctor",
+      "n": 5,
+      "own_p50": 89,
+      "tier": "S"
+    },
+    {
+      "op": "verb",
+      "name": "drive",
+      "n": 5,
+      "own_p50": 258,
+      "tier": "A"
+    },
+    {
+      "op": "verb",
+      "name": "hooks",
+      "n": 5,
+      "own_p50": 12,
+      "tier": "S"
+    },
+    {
+      "op": "verb",
+      "name": "host stop",
+      "n": 5,
+      "own_p50": 35,
+      "tier": "S"
+    },
+    {
+      "op": "verb",
+      "name": "projects",
+      "n": 5,
+      "own_p50": 27,
+      "tier": "S"
+    },
+    {
+      "op": "verb",
+      "name": "session list",
+      "n": 5,
+      "own_p50": 51,
+      "tier": "S"
+    },
+    {
+      "op": "verb",
+      "name": "settings",
+      "n": 5,
+      "own_p50": 14,
+      "tier": "S"
+    },
+    {
+      "op": "verb",
+      "name": "shells",
+      "n": 5,
+      "own_p50": 12,
+      "tier": "S"
+    },
+    {
+      "op": "verb",
+      "name": "version",
+      "n": 5,
+      "own_p50": 11,
+      "tier": "S"
+    },
+    {
+      "op": "wire",
+      "name": "initialize",
+      "n": 5,
+      "own_p50": 0,
+      "tier": "S"
+    },
+    {
+      "op": "wire",
+      "name": "session.compact",
+      "n": 5,
+      "own_p50": 70,
+      "tier": "S"
+    },
+    {
+      "op": "wire",
+      "name": "session.open",
+      "n": 15,
+      "own_p50": 1,
+      "tier": "S"
+    },
+    {
+      "op": "wire",
+      "name": "turn.send",
+      "n": 5,
+      "own_p50": 96,
+      "tier": "S"
+    }
+  ]
+}

@@ -36,7 +36,7 @@ A hook is one YAML file:
 
 ## Where it lives
 
-- Hooks, in the order they fire and by file name within each: the board `boards/<KEY>/rules/`, the project `boards/rules/`, the user `~/.tofu/boardy/rules/`. `tofu boardy init` copies the five starter hooks into the board's folder, and the eighteen library hooks run from the binary below all three scopes.
+- Hooks, in the order they fire and by file name within each: the board `boards/<KEY>/rules/`, the project `boards/rules/`, the user `~/.tofu/boardy/rules/`. `tofu boardy init` copies the five starter hooks into the board's folder, and the nineteen library hooks run from the binary below all three scopes.
 - A rule file in the library shape with `on:` and the `command` or `person_approves` checker loads as a before hook; in shadow mode it records.
 - `boards/<KEY>/board.toml`: the managers, `holds`, `log_to_review` and `scope_cites`.
 - `boards/<KEY>/triage/T<n>.json`: one waiting request each.
@@ -46,7 +46,7 @@ A hook is one YAML file:
 
 ## The hooks a board starts with
 
-`tofu boardy init` with no `--mode` gives a board these 23 hooks. Each runs before its events and refuses unless it says otherwise. Only `callers_owned` takes a bypass.
+`tofu boardy init` with no `--mode` gives a board these 24 hooks. Each runs before its events and refuses unless it says otherwise. Only `callers_owned` and `walls_stamp` take a bypass.
 
 Starter hooks, copied into `boards/<KEY>/rules/`, scope `board`:
 
@@ -76,8 +76,9 @@ Library hooks, read from the binary, scope `library`:
 - `done_reason`, Done says nothing is open, on a close to done.
 - `callers_owned`, Callers are owned, on a move to doing. The person or the lead bypasses it with `tofu boardy move <ticket> doing --bypass callers_owned --why <reason>`; nobody accepts it, the move passes, and the bypass is a `rule` line in `events.jsonl`. A hook that names who accepts its bypass holds the move until they answer: `tofu boardy bypass list` shows each one, `tofu boardy bypass answer <B> yes|no --why <text>` answers it, one unanswered for 24 hours expires, and a hook bypassed 3 times in 7 days is flagged.
 - `before_on_time`, A before is captured on time, on `ticket.log`, unless it is logged with `--late <commit or build>`.
+- `walls_stamp`, Done keeps every op in its tier, on a close to done of a ticket owning Go source: HEAD's tree needs a passing walls stamp, and the refusal names each op that left its tier with its before and after ms. Make the op faster first; when it cannot be, the person or the lead bypasses with `tofu boardy move <ticket> done --bypass walls_stamp --why "<op>: <why it cannot be faster>"`, and the walls baseline is then rewritten.
 
-`tofu boardy init --mode empty` starts a board with none of the 23, and `--mode custom --hooks may_move,drafted` with only the named ones. Such a board keeps a `rules/.mode` file, so `tofu doctor` does not offer it the starter hooks again.
+`tofu boardy init --mode empty` starts a board with none of the 24, and `--mode custom --hooks may_move,drafted` with only the named ones. Such a board keeps a `rules/.mode` file, so `tofu doctor` does not offer it the starter hooks again.
 
 ## Change it
 

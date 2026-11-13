@@ -1,0 +1,13 @@
+id: walls_stamp
+name: Done keeps every op in its tier
+description: A ticket whose owns hold Go source reaches done only with HEAD's tree stamped by the walls gate, which fails an op whose own time leaves its tier; make the op faster first, and bypass naming the op and why only when it cannot be faster.
+when: before
+on: ticket.close
+if:
+  to: done
+do: check walls_stamp
+then: refuse
+bypass:
+  who: person, lead
+  accept: none
+  wait: after
