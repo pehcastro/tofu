@@ -14,10 +14,20 @@ const BlobSHA256 = "1430af6490aa31001fed77393c4c006230a0511e6bb99d54f36a3c2c42de
 
 var registered sync.Once
 
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.DartC())
+	if err != nil {
+		return nil
+	}
+	lang.ExternalScanner = grammarruntime.DartExternalScanner{}.ExternalScannerForLanguage(lang)
+	return lang
+}
+
 func Language() *gotreesitter.Language {
 	registered.Do(func() {
 		grammarruntime.RegisterDartSupport()
 		grammarruntime.RegisterBlob("dart", grammarblobs.Dart)
+		gotreesitter.RegisterCCoreLanguage("dart", LanguageC)
 	})
 	return grammarruntime.Language("dart.bin")
 }

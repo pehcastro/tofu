@@ -14,10 +14,20 @@ const BlobSHA256 = "ce0dd76cd817d59b29a2d7e42e22cacfa488fb24cb0ae02cbfb4e7e238b2
 
 var registered sync.Once
 
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.RubyC())
+	if err != nil {
+		return nil
+	}
+	lang.ExternalScanner = grammarruntime.RubyExternalScanner{}.ExternalScannerForLanguage(lang)
+	return lang
+}
+
 func Language() *gotreesitter.Language {
 	registered.Do(func() {
 		grammarruntime.RegisterRubySupport()
 		grammarruntime.RegisterBlob("ruby", grammarblobs.Ruby)
+		gotreesitter.RegisterCCoreLanguage("ruby", LanguageC)
 	})
 	return grammarruntime.Language("ruby.bin")
 }

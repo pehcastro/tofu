@@ -14,10 +14,20 @@ const BlobSHA256 = "0b845965168c9233628914be929202e0e5cb767a3574a0409858e830ff0e
 
 var registered sync.Once
 
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.PhpC())
+	if err != nil {
+		return nil
+	}
+	lang.ExternalScanner = grammarruntime.PhpExternalScanner{}.ExternalScannerForLanguage(lang)
+	return lang
+}
+
 func Language() *gotreesitter.Language {
 	registered.Do(func() {
 		grammarruntime.RegisterPhpSupport()
 		grammarruntime.RegisterBlob("php", grammarblobs.Php)
+		gotreesitter.RegisterCCoreLanguage("php", LanguageC)
 	})
 	return grammarruntime.Language("php.bin")
 }
