@@ -14,7 +14,18 @@ const BlobSHA256 = "3bc72e1bbe6cd750cc07ed8c8231d5b2b47a3a00a6269bbd5c1ec0892103
 
 var registered sync.Once
 
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.JsonC())
+	if err != nil {
+		return nil
+	}
+	return lang
+}
+
 func Language() *gotreesitter.Language {
-	registered.Do(func() { grammarruntime.RegisterBlob("json", grammarblobs.Json) })
+	registered.Do(func() {
+		grammarruntime.RegisterBlob("json", grammarblobs.Json)
+		gotreesitter.RegisterCCoreLanguage("json", LanguageC)
+	})
 	return grammarruntime.Language("json.bin")
 }

@@ -14,10 +14,20 @@ const BlobSHA256 = "4b92e82a1f5680cb9a9704852c0583721525a756c84b2559e9e59095ee2c
 
 var registered sync.Once
 
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.TomlC())
+	if err != nil {
+		return nil
+	}
+	lang.ExternalScanner = grammarruntime.TomlExternalScanner{}.ExternalScannerForLanguage(lang)
+	return lang
+}
+
 func Language() *gotreesitter.Language {
 	registered.Do(func() {
 		grammarruntime.RegisterTomlSupport()
 		grammarruntime.RegisterBlob("toml", grammarblobs.Toml)
+		gotreesitter.RegisterCCoreLanguage("toml", LanguageC)
 	})
 	return grammarruntime.Language("toml.bin")
 }

@@ -54,20 +54,25 @@ func generate(check bool) error {
 			return fmt.Errorf("format %s: %w", name, err)
 		}
 		packages++
-		path := filepath.Join("grammars", name, name+".go")
-		if old, err := os.ReadFile(path); err == nil && bytes.Equal(old, source) {
-			continue
+		files := map[string][]byte{filepath.Join("grammars", name, name+".go"): source}
+		if ccore {
+			files[filepath.Join("grammars", "grammar_blobs", name+"_c.go")] = cAccessor(name)
 		}
-		differ++
-		if check {
-			fmt.Println("differs:", path)
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return err
-		}
-		if err := os.WriteFile(path, source, 0o644); err != nil {
-			return err
+		for path, source := range files {
+			if old, err := os.ReadFile(path); err == nil && bytes.Equal(old, source) {
+				continue
+			}
+			differ++
+			if check {
+				fmt.Println("differs:", path)
+				continue
+			}
+			if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(path, source, 0o644); err != nil {
+				return err
+			}
 		}
 	}
 	fmt.Printf("%d grammar packages, %d differed\n", packages, differ)
@@ -104,7 +109,7 @@ func cCore(name string) (ccore bool, scanner string, err error) {
 }
 
 func wrapper(name string, blob []byte, support, ccore bool, scanner string) ([]byte, error) {
-	accessor := strings.ToUpper(name[:1]) + name[1:]
+	accessor := accessorName(name)
 	pkg := name
 	if token.Lookup(pkg).IsKeyword() {
 		pkg += "lang"
@@ -148,6 +153,13 @@ var registered sync.Once
 return grammarruntime.Language(%q)
 }
 `, name, pkg, sha256.Sum256(blob), languageC, once, name+".bin")))
+}
+
+func accessorName(name string) string { return strings.ToUpper(name[:1]) + name[1:] }
+
+func cAccessor(name string) []byte {
+	accessor := accessorName(name) + "C"
+	return []byte(fmt.Sprintf("package grammarblobs\n\nimport _ \"embed\"\n\n//go:embed %s_c.bin\nvar blob%s []byte\n\nfunc %s() []byte { return blob%s }\n", name, accessor, accessor, accessor))
 }
 
 func exists(path string) bool {

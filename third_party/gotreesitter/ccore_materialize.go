@@ -64,8 +64,9 @@ func (b *ccoreBinding) childSymbol(r *ccore.Result, parent uint32, structural in
 	if child.Extra {
 		return child.Symbol
 	}
-	if row := b.source.AliasSequences[r.Trees[parent].Production()]; structural < len(row) && row[structural] != 0 {
-		return uint16(row[structural])
+	aliases := b.source.AliasSequences
+	if p := int(r.Trees[parent].Production()); p < len(aliases) && structural < len(aliases[p]) && aliases[p][structural] != 0 {
+		return uint16(aliases[p][structural])
 	}
 	return child.Symbol
 }
@@ -87,6 +88,9 @@ func (b *ccoreBinding) visibleChildren(r *ccore.Result, id uint32) int {
 }
 
 func (b *ccoreBinding) directField(production uint16, structural int) FieldID {
+	if int(production) >= len(b.source.FieldMapSlices) {
+		return 0
+	}
 	span := b.source.FieldMapSlices[production]
 	for _, e := range b.source.FieldMapEntries[span[0] : span[0]+span[1]] {
 		if !e.Inherited && int(e.ChildIndex) == structural {

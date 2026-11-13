@@ -14,10 +14,20 @@ const BlobSHA256 = "fa20b960e09b76248085e2a3a8a1e3e7b2a655e0679a32843b5aa49551f1
 
 var registered sync.Once
 
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.YamlC())
+	if err != nil {
+		return nil
+	}
+	lang.ExternalScanner = grammarruntime.YamlExternalScanner{}.ExternalScannerForLanguage(lang)
+	return lang
+}
+
 func Language() *gotreesitter.Language {
 	registered.Do(func() {
 		grammarruntime.RegisterYamlSupport()
 		grammarruntime.RegisterBlob("yaml", grammarblobs.Yaml)
+		gotreesitter.RegisterCCoreLanguage("yaml", LanguageC)
 	})
 	return grammarruntime.Language("yaml.bin")
 }

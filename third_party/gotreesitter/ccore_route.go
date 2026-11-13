@@ -205,7 +205,7 @@ func bindCCore(source, target *Language) *ccoreBinding {
 		seen[key]++
 		b.symbols[sym], b.mapped[sym] = matches[pick], true
 	}
-	b.fields = make([]FieldID, len(source.FieldNames))
+	b.fields = make([]FieldID, max(len(source.FieldNames), 1))
 	for id := 1; id < len(source.FieldNames); id++ {
 		if fid, ok := target.FieldByName(source.FieldNames[id]); ok {
 			b.fields[id] = fid

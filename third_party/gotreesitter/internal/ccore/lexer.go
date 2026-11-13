@@ -93,7 +93,7 @@ func (l *lexer) run(dfa *Lexer, state int32) bool {
 			continue
 		}
 		next, skip := dfa.step(state, l.lookahead)
-		if next < 0 {
+		if next < 0 || l.lookahead == 0 && l.eof() {
 			return found
 		}
 		l.advance(skip)
