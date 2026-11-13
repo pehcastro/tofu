@@ -20,10 +20,13 @@ import (
 	"unicode/utf8"
 
 	ts "github.com/odvcencio/gotreesitter"
+	"github.com/odvcencio/gotreesitter/grammars/bash"
 	"github.com/odvcencio/gotreesitter/grammars/css"
 	golang "github.com/odvcencio/gotreesitter/grammars/go"
+	"github.com/odvcencio/gotreesitter/grammars/html"
 	"github.com/odvcencio/gotreesitter/grammars/javascript"
 	"github.com/odvcencio/gotreesitter/grammars/json"
+	"github.com/odvcencio/gotreesitter/grammars/markdown"
 	"github.com/odvcencio/gotreesitter/grammars/python"
 	"github.com/odvcencio/gotreesitter/grammars/rust"
 	"github.com/odvcencio/gotreesitter/grammars/toml"
@@ -67,6 +70,7 @@ func run() error {
 		"go": golang.Language, "python": python.Language, "rust": rust.Language,
 		"typescript": typescript.Language, "tsx": tsx.Language, "javascript": javascript.Language,
 		"json": json.Language, "css": css.Language, "toml": toml.Language, "yaml": yaml.Language,
+		"bash": bash.Language, "html": html.Language, "markdown": markdown.Language,
 	}[*langName]
 	if !ok {
 		return fmt.Errorf("unknown -lang %q", *langName)

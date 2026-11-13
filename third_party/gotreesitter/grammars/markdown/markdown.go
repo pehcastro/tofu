@@ -14,10 +14,20 @@ const BlobSHA256 = "164af09376cb8f8f9a77e84fd169a63894c7a9da476b24d631eb54b19197
 
 var registered sync.Once
 
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.MarkdownC())
+	if err != nil {
+		return nil
+	}
+	lang.ExternalScanner = grammarruntime.MarkdownExternalScanner{}.ExternalScannerForLanguage(lang)
+	return lang
+}
+
 func Language() *gotreesitter.Language {
 	registered.Do(func() {
 		grammarruntime.RegisterMarkdownSupport()
 		grammarruntime.RegisterBlob("markdown", grammarblobs.Markdown)
+		gotreesitter.RegisterCCoreLanguage("markdown", LanguageC)
 	})
 	return grammarruntime.Language("markdown.bin")
 }
