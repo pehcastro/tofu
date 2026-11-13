@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path"
 	"slices"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	platformfs "tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/history/shadow"
@@ -332,7 +332,7 @@ func (t Trail) restore(ctx context.Context, turns []shadow.Recorded, ids []strin
 }
 
 func projectGit(ctx context.Context, work string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-c", "core.quotepath=false"}, args...)...)
+	cmd := outside.Command(ctx, "git", append([]string{"-c", "core.quotepath=false"}, args...)...)
 	cmd.Dir = work
 	cmd.Env = slices.DeleteFunc(os.Environ(), func(entry string) bool { return strings.HasPrefix(strings.ToUpper(entry), "GIT_") })
 	out, err := cmd.Output()

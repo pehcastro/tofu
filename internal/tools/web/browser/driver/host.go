@@ -9,7 +9,6 @@ import (
 	"maps"
 	"net"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"runtime/debug"
@@ -19,6 +18,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/settings"
 )
@@ -99,7 +99,7 @@ func sleepAfter(home string) time.Duration {
 func installedBuild(exe string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), konst.BrowserDialTimeoutMillis*time.Millisecond)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, exe, "browser", "build", "--json").Output()
+	out, err := outside.Command(ctx, exe, "browser", "build", "--json").Output()
 	var envelope struct {
 		Data struct {
 			Build string `json:"build"`

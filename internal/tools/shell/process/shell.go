@@ -147,15 +147,10 @@ var ErrRunning = errors.New("shell: already running under that name")
 
 type Tree struct{ inner tree }
 
-func StartTracked(cmd *exec.Cmd) (Tree, error) {
-	inner, err := startTree(cmd, DiesWithTofu)
-	return Tree{inner: inner}, err
-}
-
 func StartClocked(cmd *outside.Cmd) (Tree, error) {
 	var tracked Tree
 	err := cmd.StartWith(func(started *exec.Cmd) (err error) {
-		tracked, err = StartTracked(started)
+		tracked.inner, err = startTree(started, DiesWithTofu)
 		return err
 	})
 	return tracked, err
@@ -263,7 +258,7 @@ func (r *Registry) Start(root, name, command, owner string, env ...string) (Shel
 	if err != nil {
 		return Shell{}, err
 	}
-	cmd := choice.Command(context.Background(), root, command, env...)
+	cmd := choice.Command(context.Background(), root, command, env...).Cmd
 	started := time.Now()
 	process, waited, terminal, err := r.spawn(cmd, command, logFile)
 	if err != nil {

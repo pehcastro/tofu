@@ -15,6 +15,7 @@ import (
 
 	"tofu/bench/suites/tools/browser/airbnb"
 	"tofu/bench/suites/tools/browser/tasks"
+	"tofu/internal/platform/outside"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/shell/process"
@@ -82,7 +83,7 @@ const pipesDrainAfterTheTreeEnds = 5 * time.Second
 func tofuCapped(tofu, project string, log io.Writer, maxWall time.Duration, args ...string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), maxWall)
 	defer cancel()
-	command := exec.CommandContext(ctx, tofu, args...)
+	command := outside.Command(ctx, tofu, args...)
 	command.Dir, command.Stdout, command.Stderr = project, io.MultiWriter(os.Stdout, log), io.MultiWriter(os.Stderr, log)
 	command.WaitDelay = pipesDrainAfterTheTreeEnds
 	var tree process.Tree
@@ -91,7 +92,7 @@ func tofuCapped(tofu, project string, log io.Writer, maxWall time.Duration, args
 		endTree()
 		return nil
 	}
-	tree, err := process.StartTracked(command)
+	tree, err := process.StartClocked(command)
 	if err != nil {
 		return false, err
 	}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os/exec"
 	"runtime"
 	"strings"
 	"time"
@@ -137,10 +136,10 @@ func codeFromPaste(pasted, state string) (string, error) {
 func OpenBrowser(target string) error {
 	switch runtime.GOOS {
 	case "windows":
-		return exec.Command("rundll32", "url.dll,FileProtocolHandler", target).Start()
+		return outside.Command(context.Background(), "rundll32", "url.dll,FileProtocolHandler", target).Start()
 	case "darwin":
-		return exec.Command("open", target).Start()
+		return outside.Command(context.Background(), "open", target).Start()
 	default:
-		return exec.Command("xdg-open", target).Start()
+		return outside.Command(context.Background(), "xdg-open", target).Start()
 	}
 }

@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,6 +16,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 )
 
 const (
@@ -67,13 +67,13 @@ func (m *Memory) identity() string {
 	ctx, cancel := context.WithTimeout(context.Background(), konst.MemoryIdentityTimeoutMillis*time.Millisecond)
 	defer cancel()
 	if !testing.Testing() {
-		id, err := exec.CommandContext(ctx, "gh", "api", "user", "--jq", ".id").Output()
+		id, err := outside.Command(ctx, "gh", "api", "user", "--jq", ".id").Output()
 		if id = bytes.TrimSpace(id); err == nil && len(id) > 0 {
 			_ = fs.WriteFile(cached, id, 0o600)
 			return "gh:" + string(id)
 		}
 	}
-	email, err := exec.CommandContext(ctx, "git", "-C", m.project, "config", "user.email").Output()
+	email, err := outside.Command(ctx, "git", "-C", m.project, "config", "user.email").Output()
 	if err != nil || len(bytes.TrimSpace(email)) == 0 {
 		return ""
 	}

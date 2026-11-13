@@ -3,6 +3,7 @@ package project
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -11,7 +12,6 @@ import (
 	iofs "io/fs"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -21,6 +21,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/safe"
 )
 
@@ -307,7 +308,7 @@ func (p *Project) identify() {
 
 func gitIdentity(dir string) (remote, root string) {
 	git := func(args ...string) string {
-		out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).Output()
+		out, err := outside.Command(context.Background(), "git", append([]string{"-C", dir}, args...)...).Output()
 		if err != nil {
 			return ""
 		}

@@ -1,14 +1,15 @@
 package guard
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"regexp"
 	"slices"
 	"strings"
 
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 )
 
 const subjectLimit = 72
@@ -144,7 +145,7 @@ func releaseDocs(dir, version string, message []string) Answer {
 	}
 	slices.SortFunc(names, func(a, b string) int { return strings.Compare(strings.ToLower(a), strings.ToLower(b)) })
 	for _, name := range slices.CompactFunc(names, strings.EqualFold) {
-		if exec.Command("git", "-C", dir, "grep", "--cached", "-q", "-I", "-F", "-w", "-e", name, "--", "docs/").Run() != nil {
+		if outside.Command(context.Background(), "git", "-C", dir, "grep", "--cached", "-q", "-I", "-F", "-w", "-e", name, "--", "docs/").Run() != nil {
 			missing = append(missing, "`"+name+"` is in the "+version+" entry and nowhere under docs/.")
 		}
 	}
@@ -159,7 +160,7 @@ func announces(section string) bool {
 }
 
 func gitLines(dir string, args ...string) []string {
-	out, _ := exec.Command("git", append([]string{"-C", dir}, args...)...).Output()
+	out, _ := outside.Command(context.Background(), "git", append([]string{"-C", dir}, args...)...).Output()
 	text := strings.TrimSuffix(strings.ReplaceAll(string(out), "\r\n", "\n"), "\n")
 	if text == "" {
 		return nil

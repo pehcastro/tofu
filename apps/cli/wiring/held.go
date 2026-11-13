@@ -1,6 +1,7 @@
 package wiring
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"slices"
@@ -16,6 +17,7 @@ import (
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/platform/credential"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/project"
 	"tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/pickers/settings"
@@ -73,7 +75,7 @@ func (h HeldStore) Keys() core.Keyring {
 
 func LoginCommand(provider string) func() *exec.Cmd {
 	return func() *exec.Cmd {
-		return exec.Command(os.Args[0], append([]string{"login"}, LoginWords(provider)...)...)
+		return outside.Command(context.Background(), os.Args[0], append([]string{"login"}, LoginWords(provider)...)...).Cmd
 	}
 }
 
@@ -135,7 +137,7 @@ func (h HeldStore) OrchestratorStep() StartStep {
 	for _, wire := range wires {
 		slug := wire.Provider + "/" + wire.Model
 		step.Choices = append(step.Choices, app.Choice{Label: "bind " + slug, Run: func() *exec.Cmd {
-			return exec.Command(os.Args[0], "models", "bind", string(catalog.RoleOrchestrator), slug)
+			return outside.Command(context.Background(), os.Args[0], "models", "bind", string(catalog.RoleOrchestrator), slug).Cmd
 		}})
 	}
 	for _, spec := range library.Subscriptions {
@@ -158,7 +160,7 @@ func ClassifierStepOf(keys core.Keyring) StartStep {
 		for _, model := range library.Models {
 			if model.Kind == catalog.KindClassifier && model.Use != catalog.UseExcluded {
 				step.Choices = append(step.Choices, app.Choice{Label: "bind " + model.Slug(), Run: func() *exec.Cmd {
-					return exec.Command(os.Args[0], "models", "bind", string(catalog.RoleClassifier), model.Slug())
+					return outside.Command(context.Background(), os.Args[0], "models", "bind", string(catalog.RoleClassifier), model.Slug()).Cmd
 				}})
 			}
 		}

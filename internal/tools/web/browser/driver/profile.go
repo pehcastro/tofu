@@ -212,7 +212,7 @@ func LoginProfile(home, name, url string) error {
 	if err != nil {
 		return err
 	}
-	command := exec.Command(chrome, "--user-data-dir="+dir, "--no-first-run", "--no-default-browser-check", url)
+	command := outside.Command(context.Background(), chrome, "--user-data-dir="+dir, "--no-first-run", "--no-default-browser-check", url)
 	if err := command.Start(); err != nil {
 		return err
 	}
@@ -257,10 +257,10 @@ func launchChrome(ctx context.Context, dir string, headless bool) (*cdpConn, err
 	if err := os.WriteFile(filepath.Join(dir, ownerFile), []byte(owner), 0o600); err != nil {
 		return nil, err
 	}
-	command := exec.Command(chrome, append(args, "about:blank")...)
+	command := outside.Command(context.Background(), chrome, append(args, "about:blank")...)
 	var tracked process.Tree
 	if headless {
-		tracked, err = process.StartTracked(command)
+		tracked, err = process.StartClocked(command)
 	} else {
 		err = command.Start()
 	}

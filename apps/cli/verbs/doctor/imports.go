@@ -2,11 +2,11 @@ package doctor
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
@@ -14,6 +14,7 @@ import (
 
 	"tofu/apps/cli/output"
 	cli "tofu/apps/cli/page"
+	"tofu/internal/platform/outside"
 )
 
 type importRule struct {
@@ -118,7 +119,7 @@ type packageImports struct {
 }
 
 func moduleImports(dir string) ([]packageImports, error) {
-	list := exec.Command("go", "list", "-e", "-json=ImportPath,Imports", "./...")
+	list := outside.Command(context.Background(), "go", "list", "-e", "-json=ImportPath,Imports", "./...")
 	list.Dir = dir
 	var stderr strings.Builder
 	list.Stderr = &stderr

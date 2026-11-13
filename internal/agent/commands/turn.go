@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -10,6 +11,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/librarian/skills"
+	"tofu/internal/platform/outside"
 	"tofu/library"
 )
 
@@ -43,7 +45,7 @@ func Expand(typed, root string) (string, error) {
 
 func lastDiff(root string) (string, error) {
 	git := func(args ...string) (string, error) {
-		out, err := exec.Command("git", append([]string{"-C", root}, args...)...).Output()
+		out, err := outside.Command(context.Background(), "git", append([]string{"-C", root}, args...)...).Output()
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
 			err = errors.New(strings.TrimSpace(string(exit.Stderr)))

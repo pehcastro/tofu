@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -21,6 +20,7 @@ import (
 	"tofu/internal/models/classifiers/core"
 	llm "tofu/internal/models/llm/core"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
@@ -52,7 +52,7 @@ func (j *ScopeJudge) judge(ctx context.Context, entry entries.Entry, project str
 		return scopeJudgement{refusesLocal: true}
 	}
 	full, _ := filepath.Abs(project)
-	ignored := exec.CommandContext(ctx, "git", "-C", full, "check-ignore", "-q", fs.StateDir(full)).Run() == nil
+	ignored := outside.Command(ctx, "git", "-C", full, "check-ignore", "-q", fs.StateDir(full)).Run() == nil
 	body, builder, err := memoryscope.BuildMemoryScope(memoryscope.MemoryScopeState{Candidate: entry.Text, Said: entry.Said, Repository: filepath.Base(full), RepositoryTofuIgnored: ignored})
 	if err != nil {
 		return scopeJudgement{refusesLocal: true}

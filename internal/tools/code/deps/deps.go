@@ -10,7 +10,6 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -269,7 +268,7 @@ func (d Deps) run(ctx context.Context, e ecosystem, command []string) (string, e
 	}
 	ctx, cancel := context.WithTimeout(ctx, d.limits.Run)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, program, command[1:]...)
+	cmd := outside.Command(ctx, program, command[1:]...)
 	cmd.Dir = string(d.root)
 	out, err := cmd.CombinedOutput()
 	lines := strings.Split(strings.TrimRight(string(out), "\n"), "\n")

@@ -1,16 +1,17 @@
 package contract
 
 import (
+	"context"
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"slices"
 	"strings"
 
 	"tofu/internal/librarian/rules"
+	"tofu/internal/platform/outside"
 )
 
 func RepairPath(requested, noun string, found []string) (string, string, error) {
@@ -63,7 +64,7 @@ func RealPaths(r Root, candidates []string) []string {
 }
 
 func GitListing(r Root) ([]string, error) {
-	listed, err := exec.Command("git", "-C", string(r), "ls-files", "-z", "--cached", "--others", "--exclude-standard").Output()
+	listed, err := outside.Command(context.Background(), "git", "-C", string(r), "ls-files", "-z", "--cached", "--others", "--exclude-standard").Output()
 	if err != nil {
 		return nil, err
 	}

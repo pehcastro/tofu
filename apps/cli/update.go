@@ -16,7 +16,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	goruntime "runtime"
@@ -31,6 +30,7 @@ import (
 	"tofu/internal/models/transport"
 	platformbuild "tofu/internal/platform/build"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	settingspkg "tofu/internal/store/settings"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/ui/tui/frame/frame"
@@ -253,7 +253,7 @@ func (w *updateWatch) readDisk(ctx context.Context) {
 	var printed struct {
 		Data versionReport `json:"data"`
 	}
-	versionJSON, err := exec.CommandContext(probe, w.target, "version", "--json").Output()
+	versionJSON, err := outside.Command(probe, w.target, "version", "--json").Output()
 	if err != nil || json.Unmarshal(versionJSON, &printed) != nil {
 		printed.Data.Version = konst.Version
 	}

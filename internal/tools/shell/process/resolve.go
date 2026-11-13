@@ -29,13 +29,13 @@ func (c Choice) program() string { return cmp.Or(c.bash, c.Path) }
 
 const powerShellUTF8Output = "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n"
 
-func (c Choice) Command(ctx context.Context, dir, command string, extraEnv ...string) *exec.Cmd {
+func (c Choice) Command(ctx context.Context, dir, command string, extraEnv ...string) *outside.Cmd {
 	args := []string{"-c", command}
 	switch strings.TrimSuffix(strings.ToLower(filepath.Base(c.Path)), ".exe") {
 	case "pwsh", "powershell":
 		args = []string{"-NoProfile", "-NonInteractive", "-Command", powerShellUTF8Output + command}
 	}
-	cmd := outside.Command(ctx, c.program(), args...).Cmd
+	cmd := outside.Command(ctx, c.program(), args...)
 	cmd.Dir = dir
 	cmd.Env = slices.DeleteFunc(os.Environ(), func(entry string) bool {
 		name, _, _ := strings.Cut(entry, "=")

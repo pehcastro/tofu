@@ -2,16 +2,17 @@ package app
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"io"
 	"os"
-	"os/exec"
 	"runtime"
 	"strings"
 	"unicode"
 
 	tea "charm.land/bubbletea/v2"
 
+	"tofu/internal/platform/outside"
 	"tofu/internal/ui/tui/chat/session"
 )
 
@@ -43,7 +44,7 @@ func (r *editorRun) Run() error {
 	if err = errors.Join(err, file.Close()); err != nil {
 		return err
 	}
-	editor := exec.Command(r.argv[0], append(r.argv[1:], file.Name())...)
+	editor := outside.Command(context.Background(), r.argv[0], append(r.argv[1:], file.Name())...)
 	editor.Stdin, editor.Stdout, editor.Stderr = r.stdin, r.stdout, r.stderr
 	if err := editor.Run(); err != nil {
 		return err

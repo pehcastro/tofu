@@ -1,13 +1,15 @@
 package credential
 
 import (
+	"context"
 	"os"
-	"os/exec"
 	"os/user"
 	"path"
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"tofu/internal/platform/outside"
 )
 
 type substitution struct {
@@ -58,7 +60,7 @@ func Machine() Identities {
 	if current, err := user.Current(); err == nil {
 		m.user = current.Username[strings.LastIndex(current.Username, `\`)+1:]
 	}
-	out, _ := exec.Command("git", "config", "--get-regexp", `^user\.(email|name)$`).Output()
+	out, _ := outside.Command(context.Background(), "git", "config", "--get-regexp", `^user\.(email|name)$`).Output()
 	for line := range strings.Lines(string(out)) {
 		key, value, _ := strings.Cut(strings.TrimSpace(line), " ")
 		switch key {

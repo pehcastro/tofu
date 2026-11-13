@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"maps"
 	"os"
-	"os/exec"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,6 +15,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/scratch"
 	"tofu/internal/tools/code/search/engine"
 	"tofu/internal/tools/contract"
@@ -261,7 +261,7 @@ func (v Verb) spawn(ctx context.Context, words []string, body string) (contract.
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(konst.VerbTimeoutMillis)*time.Millisecond)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, running, words...)
+	cmd := outside.Command(ctx, running, words...)
 	cmd.Dir = string(v.root)
 	cmd.Env = append(append(os.Environ(), scratch.ScratchEnv(ctx)...), verbDepthEnvar+"="+strconv.Itoa(depth+1))
 	if body != "" {

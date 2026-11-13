@@ -23,6 +23,7 @@ import (
 
 	"tofu/internal/konst"
 	platformfs "tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 )
 
 const (
@@ -133,13 +134,13 @@ func (f Files) gitIndexed(ctx context.Context, index, stdin string, args ...stri
 	return string(out), f.failed(args, err, stderr)
 }
 
-func (f Files) command(ctx context.Context, index string, args ...string) (*exec.Cmd, *bytes.Buffer) {
+func (f Files) command(ctx context.Context, index string, args ...string) (*outside.Cmd, *bytes.Buffer) {
 	flags := []string{"--git-dir", f.Dir(), "-c", "core.autocrlf=false", "-c", "core.safecrlf=false", "-c", "core.fsmonitor=false", "-c", "core.longpaths=true",
 		"-c", "core.quotepath=false", "-c", "core.logAllRefUpdates=false", "-c", "commit.gpgsign=false", "-c", "gc.auto=0", "-c", "core.excludesFile=" + f.path(excludeName)}
 	if args[0] != "init" {
 		flags = append(flags, "--work-tree", f.Tree)
 	}
-	cmd := exec.CommandContext(ctx, "git", append(flags, args...)...)
+	cmd := outside.Command(ctx, "git", append(flags, args...)...)
 	cmd.Dir, cmd.WaitDelay = f.Tree, konst.BashWaitDelayMillis*time.Millisecond
 	cmd.Env = append(slices.DeleteFunc(os.Environ(), func(variable string) bool { return strings.HasPrefix(strings.ToUpper(variable), "GIT_") }),
 		"GIT_INDEX_FILE="+index, "GIT_AUTHOR_NAME=tofu", "GIT_AUTHOR_EMAIL=tofu@localhost", "GIT_COMMITTER_NAME=tofu", "GIT_COMMITTER_EMAIL=tofu@localhost")
@@ -373,7 +374,7 @@ func (f Files) readLevel(level []visit, was, now walk) (next []visit, fresh []st
 }
 
 type ignoreAsker struct {
-	cmd    *exec.Cmd
+	cmd    *outside.Cmd
 	stdin  io.WriteCloser
 	stdout *bufio.Reader
 	stderr *bytes.Buffer
@@ -384,6 +385,7 @@ func (f Files) askIgnored(ctx context.Context, asker *ignoreAsker, dirs []string
 	if len(dirs) == 0 {
 		return ignored, nil
 	}
+	defer outside.Wait(ctx, outside.Process)()
 	args := []string{"check-ignore", "-z", "-v", "-n", "--stdin"}
 	if asker.cmd == nil {
 		cmd, stderr := f.command(ctx, f.path(indexName), args...)

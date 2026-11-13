@@ -1,11 +1,11 @@
 package rules
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -16,6 +16,7 @@ import (
 	"tofu/apps/cli/wiring"
 	rule "tofu/internal/librarian/rules"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/project"
 )
 
@@ -107,7 +108,7 @@ func patternFiles(rules []rule.Rule, root string) ([]string, error) {
 	if !slices.ContainsFunc(rules, func(r rule.Rule) bool { return r.Pattern != nil }) {
 		return nil, nil
 	}
-	if listed, err := exec.Command("git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", root).Output(); err == nil {
+	if listed, err := outside.Command(context.Background(), "git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", root).Output(); err == nil {
 		return strings.FieldsFunc(string(listed), func(r rune) bool { return r == 0 }), nil
 	}
 	var walked []string

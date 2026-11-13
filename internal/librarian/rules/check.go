@@ -2,6 +2,7 @@ package rules
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/tools/project/lint"
 )
 
@@ -43,7 +45,7 @@ func RunCommand(command, ticketPath string, env []string) (string, bool, error) 
 	for i := range argv {
 		argv[i] = strings.ReplaceAll(argv[i], "{ticket}", ticketPath)
 	}
-	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd := outside.Command(context.Background(), argv[0], argv[1:]...)
 	cmd.Env = append(os.Environ(), env...)
 	output, err := cmd.CombinedOutput()
 	var exit *exec.ExitError

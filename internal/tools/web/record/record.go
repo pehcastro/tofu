@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/scratch"
 	"tofu/internal/tools/contract"
 )
@@ -137,7 +138,7 @@ func (r Record) Run(ctx context.Context, raw json.RawMessage) (contract.Result, 
 	go func() { _ = proxy.Serve(listener) }()
 	ctx, cancel := context.WithTimeout(ctx, r.limits.Run)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, program, args.Command[1:]...)
+	cmd := outside.Command(ctx, program, args.Command[1:]...)
 	cmd.Dir = string(r.root)
 	cmd.Env = proxiedEnv("http://" + listener.Addr().String())
 	out, runErr := cmd.CombinedOutput()

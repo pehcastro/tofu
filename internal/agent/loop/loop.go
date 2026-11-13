@@ -414,7 +414,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			recording.Lock()
 			defer recording.Unlock()
 			compactions.exchange(id, why, wire, request, started, tap.Attempts(), decision, err)
-			into.wall(walls.OpMemoryRequest, "memory model", started, err)
+			into.wall(walls.OpMemoryRequest, "memory model", started, nil, err)
 			if compactions != nil {
 				into.failed, compactions.failed = append(into.failed, compactions.failed...), nil
 			}
@@ -620,7 +620,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			messages = append(messages, added...)
 		}
 		if compaction != nil || err != nil {
-			recorded.wall(walls.OpCompaction, trigger, started, err)
+			recorded.wall(walls.OpCompaction, trigger, started, nil, err)
 		}
 		return compaction, err
 	}
@@ -759,10 +759,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				turnFiles.Turn.Owns = config.Boundary.Owns()
 			}
 			snapshotStarted := time.Now()
-			timed, cancel := context.WithTimeout(context.WithoutCancel(ctx), konst.ShadowSnapshotTimeoutMillis*time.Millisecond)
+			clocked, clock := outside.Open(context.WithoutCancel(ctx), time.Now)
+			timed, cancel := context.WithTimeout(clocked, konst.ShadowSnapshotTimeoutMillis*time.Millisecond)
 			notes, err := turnFiles.End(timed)
 			cancel()
-			recorded.wall(walls.OpUndoSnapshot, "turn end", snapshotStarted, err)
+			recorded.wall(walls.OpUndoSnapshot, "turn end", snapshotStarted, clock, err)
 			row.Warnings = append(row.Warnings, notes...)
 			switch begun := turnFiles.Begun(); {
 			case begun != nil:
@@ -889,7 +890,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		fork, begun, err := forkHistory(artifacts, landing, config.forkOpening(taskOrigin), messages, forced, forks+1, config.Caps.MaxForks)
 		if err != nil {
-			recorded.wall(walls.OpCompaction, "fork "+string(cmp.Or(forced, ForkContinuation)), forkStarted, err)
+			recorded.wall(walls.OpCompaction, "fork "+string(cmp.Or(forced, ForkContinuation)), forkStarted, nil, err)
 		}
 		return fork, begun, err
 	}
@@ -967,7 +968,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if drops := picturesLeftOut(beforeFork, messages); len(drops) > 0 {
 			recordPictureDrops(fork.Step, sentTokens(beforeFork), messages, drops)
 		}
-		recorded.wall(walls.OpCompaction, "fork "+string(fork.Kind), forkStarted, nil)
+		recorded.wall(walls.OpCompaction, "fork "+string(fork.Kind), forkStarted, nil, nil)
 	}
 	endForked := func(fork *Fork, when string, beforeFork, begun []core.Message, moved *Account, why string) Row {
 		forks++
@@ -1132,7 +1133,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		if overflowed(err) {
 			before, started := slices.Clone(messages), time.Now()
 			shrink, shrinkErr := shrinkOverflow(artifacts, messages, asSent.Total(), budget.WindowTokens)
-			recorded.wall(walls.OpCompaction, "overflow shrink", started, shrinkErr)
+			recorded.wall(walls.OpCompaction, "overflow shrink", started, nil, shrinkErr)
 			shownReads.Rebuilt()
 			flush()
 			recorded.listChange("overflow shrink", "the context window overflowed on step "+strconv.Itoa(step), before, messages)
@@ -1694,8 +1695,13 @@ func overflowed(err error) bool {
 	return transport.ContextOverflow(err) || errors.As(err, &refused)
 }
 
-func (r *record) wall(op walls.Op, name string, started time.Time, err error) {
-	r.add(session.Event{Kind: session.EventWall}, walls.Wall{Op: op, Name: name, MS: time.Since(started).Milliseconds(), At: started.UnixMilli(), OK: err == nil})
+func (r *record) wall(op walls.Op, name string, started time.Time, clock *outside.Clock, err error) {
+	wall := walls.Wall{Op: op, Name: name, MS: time.Since(started).Milliseconds(), At: started.UnixMilli(), OK: err == nil}
+	if clock != nil {
+		outsideMS := clock.Outside().Milliseconds()
+		wall.OutsideMS = &outsideMS
+	}
+	r.add(session.Event{Kind: session.EventWall}, wall)
 }
 
 func (r *record) heldAgain() (*record, bool) {

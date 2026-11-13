@@ -13,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"tofu/internal/platform/outside"
 )
 
 const (
@@ -38,7 +40,7 @@ func (o *cappedOutput) Write(chunk []byte) (int, error) {
 func runClipboardTool(pkg string, stdin io.Reader, stdout io.Writer, name string, args ...string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), clipboardToolTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := outside.Command(ctx, name, args...)
 	cmd.Env = append(os.Environ(), clipboardToolLocale)
 	cmd.WaitDelay = clipboardToolWaitDelay
 	cmd.Stdin, cmd.Stdout = stdin, stdout

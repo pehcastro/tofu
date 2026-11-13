@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -10,6 +11,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"tofu/internal/platform/outside"
 )
 
 const snapshotsKeptPerPath = 20
@@ -43,7 +46,7 @@ func snapshot(env Env, ev event) {
 }
 
 func ignoredByGit(root, rel string) bool {
-	err := exec.Command("git", "-C", root, "check-ignore", "-q", "--", rel).Run()
+	err := outside.Command(context.Background(), "git", "-C", root, "check-ignore", "-q", "--", rel).Run()
 	var exited *exec.ExitError
 	return err == nil || !errors.As(err, &exited)
 }

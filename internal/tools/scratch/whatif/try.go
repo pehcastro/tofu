@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -17,6 +16,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/scratch"
 	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
@@ -190,11 +190,11 @@ func (p plan) run(ctx context.Context, made overlay.Overlay, limit time.Duration
 	for _, argv := range p.steps {
 		command := strings.Join(argv, " ")
 		ran = append(ran, command)
-		cmd := exec.CommandContext(ctx, argv[0], argv[1:]...)
+		cmd := outside.Command(ctx, argv[0], argv[1:]...)
 		cmd.Dir, cmd.WaitDelay = p.dir, konst.BashWaitDelayMillis*time.Millisecond
 		cmd.Env = slices.Concat(os.Environ(), []string{"GOMAXPROCS=" + strconv.Itoa(konst.TestCPUs)}, scratch.ScratchEnv(ctx))
 		cmd.Stdout, cmd.Stderr = &output, &output
-		tracked, err := process.StartTracked(cmd)
+		tracked, err := process.StartClocked(cmd)
 		if err != nil {
 			return answered(NotRun, "", fmt.Sprintf("%s did not start in %s: %v", command, p.dir, err))
 		}

@@ -347,7 +347,7 @@ func (e *Engine) run(ctx context.Context, hook Hook, stdin []byte) (result Resul
 	var stdout, stderr cappedOutput
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = bytes.NewReader(stdin), &stdout, &stderr
 	cmd.WaitDelay = konst.HookKillWaitMillis * time.Millisecond
-	tracked, err := process.StartTracked(cmd)
+	tracked, err := process.StartClocked(cmd)
 	if err != nil {
 		result.Problem = "it did not start: " + err.Error()
 		return result

@@ -25,6 +25,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
@@ -301,7 +302,7 @@ func EnsureHub(project string) (_ HubStatus, err error) {
 	}
 	defer func() { _ = told.Close() }()
 	err = startDetached(func() *exec.Cmd {
-		cmd := exec.Command(exe, HubVerb, HubRunVerb, "--dir", place.project)
+		cmd := outside.Command(context.Background(), exe, HubVerb, HubRunVerb, "--dir", place.project).Cmd
 		cmd.Dir, cmd.Stdin, cmd.Stdout, cmd.Stderr, cmd.Env = place.project, tells, log, log, append(os.Environ(), hubReadyVariable+"=1")
 		return cmd
 	})

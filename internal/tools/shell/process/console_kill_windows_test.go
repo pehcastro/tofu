@@ -24,7 +24,7 @@ func TestAShellThatCannotBeListedLeavesNothingRunningOrHoldingItsLog(t *testing.
 			if err != nil {
 				t.Fatal(err)
 			}
-			cmd := choice.Command(context.Background(), t.TempDir(), command)
+			cmd := choice.Command(context.Background(), t.TempDir(), command).Cmd
 			if len(cmd.Args) != 3 || cmd.Args[1] != "-c" {
 				t.Skipf("%s does not take a command after -c", choice.Label)
 			}

@@ -369,7 +369,7 @@ func (t *BashTool) checkPort(ctx context.Context, port int) contract.Result {
 	}
 }
 
-func (t *BashTool) command(lifetime, scope context.Context, command string) *exec.Cmd {
+func (t *BashTool) command(lifetime, scope context.Context, command string) *outside.Cmd {
 	env := append(scratch.ScratchEnv(scope), subAgentDepthVar+"="+strconv.Itoa(processDepth()+1))
 	if actor := boardActor(scope); actor != "" {
 		env = append(env, subagents.SessionEnv+"="+actor)
@@ -412,7 +412,7 @@ func (t *BashTool) runBackground(ctx context.Context, args bashArgs) (contract.R
 	}
 	defer outside.Wait(ctx, outside.Process)()
 	cmd := t.command(context.Background(), ctx, args.Command)
-	got, err := registry.YieldReady(ctx, cmd, args.Command, contract.ShellOwnerFrom(ctx), process.Wait{
+	got, err := registry.YieldReady(ctx, cmd.Cmd, args.Command, contract.ShellOwnerFrom(ctx), process.Wait{
 		Within: konst.BackgroundReadyMillis * time.Millisecond,
 		Poll:   konst.ReadyPollMillis * time.Millisecond,
 		Port:   process.NamedPort(string(t.root), args.Command, cmd.Env),
@@ -457,7 +457,7 @@ func (t *BashTool) runOrMove(ctx context.Context, registry *process.Registry, co
 		wait.Early, stop = inbox.whenTyped(project.Crashes(string(t.root)))
 		defer stop()
 	}
-	got, err := registry.YieldReady(ctx, t.command(context.Background(), ctx, command), command, contract.ShellOwnerFrom(ctx), wait)
+	got, err := registry.YieldReady(ctx, t.command(context.Background(), ctx, command).Cmd, command, contract.ShellOwnerFrom(ctx), wait)
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("bash: %w", err)
 	}
@@ -655,7 +655,7 @@ func (t *BashTool) runToEnd(ctx context.Context, args bashArgs) (contract.Result
 	cmd := t.command(ctx, ctx, args.Command)
 	output := &heldOutput{}
 	cmd.Stdout, cmd.Stderr = output, output
-	tracked, startErr := process.StartTracked(cmd)
+	tracked, startErr := process.StartClocked(cmd)
 	if startErr != nil {
 		return contract.Result{}, fmt.Errorf("bash: %w", startErr)
 	}
