@@ -14,10 +14,11 @@ const (
 	TooWide
 	Unbound
 	UnmappedSymbol
+	EOFCycle
 )
 
 func (s Status) String() string {
-	return [...]string{"accepted", "stopped", "no versions left", "too wide", "unbound", "unmapped symbol"}[s]
+	return [...]string{"accepted", "stopped", "no versions left", "too wide", "unbound", "unmapped symbol", "eof cycle in the lexer"}[s]
 }
 
 const (
@@ -133,6 +134,9 @@ func (p *parser) advance(v int) bool {
 		if needsLex {
 			needsLex = false
 			lookahead = p.lex(v, state)
+			if p.l.eofCycled {
+				return p.decline(EOFCycle)
+			}
 			if lookahead != 0 {
 				p.cacheToken, p.cacheByte, p.cacheExternal = lookahead, position, external
 			}

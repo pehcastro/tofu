@@ -13,6 +13,7 @@ type lexer struct {
 	tokenStart uint32
 	tokenEnd   uint32
 	endMarked  bool
+	eofCycled  bool
 	result     uint16
 }
 
@@ -80,6 +81,7 @@ func (l *lexer) finish() {
 
 func (l *lexer) run(dfa *Lexer, state int32) bool {
 	found := false
+	eofHops := 0
 	for {
 		st := &dfa.States[state]
 		if st.Accepts {
@@ -89,6 +91,10 @@ func (l *lexer) run(dfa *Lexer, state int32) bool {
 			l.endMarked = true
 		}
 		if st.EOF >= 0 && l.eof() {
+			if eofHops++; eofHops > len(dfa.States) {
+				l.eofCycled = true
+				return found
+			}
 			state = st.EOF
 			continue
 		}
