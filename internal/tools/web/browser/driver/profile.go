@@ -232,7 +232,7 @@ func attachChrome(ctx context.Context, dir string) (*cdpConn, error) {
 		return nil, err
 	}
 	_ = conn.Close()
-	ws, err := websocket.Dial("ws://"+address+strings.TrimSpace(path), "", debuggerOrigin)
+	ws, err := websocket.Dial("ws://"+address+strings.TrimSpace(path), "", debuggerOrigin) //nolint:forbidigo
 	if err != nil {
 		return nil, err
 	}

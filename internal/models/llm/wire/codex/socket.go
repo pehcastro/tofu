@@ -145,7 +145,7 @@ func (w *Wire) dial(ctx context.Context, dump Dump, note core.Note) error {
 			header[sent.Name] = []string{sent.Value}
 		}
 	}
-	dialer := websocket.Dialer{Proxy: http.ProxyFromEnvironment, HandshakeTimeout: w.config.StreamIdle, EnableCompression: true}
+	dialer := websocket.Dialer{Proxy: http.ProxyFromEnvironment, HandshakeTimeout: w.config.StreamIdle, EnableCompression: true} //nolint:forbidigo
 	opened := outside.Wait(ctx, outside.Model)
 	conn, response, err := dialer.DialContext(ctx, w.socket.url, header)
 	opened()

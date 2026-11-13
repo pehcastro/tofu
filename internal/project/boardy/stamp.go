@@ -2,6 +2,7 @@ package boardy
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	"tofu/internal/librarian/rules"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 )
 
 const (
@@ -304,7 +306,7 @@ func uncommitted(repo string, pathspecs ...string) ([]string, error) {
 }
 
 func gitOut(repo, stdin string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
+	cmd := outside.Command(context.Background(), "git", args...)
 	cmd.Dir, cmd.Stdin = repo, strings.NewReader(stdin)
 	out, err := cmd.Output()
 	if exited := (*exec.ExitError)(nil); errors.As(err, &exited) {

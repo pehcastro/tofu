@@ -11,6 +11,26 @@ linters:
     - unparam
     - misspell
     - gocritic
+    - forbidigo
+  settings:
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^exec\.Command(Context)?$
+          pkg: ^os/exec$
+          msg: run processes through outside.Command so the wall clock counts the wait
+        - pattern: ^http\.(DefaultClient|Get|Head|Post|PostForm)$
+          pkg: ^net/http$
+          msg: build the client with outside.Client so the wall clock counts the wait
+        - pattern: ^websocket\.Dial(er)?$
+          pkg: ^(golang\.org/x/net|github\.com/gorilla)/websocket$
+          msg: hold an outside.Wait around the dial so the wall clock counts the wait
+  exclusions:
+    rules:
+      - path: _test\.go$
+        linters: [forbidigo]
+      - path: ^(bench|internal[/\\]platform[/\\]outside)[/\\]
+        linters: [forbidigo]
 
 formatters:
   enable:
