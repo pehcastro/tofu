@@ -107,7 +107,6 @@ func (l RowLedger) Append(state any, set Battery, in RowInput) (ledger.Row, erro
 		}
 	}
 	if in.Decision != nil {
-		row.LatencyMS = in.Decision.Latency.Milliseconds()
 		in.Decision.Spent(&row)
 	} else {
 		row.Build = in.Build

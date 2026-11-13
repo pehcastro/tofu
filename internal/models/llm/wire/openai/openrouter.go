@@ -91,7 +91,6 @@ func (w *Wire) send(ctx context.Context, body []byte) (core.Raw, error) {
 		Body:      response.Body,
 		RequestID: response.RequestID,
 		Attempts:  response.Attempts,
-		Latency:   response.Elapsed,
 	}, nil
 }
 

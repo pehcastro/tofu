@@ -10,6 +10,7 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/models/transport"
+	"tofu/internal/platform/outside"
 )
 
 type Raw struct {
@@ -39,6 +40,7 @@ type Decision struct {
 	AssetsUsed  json.RawMessage
 	Attempts    int
 	Latency     time.Duration
+	Outside     time.Duration
 	Bytes       int
 	Raw         []byte
 }
@@ -65,6 +67,8 @@ func (c *Client) Caps() WireCaps { return c.wire.Caps() }
 func (c *Client) Model() string { return c.wire.Model() }
 
 func (c *Client) Ask(ctx context.Context, request Request) (Decision, error) {
+	started := time.Now()
+	ctx, clock := outside.Open(ctx, time.Now)
 	alias := c.wire.Model()
 	body, err := request.Encode(alias)
 	if err != nil {
@@ -106,7 +110,8 @@ func (c *Client) Ask(ctx context.Context, request Request) (Decision, error) {
 		Charge:      ledger.ChargeOf(response.Usage.Cost, float64(response.Usage.InputTokens)*caps.ListUSDPerInput),
 		AssetsUsed:  response.AssetsUsed,
 		Attempts:    raw.Attempts,
-		Latency:     raw.Latency,
+		Latency:     time.Since(started),
+		Outside:     clock.Outside(),
 		Bytes:       len(body),
 		Raw:         response.Raw,
 	}, nil

@@ -23,7 +23,6 @@ type Raw struct {
 	Body      []byte
 	RequestID string
 	Attempts  int
-	Latency   time.Duration
 }
 
 type Wire interface {
