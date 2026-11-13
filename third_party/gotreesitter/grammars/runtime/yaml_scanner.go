@@ -1863,13 +1863,11 @@ func (e *yamlEnv) scan() bool {
 
 	// Quoted string content
 	if (vs[yTokRDqtStrCtn] && isR && e.scnDqtStrCnt(yTokRDqtStrCtn)) ||
-		(vs[yTokBRDqtStrCtn] && (isBR || hasNwl) && e.scnDqtStrCnt(yTokBRDqtStrCtn)) {
+		(vs[yTokBRDqtStrCtn] && isBR && e.scnDqtStrCnt(yTokBRDqtStrCtn)) {
 		return true
 	}
-	// Single-quoted flow scalars use the same line-folding rule as
-	// double-quoted flow scalars. See YAML 1.2.2 productions 124 and 125.
 	if (vs[yTokRSqtStrCtn] && isR && e.scnSqtStrCnt(yTokRSqtStrCtn)) ||
-		(vs[yTokBRSqtStrCtn] && (isBR || hasNwl) && e.scnSqtStrCnt(yTokBRSqtStrCtn)) {
+		(vs[yTokBRSqtStrCtn] && isBR && e.scnSqtStrCnt(yTokBRSqtStrCtn)) {
 		return true
 	}
 
@@ -2041,7 +2039,7 @@ func (e *yamlEnv) scan() bool {
 			e.mrkEnd()
 			return e.retSym(yTokRDqtStrEnd)
 		}
-		if vs[yTokBRDqtStrEnd] && (isBR || hasNwl) {
+		if vs[yTokBRDqtStrEnd] && isBR {
 			e.adv()
 			e.mrkEnd()
 			return e.retSym(yTokBRDqtStrEnd)
@@ -2076,7 +2074,7 @@ func (e *yamlEnv) scan() bool {
 			e.mrkEnd()
 			return e.retSym(yTokRSqtStrEnd)
 		}
-		if vs[yTokBRSqtStrEnd] && (isBR || hasNwl) {
+		if vs[yTokBRSqtStrEnd] && isBR {
 			e.adv()
 			if e.lka() == '\'' {
 				e.adv()
@@ -2386,7 +2384,11 @@ func (e *yamlEnv) scan() bool {
 		return false
 	}
 
-	return !vs[yTokErrRec]
+	if vs[yTokErrRec] {
+		return false
+	}
+	e.lexer.SetResultSymbol(e.symMap[yTokEndOfFile])
+	return true
 }
 
 // mayUpdImpCol is the MAY_UPD_IMP_COL macro.
