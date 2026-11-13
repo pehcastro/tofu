@@ -247,6 +247,7 @@ type Row struct {
 	PolicyVersion int             `json:"policy_version,omitempty"`
 	Reason        *Reason         `json:"reason,omitempty"`
 	LatencyMS     int64           `json:"latency_ms"`
+	OutsideMS     *int64          `json:"outside_ms,omitempty"`
 	Cost          float64         `json:"cost"`
 	Provider      string          `json:"provider,omitempty"`
 	Key           string          `json:"key,omitempty"`
@@ -273,6 +274,15 @@ func (r Row) Origin() Origin {
 		return OriginTurn
 	}
 	return OriginBench
+}
+
+const (
+	pointInlineCode = "inline_code"
+	pointStanding   = "standing"
+)
+
+func (r Row) AskedJev() bool {
+	return r.Point != pointInlineCode && r.Point != pointStanding
 }
 
 func (r Row) Day() string {

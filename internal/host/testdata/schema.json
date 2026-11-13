@@ -3047,6 +3047,9 @@
         "outcome": {
           "$ref": "#/$defs/ledger.Outcome"
         },
+        "outside_ms": {
+          "type": "integer"
+        },
         "point": {
           "type": "string"
         },
@@ -8217,6 +8220,9 @@
         },
         "level": {
           "type": "string"
+        },
+        "outside_ms": {
+          "type": "integer"
         },
         "problem": {
           "type": "string"
@@ -15164,6 +15170,9 @@
         "exit": {
           "type": "integer"
         },
+        "outside_ms": {
+          "type": "integer"
+        },
         "problem": {
           "type": "string"
         },
@@ -15995,6 +16004,9 @@
         },
         "outcome": {
           "$ref": "#/$defs/ledger.Outcome"
+        },
+        "outside_ms": {
+          "type": "integer"
         },
         "point": {
           "type": "string"
@@ -17660,6 +17672,9 @@
         },
         "id": {
           "type": "string"
+        },
+        "outside_ms": {
+          "type": "integer"
         },
         "parallel_batch": {
           "type": "integer"

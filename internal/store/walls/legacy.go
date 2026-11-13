@@ -59,6 +59,7 @@ func legacyEvent(event session.Event, id, tool string) Reading {
 		took(OpTurn, agentType(event.Agent), body.WallClockMS, body.Error == "")
 	case session.EventHook:
 		took(OpHook, body.Event, body.DurationMS, body.Exit == 0)
+		walls[len(walls)-1].OutsideMS = body.OutsideMS
 	case session.EventStep:
 		if body.Fork != nil {
 			took(OpForkBlocked, body.Fork.Kind, (time.Duration(body.Fork.BlockedMicros) * time.Microsecond).Milliseconds(), true)
@@ -145,7 +146,9 @@ func legacyExchanges(store *session.Store, id string, since time.Time) Reading {
 func legacyLedger(dir string, since time.Time) (Reading, error) {
 	var reading Reading
 	report, err := ledger.NewReader(dir).Each(ledger.Filter{Since: since}, func(row ledger.Row) error {
-		reading.Walls = append(reading.Walls, Wall{Op: OpJev, Name: row.Point, MS: row.LatencyMS, At: row.At.UnixMilli(), Session: row.SessionID, OK: true})
+		if row.AskedJev() {
+			reading.Walls = append(reading.Walls, Wall{Op: OpJev, Name: row.Point, MS: row.LatencyMS, At: row.At.UnixMilli(), Session: row.SessionID, OK: true, OutsideMS: row.OutsideMS})
+		}
 		return nil
 	})
 	reading.Bad += len(report.Corrupt)

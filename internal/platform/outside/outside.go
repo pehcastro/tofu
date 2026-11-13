@@ -68,9 +68,17 @@ func Wait(ctx context.Context, kind Kind) func() {
 }
 
 func (c *Clock) Outside() time.Duration {
+	return c.merged(func(Kind) bool { return true })
+}
+
+func (c *Clock) OutsideOf(kinds ...Kind) time.Duration {
+	return c.merged(func(kind Kind) bool { return slices.Contains(kinds, kind) })
+}
+
+func (c *Clock) merged(counts func(Kind) bool) time.Duration {
 	now := c.now()
 	c.mu.Lock()
-	waits := slices.Clone(c.waits)
+	waits := slices.DeleteFunc(slices.Clone(c.waits), func(w wait) bool { return !counts(w.kind) })
 	c.mu.Unlock()
 	slices.SortFunc(waits, func(a, b wait) int { return a.from.Compare(b.from) })
 	var total time.Duration

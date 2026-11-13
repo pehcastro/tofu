@@ -32,6 +32,7 @@ type Run struct {
 	Level      Level          `json:"level"`
 	Exit       int            `json:"exit"`
 	DurationMS int64          `json:"duration_ms"`
+	OutsideMS  *int64         `json:"outside_ms,omitempty"`
 	Decision   string         `json:"decision,omitempty"`
 	Gate       ledger.Verdict `json:"gate,omitempty"`
 	Problem    string         `json:"problem,omitempty"`

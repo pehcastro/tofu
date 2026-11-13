@@ -123,6 +123,16 @@ func readSession(store *session.Store, id string, since time.Time) Reading {
 	if err != nil {
 		reading.Unread++
 	}
+	type turnOp struct {
+		turn string
+		op   Op
+	}
+	walled := map[turnOp]bool{}
+	for _, event := range events {
+		if wall, err := session.DecodeWall(event); err == nil && wall.Turn != "" {
+			walled[turnOp{wall.Turn, Op(wall.Op)}] = true
+		}
+	}
 	tools := map[string]string{}
 	for _, event := range events {
 		switch {
@@ -134,7 +144,9 @@ func readSession(store *session.Store, id string, since time.Time) Reading {
 		case event.Kind == session.EventWall:
 			reading.keep(event.Body, id, since)
 		default:
-			reading.add(legacyEvent(event, id, tools[event.Call]))
+			legacy := legacyEvent(event, id, tools[event.Call])
+			legacy.Walls = slices.DeleteFunc(legacy.Walls, func(wall Wall) bool { return walled[turnOp{event.Turn, wall.Op}] })
+			reading.add(legacy)
 		}
 	}
 	reading.add(legacyExchanges(store, id, since))

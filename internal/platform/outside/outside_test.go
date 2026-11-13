@@ -112,6 +112,40 @@ func TestOutsideClock(t *testing.T) {
 	}
 }
 
+func TestOutsideOfKinds(t *testing.T) {
+	clock := &fakeTime{at: time.Date(2026, 11, 13, 9, 0, 0, 0, time.UTC)}
+	ctx, wall := outside.Open(context.Background(), clock.now)
+	network := outside.Wait(ctx, outside.Network)
+	clock.pass(10)
+	person := outside.Wait(ctx, outside.Person)
+	clock.pass(20)
+	network()
+	clock.pass(5)
+	person()
+	inner, _ := outside.Open(ctx, clock.now)
+	nested := outside.Wait(inner, outside.Person)
+	clock.pass(7)
+	nested()
+	cases := []struct {
+		name  string
+		kinds []outside.Kind
+		want  int64
+	}{
+		{"one kind keeps its whole span even where another kind covered it", []outside.Kind{outside.Person}, 32},
+		{"a kind not asked for is left out", []outside.Kind{outside.Network}, 30},
+		{"two kinds merge their overlap once", []outside.Kind{outside.Network, outside.Person}, 42},
+		{"no kind asked counts nothing", nil, 0},
+	}
+	for _, c := range cases {
+		if got := wall.OutsideOf(c.kinds...).Milliseconds(); got != c.want {
+			t.Errorf("%s: outside %d ms, want %d", c.name, got, c.want)
+		}
+	}
+	if got := wall.Outside().Milliseconds(); got != 42 {
+		t.Errorf("every kind: outside %d ms, want 42", got)
+	}
+}
+
 func TestOutsideClockRace(t *testing.T) {
 	ctx, wall := outside.Open(context.Background(), time.Now)
 	var all sync.WaitGroup

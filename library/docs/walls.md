@@ -20,9 +20,11 @@ milliseconds. Every wall is the same record:
 - `ok`: whether it ended without an error.
 - `outside_ms`: the part of `ms` spent waiting on something tofu does
   not run: a model, Jev, the network, a person or another process. Waits
-  that overlap count once, so it is never more than `ms`. Today the verb
-  walls of `tofu judge` and `tofu sift` carry it, counting their Jev
-  waits; any other wall has no `outside_ms` yet.
+  that overlap count once, so it is never more than `ms`. Today tool
+  calls and hooks carry it, a hook counting the process it ran; a Jev wall
+  carries it when its decision ledger row records `outside_ms`; and the
+  verb walls of `tofu judge` and `tofu sift` carry it, counting their Jev
+  waits. Any other wall has no `outside_ms` yet.
 
 tofu records the time and prints it. It does not call a time fast or
 slow; you judge that.
@@ -40,7 +42,12 @@ slow; you judge that.
 - Day files older than 30 days are deleted when a new day's file starts.
 - Turns, model requests, tool calls, hooks and Jev decisions already keep
   their own times in the session and the decision ledger. `tofu walls`
-  reads those where they are, so nothing is written twice.
+  reads those where they are, so nothing is written twice. When a turn
+  also holds a wall record of the same op, that record is read and the
+  old time is not, so no time counts twice.
+- A `jev` wall is a decision Jev was asked. The ledger's `inline_code`
+  and `standing` rows record an inline code run and a standing approval,
+  not a Jev call, and are not walls.
 
 ## Change it
 

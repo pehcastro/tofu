@@ -62,9 +62,15 @@ tofu walls --since 7d --op hook --all
 `outside_ms` is the part of a wall spent waiting on something tofu does not run: a model, Jev, the
 network, a person or another process. Waits that overlap inside one wall count once, so `outside_ms`
 is never more than `ms`, and a wait inside a nested wall counts in every wall around it. `--own`
-prints `ms - outside_ms`, and leaves out a wall whose whole time was outside. Today `tofu judge` and
-`tofu sift` record `outside_ms` on their verb wall, counting their Jev waits; every other wall has
-none yet and `--own` leaves it out rather than calling all of its time own.
+prints `ms - outside_ms`, and leaves out a wall whose whole time was outside. Today tool calls and
+hooks record `outside_ms`, a hook counting the process it ran; a Jev decision records it when its
+ledger row carries `outside_ms`; and `tofu judge` and `tofu sift` record it on their verb wall,
+counting their Jev waits. Every other wall has none yet and `--own` leaves it out rather than calling
+all of its time own.
+
+A `jev` wall is a decision Jev was asked: the ledger's `inline_code` and `standing` rows record an
+inline code run and a standing approval, not a Jev call, and are not read as walls. When a turn holds a wall record of the same op as an older
+timing field, the record is read and the older field is not, so no time counts twice.
 
 | Tier | own p50 ms |
 |---|---|

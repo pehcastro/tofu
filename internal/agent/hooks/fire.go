@@ -18,6 +18,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
@@ -76,6 +77,7 @@ type Result struct {
 	At         time.Time `json:"at"`
 	Exit       int       `json:"exit"`
 	DurationMS int64     `json:"duration_ms"`
+	OutsideMS  *int64    `json:"outside_ms,omitempty"`
 	Problem    string    `json:"problem,omitempty"`
 	Said       string    `json:"said,omitempty"`
 	stdout     string
@@ -175,7 +177,7 @@ func (e *Engine) Fire(ctx context.Context, in Input) Verdict {
 		said, problem := e.apply(in, result, chosen[i].File, &verdict)
 		stderr := strings.TrimSpace(result.stderr)
 		run := Run{Event: in.Event, Command: chosen[i].Command, File: chosen[i].File, Level: chosen[i].Level, Exit: result.Exit,
-			DurationMS: result.DurationMS, Decision: strings.Join(said, "; "), Problem: cmp.Or(result.Problem, problem), Stderr: stderr[:min(len(stderr), konst.HookSaidBytes)]}
+			DurationMS: result.DurationMS, OutsideMS: result.OutsideMS, Decision: strings.Join(said, "; "), Problem: cmp.Or(result.Problem, problem), Stderr: stderr[:min(len(stderr), konst.HookSaidBytes)]}
 		if verdict.Gate != before {
 			run.Gate = verdict.Gate
 		}
@@ -316,7 +318,11 @@ func (c *cappedOutput) Write(p []byte) (int, error) {
 
 func (e *Engine) run(ctx context.Context, hook Hook, stdin []byte) (result Result) {
 	result.At = time.Now()
-	defer func() { result.DurationMS = time.Since(result.At).Milliseconds() }()
+	ctx, clock := outside.Open(ctx, time.Now)
+	defer func() {
+		outsideMS := clock.Outside().Milliseconds()
+		result.DurationMS, result.OutsideMS = time.Since(result.At).Milliseconds(), &outsideMS
+	}()
 	choice, refused := e.shellFor(hook)
 	if refused != "" {
 		result.Problem = refused
