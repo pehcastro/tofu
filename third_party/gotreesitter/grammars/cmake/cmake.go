@@ -14,10 +14,20 @@ const BlobSHA256 = "ba2974144023195ccf657ef21b9a73905b705a5335a946de8db32971209b
 
 var registered sync.Once
 
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.CmakeC())
+	if err != nil {
+		return nil
+	}
+	lang.ExternalScanner = grammarruntime.CmakeExternalScanner{}.ExternalScannerForLanguage(lang)
+	return lang
+}
+
 func Language() *gotreesitter.Language {
 	registered.Do(func() {
 		grammarruntime.RegisterCmakeSupport()
 		grammarruntime.RegisterBlob("cmake", grammarblobs.Cmake)
+		gotreesitter.RegisterCCoreLanguage("cmake", LanguageC)
 	})
 	return grammarruntime.Language("cmake.bin")
 }

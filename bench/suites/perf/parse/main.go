@@ -23,32 +23,48 @@ import (
 	"github.com/odvcencio/gotreesitter/grammars/bash"
 	clang "github.com/odvcencio/gotreesitter/grammars/c"
 	csharp "github.com/odvcencio/gotreesitter/grammars/c_sharp"
+	"github.com/odvcencio/gotreesitter/grammars/clojure"
+	"github.com/odvcencio/gotreesitter/grammars/cmake"
 	"github.com/odvcencio/gotreesitter/grammars/cpp"
 	"github.com/odvcencio/gotreesitter/grammars/css"
 	"github.com/odvcencio/gotreesitter/grammars/dart"
+	"github.com/odvcencio/gotreesitter/grammars/dockerfile"
+	"github.com/odvcencio/gotreesitter/grammars/elixir"
+	"github.com/odvcencio/gotreesitter/grammars/erlang"
 	golang "github.com/odvcencio/gotreesitter/grammars/go"
 	"github.com/odvcencio/gotreesitter/grammars/groovy"
+	"github.com/odvcencio/gotreesitter/grammars/haskell"
+	"github.com/odvcencio/gotreesitter/grammars/hcl"
 	"github.com/odvcencio/gotreesitter/grammars/html"
 	"github.com/odvcencio/gotreesitter/grammars/java"
 	"github.com/odvcencio/gotreesitter/grammars/javascript"
 	"github.com/odvcencio/gotreesitter/grammars/json"
+	"github.com/odvcencio/gotreesitter/grammars/julia"
 	"github.com/odvcencio/gotreesitter/grammars/kotlin"
+	"github.com/odvcencio/gotreesitter/grammars/less"
 	"github.com/odvcencio/gotreesitter/grammars/lua"
 	makefile "github.com/odvcencio/gotreesitter/grammars/make"
 	"github.com/odvcencio/gotreesitter/grammars/markdown"
+	"github.com/odvcencio/gotreesitter/grammars/nix"
 	"github.com/odvcencio/gotreesitter/grammars/objc"
+	"github.com/odvcencio/gotreesitter/grammars/ocaml"
 	"github.com/odvcencio/gotreesitter/grammars/php"
 	"github.com/odvcencio/gotreesitter/grammars/powershell"
+	"github.com/odvcencio/gotreesitter/grammars/proto"
 	"github.com/odvcencio/gotreesitter/grammars/python"
+	"github.com/odvcencio/gotreesitter/grammars/r"
 	"github.com/odvcencio/gotreesitter/grammars/ruby"
 	"github.com/odvcencio/gotreesitter/grammars/rust"
 	"github.com/odvcencio/gotreesitter/grammars/scala"
+	"github.com/odvcencio/gotreesitter/grammars/scss"
+	"github.com/odvcencio/gotreesitter/grammars/solidity"
 	"github.com/odvcencio/gotreesitter/grammars/sql"
 	"github.com/odvcencio/gotreesitter/grammars/swift"
 	"github.com/odvcencio/gotreesitter/grammars/toml"
 	"github.com/odvcencio/gotreesitter/grammars/tsx"
 	"github.com/odvcencio/gotreesitter/grammars/typescript"
 	"github.com/odvcencio/gotreesitter/grammars/yaml"
+	"github.com/odvcencio/gotreesitter/grammars/zig"
 )
 
 type file struct {
@@ -91,6 +107,10 @@ func run() error {
 		"powershell": powershell.Language, "cpp": cpp.Language, "groovy": groovy.Language, "sql": sql.Language,
 		"java": java.Language, "kotlin": kotlin.Language, "ruby": ruby.Language, "php": php.Language,
 		"lua": lua.Language, "scala": scala.Language, "swift": swift.Language, "dart": dart.Language,
+		"clojure": clojure.Language, "cmake": cmake.Language, "dockerfile": dockerfile.Language, "elixir": elixir.Language,
+		"erlang": erlang.Language, "haskell": haskell.Language, "hcl": hcl.Language, "julia": julia.Language,
+		"less": less.Language, "nix": nix.Language, "ocaml": ocaml.Language, "proto": proto.Language,
+		"r": r.Language, "scss": scss.Language, "solidity": solidity.Language, "zig": zig.Language,
 	}[*langName]
 	if !ok {
 		return fmt.Errorf("unknown -lang %q", *langName)

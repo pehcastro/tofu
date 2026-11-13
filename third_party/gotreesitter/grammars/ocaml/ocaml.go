@@ -14,10 +14,20 @@ const BlobSHA256 = "97cf081c12b23db66048e08fd84d5d7f44868072d3667bcb892fb66f477c
 
 var registered sync.Once
 
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.OcamlC())
+	if err != nil {
+		return nil
+	}
+	lang.ExternalScanner = grammarruntime.OcamlExternalScanner{}.ExternalScannerForLanguage(lang)
+	return lang
+}
+
 func Language() *gotreesitter.Language {
 	registered.Do(func() {
 		grammarruntime.RegisterOcamlSupport()
 		grammarruntime.RegisterBlob("ocaml", grammarblobs.Ocaml)
+		gotreesitter.RegisterCCoreLanguage("ocaml", LanguageC)
 	})
 	return grammarruntime.Language("ocaml.bin")
 }

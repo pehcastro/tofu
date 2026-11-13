@@ -14,7 +14,18 @@ const BlobSHA256 = "e47329510284ba1f5d2e63ae2c48bf9a70c4705c6355c34c9b315a2edaa4
 
 var registered sync.Once
 
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.ZigC())
+	if err != nil {
+		return nil
+	}
+	return lang
+}
+
 func Language() *gotreesitter.Language {
-	registered.Do(func() { grammarruntime.RegisterBlob("zig", grammarblobs.Zig) })
+	registered.Do(func() {
+		grammarruntime.RegisterBlob("zig", grammarblobs.Zig)
+		gotreesitter.RegisterCCoreLanguage("zig", LanguageC)
+	})
 	return grammarruntime.Language("zig.bin")
 }

@@ -14,10 +14,20 @@ const BlobSHA256 = "a9b075c62ed19db08fe7f917651b6428f1f288f5f8a24631773d07dd9b54
 
 var registered sync.Once
 
+func LanguageC() *gotreesitter.Language {
+	lang, err := gotreesitter.LoadLanguage(grammarblobs.ElixirC())
+	if err != nil {
+		return nil
+	}
+	lang.ExternalScanner = grammarruntime.ElixirExternalScanner{}.ExternalScannerForLanguage(lang)
+	return lang
+}
+
 func Language() *gotreesitter.Language {
 	registered.Do(func() {
 		grammarruntime.RegisterElixirSupport()
 		grammarruntime.RegisterBlob("elixir", grammarblobs.Elixir)
+		gotreesitter.RegisterCCoreLanguage("elixir", LanguageC)
 	})
 	return grammarruntime.Language("elixir.bin")
 }
