@@ -11,6 +11,8 @@ const (
 	internalNode subtreeKind = iota
 	leafToken
 	keywordToken
+	missingToken
+	scanChangedToken
 )
 
 type Subtree struct {
@@ -18,6 +20,8 @@ type Subtree struct {
 	Size              uint32
 	kidsOrScan        uint32
 	DynPrec           int32
+	errorCost         uint32
+	descendants       uint32
 	ChildCount        uint16
 	Symbol            uint16
 	productionOrState uint16
@@ -26,6 +30,17 @@ type Subtree struct {
 }
 
 func (t *Subtree) leaf() bool { return t.kind != internalNode }
+
+func (t *Subtree) Missing() bool { return t.kind == missingToken }
+
+func (t *Subtree) ErrorCost() uint32 {
+	if t.Missing() {
+		return costPerMissingTree + costPerRecovery
+	}
+	return t.errorCost
+}
+
+func (t *Subtree) VisibleDescendants() uint32 { return t.descendants }
 
 func (t *Subtree) Production() uint16 {
 	if t.leaf() {
@@ -54,6 +69,7 @@ type Result struct {
 	Trees     []Subtree
 	Kids      []uint32
 	Root      uint32
+	t         *Tables
 	scans     []scanState
 	scanBytes []byte
 	tooWide   bool
@@ -85,11 +101,7 @@ func (r *Result) Children(id uint32) []uint32 {
 
 func (t *Subtree) Total() uint32 { return t.Padding + t.Size }
 
-func (r *Result) leaf(symbol uint16, padding, size uint32, parseState uint16, keyword bool) uint32 {
-	kind := leafToken
-	if keyword {
-		kind = keywordToken
-	}
+func (r *Result) leaf(symbol uint16, padding, size uint32, parseState uint16, kind subtreeKind) uint32 {
 	r.Trees = append(r.Trees, Subtree{
 		Padding:           padding,
 		Size:              size,
@@ -106,11 +118,18 @@ func (r *Result) copyOf(id uint32) uint32 {
 	return uint32(len(r.Trees) - 1)
 }
 
+func (r *Result) shown(child *Subtree, aliases []uint16, structural int) bool {
+	aliased := !child.Extra && child.Symbol != 0 && structural < len(aliases) && aliases[structural] != 0
+	return aliased || r.t.Visible[child.Symbol]
+}
+
 func (r *Result) node(symbol uint16, children []uint32, productionID uint16) uint32 {
 	if len(children) > math.MaxUint16 {
 		r.tooWide = true
 	}
 	n := Subtree{Symbol: symbol, productionOrState: productionID, kidsOrScan: uint32(len(r.Kids)), ChildCount: uint16(len(children))}
+	aliases := r.t.aliases(productionID)
+	structural := 0
 	for i, c := range children {
 		ct := &r.Trees[c]
 		if i == 0 {
@@ -119,10 +138,37 @@ func (r *Result) node(symbol uint16, children []uint32, productionID uint16) uin
 			n.Size += ct.Total()
 		}
 		n.DynPrec += ct.DynPrec
+		n.errorCost += ct.ErrorCost()
+		n.descendants += ct.descendants
+		if r.shown(ct, aliases, structural) {
+			n.descendants++
+		}
+		if !ct.Extra {
+			structural++
+		}
 	}
 	r.Kids = append(r.Kids, children...)
 	r.Trees = append(r.Trees, n)
 	return uint32(len(r.Trees) - 1)
+}
+
+func (r *Result) visibleChildCount(id uint32) uint32 {
+	count := uint32(0)
+	aliases := r.t.aliases(r.Trees[id].Production())
+	structural := 0
+	for _, c := range r.Children(id) {
+		ct := &r.Trees[c]
+		switch {
+		case r.shown(ct, aliases, structural):
+			count++
+		case ct.ChildCount > 0:
+			count += r.visibleChildCount(c)
+		}
+		if !ct.Extra {
+			structural++
+		}
+	}
+	return count
 }
 
 func (r *Result) compare(left, right uint32) int {
@@ -152,20 +198,33 @@ func order(less bool) int {
 	return 1
 }
 
+func rightWins(leftCost, rightCost uint32, leftDyn, rightDyn int32) (pick, decided bool) {
+	switch {
+	case leftCost != rightCost:
+		return rightCost < leftCost, true
+	case leftDyn != rightDyn:
+		return rightDyn > leftDyn, true
+	}
+	return true, leftCost > 0
+}
+
 func (r *Result) selectTree(left, right uint32) bool {
-	if l, rt := r.Trees[left].DynPrec, r.Trees[right].DynPrec; l != rt {
-		return rt > l
+	l, rt := &r.Trees[left], &r.Trees[right]
+	if pick, decided := rightWins(l.ErrorCost(), rt.ErrorCost(), l.DynPrec, rt.DynPrec); decided {
+		return pick
 	}
 	return r.compare(left, right) == 1
 }
 
 func (r *Result) selectChildren(left uint32, children []uint32) bool {
-	dyn := int32(0)
+	dyn, cost := int32(0), uint32(0)
 	for _, c := range children {
 		dyn += r.Trees[c].DynPrec
+		cost += r.Trees[c].ErrorCost()
 	}
-	if l := r.Trees[left].DynPrec; l != dyn {
-		return dyn > l
+	l := &r.Trees[left]
+	if pick, decided := rightWins(l.ErrorCost(), cost, l.DynPrec, dyn); decided {
+		return pick
 	}
 	return r.compareKids(r.Children(left), children) == 1
 }
@@ -178,6 +237,11 @@ func (r *Result) equivalent(left, right uint32) bool {
 		return false
 	}
 	l, rt := &r.Trees[left], &r.Trees[right]
-	return l.Symbol == rt.Symbol && l.Padding == rt.Padding && l.Size == rt.Size &&
-		l.ChildCount == rt.ChildCount && l.Extra == rt.Extra
+	if l.Symbol != rt.Symbol {
+		return false
+	}
+	if l.ErrorCost() > 0 && rt.ErrorCost() > 0 {
+		return true
+	}
+	return l.Padding == rt.Padding && l.Size == rt.Size && l.ChildCount == rt.ChildCount && l.Extra == rt.Extra
 }

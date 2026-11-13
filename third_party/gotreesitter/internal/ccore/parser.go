@@ -10,7 +10,6 @@ type Status uint8
 const (
 	Accepted Status = iota
 	Stopped
-	RecoveryNeeded
 	NoVersionsLeft
 	TooWide
 	Unbound
@@ -18,7 +17,7 @@ const (
 )
 
 func (s Status) String() string {
-	return [...]string{"accepted", "stopped", "recovery needed", "no versions left", "too wide", "unbound", "unmapped symbol"}[s]
+	return [...]string{"accepted", "stopped", "no versions left", "too wide", "unbound", "unmapped symbol"}[s]
 }
 
 const (
@@ -47,6 +46,7 @@ type parser struct {
 	outcome       Status
 	trailing      []uint32
 	trailing2     []uint32
+	reductions    []Action
 	scanBuf       [serializationBufferSize]byte
 }
 
@@ -56,15 +56,16 @@ func (w *Work) Parse(t *Tables, src []byte, scanner Scanner, stop func() bool) (
 	old := &w.p
 	inked := len(src) - bytes.Count(src, []byte{' '}) - bytes.Count(src, []byte{'\n'})
 	estimate := inked*treeQuartersPerInkByte/4 + reserveSlack
-	w.p = parser{t: t, stop: stop, scanner: scanner, l: lexer{src: src}, trailing: old.trailing[:0], trailing2: old.trailing2[:0],
+	w.p = parser{t: t, stop: stop, scanner: scanner, l: lexer{src: src}, trailing: old.trailing[:0], trailing2: old.trailing2[:0], reductions: old.reductions[:0],
 		r: Result{
 			Trees:     append(slices.Grow(old.r.Trees[:0], estimate), Subtree{}),
 			Kids:      slices.Grow(old.r.Kids[:0], estimate),
+			t:         t,
 			scans:     append(old.r.scans[:0], scanState{}),
 			scanBytes: old.r.scanBytes[:0],
 		},
 		s: stack{nodes: append(old.s.nodes[:0], stackNode{}), free: old.s.free[:0], heads: old.s.heads[:0],
-			iterators: old.s.iterators[:0], slices: old.s.slices[:0], buffers: old.s.buffers},
+			iterators: old.s.iterators[:0], slices: old.s.slices[:0], buffers: old.s.buffers, summaries: append(old.s.summaries[:0], nil)},
 	}
 	p := &w.p
 	p.s.r = &p.r
@@ -94,96 +95,14 @@ func (p *parser) run() bool {
 				}
 			}
 		}
-		sawUnpaused, needsRecovery := p.condense()
-		if p.finished != 0 && (!sawUnpaused || needsRecovery) {
+		least := p.condense()
+		if p.finished != 0 && p.r.Trees[p.finished].ErrorCost() < least {
 			return true
 		}
-		if needsRecovery {
-			return p.decline(RecoveryNeeded)
-		}
 		if len(p.s.heads) == 0 {
-			return p.decline(NoVersionsLeft)
+			return p.finished != 0 || p.decline(NoVersionsLeft)
 		}
 	}
-}
-
-func (p *parser) condense() (sawUnpaused, needsRecovery bool) {
-	for i := 0; i < len(p.s.heads); i++ {
-		if p.s.heads[i].status == halted {
-			p.s.remove(i)
-			i--
-			continue
-		}
-		if p.s.heads[i].status == active {
-			sawUnpaused = true
-		}
-		for j := 0; j < i; j++ {
-			switch p.compare(j, i) {
-			case takeLeft:
-				p.s.remove(i)
-				i--
-				j = i
-			case preferLeft, none:
-				if p.s.merge(j, i) {
-					i--
-					j = i
-				}
-			case preferRight:
-				if p.s.merge(j, i) {
-					i--
-					j = i
-				} else {
-					p.s.swap(i, j)
-				}
-			case takeRight:
-				p.s.remove(j)
-				i--
-				j--
-			}
-		}
-	}
-	for len(p.s.heads) > maxVersionCount {
-		p.s.remove(maxVersionCount)
-	}
-	hasUnpaused := false
-	for i := 0; i < len(p.s.heads); i++ {
-		if p.s.heads[i].status != paused {
-			hasUnpaused = true
-			continue
-		}
-		if !hasUnpaused && p.accepts < maxVersionCount {
-			return sawUnpaused, true
-		}
-		p.s.remove(i)
-		i--
-	}
-	return sawUnpaused, false
-}
-
-type comparison uint8
-
-const (
-	none comparison = iota
-	takeLeft
-	preferLeft
-	preferRight
-	takeRight
-)
-
-func (p *parser) compare(a, b int) comparison {
-	pa, pb := p.s.heads[a].status == paused, p.s.heads[b].status == paused
-	da, db := p.s.node(a).dynPrec, p.s.node(b).dynPrec
-	switch {
-	case !pa && pb:
-		return takeLeft
-	case pa && !pb:
-		return takeRight
-	case da > db:
-		return preferLeft
-	case db > da:
-		return preferRight
-	}
-	return none
 }
 
 func (p *parser) checkStop() bool {
@@ -245,7 +164,8 @@ func (p *parser) advance(v int) bool {
 				p.accept(v, lookahead)
 				return true
 			case ActionRecover:
-				return p.decline(RecoveryNeeded)
+				p.recover(v, lookahead)
+				return true
 			}
 		}
 		if lastReduction != noVersion {
@@ -269,9 +189,10 @@ func (p *parser) advance(v int) bool {
 			}
 		}
 		if state == errorState {
-			return p.decline(RecoveryNeeded)
+			p.recover(v, lookahead)
+			return true
 		}
-		p.s.heads[v].status = paused
+		p.s.pause(v, lookahead)
 		return true
 	}
 }
@@ -363,6 +284,9 @@ func (p *parser) accept(v int, lookahead uint32) {
 			children := append(append(append(p.s.buffer(), trees[:j]...), p.r.Children(trees[j])...), trees[j+1:]...)
 			root = p.r.node(t.Symbol, children, t.Production())
 			p.s.recycle(children)
+			if t.Symbol >= p.t.errorSymbol() {
+				p.chargeError(root, 0)
+			}
 			break
 		}
 		p.accepts++

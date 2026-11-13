@@ -69,21 +69,23 @@ func (p *parser) lex(v int, parseState uint16) uint32 {
 		errEnd = l.pos
 	}
 	if skipped {
-		return p.r.leaf(symError, errStart-start, errEnd-errStart, parseState, false)
+		return p.r.leaf(p.t.errorSymbol(), errStart-start, errEnd-errStart, parseState, leafToken)
 	}
 	symbol := l.result
 	padding, size := l.tokenStart-start, l.tokenEnd-l.tokenStart
-	keyword := false
+	kind := leafToken
 	if symbol == p.t.KeywordCapture && symbol != 0 {
 		end := l.tokenEnd
 		l.reset(l.tokenStart)
 		l.start()
-		keyword = l.run(&p.t.Keywords, 0)
-		if keyword && l.tokenEnd == end && (p.t.lookup(parseState, l.result) != 0 || p.t.isReserved(parseState, l.result)) {
+		if l.run(&p.t.Keywords, 0) {
+			kind = keywordToken
+		}
+		if kind == keywordToken && l.tokenEnd == end && (p.t.lookup(parseState, l.result) != 0 || p.t.isReserved(parseState, l.result)) {
 			symbol = l.result
 		}
 	}
-	return p.r.leaf(symbol, padding, size, parseState, keyword)
+	return p.r.leaf(symbol, padding, size, parseState, kind)
 }
 
 func (p *parser) scan(start, current uint32, external uint16, v int, parseState uint16, errorMode bool) uint32 {
@@ -99,14 +101,18 @@ func (p *parser) scan(start, current uint32, external uint16, v int, parseState 
 	}
 	state := p.scanBuf[:p.scanner.Serialize(p.scanBuf[:])]
 	changed := !bytes.Equal(previous, state)
-	if tokenEnd <= current && !changed && (errorMode || p.t.nextState(parseState, symbol) == parseState) {
+	if tokenEnd <= current && !changed && (errorMode || !p.s.hasAdvancedSinceError(v) || p.t.nextState(parseState, symbol) == parseState) {
 		return 0
 	}
 	scan := p.r.Trees[last].scan()
 	if changed || scan == 0 {
 		scan = p.r.addScan(state)
 	}
-	leaf := p.r.leaf(symbol, tokenStart-start, tokenEnd-tokenStart, parseState, false)
+	kind := leafToken
+	if changed {
+		kind = scanChangedToken
+	}
+	leaf := p.r.leaf(symbol, tokenStart-start, tokenEnd-tokenStart, parseState, kind)
 	p.r.Trees[leaf].kidsOrScan = scan
 	return leaf
 }

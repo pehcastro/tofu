@@ -13,8 +13,11 @@ import (
 	"runtime/pprof"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	ts "github.com/odvcencio/gotreesitter"
 	golang "github.com/odvcencio/gotreesitter/grammars/go"
@@ -133,9 +136,9 @@ func (g *gate) declineReason(src []byte) string {
 }
 
 func (g *gate) sexpOf(tree *ts.Tree) string {
-	var b strings.Builder
-	writeSexp(&b, tree.RootNode(), g.lang)
-	return b.String()
+	w := sexpWriter{lang: g.lang, src: tree.Source()}
+	w.node(tree.RootNode())
+	return w.b.String()
 }
 
 func (g *gate) sameTree(a, b *ts.Tree) bool {
@@ -211,10 +214,10 @@ func (g *gate) compare(files []file, sexp, incremental bool) error {
 			if err != nil {
 				return err
 			}
-			if g.sexpOf(tree) == c {
+			if mine := g.sexpOf(tree); mine == c {
 				sexpSame++
 			} else {
-				fmt.Println("sexp differs from C:", f.path)
+				fmt.Println("sexp differs from C:", f.path, firstDifference(mine, c))
 			}
 		}
 		tree.Release()
@@ -343,29 +346,68 @@ func nodeList(n *ts.Node, lang *ts.Language) []string {
 	return out
 }
 
-func writeSexp(b *strings.Builder, n *ts.Node, lang *ts.Language) {
-	if n.IsMissing() {
-		b.WriteString("(MISSING " + n.Type(lang) + ")")
-		return
+func firstDifference(mine, c string) string {
+	at := 0
+	for at < len(mine) && at < len(c) && mine[at] == c[at] {
+		at++
 	}
-	b.WriteString("(" + n.Type(lang))
-	writeSexpChildren(b, n, lang)
-	b.WriteString(")")
+	from := max(0, at-60)
+	return fmt.Sprintf("\n  go %q\n  c  %q", mine[from:min(len(mine), at+60)], c[from:min(len(c), at+60)])
 }
 
-func writeSexpChildren(b *strings.Builder, n *ts.Node, lang *ts.Language) {
+type sexpWriter struct {
+	b    strings.Builder
+	lang *ts.Language
+	src  []byte
+}
+
+func (w *sexpWriter) node(n *ts.Node) {
+	switch {
+	case n.IsMissing() && n.IsNamed():
+		w.b.WriteString("(MISSING " + n.Type(w.lang) + ")")
+		return
+	case n.IsMissing():
+		w.b.WriteString("(MISSING \"" + n.Type(w.lang) + "\")")
+		return
+	case n.IsError() && n.ChildCount() == 0 && n.EndByte() > n.StartByte():
+		w.b.WriteString("(UNEXPECTED " + unexpected(w.src[n.StartByte():]))
+	default:
+		w.b.WriteString("(" + n.Type(w.lang))
+	}
+	w.children(n)
+	w.b.WriteString(")")
+}
+
+func (w *sexpWriter) children(n *ts.Node) {
 	for i := 0; i < int(n.ChildCount()); i++ {
 		child := n.Child(i)
 		if !child.IsNamed() && !child.IsMissing() {
-			writeSexpChildren(b, child, lang)
+			w.children(child)
 			continue
 		}
-		b.WriteString(" ")
-		if field := n.FieldNameForChild(i, lang); field != "" {
-			b.WriteString(field + ": ")
+		w.b.WriteString(" ")
+		if field := n.FieldNameForChild(i, w.lang); field != "" {
+			w.b.WriteString(field + ": ")
 		}
-		writeSexp(b, child, lang)
+		w.node(child)
 	}
+}
+
+func unexpected(rest []byte) string {
+	r, _ := utf8.DecodeRune(rest)
+	switch {
+	case r == 0:
+		return `'\0'`
+	case r == '\n':
+		return `'\n'`
+	case r == '\t':
+		return `'\t'`
+	case r == '\r':
+		return `'\r'`
+	case r < utf8.RuneSelf && unicode.IsPrint(r):
+		return "'" + string(r) + "'"
+	}
+	return strconv.Itoa(int(r))
 }
 
 func (g *gate) cLists(files []file) (map[string][]string, error) {

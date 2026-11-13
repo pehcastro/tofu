@@ -3,6 +3,7 @@ package gotreesitter
 import (
 	"bytes"
 	"os"
+	"slices"
 	"sync"
 	"unsafe"
 
@@ -17,6 +18,7 @@ type ccoreBinding struct {
 	tables     *ccore.Tables
 	symbols    []Symbol
 	mapped     []bool
+	meta       []SymbolMetadata
 	fields     []FieldID
 	supertypes []uint32
 	works      sync.Pool
@@ -171,13 +173,17 @@ func (s *ccoreScanner) Scan(at uint32, valid []bool, state []byte) (uint16, uint
 func (s *ccoreScanner) Serialize(buf []byte) int { return s.scanner.Serialize(s.payload, buf) }
 
 func bindCCore(source, target *Language) *ccoreBinding {
-	if source == nil || target == nil || source.ExternalTokenCount != 0 && source.ExternalScanner == nil {
+	if source == nil || target == nil || source.ExternalTokenCount != 0 && source.ExternalScanner == nil || len(source.SymbolMetadata) != len(source.SymbolNames) {
 		return nil
 	}
-	b := &ccoreBinding{target: target, source: source, tables: ccoreTables(source)}
+	b := &ccoreBinding{target: target, source: source}
 	b.works.New = func() any { return &ccore.Work{} }
-	b.symbols = make([]Symbol, len(source.SymbolNames))
-	b.mapped = make([]bool, len(source.SymbolNames))
+	count := len(source.SymbolNames)
+	b.meta = append(slices.Clip(source.SymbolMetadata), SymbolMetadata{Visible: true, Named: true}, SymbolMetadata{})
+	b.tables = ccoreTables(source, b.meta)
+	b.symbols = make([]Symbol, count+2)
+	b.mapped = make([]bool, count+2)
+	b.symbols[count], b.mapped[count], b.mapped[count+1] = errorSymbol, true, true
 	seen := map[symbolNameNamedKey]int{}
 	targetVisible, sourceVisible := ccoreVisibleSymbols(target), ccoreVisibleSymbols(source)
 	for sym, meta := range source.SymbolMetadata {
@@ -187,9 +193,9 @@ func bindCCore(source, target *Language) *ccoreBinding {
 		key := symbolNameNamedKey{name: source.SymbolNames[sym], named: meta.Named}
 		matches := targetVisible[key]
 		if len(matches) == 0 {
-			if hidden, ok := target.symbolByNameAndNamed(key.name, key.named); ok {
-				b.symbols[sym], b.mapped[sym] = hidden, true
-			}
+			hidden, ok := target.symbolByNameAndNamed(key.name, key.named)
+			b.symbols[sym], b.mapped[sym] = hidden, ok
+			b.meta[sym].Visible = ok || meta.Named
 			continue
 		}
 		pick := len(matches) - 1
@@ -205,7 +211,7 @@ func bindCCore(source, target *Language) *ccoreBinding {
 			b.fields[id] = fid
 		}
 	}
-	b.supertypes = make([]uint32, len(source.SymbolNames))
+	b.supertypes = make([]uint32, count+2)
 	for sym, name := range source.SymbolNames {
 		if source.supertypeBit(Symbol(sym)) == 0 {
 			continue
@@ -233,8 +239,11 @@ func ccoreVisibleSymbols(lang *Language) map[symbolNameNamedKey][]Symbol {
 	return out
 }
 
-func ccoreTables(lang *Language) *ccore.Tables {
+func ccoreTables(lang *Language, meta []SymbolMetadata) *ccore.Tables {
 	t := &ccore.Tables{
+		Visible:         make([]bool, len(meta)),
+		ErrorSymbol:     uint16(len(lang.SymbolNames)),
+		Aliases:         make([][]uint16, len(lang.AliasSequences)),
 		SymbolCount:     lang.SymbolCount,
 		TokenCount:      lang.TokenCount,
 		LargeStateCount: lang.LargeStateCount,
@@ -244,6 +253,15 @@ func ccoreTables(lang *Language) *ccore.Tables {
 		KeywordCapture:  uint16(lang.KeywordCaptureToken),
 		ReservedSetSize: uint32(lang.MaxReservedWordSetSize),
 		ExternalStates:  lang.ExternalLexStates,
+	}
+	for i, m := range meta {
+		t.Visible[i] = m.Visible
+	}
+	for i, row := range lang.AliasSequences {
+		t.Aliases[i] = make([]uint16, len(row))
+		for j, s := range row {
+			t.Aliases[i][j] = uint16(s)
+		}
 	}
 	t.ParseTable = contiguousRows(lang.ParseTable, int(lang.SymbolCount))
 	actionCount := 0

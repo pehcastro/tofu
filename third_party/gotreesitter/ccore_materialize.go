@@ -14,6 +14,7 @@ type ccoreBuilder struct {
 	kids     []*Node
 	fields   []FieldID
 	lines    []uint32
+	row      int
 	unmapped bool
 }
 
@@ -27,22 +28,27 @@ func lineStarts(source []byte) []uint32 {
 	return lines
 }
 
-func (m *ccoreBuilder) point(at uint32) Point {
-	row, found := slices.BinarySearch(m.lines, at)
+func (m *ccoreBuilder) points(start, end uint32) (Point, Point) {
+	for m.row+1 < len(m.lines) && m.lines[m.row+1] <= start {
+		m.row++
+	}
+	after, found := slices.BinarySearch(m.lines[m.row:], end)
+	row := m.row + after
 	if !found {
 		row--
 	}
-	return Point{Row: uint32(row), Column: at - m.lines[row]}
+	return Point{Row: uint32(m.row), Column: start - m.lines[m.row]}, Point{Row: uint32(row), Column: end - m.lines[row]}
 }
 
 func (b *ccoreBinding) materialize(r *ccore.Result, source []byte) (*Tree, ccore.Status) {
-	total := 1 + b.countVisible(r, r.Root)
+	bound := 1 + int(r.Trees[r.Root].VisibleDescendants())
 	arena := acquireNodeArena(arenaClassFull)
-	arena.ensureNodeCapacity(total)
-	arena.used = total
-	m := &ccoreBuilder{b: b, r: r, arena: arena, nodes: arena.nodes[:1:total], kids: arena.allocNodeSliceNoClear(total)[:0], fields: arena.allocFieldIDSlice(total), lines: lineStarts(source)}
+	arena.ensureNodeCapacity(bound)
+	arena.used = bound
+	m := &ccoreBuilder{b: b, r: r, arena: arena, nodes: arena.nodes[:1:bound], kids: arena.allocNodeSliceNoClear(bound)[:0], fields: arena.allocFieldIDSlice(bound), lines: lineStarts(source)}
 	root := &m.nodes[0]
 	m.build(root, r.Root, r.Trees[r.Root].Symbol, 0)
+	arena.used = len(m.nodes)
 	if m.unmapped {
 		arena.Release()
 		return nil, ccore.UnmappedSymbol
@@ -64,26 +70,11 @@ func (b *ccoreBinding) childSymbol(r *ccore.Result, parent uint32, structural in
 	return child.Symbol
 }
 
-func (b *ccoreBinding) countVisible(r *ccore.Result, id uint32) int {
-	n, structural := 0, 0
-	for _, c := range r.Children(id) {
-		t := &r.Trees[c]
-		if b.source.SymbolMetadata[b.childSymbol(r, id, structural, t)].Visible {
-			n++
-		}
-		if !t.Extra {
-			structural++
-		}
-		n += b.countVisible(r, c)
-	}
-	return n
-}
-
 func (b *ccoreBinding) visibleChildren(r *ccore.Result, id uint32) int {
 	n, structural := 0, 0
 	for _, c := range r.Children(id) {
 		t := &r.Trees[c]
-		if b.source.SymbolMetadata[b.childSymbol(r, id, structural, t)].Visible {
+		if b.meta[b.childSymbol(r, id, structural, t)].Visible {
 			n++
 		} else {
 			n += b.visibleChildren(r, c)
@@ -114,10 +105,12 @@ func (m *ccoreBuilder) build(n *Node, id uint32, symbol uint16, pos uint32) {
 	}
 	n.ownerArena = m.arena
 	n.symbol = m.b.symbols[symbol]
-	n.setNamed(m.b.source.SymbolMetadata[symbol].Named)
+	n.setNamed(m.b.meta[symbol].Named)
 	n.setExtra(t.Extra)
+	n.setMissing(t.Missing())
+	n.setHasError(t.ErrorCost() > 0)
 	n.startByte, n.endByte = start, end
-	n.startPoint, n.endPoint = m.point(start), m.point(end)
+	n.startPoint, n.endPoint = m.points(start, end)
 	n.childIndex = -1
 	count := m.b.visibleChildren(m.r, id)
 	if count == 0 {
@@ -152,7 +145,7 @@ func (m *ccoreBuilder) fill(parent *Node, id uint32, kids []*Node, fields []Fiel
 				field = inherited
 			}
 		}
-		if m.b.source.SymbolMetadata[symbol].Visible {
+		if m.b.meta[symbol].Visible {
 			m.nodes = m.nodes[:len(m.nodes)+1]
 			child := &m.nodes[len(m.nodes)-1]
 			kids[*k], fields[*k] = child, m.b.fields[field]
@@ -205,7 +198,7 @@ type flatBuilder struct {
 }
 
 func (b *ccoreBinding) flatten(r *ccore.Result, into []FlatNode) ([]FlatNode, bool) {
-	f := &flatBuilder{b: b, r: r, nodes: append(slices.Grow(into[:0], 1+b.countVisible(r, r.Root)), FlatNode{})}
+	f := &flatBuilder{b: b, r: r, nodes: append(slices.Grow(into[:0], 1+int(r.Trees[r.Root].VisibleDescendants())), FlatNode{})}
 	ok := f.node(0, r.Root, r.Trees[r.Root].Symbol, 0)
 	return f.nodes, ok
 }
@@ -216,7 +209,7 @@ func (f *flatBuilder) node(at, id uint32, symbol uint16, pos uint32) bool {
 	n.Start = pos + t.Padding
 	n.End = n.Start + t.Size
 	n.Symbol = f.b.symbols[symbol]
-	if f.b.source.SymbolMetadata[symbol].Named {
+	if f.b.meta[symbol].Named {
 		n.Flags |= FlatNamed
 	}
 	if t.Extra {
@@ -225,7 +218,7 @@ func (f *flatBuilder) node(at, id uint32, symbol uint16, pos uint32) bool {
 	n.Kids, n.KidCount = uint32(len(f.nodes)), uint32(f.b.visibleChildren(f.r, id))
 	f.nodes = f.nodes[:n.Kids+n.KidCount]
 	next := n.Kids
-	return f.b.mapped[symbol] && f.kids(at, id, &next, 0, pos)
+	return f.b.mapped[symbol] && !t.Missing() && f.kids(at, id, &next, 0, pos)
 }
 
 func (f *flatBuilder) kids(parent, id uint32, next *uint32, inherited FieldID, running uint32) bool {
@@ -242,7 +235,7 @@ func (f *flatBuilder) kids(parent, id uint32, next *uint32, inherited FieldID, r
 				field = inherited
 			}
 		}
-		if f.b.source.SymbolMetadata[symbol].Visible {
+		if f.b.meta[symbol].Visible {
 			at := *next
 			*next++
 			f.nodes[at] = FlatNode{Parent: parent, Field: f.b.fields[field]}

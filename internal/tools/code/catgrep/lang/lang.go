@@ -240,10 +240,18 @@ func (l Lang) PreprocessPattern(query string) string {
 	if l == Php {
 		out.WriteString(phpOpenTag)
 	}
+	l.expand(&out, query)
+	if l == Go && query != "" && !strings.HasSuffix(query, "\n") {
+		out.WriteByte('\n')
+	}
+	return out.String()
+}
+
+func (l Lang) expand(out *strings.Builder, query string) {
 	expando := l.Sigil()
 	if expando == metaVarChar {
 		out.WriteString(query)
-		return out.String()
+		return
 	}
 	dollars := 0
 	for _, c := range query {
@@ -264,5 +272,4 @@ func (l Lang) PreprocessPattern(query string) string {
 		sigil = expando
 	}
 	out.WriteString(strings.Repeat(string(sigil), dollars))
-	return out.String()
 }

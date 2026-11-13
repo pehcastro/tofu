@@ -72,6 +72,25 @@ type Tables struct {
 	ReservedWords   []uint16
 	ReservedSetSize uint32
 	ExternalStates  [][]bool
+	Visible         []bool
+	Aliases         [][]uint16
+	ErrorSymbol     uint16
+}
+
+func (t *Tables) errorSymbol() uint16 { return t.ErrorSymbol }
+
+func (t *Tables) errorRepeatSymbol() uint16 { return t.ErrorSymbol + 1 }
+
+func (t *Tables) aliases(production uint16) []uint16 {
+	if production == 0 || int(production) >= len(t.Aliases) {
+		return nil
+	}
+	return t.Aliases[production]
+}
+
+func (t *Tables) hasReduce(state, symbol uint16) bool {
+	actions := t.entry(state, symbol).Actions
+	return len(actions) > 0 && actions[0].Type == ActionReduce
 }
 
 type Scanner interface {
@@ -81,7 +100,6 @@ type Scanner interface {
 
 const (
 	symEnd         uint16 = 0
-	symError       uint16 = 65535
 	errorState     uint16 = 0
 	noLexState     uint16 = 0xFFFF
 	invalidRune    int32  = -1
@@ -142,7 +160,7 @@ func (t *Tables) lookup(state, symbol uint16) uint16 {
 }
 
 func (t *Tables) entry(state, symbol uint16) *ActionEntry {
-	if symbol == symError {
+	if uint32(symbol) >= t.SymbolCount {
 		return &t.Actions[0]
 	}
 	return &t.Actions[t.lookup(state, symbol)]
