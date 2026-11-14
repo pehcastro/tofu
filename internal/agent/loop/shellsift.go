@@ -4,9 +4,13 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"tofu/internal/judge/points"
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
+	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/shell/bash/sift"
 	shipped "tofu/library"
@@ -71,6 +75,7 @@ type ShellCut struct {
 	Text   string
 	Saved  int
 	Method points.Method
+	Folded bool
 }
 
 func siftOrNothing(given *ShellSift) *ShellSift {
@@ -101,7 +106,17 @@ func (g gatedCall) cutShellResult(ctx context.Context, tool string, result contr
 		note += line
 	}
 	shell := sift.Shell{Command: result.Command, Note: note, Stdout: stdout, ExitCode: code}
-	cut, err := g.sift.Cut(ctx, shell, g.task)
+	started := time.Now()
+	clocked, clock := outside.Open(ctx, time.Now)
+	cut, err := g.sift.Cut(clocked, shell, g.task)
+	if g.site.log != nil {
+		method, jev := string(cut.Method), clock.OutsideOf(outside.Jev).Milliseconds()
+		if cut.Folded {
+			method = "fold"
+		}
+		_, _ = g.site.log.Append(session.Event{Turn: g.site.turn, Agent: g.site.agent, Call: g.site.call, Kind: session.EventWall},
+			walls.Wall{Op: walls.OpSift, Name: method, MS: time.Since(started).Milliseconds(), At: started.UnixMilli(), OK: err == nil, OutsideMS: &jev})
+	}
 	if err != nil {
 		return ShellCut{Text: result.Content}
 	}
@@ -113,7 +128,7 @@ func (s ShellSift) Cut(ctx context.Context, shell sift.Shell, task string) (Shel
 	whole := sift.JoinUnits(units)
 	original := len(whole)
 	if folded, known := sift.Fold(shell); known {
-		return ShellCut{Text: folded, Saved: max(0, original-len(folded)), Method: points.Cheap}, nil
+		return ShellCut{Text: folded, Saved: max(0, original-len(folded)), Method: points.Cheap, Folded: true}, nil
 	}
 	if strings.Count(shell.Stdout, "\n") > konst.ShellDrainLinesFloor {
 		shell.Stdout = sift.Drain(shell.Stdout, konst.ShellDrainSimilarityPercent, konst.ShellDrainTemplatesCap)
