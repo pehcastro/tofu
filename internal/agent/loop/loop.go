@@ -175,9 +175,12 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		return Row{}, err
 	}
 	artifacts.preview = artifacts.preview.OnWire(config.Wire)
-	artifacts.standing = newStandingJudge(config).orders
-	artifacts.keep = newKeepJudge(config.Project, config.Places.Log, config.Task, config.Notify)
-	artifacts.keep.index = cmp.Or(config.Drops, artifacts.keep.index)
+	judgedBy, judging := config, sync.WaitGroup{}
+	defer judging.Wait()
+	var standing *standingJudge
+	var keeping *keepJudge
+	judging.Go(func() { standing = newStandingJudge(judgedBy) })
+	judging.Go(func() { keeping = newKeepJudge(judgedBy.Project, judgedBy.Places.Log, judgedBy.Task, judgedBy.Notify) })
 	sifter := siftOrNothing(config.Sift)
 	if config.Redactor == nil {
 		live := new(credential.HeldKeys).Live()
@@ -252,6 +255,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, SpawnedBy: config.SpawnedBy, Budget: budget, System: held.head, Tools: usedTools, ToolSchemas: string(sentSchemas), Parts: held.parts}
 
 	upgraded := config.upgradeNote()
+	judging.Wait()
+	artifacts.standing, artifacts.keep = standing.orders, keeping
+	artifacts.keep.index = cmp.Or(config.Drops, artifacts.keep.index)
 	recorded, err = openRecord(config, row)
 	if err != nil {
 		return Row{}, err
@@ -1918,6 +1924,10 @@ func inParallel(crashes safe.Report, unit string, n int, each func(int)) {
 	if first := slices.IndexFunc(crashed, func(err error) bool { return err != nil }); first >= 0 {
 		panic(crashed[first])
 	}
+}
+
+func OpenJudges(config Config) {
+	config.Inbox.openJudges(config)
 }
 
 type callOrderKey struct{}

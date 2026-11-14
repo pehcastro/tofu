@@ -140,6 +140,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		return limitReached{}
 	}
 	defer func() { _ = releaseTurn() }()
+	labelled := h.labelAhead(id)
 	task += h.takeRan()
 	imagesOf := func(said string) []llm.Image {
 		attached, err := h.takePendingImages(said)
@@ -201,12 +202,11 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	if err := h.cron.Keep(cronFile(sessions, id)); err != nil {
 		say("cron jobs were not written: " + err.Error())
 	}
-	if labelled, named := h.label(sessions, h.ID()); named {
-		emit(labelled)
-	}
+	emit(<-labelled)
 	if prepared.GateOff != nil && !resumed {
 		emit(gateOffEvent(prepared.GateOff))
 	}
+	go loop.OpenJudges(config)
 	watch.spawner, watch.maxSteps, watch.decisions = prepared.Spawner, prepared.MaxSteps, prepared.Decisions
 	watch.runs = func() map[string]session.AgentRun { return recordedRuns(sessions, h.ID()) }
 	h.mu.Lock()
@@ -607,6 +607,18 @@ func (h *Host) label(store *session.Store, id string) (Event, bool) {
 	return labelledAs(store, Event{Kind: EventSession, ID: id, Root: id}), true
 }
 
+func (h *Host) labelAhead(id string) <-chan Event {
+	labelled := make(chan Event, 1)
+	go func() {
+		event := Event{Kind: EventSession, ID: id, Root: id}
+		if store, err := session.OpenIn(h.dir); err == nil {
+			event, _ = h.label(store, id)
+		}
+		labelled <- event
+	}()
+	return labelled
+}
+
 func (h *Host) recordHeader(store *session.Store, id string) error {
 	return store.WriteUnlessHeld(session.Header{ID: id, Root: id, At: h.now()})
 }
@@ -616,7 +628,7 @@ func labelledAs(store *session.Store, labelled Event) Event {
 	if err != nil {
 		return labelled
 	}
-	labelled.Root, labelled.Text, labelled.Identity, labelled.LastAt = identity.Family, identity.Handle(), &identity, LastAt(store, labelled.ID)
+	labelled.Root, labelled.Text, labelled.Identity, labelled.LastAt = identity.Family, identity.Handle(), &identity, cmp.Or(LastAt(store, labelled.ID), identity.Started)
 	return labelled
 }
 

@@ -445,10 +445,24 @@ func (s *Store) Header(handle string) (Header, error) {
 }
 
 func (s *Store) WriteUnlessHeld(header Header) error {
-	if _, err := s.read(header.ID); err == nil {
-		return nil
+	if _, err := s.read(header.ID); !errors.Is(err, fs.ErrNotExist) {
+		return err
 	}
-	return s.Write(header, nil)
+	if s.legacy(header.ID) {
+		return LegacyError{ID: header.ID}
+	}
+	release, err := s.Hold(header.ID)
+	if err != nil {
+		return err
+	}
+	line, err := s.writeHeader(s.fresh(header), s.redactor())
+	if err == nil {
+		err = s.appendIndex(line)
+	}
+	if release != nil {
+		err = errors.Join(err, release())
+	}
+	return err
 }
 
 func (s *Store) Ancestors(id string) ([]Header, error) {
