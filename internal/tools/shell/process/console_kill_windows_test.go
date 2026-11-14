@@ -20,7 +20,7 @@ func TestAShellThatCannotBeListedLeavesNothingRunningOrHoldingItsLog(t *testing.
 			}
 			registry := OpenAt(dir)
 			registry.Lifetime = OutlivesTofu
-			choice, err := Resolve("")
+			choice, err := Resolve(t.Context(), "")
 			if err != nil {
 				t.Fatal(err)
 			}

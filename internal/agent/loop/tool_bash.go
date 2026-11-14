@@ -78,7 +78,7 @@ func NewBashToolCached(root string, cache *ToolchainCache) (*BashTool, error) {
 		return nil, err
 	}
 	probe := cache.probeFor(string(resolved), realToolchainRunner, konst.ToolchainProbeTimeoutMillis*time.Millisecond)
-	choice, err := process.Resolve("")
+	choice, err := process.Resolve(context.Background(), "")
 	if err != nil {
 		return nil, err
 	}
@@ -127,35 +127,19 @@ func (c *ToolchainCache) probeFor(dir string, run toolchainRunner, timeout time.
 	return probe
 }
 
-type shellEnv struct{ setting string }
-
-func realShellEnv() shellEnv { return shellEnv{} }
-
 type RunShell struct {
 	choice process.Choice
 	cache  *ToolchainCache
-	run    *toolchainRunner
 }
 
 func (r RunShell) Resolved() bool { return r.cache != nil }
 
-func (r RunShell) runner() toolchainRunner {
-	if r.run == nil {
-		return realToolchainRunner
-	}
-	return *r.run
-}
-
-func resolveRunShell(env shellEnv, run toolchainRunner) (RunShell, error) {
-	choice, err := process.Resolve(env.setting)
+func ResolveRunShell(ctx context.Context, override string) (RunShell, error) {
+	choice, err := process.Resolve(ctx, override)
 	if err != nil {
 		return RunShell{}, err
 	}
-	return RunShell{choice: choice, cache: NewToolchainCache(), run: &run}, nil
-}
-
-func ResolveRunShell(override string) (RunShell, error) {
-	return resolveRunShell(shellEnv{setting: override}, realToolchainRunner)
+	return RunShell{choice: choice, cache: NewToolchainCache()}, nil
 }
 
 func NewBashToolFromShell(root string, shell RunShell) (*BashTool, error) {
@@ -163,7 +147,7 @@ func NewBashToolFromShell(root string, shell RunShell) (*BashTool, error) {
 	if err != nil {
 		return nil, err
 	}
-	probe := shell.cache.probeFor(string(resolved), shell.runner(), konst.ToolchainProbeTimeoutMillis*time.Millisecond)
+	probe := shell.cache.probeFor(string(resolved), realToolchainRunner, konst.ToolchainProbeTimeoutMillis*time.Millisecond)
 	return &BashTool{root: resolved, choice: shell.choice, probe: probe, softLimit: konst.LeadBashSoftLimitMillis * time.Millisecond}, nil
 }
 
@@ -172,7 +156,7 @@ func shellLinesFromShell(dir string, shell RunShell) []string {
 	if shell.choice.Note != "" {
 		lines = append(lines, "shell notes: "+shell.choice.Note)
 	}
-	probe := shell.cache.probeFor(dir, shell.runner(), konst.ToolchainProbeTimeoutMillis*time.Millisecond)
+	probe := shell.cache.probeFor(dir, realToolchainRunner, konst.ToolchainProbeTimeoutMillis*time.Millisecond)
 	if summary := formatToolchain(probe.wait()); summary != "" {
 		lines = append(lines, "toolchain: "+summary)
 	}

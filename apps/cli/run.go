@@ -367,7 +367,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	defer resumed.letGo()
 	opts, modelFrom := resumed.onItsModel(opts)
 	opts = wiring.OnTheBoundWire(opts)
-	clock.step("model roles")
+	clock.step("model roles", 0)
 	dir := cmp.Or(opts.Dir, ".")
 	say := func(unreadable string) { _, _ = fmt.Fprintln(errOut, "tofu run: "+unreadable) }
 	if library, err := wiring.ModelLibrary(opts.Dir); err == nil {
@@ -385,7 +385,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	if opts.ShowPrompt {
 		return showPrompt(opts, out, errOut)
 	}
-	clock.step("settings")
+	clock.step("settings", 0)
 
 	selected, err := wiring.ChooseModel(opts)
 	if err != nil {
@@ -394,7 +394,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	if modelFrom != "" {
 		_, _ = fmt.Fprintf(out, "session %s runs on %s, from %s\n", resumed.carry.Handle, selected.Slug(), modelFrom)
 	}
-	clock.step("model choice")
+	clock.step("model choice", 0)
 	if opts.DryRun {
 		return dryRun(opts, selected, dir, say, out, errOut)
 	}
@@ -402,7 +402,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 }
 
 func dryRun(opts wiring.RunOpts, selected models.Model, dir string, say func(string), out, errOut io.Writer) int {
-	shell, err := loop.ResolveRunShell(settingspkg.TextSaying(dir, settingspkg.Shell, say))
+	shell, err := loop.ResolveRunShell(context.Background(), settingspkg.TextSaying(dir, settingspkg.Shell, say))
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -471,7 +471,7 @@ func runTurn(opts wiring.RunOpts, resumed runResumed, selected models.Model, clo
 	if err != nil {
 		return runFail(errOut, err)
 	}
-	clock.step("shell registry and scratch")
+	clock.step("shell registry and scratch", 0)
 	runErr := loop.Lead(loop.WithShellRegistry(leading, registry), config, nil, nil, func(row loop.Row, _ error) {
 		printRunRow(out, row, selected.Slug(), selected.WindowText())
 		head, rows = cmp.Or(row.Session, head), append(rows, row)
@@ -583,7 +583,7 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 	}
 	environment, files, instructions, notice := runEnvironment(opts, run.now)
 	say(notice)
-	run.startup.step("instructions and environment")
+	run.startup.step("instructions and environment", 0)
 	remembered := ""
 	if opts.Agent == "" && memoryOn(cmp.Or(opts.Dir, ".")) {
 		block, unread := entries.Block(cmp.Or(opts.Dir, "."))
@@ -592,7 +592,7 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 		}
 		remembered = block
 	}
-	run.startup.step("memory")
+	run.startup.step("memory", 0)
 	discovered := <-found
 	opts.LeadAlone = opts.LeadMayWorkAlone && opts.Agent == "" && !opts.NoSubAgents && opts.ToolSet != toolSetThree &&
 		loop.LeadWorksAlone(cmp.Or(opts.Dir, "."), opts.Task, discovered.Definitions)
@@ -606,12 +606,12 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 		say("the sub-agent in " + broken.Path + " is not offered: " + broken.Reason)
 		brokenAgents = append(brokenAgents, loop.PromptPart{Concern: rule.ConcernIdentity, File: filepath.ToSlash(broken.Path), Why: broken.Reason, State: session.PartDropped})
 	}
-	run.startup.step("sub-agent definitions")
+	run.startup.step("sub-agent definitions", 0)
 	stack, err := wiring.StackRules("", cmp.Or(opts.Dir, "."))
 	if err != nil {
 		return composedRun{}, err
 	}
-	run.startup.step("rules")
+	run.startup.step("rules", 0)
 	rules := stack.Rules
 	var switchedOff []rule.Overriding
 	for _, applied := range stack.Overrides {
@@ -643,7 +643,7 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 		}))
 		slices.SortFunc(skills, func(a, b skill.Skill) int { return strings.Compare(a.Name, b.Name) })
 	}
-	run.startup.step("skills")
+	run.startup.step("skills", 0)
 	subAgents := loop.SubAgents{Defined: discovered.Definitions, Root: cmp.Or(opts.Dir, "."), Prompt: loop.ComposeSpec{Environment: strings.TrimSpace(environment + "\n\n" + files),
 		ToolGuidance: loop.EveryToolIsRelativeToTheWorkingDirectory + loop.ContractAddendum, Rules: rules, SwitchedOff: switchedOff, Skills: skills, SkillsOff: skillsOff, WindowTokens: run.budget.WindowTokens,
 		Kinds: loop.NewKindJudge(cmp.Or(opts.Dir, ".")), Applies: loop.NewRuleJudge(cmp.Or(opts.Dir, "."))}}
@@ -673,7 +673,7 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 		say("no framework rule fires for a sub-agent from the project's own manifests: " + err.Error())
 	}
 	composed, err := loop.Compose(first)
-	run.startup.step("frameworks and prompt")
+	run.startup.step("frameworks and prompt", 0)
 	return composedRun{opts: opts, environment: environment, files: files, memory: remembered, instructions: instructions, composed: composed, composeTask: composeTask, subAgents: subAgents, skills: skills,
 		shippedOff: stack.ShippedOff, checksWork: slices.ContainsFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == wiring.VerifySubAgentsRule })}, err
 }

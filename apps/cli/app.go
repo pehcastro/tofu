@@ -35,6 +35,7 @@ import (
 	llm "tofu/internal/models/llm/core"
 	platformclipboard "tofu/internal/platform/clipboard"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/platform/scratch"
@@ -390,7 +391,7 @@ func appKillShell(registry *process.Registry, openErr error) func(string) error 
 }
 
 func shellCommand(ctx context.Context, dir string, registry *process.Registry, command string) (string, bool) {
-	chosen, err := loop.ResolveRunShell(settingspkg.TextSaying(dir, settingspkg.Shell, nil))
+	chosen, err := loop.ResolveRunShell(ctx, settingspkg.TextSaying(dir, settingspkg.Shell, nil))
 	if err != nil {
 		return err.Error(), false
 	}
@@ -552,12 +553,13 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 	say, dir := hooks.Say, cmp.Or(opts.Dir, ".")
 	started := startedTurn{Prepared: host.Prepared{MaxSteps: opts.MaxSteps}}
 	prepared := &started.Prepared
-	shell, err := loop.ResolveRunShell(settingspkg.TextSaying(dir, settingspkg.Shell, say))
+	probing, probe := outside.Open(context.Background(), time.Now)
+	shell, err := loop.ResolveRunShell(probing, settingspkg.TextSaying(dir, settingspkg.Shell, say))
 	if err != nil {
 		return started, err
 	}
 	opts.Shell = shell
-	clock.step("settings")
+	clock.step("settings", probe.Outside())
 	opened, err := e.open(opts)
 	if opened.Held != nil {
 		prepared.Close = opened.Held.Close
@@ -570,7 +572,7 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 		checked()
 		opened.Held.Close()
 	}
-	clock.step("model choice and credentials")
+	clock.step("model choice and credentials", 0)
 	images := start.Images
 	if len(images) > 0 {
 		if refused := imagesRefused(settingspkg.TextSaying(dir, settingspkg.Images, say), opened.Selected, len(images)); refused != "" {
@@ -590,7 +592,7 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 	if start.Pick.Fired != "" {
 		built = shellsverb.WithoutPush(built)
 	}
-	clock.step("shell, tools and session store")
+	clock.step("shell, tools and session store", 0)
 	places := e.places
 	if places == (platformproject.Places{}) {
 		if places, err = platformproject.ResolvePlaces("."); err != nil {
@@ -625,12 +627,12 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 	if siftErr != nil {
 		say("no shell result is cut: " + siftErr.Error())
 	}
-	clock.step("gate and sift")
+	clock.step("gate and sift", 0)
 	budget, err := wiring.ContextBudget(opts, opened.Selected)
 	if err != nil {
 		return started, err
 	}
-	clock.step("model catalogue")
+	clock.step("model catalogue", 0)
 	opened.Held.Wrapping(func(model loop.Model, budget recall.Budget) (loop.Model, error) {
 		asked, guardErr := wiring.Guarded(model, budget)
 		if guardErr != nil {
@@ -655,7 +657,7 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 	if spawner != nil {
 		spawner.Review = newDoneReview(opts.DoneArm, say)
 	}
-	clock.step("lead tools, board and spawn")
+	clock.step("lead tools, board and spawn", 0)
 	if config.Session != e.timed {
 		e.timed = config.Session
 		closeAccounts := prepared.Close

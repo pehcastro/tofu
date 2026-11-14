@@ -1,6 +1,7 @@
 package startup
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -89,7 +90,7 @@ func Measure(runs int) (Rounds, error) {
 }
 
 func timeToolchainCacheHit(dir string) (cold, warm time.Duration, err error) {
-	shell, err := loop.ResolveRunShell("")
+	shell, err := loop.ResolveRunShell(context.Background(), "")
 	if err != nil {
 		return 0, 0, err
 	}

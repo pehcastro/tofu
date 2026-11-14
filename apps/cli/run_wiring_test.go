@@ -53,7 +53,7 @@ func projectSessions(t *testing.T, dir string) *session.Store {
 }
 
 func buildTestRunTools(dir, set string) ([]contract.Tool, error) {
-	shell, err := loop.ResolveRunShell("")
+	shell, err := loop.ResolveRunShell(context.Background(), "")
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +103,7 @@ func TestTheWriteAndEditARunBuildsAreCheckedByTheWarmTscItIsGiven(t *testing.T) 
 	}
 	warm := newWarmProcesses(nil)
 	t.Cleanup(warm.Close)
-	shell, err := loop.ResolveRunShell("")
+	shell, err := loop.ResolveRunShell(t.Context(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +133,7 @@ func TestASessionInATsconfigDirectoryStartsItsWatcherBeforeAnyToolCall(t *testin
 	if _, err := exec.LookPath("bun"); err != nil {
 		t.Skip("bun is not on PATH")
 	}
-	shell, err := loop.ResolveRunShell("")
+	shell, err := loop.ResolveRunShell(t.Context(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +204,7 @@ func TestASessionInAWorkspaceRootWarmsItsLargestPackagesUpToTheCap(t *testing.T)
 			t.Fatal(err)
 		}
 	}
-	shell, err := loop.ResolveRunShell("")
+	shell, err := loop.ResolveRunShell(t.Context(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

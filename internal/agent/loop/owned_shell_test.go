@@ -103,7 +103,7 @@ func TestAPowerShellScriptBlockIsStillRefusedUnderPowerShell(t *testing.T) {
 	}
 	t.Setenv("USERPROFILE", t.TempDir())
 	t.Setenv("PATH", filepath.Dir(powershell))
-	shell, err := loop.ResolveRunShell("")
+	shell, err := loop.ResolveRunShell(t.Context(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

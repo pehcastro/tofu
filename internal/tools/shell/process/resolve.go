@@ -79,17 +79,17 @@ func CodeEnv(extra ...string) []string {
 const posixSyntaxDoesNotApply = "this project's tools assume a posix shell: heredocs, $VAR, forward slashes and /dev/null do not work here, " +
 	"and && and || are a parse error in Windows PowerShell 5.1"
 
-func Resolve(setting string) (Choice, error) {
+func Resolve(ctx context.Context, setting string) (Choice, error) {
 	if setting != "" {
-		return resolveOverride(setting, "the shell setting")
+		return resolveOverride(ctx, setting, "the shell setting")
 	}
 	if override := os.Getenv("TOFU_SHELL"); override != "" {
-		return resolveOverride(override, "TOFU_SHELL")
+		return resolveOverride(ctx, override, "TOFU_SHELL")
 	}
 	if runtime.GOOS == "windows" {
-		return resolveWindows()
+		return resolveWindows(ctx)
 	}
-	return resolvePosix()
+	return resolvePosix(ctx)
 }
 
 func exists(path string) bool {
@@ -97,8 +97,8 @@ func exists(path string) bool {
 	return err == nil
 }
 
-func (c Choice) family() (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), konst.ShellProbeTimeoutMillis*time.Millisecond)
+func (c Choice) family(ctx context.Context) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, konst.ShellProbeTimeoutMillis*time.Millisecond)
 	defer cancel()
 	cmd := outside.Command(ctx, c.program(), "-c", "uname -o")
 	if c.bash != "" {
@@ -147,7 +147,7 @@ func gitLauncherEnv(env []string, launcher string) []string {
 
 func isWSL(family string) bool { return strings.Contains(family, "GNU/Linux") }
 
-func resolveOverride(setting, source string) (Choice, error) {
+func resolveOverride(ctx context.Context, setting, source string) (Choice, error) {
 	path := setting
 	if setting == "wsl" {
 		found, err := exec.LookPath("bash")
@@ -159,7 +159,7 @@ func resolveOverride(setting, source string) (Choice, error) {
 	if _, err := os.Stat(path); err != nil {
 		return Choice{}, fmt.Errorf("bash: %s is set to %q and it does not exist: %w", source, path, err)
 	}
-	named, err := Choice{Path: path}.family()
+	named, err := Choice{Path: path}.family(ctx)
 	if err != nil {
 		return Choice{}, fmt.Errorf("bash: %s is set to %q and it would not run: %w", source, path, err)
 	}
@@ -195,7 +195,7 @@ func looksLikeWSLPath(path string) bool {
 	return strings.Contains(lower, `\system32\bash.exe`) || strings.Contains(lower, `windowsapps\bash.exe`)
 }
 
-func resolveWindows() (Choice, error) {
+func resolveWindows(ctx context.Context) (Choice, error) {
 	var rejected []string
 	for _, bash := range gitBashCandidates() {
 		if !exists(bash) {
@@ -206,7 +206,7 @@ func resolveWindows() (Choice, error) {
 			choice.Label = "git bash on Msys"
 			return choice, nil
 		}
-		if named, err := choice.family(); err == nil {
+		if named, err := choice.family(ctx); err == nil {
 			choice.Label = "git bash on " + named
 			return choice, nil
 		}
@@ -216,7 +216,7 @@ func resolveWindows() (Choice, error) {
 		rejected = append(rejected, "git bash (not beside git on PATH, nor under Program Files, LOCALAPPDATA, GIT_INSTALL_ROOT or scoop)")
 	}
 	if path, err := exec.LookPath("bash"); err == nil {
-		named, probeErr := Choice{Path: path}.family()
+		named, probeErr := Choice{Path: path}.family(ctx)
 		if probeErr == nil && !isWSL(named) && !looksLikeWSLPath(path) {
 			return Choice{Path: path, Label: "bash on " + named}, nil
 		}
@@ -234,10 +234,10 @@ func resolveWindows() (Choice, error) {
 		strings.Join(rejected, "; "))
 }
 
-func resolvePosix() (Choice, error) {
+func resolvePosix(ctx context.Context) (Choice, error) {
 	for _, path := range []string{os.Getenv("SHELL"), "/bin/sh"} {
 		if path != "" && exists(path) {
-			named, _ := Choice{Path: path}.family()
+			named, _ := Choice{Path: path}.family(ctx)
 			return Choice{Path: path, Label: filepath.Base(path) + " on " + cmp.Or(named, runtime.GOOS)}, nil
 		}
 	}

@@ -1881,7 +1881,7 @@ func TestTheAppsBashToolResolvesThroughTheSameShellSettingAsTofuRun(t *testing.T
 	if unreadable != "" {
 		t.Fatalf("reading the shell setting: %s", unreadable)
 	}
-	if _, err := loop.ResolveRunShell(shellOverride); err == nil {
+	if _, err := loop.ResolveRunShell(t.Context(), shellOverride); err == nil {
 		t.Fatal("tofu run's own resolution did not fail on a shell setting that does not exist, so this test proves nothing")
 	}
 

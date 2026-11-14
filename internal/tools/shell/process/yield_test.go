@@ -14,7 +14,7 @@ import (
 
 func shellCommand(t *testing.T, dir, command string) *exec.Cmd {
 	t.Helper()
-	choice, err := Resolve("")
+	choice, err := Resolve(t.Context(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

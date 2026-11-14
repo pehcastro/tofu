@@ -19,7 +19,7 @@ import (
 
 func bashOrSkip(t *testing.T) process.Choice {
 	t.Helper()
-	choice, err := process.Resolve("")
+	choice, err := process.Resolve(t.Context(), "")
 	if err != nil || strings.Contains(choice.Label, "powershell") || strings.Contains(choice.Label, "pwsh") {
 		t.Skip("no bash resolved on this machine")
 	}

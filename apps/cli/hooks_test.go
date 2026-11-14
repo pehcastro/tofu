@@ -21,7 +21,7 @@ import (
 
 func sessionHooks(t *testing.T, project string) string {
 	t.Helper()
-	if choice, err := process.Resolve(""); err != nil || strings.Contains(choice.Label, "powershell") {
+	if choice, err := process.Resolve(t.Context(), ""); err != nil || strings.Contains(choice.Label, "powershell") {
 		t.Skip("no bash resolved on this machine")
 	}
 	logged := `{"type":"command","command":"cat >> session.log; echo >> session.log"}`

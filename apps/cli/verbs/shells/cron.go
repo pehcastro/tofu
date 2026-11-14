@@ -17,7 +17,7 @@ var gitPush = fs.LazyRegexp(`\bgit\b[^;&|\n]*\bpush\b`)
 
 func CronChecker(dir string) cron.Checker {
 	return func(ctx context.Context, command string) (int, string, error) {
-		shell, err := loop.ResolveRunShell(settingspkg.TextSaying(dir, settingspkg.Shell, nil))
+		shell, err := loop.ResolveRunShell(ctx, settingspkg.TextSaying(dir, settingspkg.Shell, nil))
 		if err != nil {
 			return 0, "", err
 		}

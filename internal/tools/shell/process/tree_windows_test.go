@@ -81,7 +81,7 @@ func childrenOutsideTheJobEventually(t *testing.T, job windows.Handle, pid int) 
 
 func attemptShellUnderAJob(t *testing.T) (job windows.Handle, cmd *exec.Cmd, children int, strays []windows.Handle, ok bool) {
 	t.Helper()
-	choice, err := Resolve("")
+	choice, err := Resolve(t.Context(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

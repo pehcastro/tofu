@@ -65,7 +65,7 @@ func TestServeStatusNamesTheLeadNestedAgentsAndAShellsOwnReport(t *testing.T) {
 		t.Errorf("the nested sub-agent reads %+v, want blocked:question with app tofu", asking)
 	}
 
-	choice, err := process.Resolve("")
+	choice, err := process.Resolve(t.Context(), "")
 	if err != nil {
 		t.Fatal(err)
 	}

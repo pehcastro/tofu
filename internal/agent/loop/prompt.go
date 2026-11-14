@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -121,7 +122,7 @@ func environmentBlock(dir string, now time.Time, shell *RunShell) string {
 }
 
 func shellLines(dir string) []string {
-	shell, err := resolveRunShell(realShellEnv(), realToolchainRunner)
+	shell, err := ResolveRunShell(context.Background(), "")
 	if err != nil {
 		return []string{"shell: " + err.Error()}
 	}

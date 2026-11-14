@@ -250,7 +250,8 @@ func (r *Registry) Start(root, name, command, owner string, env ...string) (Shel
 	if err := r.keptFull(0); err != nil {
 		return Shell{}, err
 	}
-	choice, err := Resolve("")
+	ctx := context.Background()
+	choice, err := Resolve(ctx, "")
 	if err != nil {
 		return Shell{}, err
 	}
@@ -258,7 +259,7 @@ func (r *Registry) Start(root, name, command, owner string, env ...string) (Shel
 	if err != nil {
 		return Shell{}, err
 	}
-	cmd := choice.Command(context.Background(), root, command, env...).Cmd
+	cmd := choice.Command(ctx, root, command, env...).Cmd
 	started := time.Now()
 	process, waited, terminal, err := r.spawn(cmd, command, logFile)
 	if err != nil {

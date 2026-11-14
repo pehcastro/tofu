@@ -323,7 +323,7 @@ func (e *Engine) run(ctx context.Context, hook Hook, stdin []byte) (result Resul
 		outsideMS := clock.Outside().Milliseconds()
 		result.DurationMS, result.OutsideMS = time.Since(result.At).Milliseconds(), &outsideMS
 	}()
-	choice, refused := e.shellFor(hook)
+	choice, refused := e.shellFor(ctx, hook)
 	if refused != "" {
 		result.Problem = refused
 		return result
@@ -375,7 +375,7 @@ func (e *Engine) run(ctx context.Context, hook Hook, stdin []byte) (result Resul
 	return result
 }
 
-func (e *Engine) shellFor(hook Hook) (process.Choice, string) {
+func (e *Engine) shellFor(ctx context.Context, hook Hook) (process.Choice, string) {
 	if hook.Shell == "powershell" {
 		for _, name := range []string{"pwsh", "powershell"} {
 			if path, err := exec.LookPath(name); err == nil {
@@ -386,7 +386,7 @@ func (e *Engine) shellFor(hook Hook) (process.Choice, string) {
 	}
 	e.resolve.Do(func() {
 		if e.bash.Path == "" {
-			e.bash, e.bashErr = process.Resolve("")
+			e.bash, e.bashErr = process.Resolve(context.WithoutCancel(ctx), "")
 		}
 	})
 	if e.bashErr != nil {

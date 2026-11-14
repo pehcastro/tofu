@@ -47,14 +47,14 @@ func (c *startupClock) add(name string, waited time.Duration) {
 	c.last = now
 }
 
-func (c *startupClock) step(name string) {
+func (c *startupClock) step(name string, waited time.Duration) {
 	if c == nil {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.asked.IsZero() {
-		c.add(name, 0)
+		c.add(name, waited)
 	}
 }
 
@@ -64,7 +64,7 @@ func (c *startupClock) picking(accounts loop.Accounts, store *cred.Store) loop.A
 		return accounts
 	}
 	accounts.Pick = func(ctx context.Context) (loop.Account, error) {
-		c.step("turn opening")
+		c.step("turn opening", 0)
 		picking, clock := outside.Open(ctx, time.Now)
 		account, err := pick(picking)
 		c.mu.Lock()

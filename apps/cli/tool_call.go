@@ -205,7 +205,7 @@ func handStores(opts wiring.RunOpts, recorded string) (wiring.RunOpts, *session.
 
 func handConfig(opts wiring.RunOpts, recorded string, warm *warmProcesses, notify func(string)) (handRun, error) {
 	var hand handRun
-	shell, err := loop.ResolveRunShell(settingspkg.TextSaying(opts.Dir, settingspkg.Shell, notify))
+	shell, err := loop.ResolveRunShell(context.Background(), settingspkg.TextSaying(opts.Dir, settingspkg.Shell, notify))
 	if err != nil {
 		return hand, err
 	}

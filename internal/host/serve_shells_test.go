@@ -19,7 +19,7 @@ func TestServeAnnouncesOnlyAKeptShellAndClosesEveryNameItAnnounced(t *testing.T)
 	c, _, _ := serving(t, nil, ServeConfig{Shells: registry})
 	c.ask("1", "initialize", `{"client":"desk"}`)
 	c.answer("1", &InitializeResult{})
-	choice, err := process.Resolve("")
+	choice, err := process.Resolve(t.Context(), "")
 	if err != nil {
 		t.Fatal(err)
 	}
