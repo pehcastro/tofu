@@ -115,16 +115,6 @@ func (u Use) valid() bool {
 	return false
 }
 
-func neverOffered(id string) bool {
-	for _, word := range strings.FieldsFunc(strings.ToLower(id), func(r rune) bool { return r == '-' || r == '/' }) {
-		switch word {
-		case "fable", "astra":
-			return true
-		}
-	}
-	return false
-}
-
 type Vision string
 
 const (
@@ -339,7 +329,6 @@ type RefusalKind int
 const (
 	RefusedUnknown RefusalKind = iota
 	RefusedExcluded
-	RefusedNeverOffered
 )
 
 type Refusal struct {
@@ -353,8 +342,6 @@ func (r *Refusal) Error() string {
 	switch r.Kind {
 	case RefusedExcluded:
 		return "the model library excludes " + r.Slug + ": " + r.Model.Reason
-	case RefusedNeverOffered:
-		return "tofu never offers " + r.Slug + ", whatever a library file or an account says"
 	case RefusedUnknown:
 		return "the model library has no " + r.Slug + ", it has " + strings.Join(r.Known, ", ") + "; run " + ReloadVerb + " to add what your accounts serve"
 	}
@@ -362,9 +349,6 @@ func (r *Refusal) Error() string {
 }
 
 func (c Library) Select(slug string) (Model, error) {
-	if neverOffered(slug) {
-		return Model{}, &Refusal{Kind: RefusedNeverOffered, Slug: slug}
-	}
 	known := make([]string, 0, len(c.Models))
 	for _, model := range c.Models {
 		if model.Slug() != slug {

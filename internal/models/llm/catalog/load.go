@@ -166,9 +166,6 @@ func Load(layers []Layer) (Library, error) {
 		library.Subscriptions = append(library.Subscriptions, spec)
 	}
 	for _, slug := range models.order {
-		if neverOffered(slug) {
-			continue
-		}
 		model, bad := buildModel(slug, models.sheets[slug], known)
 		if bad == nil {
 			model.Published, bad = publishedWindow(windows.sheets[string(model.Provider)], model.ID)
