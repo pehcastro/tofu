@@ -540,10 +540,11 @@ func (e *appEngine) OneTurnPerProject() bool {
 }
 
 func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, error) {
+	clock := clockFromNow()
 	opts := pickedOpts(e.dir, start, e.arms.MaxSteps)
 	opts.GateArm, opts.SiftArm, opts.DoneArm, opts.NoInstructions, opts.NoDocs = e.arms.GateArm, e.arms.SiftArm, e.arms.DoneArm, e.arms.NoInstructions, e.arms.NoDocs
 	opts.ToolSet, opts.ContextCeiling, opts.NoSubAgents = cmp.Or(e.arms.ToolSet, opts.ToolSet), e.arms.ContextCeiling, e.arms.NoSubAgents
-	started, err := e.startTurn(settled(opts, hooks.Say), start, hooks, clockFromNow())
+	started, err := e.startTurn(settled(opts, hooks.Say), start, hooks, clock)
 	if started.scorer != nil {
 		closing := started.Close
 		started.Close = func() {
@@ -666,14 +667,15 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 		spawner.Review = newDoneReview(opts.DoneArm, say)
 	}
 	clock.step("lead tools, board and spawn", 0)
+	turn := laterTurn
 	if config.Session != e.timed {
-		e.timed = config.Session
-		closeAccounts := prepared.Close
-		prepared.Close = func() {
-			closeAccounts()
-			if err := clock.record(sessions, config.Session); err != nil {
-				say("the startup steps were not recorded: " + err.Error())
-			}
+		e.timed, turn = config.Session, firstTurn
+	}
+	closeAccounts := prepared.Close
+	prepared.Close = func() {
+		closeAccounts()
+		if err := clock.record(sessions, config.Session, turn); err != nil {
+			say("the startup steps were not recorded: " + err.Error())
 		}
 	}
 	if gate != nil {

@@ -686,11 +686,12 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 	subAgents.Prompt.Dropped = slices.Concat(brokenAgents, unloaded, droppedRules(stack, rules, switchedOff, opts))
 	spec.Dropped = slices.Concat(brokenAgents, unloaded, droppedRules(stack, spec.Rules, switchedOff, opts))
 	composeTask := func(task string) (loop.Composed, error) {
-		return loop.Compose(taskSpec(spec, dir, task, say))
+		next, _, _ := taskSpec(spec, dir, task, say)
+		return loop.Compose(next)
 	}
-	first := taskSpec(spec, dir, opts.Task, say)
-	if subAgents.Prompt.Frameworks, err = rule.Frameworks(dir, nil); err != nil {
-		say("no framework rule fires for a sub-agent from the project's own manifests: " + err.Error())
+	first, project, projectErr := taskSpec(spec, dir, opts.Task, say)
+	if subAgents.Prompt.Frameworks = project; projectErr != nil {
+		say("no framework rule fires for a sub-agent from the project's own manifests: " + projectErr.Error())
 	}
 	composed, err := loop.Compose(first)
 	run.startup.step("frameworks and prompt", 0)
@@ -698,23 +699,27 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 		shippedOff: stack.ShippedOff, checksWork: slices.ContainsFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == wiring.VerifySubAgentsRule })}, err
 }
 
-func taskSpec(spec loop.ComposeSpec, dir, task string, say func(string)) loop.ComposeSpec {
+func taskSpec(spec loop.ComposeSpec, dir, task string, say func(string)) (loop.ComposeSpec, []string, error) {
 	named := loop.TaskNamed(task).Paths
-	var err error
-	spec.Task = task
-	if spec.Frameworks, err = rule.Frameworks(dir, named); err != nil {
+	project, projectErr := rule.Frameworks(dir, nil)
+	spec.Task, spec.Frameworks = task, project
+	err := projectErr
+	if len(named) > 0 {
+		spec.Frameworks, err = rule.Frameworks(dir, named)
+		if projectErr == nil {
+			spec.PathFrameworks = slices.DeleteFunc(slices.Clone(spec.Frameworks), func(framework string) bool { return slices.Contains(project, framework) })
+		}
+	}
+	if err != nil {
 		say("no framework rule fires this run: " + err.Error())
 	}
-	if project, err := rule.Frameworks(dir, nil); err == nil && len(named) > 0 {
-		spec.PathFrameworks = slices.DeleteFunc(slices.Clone(spec.Frameworks), func(framework string) bool { return slices.Contains(project, framework) })
-	}
 	if !spec.Alone {
-		return spec
+		return spec, project, projectErr
 	}
 	if spec.Languages, err = rule.Languages(dir, named); err != nil {
 		say("no language rule fires from the folders the task names: " + err.Error())
 	}
-	return spec
+	return spec, project, projectErr
 }
 
 func droppedRules(stack wiring.RuleStack, kept []rule.Rule, switchedOff []rule.Overriding, opts wiring.RunOpts) []loop.PromptPart {

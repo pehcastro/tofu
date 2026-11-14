@@ -132,17 +132,25 @@ func (c *startupClock) leading(model loop.Model) loop.Model {
 	return firstRequestModel{inner: model, clock: c}
 }
 
-func (c *startupClock) record(store *session.Store, id string) error {
+type turnOrdinal string
+
+const (
+	firstTurn turnOrdinal = ""
+	laterTurn turnOrdinal = "later turn "
+)
+
+func (c *startupClock) record(store *session.Store, id string, turn turnOrdinal) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.asked.IsZero() {
 		return nil
 	}
 	var outsideMS int64
-	for _, step := range c.steps {
+	for i, step := range c.steps {
 		outsideMS += *step.OutsideMS
+		c.steps[i].Name = string(turn) + step.Name
 	}
-	whole := walls.Wall{Op: walls.OpStartup, Name: "to first request", MS: c.asked.Sub(c.began).Milliseconds(), At: c.began.UnixMilli(), OK: true, OutsideMS: &outsideMS}
+	whole := walls.Wall{Op: walls.OpStartup, Name: string(turn) + "to first request", MS: c.asked.Sub(c.began).Milliseconds(), At: c.began.UnixMilli(), OK: true, OutsideMS: &outsideMS}
 	log, err := store.Open(session.Header{ID: id})
 	if err != nil {
 		return err
