@@ -26,16 +26,12 @@ type Battery struct {
 }
 
 func ResolveRuleMode(r gate.Rule) (gate.Resolution, error) {
-	calibDir, err := project.CalibrationDir()
+	places, err := project.ResolvePlaces(".")
 	if err != nil {
 		return gate.Resolution{}, err
 	}
-	lookup := lookupLock(gate.LockPath(calibDir, r))
-	ledgerDir, err := project.LogDir()
-	if err != nil {
-		return gate.Resolution{}, err
-	}
-	current, err := CurrentBuild(ledgerDir, r.Questions)
+	lookup := lookupLock(gate.LockPath(places.Calibration(), r))
+	current, err := CurrentBuild(places.Log, r.Questions)
 	if err != nil {
 		return gate.Resolution{}, err
 	}

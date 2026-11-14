@@ -36,15 +36,15 @@ func RecordedStateDir(elem ...string) string {
 	return filepath.Join(append([]string{owner}, elem...)...)
 }
 
-func stateChild(name string) (string, error) {
-	state, err := ProjectStateDir()
+func CalibrationDir() (string, error) {
+	places, err := ResolvePlaces(".")
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(state, name), nil
+	return places.Calibration(), nil
 }
 
-func CalibrationDir() (string, error) { return stateChild("calibration") }
+func (p Places) Calibration() string { return filepath.Join(p.State, "calibration") }
 
 func LogDir() (string, error) {
 	places, err := ResolvePlaces(".")

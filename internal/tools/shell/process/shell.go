@@ -137,11 +137,10 @@ func (r *Registry) Own() []Shell {
 	return slices.DeleteFunc(found, func(one Shell) bool { return one.State != Running || one.TofuPID != r.self || one.Session != r.session })
 }
 
-func (r *Registry) endedPath(name string) string { return filepath.Join(r.dir, name+stateSuffix) }
-func (r *Registry) runningPath(name string) string {
-	return filepath.Join(r.dir, runningDir, name+stateSuffix)
-}
-func (r *Registry) logPath(name string) string { return filepath.Join(r.dir, name+logSuffix) }
+func (r *Registry) endedPath(name string) string   { return filepath.Join(r.dir, name+stateSuffix) }
+func runningState(name string) string              { return filepath.Join(runningDir, name+stateSuffix) }
+func (r *Registry) runningPath(name string) string { return filepath.Join(r.dir, runningState(name)) }
+func (r *Registry) logPath(name string) string     { return filepath.Join(r.dir, name+logSuffix) }
 
 var ErrRunning = errors.New("shell: already running under that name")
 
@@ -297,7 +296,7 @@ func (r *Registry) await(waited <-chan error, started Shell, process *live) {
 	if process.killed {
 		return
 	}
-	if raw, err := os.ReadFile(r.runningPath(started.Name)); err == nil {
+	if raw, err := r.readState(runningState(started.Name)); err == nil {
 		_ = json.Unmarshal(raw, &started)
 	}
 	ended := time.Now()
@@ -316,7 +315,7 @@ func (r *Registry) Prune() error {
 		if !isState {
 			continue
 		}
-		if entry, readErr := r.stateAt(r.endedPath(name)); readErr == nil && entry.State != Running && (entry.Ended == nil || entry.Ended.Before(kept)) {
+		if entry, readErr := r.stateAt(file.Name()); readErr == nil && entry.State != Running && (entry.Ended == nil || entry.Ended.Before(kept)) {
 			r.removeEnded(name)
 		}
 	}
@@ -341,34 +340,48 @@ func (r *Registry) PruneEvery(every time.Duration) error {
 }
 
 func (r *Registry) writeLocked(entry Shell) error {
-	path, other := r.runningPath(entry.Name), r.endedPath(entry.Name)
+	state, other := runningState(entry.Name), entry.Name+stateSuffix
 	if entry.State != Running {
 		entry.Holder, entry.HeldSince = "", nil
-		path, other = other, path
+		state, other = other, state
 	}
+	root, err := os.OpenRoot(r.dir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
 	if entry.State != Running && entry.Kept == "" {
 		_ = os.Remove(r.logPath(entry.Name))
-		return errors.Join(removed(path), removed(other))
+		return errors.Join(removed(root, state), removed(root, other))
 	}
 	raw, err := json.MarshalIndent(entry, "", "  ")
 	if err != nil {
 		return err
 	}
-	staging := path + stagingSuffix
-	if err := os.WriteFile(staging, raw, fileMode); err != nil {
+	staging := state + stagingSuffix
+	if err := root.WriteFile(staging, raw, fileMode); err != nil {
 		return err
 	}
-	if err := os.Rename(staging, path); err != nil {
-		return err
+	if err := root.Rename(staging, state); err != nil {
+		return fmt.Errorf("%s: %w", r.dir, err)
 	}
-	return removed(other)
+	return removed(root, other)
 }
 
-func removed(path string) error {
-	if err := os.Remove(path); !errors.Is(err, os.ErrNotExist) {
+func removed(root *os.Root, state string) error {
+	if err := root.Remove(state); !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	return nil
+}
+
+func (r *Registry) readState(state string) ([]byte, error) {
+	root, err := os.OpenRoot(r.dir)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := root.ReadFile(state)
+	return raw, errors.Join(err, root.Close())
 }
 
 func (r *Registry) Read(name string) (Shell, error) {
@@ -390,31 +403,31 @@ func (r *Registry) Read(name string) (Shell, error) {
 }
 
 func (r *Registry) readLocked(name string) (Shell, error) {
-	entry, err := r.stateAt(r.runningPath(name))
+	entry, err := r.stateAt(runningState(name))
 	if errors.Is(err, os.ErrNotExist) {
-		return r.stateAt(r.endedPath(name))
+		return r.stateAt(name + stateSuffix)
 	}
 	return entry, err
 }
 
-func (r *Registry) stateAt(path string) (Shell, error) {
-	info, err := os.Stat(path)
+func (r *Registry) stateAt(state string) (Shell, error) {
+	info, err := os.Stat(filepath.Join(r.dir, state))
 	r.parsedMu.Lock()
 	defer r.parsedMu.Unlock()
 	if err != nil {
-		delete(r.parsed, path)
+		delete(r.parsed, state)
 		return Shell{}, err
 	}
-	if seen, ok := r.parsed[path]; ok && seen.size == info.Size() && seen.modified.Equal(info.ModTime()) {
+	if seen, ok := r.parsed[state]; ok && seen.size == info.Size() && seen.modified.Equal(info.ModTime()) {
 		return seen.entry, nil
 	}
-	raw, err := os.ReadFile(path)
+	raw, err := r.readState(state)
 	if err != nil {
 		return Shell{}, err
 	}
 	var entry Shell
 	if err = json.Unmarshal(raw, &entry); err == nil && time.Since(info.ModTime()) > stateSettled {
-		r.parsed[path] = parsedState{modified: info.ModTime(), size: info.Size(), entry: entry}
+		r.parsed[state] = parsedState{modified: info.ModTime(), size: info.Size(), entry: entry}
 	}
 	return entry, err
 }

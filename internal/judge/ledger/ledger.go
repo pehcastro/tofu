@@ -104,13 +104,48 @@ func (a *Answer) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &wire); err != nil {
 		return err
 	}
-	if wire.Kind != nil {
-		return a.fromTypedWire(wire)
+	if err := answerReadable(wire.Question, wire.Kind, wire.Choice, len(wire.Dist)); err != nil {
+		return err
 	}
-	return a.fromLegacyWire(wire)
+	if wire.Kind != nil {
+		a.fromTypedWire(wire)
+		return nil
+	}
+	a.fromLegacyWire(wire)
+	return nil
 }
 
-func (a *Answer) fromTypedWire(wire answerWire) error {
+type answerShape struct {
+	Question string      `json:"question"`
+	Kind     *AnswerKind `json:"kind"`
+	Choice   *string     `json:"choice"`
+	Dist     []struct{}  `json:"dist"`
+}
+
+func (s answerShape) readable() error {
+	return answerReadable(s.Question, s.Kind, s.Choice, len(s.Dist))
+}
+
+func answerReadable(question string, kind *AnswerKind, choice *string, dist int) error {
+	switch {
+	case kind != nil && *kind != AnswerNoul && *kind != AnswerChoice && *kind != AnswerScore:
+		return fmt.Errorf("ledger: answer %q carries unknown kind %q", question, *kind)
+	case kind == nil && dist == 0:
+		if _, err := strconv.ParseFloat(legacyChoice(choice), 64); err != nil {
+			return fmt.Errorf("ledger: legacy noul answer %q: %w", question, err)
+		}
+	}
+	return nil
+}
+
+func legacyChoice(choice *string) string {
+	if choice == nil {
+		return ""
+	}
+	return *choice
+}
+
+func (a *Answer) fromTypedWire(wire answerWire) {
 	*a = Answer{Question: wire.Question, Wording: wire.Wording, Kind: *wire.Kind, Dist: wire.Dist, Legend: wire.Legend}
 	switch *wire.Kind {
 	case AnswerNoul:
@@ -125,32 +160,22 @@ func (a *Answer) fromTypedWire(wire answerWire) error {
 		if wire.Score != nil {
 			a.Score = *wire.Score
 		}
-	default:
-		return fmt.Errorf("ledger: answer %q carries unknown kind %q", wire.Question, *wire.Kind)
 	}
-	return nil
 }
 
-func (a *Answer) fromLegacyWire(wire answerWire) error {
-	choice := ""
-	if wire.Choice != nil {
-		choice = *wire.Choice
-	}
+func (a *Answer) fromLegacyWire(wire answerWire) {
+	choice := legacyChoice(wire.Choice)
 	if len(wire.Dist) == 0 {
-		p, err := strconv.ParseFloat(choice, 64)
-		if err != nil {
-			return fmt.Errorf("ledger: legacy noul answer %q: %w", wire.Question, err)
-		}
+		p, _ := strconv.ParseFloat(choice, 64)
 		*a = Answer{Question: wire.Question, Wording: wire.Wording, Kind: AnswerNoul, Noul: p}
-		return nil
+		return
 	}
 	if looksLikeScoreDist(wire.Dist) {
 		level, _ := strconv.ParseFloat(choice, 64)
 		*a = Answer{Question: wire.Question, Wording: wire.Wording, Kind: AnswerScore, Score: level, Dist: wire.Dist}
-		return nil
+		return
 	}
 	*a = Answer{Question: wire.Question, Wording: wire.Wording, Kind: AnswerChoice, Choice: choice, Dist: wire.Dist}
-	return nil
 }
 
 func looksLikeScoreDist(dist []Slice) bool {

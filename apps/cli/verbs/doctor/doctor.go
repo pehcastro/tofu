@@ -58,7 +58,7 @@ func Clocked(ctx context.Context, args []string, _ io.Reader, out, errOut io.Wri
 		return Imports(".", asJSON, out, errOut)
 	}
 	steps := clockSteps(ctx)
-	report := stateOn(steps, now)
+	report, places, placesErr := stateOn(steps, now)
 	ready := report.Verdict == host.DoctorReady
 	unruled, fixed := unruledBoards(report.Root, fix)
 	steps.took("boards with no rules", true)
@@ -73,10 +73,12 @@ func Clocked(ctx context.Context, args []string, _ io.Reader, out, errOut io.Wri
 		report.Steps, report.TotalMS = steps.done(), time.Since(now).Milliseconds()
 		err = page.Print(out, append(lines, stepLines(page, report)...))
 	}
-	if places, placesErr := project.ResolvePlaces(report.Root); placesErr == nil {
+	if placesErr == nil {
+		recorded := walls.Writer{State: places.State}
 		for _, step := range steps.walls {
-			_ = walls.Append(places.State, step)
+			_ = recorded.Append(step)
 		}
+		_ = recorded.Close()
 	}
 	switch {
 	case err != nil:
@@ -128,7 +130,7 @@ func (s *stepClock) done() []host.DoctorStep {
 	return steps
 }
 
-func stateOn(steps *stepClock, now time.Time) host.DoctorReport {
+func stateOn(steps *stepClock, now time.Time) (host.DoctorReport, project.Places, error) {
 	root, err := os.Getwd()
 	if err != nil {
 		root = "."
@@ -145,12 +147,14 @@ func stateOn(steps *stepClock, now time.Time) host.DoctorReport {
 	steps.took("gate key", err == nil)
 	report.Library, report.Rules = wiring.ReadLibrary()
 	steps.took("library", report.Library.Unreadable == "")
+	places, placesErr := project.ResolvePlaces(root)
 	for i, point := range report.Rules {
-		if point.Point == wiring.ShellSiftPoint {
+		switch {
+		case point.Point == wiring.ShellSiftPoint:
 			report.Rules[i] = wiring.ShellSiftRule(point)
-			continue
+		case placesErr == nil:
+			report.Rules[i] = withLockStanding(point, places.Calibration())
 		}
-		report.Rules[i] = withLockStanding(point)
 	}
 	steps.took("rule locks", true)
 	report.Blockers = wiring.DoctorBlockers()
@@ -186,19 +190,18 @@ func stateOn(steps *stepClock, now time.Time) host.DoctorReport {
 		report.Verdict = host.DoctorNotReady
 	}
 	report.Steps = steps.done()
-	return report
+	return report, places, placesErr
 }
 
-func withLockStanding(point host.DoctorRule) host.DoctorRule {
+func withLockStanding(point host.DoctorRule, calibration string) host.DoctorRule {
 	if point.Fallback != "" || point.Unusable != "" {
 		return point
 	}
 	r, _, err := wiring.LoadRulePoint(point.Point, "")
-	dir, dirErr := project.CalibrationDir()
-	if err != nil || dirErr != nil {
+	if err != nil {
 		return point
 	}
-	if present, _ := fs.Exists(gate.LockPath(dir, r)); !present {
+	if present, _ := fs.Exists(gate.LockPath(calibration, r)); !present {
 		return point
 	}
 	res, err := wiring.ResolveRuleMode(r)

@@ -6,11 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"tofu/internal/platform/fs"
@@ -143,49 +146,70 @@ func (r *Reader) days() ([]string, error) {
 }
 
 func (r *Reader) eachInDay(day string, filter Filter, report *Report, fn func(Row) error) error {
-	path := filepath.Join(r.dir, day+logSuffix)
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = file.Close() }()
-
 	outcomes, err := r.outcomes(day)
 	if err != nil {
 		return err
 	}
+	path := r.dayPath(day)
+	cut, err := eachLine(path, func(number int, line []byte) error {
+		report.Scanned++
+		row, err := parseRow(line)
+		if err != nil {
+			report.Corrupt = append(report.Corrupt, Corrupt{File: path, Line: number, Err: err})
+			return nil
+		}
+		if outcome, ok := outcomes[row.ID]; ok {
+			row.Outcome = &outcome
+		}
+		if !filter.match(row) {
+			return nil
+		}
+		report.Matched++
+		return fn(row)
+	})
+	if cut != nil {
+		report.Corrupt = append(report.Corrupt, *cut)
+	}
+	return err
+}
 
+func (r *Reader) dayPath(day string) string { return filepath.Join(r.dir, day+logSuffix) }
+
+func eachLine(path string, each func(number int, line []byte) error) (*Corrupt, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 0, bufio.MaxScanTokenSize), lineCeiling)
 	number := 0
 	for scanner.Scan() {
 		number++
-		line := scanner.Bytes()
-		if len(line) == 0 {
+		if len(scanner.Bytes()) == 0 {
 			continue
 		}
-		report.Scanned++
-		row, err := parseRow(line)
-		if err != nil {
-			report.Corrupt = append(report.Corrupt, Corrupt{File: path, Line: number, Err: err})
-			continue
-		}
-		if outcome, ok := outcomes[row.ID]; ok {
-			attached := outcome
-			row.Outcome = &attached
-		}
-		if !filter.match(row) {
-			continue
-		}
-		report.Matched++
-		if err := fn(row); err != nil {
-			return err
+		if err := each(number, scanner.Bytes()); err != nil {
+			return nil, err
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		report.Corrupt = append(report.Corrupt, Corrupt{File: path, Line: number + 1, Err: err})
+		return &Corrupt{File: path, Line: number + 1, Err: err}, nil
 	}
-	return nil
+	return nil, nil
+}
+
+func atOnce(n int, work func(i int)) {
+	workers := min(n, runtime.GOMAXPROCS(0))
+	var group sync.WaitGroup
+	for first := range workers {
+		group.Go(func() {
+			for i := first; i < n; i += workers {
+				work(i)
+			}
+		})
+	}
+	group.Wait()
 }
 
 func parseRow(line []byte) (Row, error) {
@@ -193,10 +217,14 @@ func parseRow(line []byte) (Row, error) {
 	if err := json.Unmarshal(line, &row); err != nil {
 		return Row{}, err
 	}
-	if row.Schema < 1 || row.Schema > SchemaVersion {
-		return Row{}, fmt.Errorf("ledger: row schema %d, this build reads up to %d", row.Schema, SchemaVersion)
+	return row, readableSchema(row.Schema)
+}
+
+func readableSchema(schema int) error {
+	if schema < 1 || schema > SchemaVersion {
+		return fmt.Errorf("ledger: row schema %d, this build reads up to %d", schema, SchemaVersion)
 	}
-	return row, nil
+	return nil
 }
 
 func (r *Reader) Newest(filter Filter) (Row, bool, error) {
@@ -204,11 +232,63 @@ func (r *Reader) Newest(filter Filter) (Row, bool, error) {
 	if err != nil {
 		return Row{}, false, err
 	}
-	for _, day := range slices.Backward(days) {
-		if !filter.coversDay(day) {
-			continue
+	days = slices.DeleteFunc(days, func(day string) bool { return !filter.coversDay(day) })
+	slices.Reverse(days)
+	var point []byte
+	if filter.Point != "" {
+		point, _ = json.Marshal(filter.Point)
+	}
+	if point == nil || len(days) < 2 {
+		return r.newestIn(days, filter, point)
+	}
+	if row, found, err := r.newestIn(days[:1], filter, point); found || err != nil {
+		return row, found, err
+	}
+	days, err = r.naming(days[1:], point)
+	if err != nil {
+		return Row{}, false, err
+	}
+	return r.newestIn(days, filter, point)
+}
+
+func (r *Reader) naming(days []string, point []byte) ([]string, error) {
+	named, errs := make([]bool, len(days)), make([]error, len(days))
+	atOnce(len(days), func(i int) { named[i], errs[i] = fileContains(r.dayPath(days[i]), point) })
+	var kept []string
+	for i, day := range days {
+		if named[i] {
+			kept = append(kept, day)
 		}
-		row, found, err := r.lastInDay(day, filter)
+	}
+	return kept, errors.Join(errs...)
+}
+
+func fileContains(path string, text []byte) (bool, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = file.Close() }()
+	chunk, carried := make([]byte, newestChunkBytes+len(text)), 0
+	for {
+		read, err := file.Read(chunk[carried:])
+		seen := chunk[:carried+read]
+		if bytes.Contains(seen, text) {
+			return true, nil
+		}
+		if errors.Is(err, io.EOF) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		carried = copy(chunk, seen[max(len(seen)-len(text)+1, 0):])
+	}
+}
+
+func (r *Reader) newestIn(days []string, filter Filter, point []byte) (Row, bool, error) {
+	for _, day := range days {
+		row, found, err := r.lastInDay(day, filter, point)
 		if err != nil {
 			return Row{}, false, err
 		}
@@ -224,8 +304,8 @@ func (r *Reader) Newest(filter Filter) (Row, bool, error) {
 	return Row{}, false, nil
 }
 
-func (r *Reader) lastInDay(day string, filter Filter) (Row, bool, error) {
-	file, err := os.Open(filepath.Join(r.dir, day+logSuffix))
+func (r *Reader) lastInDay(day string, filter Filter, point []byte) (Row, bool, error) {
+	file, err := os.Open(r.dayPath(day))
 	if err != nil {
 		return Row{}, false, err
 	}
@@ -246,8 +326,10 @@ func (r *Reader) lastInDay(day string, filter Filter) (Row, bool, error) {
 			rest, unread = append(chunk, rest...), from
 			continue
 		}
-		if row, err := parseRow(rest[cut+1:]); err == nil && filter.match(row) {
-			return row, true, nil
+		if line := rest[cut+1:]; point == nil || bytes.Contains(line, point) {
+			if row, err := parseRow(line); err == nil && filter.match(row) {
+				return row, true, nil
+			}
 		}
 		if cut < 0 {
 			return Row{}, false, nil
