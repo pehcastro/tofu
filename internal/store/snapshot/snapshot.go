@@ -229,12 +229,16 @@ func (r Repo) BeginFrom(ctx context.Context, turn string, start func() (string, 
 }
 
 func (r Repo) End(ctx context.Context) error {
+	return r.EndFrom(ctx, func() (string, error) { return r.files().Snapshot(ctx) })
+}
+
+func (r Repo) EndFrom(ctx context.Context, end func() (string, error)) error {
 	return r.locked(ctx, func() error {
 		entries, err := r.entries()
 		if err != nil {
 			return err
 		}
-		tree, err := r.files().Snapshot(ctx)
+		tree, err := end()
 		if err != nil {
 			return err
 		}

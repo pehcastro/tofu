@@ -644,6 +644,11 @@ func (r *record) begin(row Row, task core.Origin, files *shadow.Started) {
 		header.ContextCeiling, header.ContextTarget, header.AutoCompaction = start.ContextCeiling, start.ContextTarget, start.AutoCompaction
 	}))
 	if r.undoShared != nil {
+		if files == nil || files.Store.State != r.undo.State || files.Store.Tree != r.undo.Tree {
+			files = nil
+		} else {
+			files.EndsUnder(r.endUndo)
+		}
 		r.undoShared <- files
 		r.undoShared = nil
 	}
@@ -663,7 +668,7 @@ func (r *record) holdUndo() {
 			defer cancel()
 			return repo.BeginFrom(timed, turn, func() (string, error) {
 				close(held)
-				if files := <-shared; files != nil && files.Store.State == repo.State && files.Store.Tree == repo.Tree {
+				if files := <-shared; files != nil {
 					if tree, err := files.StartTree(); err == nil {
 						return tree, nil
 					}
@@ -899,21 +904,40 @@ func (r *record) end(row Row) {
 	r.note(r.log.Edit(func(header *session.Header) {
 		header.Outcome, header.Error, header.Model = row.Outcome.String(), row.Error, cmp.Or(row.Model, header.Model)
 	}))
+	r.endUndo(context.Background(), func(ctx context.Context) (string, error) {
+		alone := clockFrom(ctx)
+		timed, cancel := context.WithTimeout(alone.ctx, konst.UndoSnapshotTimeoutMillis*time.Millisecond)
+		defer cancel()
+		tree, err := snapshot.Files{State: r.undo.State, Tree: r.undo.Tree}.Snapshot(timed)
+		r.wall(session.Event{}, clockedWall(walls.OpUndoSnapshot, "undo end snapshot", alone, err == nil))
+		return tree, err
+	})
+	r.note(r.inbox.release(r.log))
+}
+
+func (r *record) endUndo(ctx context.Context, take func(context.Context) (string, error)) {
 	failed := r.undoStartFailure()
 	if r.undo != nil {
-		ending := clockFrom(context.Background())
+		ending := clockFrom(ctx)
 		timed, cancel := context.WithTimeout(ending.ctx, konst.UndoSnapshotTimeoutMillis*time.Millisecond)
-		err := r.undo.End(timed)
+		var taking time.Duration
+		err := r.undo.EndFrom(timed, func() (string, error) {
+			began := time.Now()
+			defer func() { taking = time.Since(began) }()
+			return take(ctx)
+		})
 		cancel()
-		r.wall(session.Event{}, clockedWall(walls.OpUndoSnapshot, "undo end", ending, err == nil))
+		ledger := clockedWall(walls.OpUndoSnapshot, "undo end", ending, err == nil)
+		ledger.MS -= taking.Milliseconds()
+		r.wall(session.Event{}, ledger)
 		if err != nil {
 			failed = errors.New("the files at the end of the turn, for undo: " + err.Error())
 		}
+		r.undo = nil
 	}
 	if failed != nil {
 		r.notice(failed.Error())
 	}
-	r.note(r.inbox.release(r.log))
 }
 
 func forkHeader(from session.Header, into string, kind ForkKind, at time.Time) session.Header {

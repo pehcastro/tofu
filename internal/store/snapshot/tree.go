@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -188,10 +189,12 @@ func (f Files) writeObject(kind string, body []byte) ([]byte, error) {
 	if err := deflate.Close(); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
-	}
 	temp, err := os.CreateTemp(dir, "tmp_obj_")
+	if errors.Is(err, fs.ErrNotExist) {
+		if err = os.MkdirAll(dir, 0o755); err == nil {
+			temp, err = os.CreateTemp(dir, "tmp_obj_")
+		}
+	}
 	if err != nil {
 		return nil, err
 	}

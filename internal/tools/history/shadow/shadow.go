@@ -67,11 +67,14 @@ type Started struct {
 }
 
 type begun struct {
-	done   chan struct{}
-	tree   string
-	commit string
-	err    error
+	done     chan struct{}
+	tree     string
+	commit   string
+	err      error
+	endUnder EndUnder
 }
+
+type EndUnder func(ctx context.Context, take func(context.Context) (string, error))
 
 type startedKey struct{}
 
@@ -126,11 +129,27 @@ func (s Started) StartTree() (string, error) {
 	return s.begun.tree, err
 }
 
+func (s Started) EndsUnder(under EndUnder) { s.begun.endUnder = under }
+
 func (s Started) End(ctx context.Context) ([]string, error) {
 	if err := s.Begun(); err != nil {
 		return nil, err
 	}
-	tree, err := s.Store.Snapshot(ctx)
+	pruned := s.Store.prune(ctx)
+	var tree string
+	var err error
+	taken := false
+	take := func(ctx context.Context) (string, error) {
+		taken = true
+		tree, err = s.Store.Snapshot(ctx)
+		return tree, err
+	}
+	if s.begun.endUnder != nil {
+		s.begun.endUnder(ctx, take)
+	}
+	if !taken {
+		_, _ = take(ctx)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +164,7 @@ func (s Started) End(ctx context.Context) ([]string, error) {
 	if _, err := s.Store.git(ctx, "", "update-ref", TurnRefs+"/"+s.Turn.ID, commit, s.begun.commit); err != nil {
 		return nil, err
 	}
-	return s.Store.prune(ctx)
+	return pruned()
 }
 
 func (s Started) Live(ctx context.Context) (Changed, error) {
@@ -259,7 +278,7 @@ func mentions(said, path string) bool {
 	}
 }
 
-func (s Store) prune(ctx context.Context) ([]string, error) {
+func (s Store) prune(ctx context.Context) func() ([]string, error) {
 	var listed, counted string
 	var listing, counting error
 	var asking sync.WaitGroup
@@ -267,10 +286,16 @@ func (s Store) prune(ctx context.Context) ([]string, error) {
 		listed, listing = s.git(ctx, "", "for-each-ref", "--sort=refname", "--sort=committerdate", "--format=%(refname)", TurnRefs)
 	})
 	asking.Go(func() { counted, counting = s.git(ctx, "", "count-objects", "-v") })
-	asking.Wait()
-	if err := errors.Join(listing, counting); err != nil {
-		return nil, err
+	return func() ([]string, error) {
+		asking.Wait()
+		if err := errors.Join(listing, counting); err != nil {
+			return nil, err
+		}
+		return s.trim(ctx, listed, counted)
 	}
+}
+
+func (s Store) trim(ctx context.Context, listed, counted string) ([]string, error) {
 	refs := strings.Fields(listed)
 	dropped, notes := max(len(refs)-konst.ShadowTurnsKept, 0), []string{}
 	if dropped > 0 {
