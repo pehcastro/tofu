@@ -76,7 +76,7 @@ func NewPoller(
 	if err != nil {
 		return nil, err
 	}
-	return &Poller{http: outside.Client(outside.Network, httpClient), now: now, spread: rand.Float64, endpoints: endpoints, record: record, dir: dir}, nil
+	return &Poller{http: outside.Over(outside.Network, httpClient, nil), now: now, spread: rand.Float64, endpoints: endpoints, record: record, dir: dir}, nil
 }
 
 func (p *Poller) Poll(ctx context.Context, account Account) (Report, error) {

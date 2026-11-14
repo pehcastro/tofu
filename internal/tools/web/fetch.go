@@ -73,7 +73,7 @@ type flight struct {
 }
 
 func NewClient(config Config) *Client {
-	client := outside.Client(outside.Network, nil)
+	client := outside.Over(outside.Network, nil, nil)
 	client.Timeout = time.Duration(config.TimeoutMS) * time.Millisecond
 	return &Client{
 		http:     client,

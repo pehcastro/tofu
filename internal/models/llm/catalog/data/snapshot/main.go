@@ -35,7 +35,7 @@ func snapshot(vendors []string) error {
 		return errors.New("name the models.dev providers to keep, as in go run ./data/snapshot anthropic openai meta")
 	}
 	source := catalog.RegistrySource()
-	response, err := outside.Client(outside.Network, nil).Get(source)
+	response, err := outside.Over(outside.Network, nil, nil).Get(source)
 	if err != nil {
 		return err
 	}

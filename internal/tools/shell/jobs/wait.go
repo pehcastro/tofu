@@ -62,7 +62,7 @@ func parseFor(registry *process.Registry, entry process.Shell, spec string) (con
 			if err != nil {
 				return "", false
 			}
-			response, err := outside.Client(outside.Network, nil).Do(request)
+			response, err := outside.Over(outside.Network, nil, nil).Do(request)
 			if err != nil {
 				return "", false
 			}

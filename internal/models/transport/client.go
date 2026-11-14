@@ -92,7 +92,7 @@ func New(config Config) (*Client, error) {
 	}
 	return &Client{
 		config: config,
-		http:   outside.Client(config.Waits, config.HTTP),
+		http:   outside.Over(config.Waits, config.HTTP, nil),
 		slots:  make(chan struct{}, config.Concurrency),
 	}, nil
 }

@@ -342,7 +342,7 @@ func fakeSecret(tag string) string { return "fake-test-secret-" + tag }
 func doctorJSON(t *testing.T) host.DoctorReport {
 	t.Helper()
 	out := &bytes.Buffer{}
-	doctorverb.Verb([]string{output.JSONFlag}, out, out)
+	doctorverb.Clocked(t.Context(), []string{output.JSONFlag}, nil, out, out)
 	var envelope struct{ Data host.DoctorReport }
 	oneEnvelope(t, out.String(), &envelope)
 	return envelope.Data

@@ -16,10 +16,6 @@ type clockedBody struct {
 	stop func()
 }
 
-func Client(kind Kind, given *http.Client) *http.Client {
-	return Over(kind, given, nil)
-}
-
 func Over(kind Kind, given *http.Client, base http.RoundTripper) *http.Client {
 	var client http.Client
 	if given != nil {

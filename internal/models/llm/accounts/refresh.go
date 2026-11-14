@@ -66,7 +66,7 @@ func newManager(store *Store, spec Spec, find func(time.Time) (Row, bool, error)
 		store:    store,
 		spec:     spec,
 		find:     find,
-		client:   outside.Client(outside.Network, nil),
+		client:   outside.Over(outside.Network, nil, nil),
 		now:      time.Now,
 		save:     store.UpdateIfRefreshMatches,
 		note:     func(string) {},

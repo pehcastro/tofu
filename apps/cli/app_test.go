@@ -377,7 +377,7 @@ func TestLoginTypeSafeStoresTheKeyInTheDatabaseAndPrintsNoMoreThanItsTail(t *tes
 		t.Errorf("login --status does not show the last four characters:\n%s", status.String())
 	}
 	var checked bytes.Buffer
-	doctorverb.Verb(nil, &checked, &errOut)
+	doctorverb.Clocked(t.Context(), nil, nil, &checked, &errOut)
 	if !strings.Contains(strings.Join(strings.Fields(checked.String()), " "), "jev key · credential store") {
 		t.Errorf("tofu doctor does not say the key came from the credential store:\n%s", checked.String())
 	}

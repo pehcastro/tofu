@@ -25,7 +25,7 @@ type LoginOptions struct {
 }
 
 func Login(ctx context.Context, opt LoginOptions) (Credential, error) {
-	opt.Client = outside.Client(outside.Network, opt.Client)
+	opt.Client = outside.Over(outside.Network, opt.Client, nil)
 	if opt.Now == nil {
 		opt.Now = time.Now
 	}

@@ -16,7 +16,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
-	doctorverb "tofu/apps/cli/verbs/doctor"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/host"
 	"tofu/internal/models/llm/accounts"
@@ -164,7 +163,7 @@ func TestTheAppAndDoctorCallTheSameStateReady(t *testing.T) {
 	} {
 		step.store()
 		required := slices.DeleteFunc(heldForTest(t).Requirements(), func(step tui.Requirement) bool { return step.Done != "" })
-		report := doctorverb.State(time.Now())
+		report := doctorJSON(t)
 		appReady, doctorSaysReady := len(required) == 0, report.Verdict == host.DoctorReady
 		t.Logf("%s: the app lists %d blockers, doctor says %s", step.what, len(required), report.Verdict)
 		if appReady != doctorSaysReady {

@@ -41,10 +41,6 @@ const (
 	gateMissing = "missing"
 )
 
-func Verb(args []string, out, errOut io.Writer) int {
-	return Clocked(context.Background(), args, nil, out, errOut)
-}
-
 func Clocked(ctx context.Context, args []string, _ io.Reader, out, errOut io.Writer) int {
 	now, asJSON, imports, fix := time.Now(), output.JSONAsked(args), false, false
 	for _, arg := range args {
@@ -97,10 +93,6 @@ func blockerProblems(blockers []host.DoctorBlocker) []cli.Problem {
 		problems[i] = cli.Problem{What: blocker.Label + ": " + blocker.What, Hint: blocker.Command}
 	}
 	return problems
-}
-
-func State(now time.Time) host.DoctorReport {
-	return stateOn(clockSteps(context.Background()), now)
 }
 
 type stepClock struct {
