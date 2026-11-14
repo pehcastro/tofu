@@ -29,7 +29,7 @@ func importRules() []importRule {
 		"tofu/internal/konst", "tofu/internal/platform/safe",
 		"tofu/internal/platform/fs", "tofu/internal/platform/project", "tofu/internal/platform/clipboard",
 		"tofu/internal/platform/console", "tofu/internal/platform/scratch", "tofu/internal/platform/credential",
-		"tofu/internal/platform/profile", "tofu/internal/platform/build",
+		"tofu/internal/platform/profile", "tofu/internal/platform/build", "tofu/internal/platform/outside",
 	}
 	rules := []importRule{
 		{from: "tofu/apps", scope: "tofu/bench"},
