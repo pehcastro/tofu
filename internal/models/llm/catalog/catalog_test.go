@@ -30,6 +30,15 @@ func planOf(library Library, subscription Subscription, registry Registry, ids .
 	return Plan(library.Reconcile(served, registry), registry, library, foundToday)
 }
 
+func everyShippedClaudeAnd(library Library, ids ...string) []string {
+	for _, model := range library.Models {
+		if model.Subscription == ClaudeSub && model.From == "" {
+			ids = append(ids, model.ID)
+		}
+	}
+	return ids
+}
+
 func entryIn(t *testing.T, plan CatalogPlan, slug string) Model {
 	t.Helper()
 	for _, model := range plan {
@@ -55,7 +64,7 @@ func TestANewIdLandsAllowedWithTheEffortsOfItsNewestAllowedSibling(t *testing.T)
 	sibling, _ := library.Resolve("claude-sub/claude-sonnet-5")
 	registry := registryOf(t, `{"anthropic":{"models":{"claude-sonnet-5-5":{"tool_call":true,"reasoning":true,`+
 		`"reasoning_options":[{"type":"effort","values":["high"]}],"modalities":{"input":["text"]},"limit":{"context":1000000}}}}}`)
-	plan := planOf(library, ClaudeSub, registry, "claude-sonnet-5-5", "claude-sonnet-5-5-20261001")
+	plan := planOf(library, ClaudeSub, registry, everyShippedClaudeAnd(library, "claude-sonnet-5-5", "claude-sonnet-5-5-20261001")...)
 	if len(plan) != 2 {
 		t.Fatalf("want the two new ids and nothing else, got %v", plan)
 	}
@@ -104,7 +113,7 @@ func TestACatalogEntryNoLongerServedIsExcludedAndComesBackWhenServedAgain(t *tes
 	if err != nil {
 		t.Fatalf("loading: %v", err)
 	}
-	plan := planOf(library, ClaudeSub, shippedTable(t), "claude-opus-5")
+	plan := planOf(library, ClaudeSub, shippedTable(t), everyShippedClaudeAnd(library)...)
 	if len(plan) != 1 {
 		t.Fatalf("want the one catalog entry and no shipped one, got %v", plan)
 	}
@@ -122,9 +131,57 @@ func TestACatalogEntryNoLongerServedIsExcludedAndComesBackWhenServedAgain(t *tes
 	if err != nil {
 		t.Fatalf("loading the written catalog: %v", err)
 	}
-	back := entryIn(t, planOf(library, ClaudeSub, shippedTable(t), "claude-opus-5", "claude-sonnet-5-5"), "claude-sub/claude-sonnet-5-5")
+	back := entryIn(t, planOf(library, ClaudeSub, shippedTable(t), everyShippedClaudeAnd(library, "claude-sonnet-5-5")...), "claude-sub/claude-sonnet-5-5")
 	if back.Use != UseAllowed || back.Found != "2026-09-01" {
 		t.Fatalf("served again, the entry came out %q %q found %q", back.Use, back.Reason, back.Found)
+	}
+}
+
+func TestAShippedModelTheAccountDoesNotListIsExcludedAndNeverRewrittenAsDiscovered(t *testing.T) {
+	own := layerOf("global", oneFile("models/anthropic/claude-opus-4-8.yaml", "use: excluded\nreason: not on this machine\n"))
+	library, err := Load([]Layer{shippedLayer(), own})
+	if err != nil {
+		t.Fatalf("loading: %v", err)
+	}
+	listed := slices.DeleteFunc(everyShippedClaudeAnd(library), func(id string) bool {
+		return id == "claude-opus-5" || id == "claude-sonnet-5" || id == "claude-opus-4-8"
+	})
+	plan := planOf(library, ClaudeSub, shippedTable(t), listed...)
+	if len(plan) != 1 {
+		t.Fatalf("want the unlisted allowed model alone, not the default the library cannot load without, got %v", plan)
+	}
+	gone := entryIn(t, plan, "claude-sub/claude-sonnet-5")
+	if gone.Use != UseExcluded || gone.Reason != "the claude-sub account no longer serves it" {
+		t.Fatalf("a shipped model the account does not list came out %q %q", gone.Use, gone.Reason)
+	}
+	namesAFactOnly(t, gone)
+
+	dir := t.TempDir()
+	if err := plan.Write(dir); err != nil {
+		t.Fatalf("writing: %v", err)
+	}
+	written, _ := os.ReadFile(filepath.Join(dir, modelsDir, "anthropic", "claude-sonnet-5.yaml"))
+	t.Logf("catalog/models/anthropic/claude-sonnet-5.yaml:\n%s", written)
+	stopped, err := Load([]Layer{shippedLayer(), platformfs.DirLayer(catalogLayer, dir), own})
+	if err != nil {
+		t.Fatalf("loading the written catalog: %v", err)
+	}
+	if _, err := stopped.Select("claude-sub/claude-sonnet-5"); err == nil {
+		t.Fatal("a shipped model the account does not list is still sendable")
+	}
+	if mine, _ := stopped.Resolve("claude-sub/claude-opus-4-8"); mine.Reason != "not on this machine" {
+		t.Fatalf("a model a person excluded lost their reason: %q", mine.Reason)
+	}
+	if _, err := stopped.Select("codex-sub/gpt-5.6-sol"); err != nil {
+		t.Fatalf("a model on another account was touched: %v", err)
+	}
+	for _, id := range listed {
+		if _, err := stopped.Select("claude-sub/" + id); err != nil {
+			t.Fatalf("claude-sub/%s is listed and not sendable: %v", id, err)
+		}
+	}
+	if again := planOf(stopped, ClaudeSub, shippedTable(t), append(listed, "claude-opus-5", "claude-sonnet-5")...); len(again) != 0 {
+		t.Fatalf("listed again, a shipped model is rewritten as discovered rather than left to its shipped file: %v", again)
 	}
 }
 
@@ -154,7 +211,7 @@ func TestFromAndFoundRoundTripThroughTheCatalog(t *testing.T) {
 	registry := registryOf(t, `{"anthropic":{"models":{"claude-mythos-1":{"tool_call":true,"reasoning":true,`+
 		`"reasoning_options":[{"type":"budget_tokens","min":1024},{"type":"effort","values":["low","ultra"]}],`+
 		`"modalities":{"input":["text","image"]},"limit":{"context":200000}}}}}`)
-	plan := planOf(library, ClaudeSub, registry, "claude-mythos-1", "claude-sonnet-5-5")
+	plan := planOf(library, ClaudeSub, registry, everyShippedClaudeAnd(library, "claude-mythos-1", "claude-sonnet-5-5")...)
 	dir := t.TempDir()
 	if err := plan.Write(dir); err != nil {
 		t.Fatalf("writing: %v", err)

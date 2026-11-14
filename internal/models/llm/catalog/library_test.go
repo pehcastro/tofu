@@ -209,19 +209,19 @@ func TestTheShippedWiresResolveTheModelsTheyResolvedBefore(t *testing.T) {
 	}
 	frozen := map[string]string{
 		"claude-sub/claude-haiku-4-5-20251001":  "claude-haiku-4-5-20251001 allowed 5h and 7d",
-		"claude-sub/claude-opus-4-5-20251101":   "claude-opus-4-5-20251101 excluded 5h and 7d",
-		"claude-sub/claude-opus-4-6":            "claude-opus-4-6 excluded 5h and 7d",
-		"claude-sub/claude-opus-4-7":            "claude-opus-4-7 excluded 5h and 7d",
-		"claude-sub/claude-opus-4-8":            "claude-opus-4-8 excluded 5h and 7d",
+		"claude-sub/claude-opus-4-5-20251101":   "claude-opus-4-5-20251101 allowed 5h and 7d",
+		"claude-sub/claude-opus-4-6":            "claude-opus-4-6 allowed 5h and 7d",
+		"claude-sub/claude-opus-4-7":            "claude-opus-4-7 allowed 5h and 7d",
+		"claude-sub/claude-opus-4-8":            "claude-opus-4-8 allowed 5h and 7d",
 		"claude-sub/claude-opus-5":              "claude-opus-5 default 5h and 7d",
-		"claude-sub/claude-sonnet-4-5-20250929": "claude-sonnet-4-5-20250929 excluded 5h and 7d",
-		"claude-sub/claude-sonnet-4-6":          "claude-sonnet-4-6 excluded 5h and 7d",
+		"claude-sub/claude-sonnet-4-5-20250929": "claude-sonnet-4-5-20250929 allowed 5h and 7d",
+		"claude-sub/claude-sonnet-4-6":          "claude-sonnet-4-6 allowed 5h and 7d",
 		"claude-sub/claude-sonnet-5":            "claude-sonnet-5 allowed 5h and 7d",
-		"codex-sub/gpt-5.5":                     "gpt-5.5 excluded 5h and 7d",
+		"codex-sub/gpt-5.5":                     "gpt-5.5 allowed 5h and 7d",
 		"codex-sub/gpt-5.6-luna":                "gpt-5.6-luna allowed 5h and 7d",
 		"codex-sub/gpt-5.6-sol":                 "gpt-5.6-sol default 5h and 7d",
 		"codex-sub/gpt-5.6-terra":               "gpt-5.6-terra allowed 5h and 7d",
-		"codex-sub/gpt-reserve":                 "gpt-reserve excluded 5h and 7d",
+		"codex-sub/gpt-reserve":                 "gpt-reserve allowed 5h and 7d",
 		"meta/muse-spark-1.1":                   "muse-spark-1.1 allowed ",
 		"meta/muse-spark-1.2":                   "muse-spark-1.2 allowed ",
 		"meta/muse-spark-1.2-contributor":       "muse-spark-1.2-contributor allowed ",
@@ -263,13 +263,18 @@ func TestSelectRefusesAnUnknownModelAndNamesWhatItKnows(t *testing.T) {
 	}
 }
 
-func TestSelectRefusesAnExcludedModelWithItsLibraryReason(t *testing.T) {
-	_, err := shippedLibrary(t).Select("claude-sub/claude-opus-4-8")
+func TestSelectRefusesAModelAPersonExcludedWithTheirReason(t *testing.T) {
+	own := layerOf("global", oneFile("models/anthropic/claude-opus-4-8.yaml", "use: excluded\nreason: not on this machine\n"))
+	library, err := Load([]Layer{shippedLayer(), own})
+	if err != nil {
+		t.Fatalf("loading: %v", err)
+	}
+	_, err = library.Select("claude-sub/claude-opus-4-8")
 	var refusal *Refusal
 	if !errors.As(err, &refusal) || refusal.Kind != RefusedExcluded {
 		t.Fatalf("want an exclusion refusal, got %v", err)
 	}
-	if !strings.Contains(refusal.Error(), "a previous generation the account still serves") {
+	if !strings.Contains(refusal.Error(), "not on this machine") {
 		t.Fatalf("the refusal must carry the library reason, got %q", refusal.Error())
 	}
 }

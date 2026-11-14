@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -210,7 +211,11 @@ func TestAModelOnASubscriptionTheTurnCannotRunIsNotReached(t *testing.T) {
 }
 
 func TestAnExcludedModelIsNeverWhatTheNextTurnRunsOn(t *testing.T) {
-	loaded, err := shippedFixture()
+	oneExcluded := func() (library.Library, error) {
+		own := fstest.MapFS{"models/anthropic/claude-opus-4-8.yaml": {Data: []byte("use: excluded\nreason: not on this machine\n")}}
+		return library.Load([]library.Layer{{Name: "library", Origin: "library", FS: os.DirFS(shippedRoot)}, {Name: "home", Origin: "home", FS: own}})
+	}
+	loaded, err := oneExcluded()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,12 +225,14 @@ func TestAnExcludedModelIsNeverWhatTheNextTurnRunsOn(t *testing.T) {
 			excluded[one.Slug()] = true
 		}
 	}
-	if len(excluded) == 0 {
-		t.Skip("the shipped library excludes no model, so no pick here can land on one")
+	if !excluded["claude-sub/claude-opus-4-8"] {
+		t.Fatalf("the fixture excludes %v, want claude-sub/claude-opus-4-8", excluded)
 	}
-	ran := make(chan Pick, 1)
 	for press := range pressesPastEveryRow {
-		app := pickerApp(t, ran, bothWires)
+		app := newTestApp(Options{Repo: testRepo, Now: fixedClock(), Wires: bothWires, Models: oneExcluded})
+		app.Init()
+		app.Update(tea.WindowSizeMsg{Width: 120, Height: 36})
+		app.openPicker("")
 		for range press {
 			app.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 		}

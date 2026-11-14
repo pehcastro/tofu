@@ -26,25 +26,25 @@ import (
 )
 
 const (
-	modelsFromTheBinaryAlone = `Models · 21 known                                                    ✓ 13 usable
+	modelsFromTheBinaryAlone = `Models · 21 known                                                    ✓ 21 usable
 
 claude-sub
-  ✓ claude-sub/claude-haiku-4-5-20251001   allowed   200k
-  ○ claude-sub/claude-opus-4-5-20251101    excluded  200k
-  ○ claude-sub/claude-opus-4-6             excluded  1M
-  ○ claude-sub/claude-opus-4-7             excluded  1M
-  ○ claude-sub/claude-opus-4-8             excluded  1M
-  ● claude-sub/claude-opus-5               default   1M
-  ○ claude-sub/claude-sonnet-4-5-20250929  excluded  1M
-  ○ claude-sub/claude-sonnet-4-6           excluded  1M
-  ✓ claude-sub/claude-sonnet-5             allowed   1M
+  ✓ claude-sub/claude-haiku-4-5-20251001   allowed  200k
+  ✓ claude-sub/claude-opus-4-5-20251101    allowed  200k
+  ✓ claude-sub/claude-opus-4-6             allowed  1M
+  ✓ claude-sub/claude-opus-4-7             allowed  1M
+  ✓ claude-sub/claude-opus-4-8             allowed  1M
+  ● claude-sub/claude-opus-5               default  1M
+  ✓ claude-sub/claude-sonnet-4-5-20250929  allowed  1M
+  ✓ claude-sub/claude-sonnet-4-6           allowed  1M
+  ✓ claude-sub/claude-sonnet-5             allowed  1M
 
 codex-sub
-  ○ codex-sub/gpt-5.5        excluded  1.05M
-  ✓ codex-sub/gpt-5.6-luna   allowed   1.05M
-  ● codex-sub/gpt-5.6-sol    default   1.05M
-  ✓ codex-sub/gpt-5.6-terra  allowed   1.05M
-  ○ codex-sub/gpt-reserve    excluded
+  ✓ codex-sub/gpt-5.5        allowed  1.05M
+  ✓ codex-sub/gpt-5.6-luna   allowed  1.05M
+  ● codex-sub/gpt-5.6-sol    default  1.05M
+  ✓ codex-sub/gpt-5.6-terra  allowed  1.05M
+  ✓ codex-sub/gpt-reserve    allowed
 
 api key
   ✓ meta/muse-spark-1.1              allowed  1.05M
@@ -68,25 +68,25 @@ windows
   → tofu models update
 `
 
-	modelsWithAProjectLayerAndAHomeRegistry = `Models · 21 known                                                    ✓ 14 usable
+	modelsWithAHomeExclusionAndAHomeRegistry = `Models · 21 known                                                    ✓ 20 usable
 
 claude-sub
   ✓ claude-sub/claude-haiku-4-5-20251001   allowed
-  ✓ claude-sub/claude-opus-4-5-20251101    allowed         project layer
-  ○ claude-sub/claude-opus-4-6             excluded
-  ○ claude-sub/claude-opus-4-7             excluded
-  ○ claude-sub/claude-opus-4-8             excluded
+  ○ claude-sub/claude-opus-4-5-20251101    excluded        home layer
+  ✓ claude-sub/claude-opus-4-6             allowed
+  ✓ claude-sub/claude-opus-4-7             allowed
+  ✓ claude-sub/claude-opus-4-8             allowed
   ● claude-sub/claude-opus-5               default   123k
-  ○ claude-sub/claude-sonnet-4-5-20250929  excluded
-  ○ claude-sub/claude-sonnet-4-6           excluded
+  ✓ claude-sub/claude-sonnet-4-5-20250929  allowed
+  ✓ claude-sub/claude-sonnet-4-6           allowed
   ✓ claude-sub/claude-sonnet-5             allowed         orchestrator
 
 codex-sub
-  ○ codex-sub/gpt-5.5        excluded
+  ✓ codex-sub/gpt-5.5        allowed
   ✓ codex-sub/gpt-5.6-luna   allowed
   ● codex-sub/gpt-5.6-sol    default
   ✓ codex-sub/gpt-5.6-terra  allowed
-  ○ codex-sub/gpt-reserve    excluded
+  ✓ codex-sub/gpt-reserve    allowed
 
 api key
   ✓ meta/muse-spark-1.1              allowed  1.05M
@@ -110,21 +110,21 @@ windows
   → tofu models update
 `
 
-	modelsJSONWithAProjectLayer = `models ok true problems 0
+	modelsJSONWithAHomeExclusion = `models ok true problems 0
 claude-sub/claude-haiku-4-5-20251001 allowed 0 library
-claude-sub/claude-opus-4-5-20251101 allowed 0 project
-claude-sub/claude-opus-4-6 excluded 0 library
-claude-sub/claude-opus-4-7 excluded 0 library
-claude-sub/claude-opus-4-8 excluded 0 library
+claude-sub/claude-opus-4-5-20251101 excluded 0 home
+claude-sub/claude-opus-4-6 allowed 0 library
+claude-sub/claude-opus-4-7 allowed 0 library
+claude-sub/claude-opus-4-8 allowed 0 library
 claude-sub/claude-opus-5 default 123456 library
-claude-sub/claude-sonnet-4-5-20250929 excluded 0 library
-claude-sub/claude-sonnet-4-6 excluded 0 library
+claude-sub/claude-sonnet-4-5-20250929 allowed 0 library
+claude-sub/claude-sonnet-4-6 allowed 0 library
 claude-sub/claude-sonnet-5 allowed 0 library orchestrator
-codex-sub/gpt-5.5 excluded 0 library
+codex-sub/gpt-5.5 allowed 0 library
 codex-sub/gpt-5.6-luna allowed 0 library
 codex-sub/gpt-5.6-sol default 0 library
 codex-sub/gpt-5.6-terra allowed 0 library
-codex-sub/gpt-reserve excluded 0 library
+codex-sub/gpt-reserve allowed 0 library
 meta/muse-spark-1.1 allowed 1048576 library
 meta/muse-spark-1.2 allowed 1048576 library
 meta/muse-spark-1.2-contributor allowed 1048576 library
@@ -136,13 +136,20 @@ typesafe/jev-latest allowed 0 library
 
 	homeRegistryOfOneWindow = `{"from":"the table this test wrote","windows":{"anthropic/claude-opus-5":123456}}`
 
-	updateOfANewModelAndARefusedAccount = `Model update                                                  ⚠ 1 new · 1 failed
+	updateOfANewModelAndARefusedAccount = `Model update                                      ⚠ 1 new · 7 dropped · 1 failed
 
   models.dev    ✓ 2 context windows
   catalog       ✓ 1 file removed
 
 claude-sub      ✓ 3 served
-  + claude-sonnet-5-5  allowed
+  + claude-sonnet-5-5           allowed
+  - claude-haiku-4-5-20251001   excluded
+  - claude-opus-4-5-20251101    excluded
+  - claude-opus-4-6             excluded
+  - claude-opus-4-7             excluded
+  - claude-opus-4-8             excluded
+  - claude-sonnet-4-5-20250929  excluded
+  - claude-sonnet-4-6           excluded
 
 codex-sub       ✗ model list refused (403)
   → tofu login llm codex-sub
@@ -194,19 +201,19 @@ func modelsJSONLines(t *testing.T, printed string) string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
-func TestE2EModelsMergesTheProjectLayerOverTheBinaryAndReadsTheRegistryFromHome(t *testing.T) {
+func TestE2EModelsMergesTheHomeLayerOverTheBinaryAndReadsTheRegistryFromHome(t *testing.T) {
 	shipped := newProject(t, "shipped")
 	testkit.SameText(t, "a project that overrides nothing",
 		shipped.run(t, output.ExitOK, "models"), modelsFromTheBinaryAlone)
 
 	layered := newProject(t, "layered")
-	testkit.WriteFile(t, layered.dir, ".tofu/models/anthropic/claude-opus-4-5-20251101.yaml", "use: allowed\n")
+	testkit.WriteFile(t, layered.home, ".tofu/models/anthropic/claude-opus-4-5-20251101.yaml", "use: excluded\nreason: not on this machine\n")
 	testkit.WriteFile(t, layered.dir, ".tofu/roles/turn.yaml", "model: claude-sub/claude-sonnet-5\n")
 	testkit.WriteFile(t, layered.home, ".tofu/model-windows.json", homeRegistryOfOneWindow)
-	testkit.SameText(t, "a project that allows one excluded model, binds the orchestrator through the legacy turn.yaml, and carries its own window table",
-		layered.run(t, output.ExitOK, "models"), modelsWithAProjectLayerAndAHomeRegistry)
+	testkit.SameText(t, "a home that excludes one model, a project that binds the orchestrator through the legacy turn.yaml, and carries its own window table",
+		layered.run(t, output.ExitOK, "models"), modelsWithAHomeExclusionAndAHomeRegistry)
 	testkit.SameText(t, "the same project as one --json envelope",
-		modelsJSONLines(t, layered.run(t, output.ExitOK, "models", "--json")), modelsJSONWithAProjectLayer)
+		modelsJSONLines(t, layered.run(t, output.ExitOK, "models", "--json")), modelsJSONWithAHomeExclusion)
 }
 
 func stubbed(t *testing.T, status int, body string) string {
@@ -324,8 +331,25 @@ func TestModelsUpdateShowsANewModelAndARefusedAccountWithTheVendorBodyOnlyInJSON
 	if code := run([]string{"models", output.JSONFlag}, strings.NewReader(""), &listed, io.Discard); code != output.ExitOK {
 		t.Fatalf("tofu models --json exited %d\n%s", code, listed.String())
 	}
-	if !strings.Contains(modelsJSONLines(t, listed.String()), "claude-sub/claude-sonnet-5-5 allowed 1000000 catalog") {
-		t.Fatalf("tofu models --json does not show claude-sub/claude-sonnet-5-5 from the catalog\n%s", listed.String())
+	lines := modelsJSONLines(t, listed.String())
+	for _, want := range []string{"claude-sub/claude-sonnet-5-5 allowed 1000000 catalog", "claude-sub/claude-opus-4-8 excluded 0 catalog", "claude-sub/claude-opus-5 default 1000000 library"} {
+		if !strings.Contains(lines, want) {
+			t.Fatalf("tofu models --json does not show %q\n%s", want, lines)
+		}
+	}
+
+	everyClaude := `{"data":[{"id":"claude-haiku-4-5-20251001"},{"id":"claude-opus-4-5-20251101"},{"id":"claude-opus-4-6"},{"id":"claude-opus-4-7"},` +
+		`{"id":"claude-opus-4-8"},{"id":"claude-opus-5"},{"id":"claude-sonnet-4-5-20250929"},{"id":"claude-sonnet-4-6"},{"id":"claude-sonnet-5"},{"id":"claude-sonnet-5-5"}]}`
+	relisted := []models.Account{{Subscription: models.ClaudeSub, Token: token, BaseURL: stubbed(t, http.StatusOK, everyClaude)}}
+	if _, err := modelsverb.UpdateModels(context.Background(), client, relisted, nil); err != nil {
+		t.Fatal(err)
+	}
+	listed.Reset()
+	if code := run([]string{"models", output.JSONFlag}, strings.NewReader(""), &listed, io.Discard); code != output.ExitOK {
+		t.Fatalf("tofu models --json exited %d\n%s", code, listed.String())
+	}
+	if lines := modelsJSONLines(t, listed.String()); !strings.Contains(lines, "claude-sub/claude-opus-4-8 allowed 0 library") {
+		t.Fatalf("listed again, claude-sub/claude-opus-4-8 does not come back to its shipped file\n%s", lines)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -168,27 +169,22 @@ func TestADatedLibraryIdStillFindsTheUndatedRegistryEntry(t *testing.T) {
 	}
 }
 
-func TestEveryChatModelTheAccountCanSendTakesAWindowFromTheTable(t *testing.T) {
+func TestOnlyTheNamedSendableModelsLackAPublishedWindow(t *testing.T) {
 	library, registry := shippedLibrary(t), shippedTable(t)
-	answered, chat := 0, 0
+	var windowless []string
 	for _, model := range library.Models {
 		if model.Kind != KindLLM {
 			continue
 		}
-		chat++
 		tokens, source := WindowFor(model, registry, Served{})
-		if tokens > 0 {
-			answered++
-		}
 		if model.Use != UseExcluded && tokens <= 0 {
-			t.Fatalf("%s is sendable and no table entry gives it a window, so it would compact on a guess", model.Slug())
+			windowless = append(windowless, model.Slug())
 		}
 		t.Logf("%-40s %8d %s", model.Slug(), tokens, source)
 	}
-	if answered == chat {
-		t.Fatalf("all %d chat models have a window, and the case worth watching is the one that has none", answered)
+	if want := []string{"codex-sub/gpt-reserve"}; !slices.Equal(windowless, want) {
+		t.Fatalf("sendable with no published window, so compacting on the no-window path: %v, want %v", windowless, want)
 	}
-	t.Logf("%d of %d chat models the library ships take a window from %s", answered, chat, registry.From)
 }
 
 func TestReconcileNamesAWindowThePublishedTableDoesNotMatch(t *testing.T) {

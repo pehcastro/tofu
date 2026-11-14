@@ -38,14 +38,14 @@ func Plan(reconciled Reconciliation, registry Registry, library Library, found s
 		plan = append(plan, library.discovered(account, id, registry, found))
 	}
 	for _, model := range library.Models {
-		if model.Subscription != account.Subscription || model.From == "" {
+		if model.Subscription != account.Subscription {
 			continue
 		}
 		switch {
-		case !served[model.ID] && model.Use != UseExcluded:
+		case !served[model.ID] && model.Use == UseAllowed:
 			model.Use, model.Reason = UseExcluded, stopped
 			plan = append(plan, model)
-		case served[model.ID] && model.Reason == stopped:
+		case served[model.ID] && model.Reason == stopped && model.From != "":
 			plan = append(plan, library.discovered(account, model.ID, registry, model.Found))
 		}
 	}

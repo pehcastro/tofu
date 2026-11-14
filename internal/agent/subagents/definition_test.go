@@ -214,8 +214,15 @@ func TestModelTiers(t *testing.T) {
 		}
 	})
 
-	t.Run("a tier set to a model tofu refuses", func(t *testing.T) {
-		thinker := definitionNamed(t, scan(map[Tier]string{TierGenius: "claude-sub/claude-opus-4-8"}), "thinker")
+	t.Run("a tier set to a model a person excluded", func(t *testing.T) {
+		own := fstest.MapFS{"models/anthropic/claude-opus-4-8.yaml": {Data: []byte("use: excluded\nreason: not on this machine\n")}}
+		catalog, err := models.Load([]platformfs.Layer{{Name: "library", Origin: "library", FS: shipped.Files()}, {Name: "home", Origin: "home", FS: own}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := scanOf(t, "", "tofu", "agents", "claude")
+		s.Project, s.Tiers, s.Catalog = project, map[Tier]string{TierGenius: "claude-sub/claude-opus-4-8"}, catalog
+		thinker := definitionNamed(t, Definitions(s), "thinker")
 		if thinker.Runs != RunsRefused || !strings.Contains(strings.Join(thinker.Refused, ""), "modelTier.genius") {
 			t.Fatalf("a tier naming an excluded model is refused naming the setting, got %+v", thinker)
 		}

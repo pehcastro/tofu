@@ -12,9 +12,9 @@
                      PROVIDERS               › claude-opus-5                                 source  claude-sub         
                      › all                     claude-sub                                    kind    llm                
                        claude-sub              claude-sonnet-4-5-20250929                    pays    subscription       
-                       Meta · no key           claude-sub · excluded                         window  5h and 7d          
+                       Meta · no key           claude-sub                                    window  5h and 7d          
                                                claude-sonnet-4-6                             layer   library            
-                     f5 updates models         claude-sub · excluded                                                    
+                     f5 updates models         claude-sub                                                               
                                                claude-sonnet-5                               EFFORT                     
                                                claude-sub                                    medium  shift+←→           
                                                muse-spark-1.1                                                           
@@ -42,9 +42,9 @@
                      PROVIDERS               › claude-opus-5                                 source  claude-sub         
                      › all                     claude-sub                                    kind    llm                
                        claude-sub              claude-sonnet-4-5-20250929                    pays    subscription       
-                       Meta · no key           claude-sub · excluded                         window  5h and 7d          
+                       Meta · no key           claude-sub                                    window  5h and 7d          
                                                claude-sonnet-4-6                             layer   library            
-                     f5 updates models         claude-sub · excluded                                                    
+                     f5 updates models         claude-sub                                                               
                                                claude-sonnet-5                               EFFORT                     
                                                claude-sub                                    medium  shift+←→           
                                                claude-sonnet-5-5                                                        
