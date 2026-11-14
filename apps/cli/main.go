@@ -385,7 +385,7 @@ func verbNamed(name string) verb {
 	case "usage":
 		return verb{clocked: loginverb.UsageVerb, usage: loginverb.UsageFlags}
 	case "models":
-		return verb{run: withoutIn(modelsverb.Verb), usage: modelsverb.Usage}
+		return verb{clocked: modelsverb.Clocked, usage: modelsverb.Usage}
 	case "agents":
 		return verb{run: withoutIn(agentsVerb), usage: strings.Join([]string{agentsUsage, agentsAddUsage, agentsSetUsage, agentsRemoveUsage}, " ")}
 	case "why":

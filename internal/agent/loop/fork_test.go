@@ -350,7 +350,7 @@ func TestAPictureAToolReadsReachesTheModelCountsAndIsTheFirstThingDropped(t *tes
 	if history := withPictures - HistoryTokens(artifacts.preview, stripped(messages)); pictured-plain != 2*konst.ImageTokens || history != 2*konst.ImageTokens {
 		t.Errorf("two pictures add %d to the fork's estimate and %d to the history's, want %d", pictured-plain, history, 2*konst.ImageTokens)
 	}
-	shrink, err := shrinkTo(artifacts, messages, withPictures, withPictures-konst.ImageTokens+100, causeOverflow)
+	shrink, err := shrinkFrom(t.Context(), artifacts, messages, withPictures, withPictures-konst.ImageTokens+100, 0, causeOverflow, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -84,7 +84,7 @@ func TestDeskACronFireThatStartsATurnSaysSoOnlyByItsOriginAndDeleteAllEmptiesThe
 
 func TestDeskQueryUsageAsksTheSharedCacheEachTimeAndDatesItselfByItsOldestReading(t *testing.T) {
 	var reads atomic.Int32
-	verb := func(args []string) (VerbResult, error) {
+	verb := func(_ context.Context, args []string) (VerbResult, error) {
 		if args[0] != "usage" {
 			return VerbResult{}, nil
 		}

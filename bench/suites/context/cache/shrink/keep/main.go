@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -109,7 +110,7 @@ func runArm(dir, home string, corpus []mockedSession) (tally, error) {
 	}
 	var t tally
 	for _, session := range corpus {
-		compacted, err := loop.CompactCarried(project, places, "", session.Task, "", conversationOf(session))
+		compacted, err := loop.CompactCarried(context.Background(), project, places, "", session.Task, "", conversationOf(session))
 		if err != nil {
 			return tally{}, fmt.Errorf("%s: %w", session.Name, err)
 		}

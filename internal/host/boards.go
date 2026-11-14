@@ -2,6 +2,7 @@ package host
 
 import (
 	"cmp"
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -109,8 +110,8 @@ func logDir(project string) (string, error) {
 	return filepath.Join(state, "log"), err
 }
 
-func (s *server) sessionDetail(p SessionParams) (any, error) {
-	info, err := verbAs[SessionInfo](s, "session", "info", p.Session)
+func (s *server) sessionDetail(ctx context.Context, p SessionParams) (any, error) {
+	info, err := verbAs[SessionInfo](ctx, s, "session", "info", p.Session)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +173,7 @@ func (s *server) usageHistory(p UsageHistoryParams) (any, error) {
 	return report, nil
 }
 
-func (s *server) limits(NoParams) (any, error) {
+func (s *server) limits(ctx context.Context) (any, error) {
 	now := time.Now()
 	dir, err := fs.QuotaDir()
 	if err != nil {
@@ -183,7 +184,7 @@ func (s *server) limits(NoParams) (any, error) {
 		return nil, err
 	}
 	report := LimitsReport{Burns: append([]quota.Burn{}, quota.Burns(readings)...), TornReadings: torn, Order: []AccountOrder{}, Spend: []AccountSpend{}}
-	accounts, err := verbAs[Accounts](s, "login", "--status")
+	accounts, err := verbAs[Accounts](ctx, s, "login", "--status")
 	if err != nil {
 		return nil, err
 	}

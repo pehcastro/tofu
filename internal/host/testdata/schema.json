@@ -2454,6 +2454,42 @@
       ],
       "type": "object"
     },
+    "JevPin": {
+      "additionalProperties": false,
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "found": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "newer": {
+          "type": "string"
+        },
+        "shadowed": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "skipped": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "from"
+      ],
+      "type": "object"
+    },
     "Judgement": {
       "additionalProperties": false,
       "properties": {
@@ -3957,6 +3993,9 @@
       "properties": {
         "context_windows": {
           "type": "integer"
+        },
+        "jev": {
+          "$ref": "#/$defs/JevPin"
         },
         "removed_from_catalog": {
           "items": {

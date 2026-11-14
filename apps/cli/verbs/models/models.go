@@ -109,6 +109,10 @@ func bindVerb(args []string, out, errOut io.Writer) int {
 }
 
 func Verb(args []string, out, errOut io.Writer) int {
+	return Clocked(context.Background(), args, nil, out, errOut)
+}
+
+func Clocked(ctx context.Context, args []string, _ io.Reader, out, errOut io.Writer) int {
 	if len(args) > 0 && args[0] == "bind" {
 		return bindVerb(args[1:], out, errOut)
 	}
@@ -128,7 +132,7 @@ func Verb(args []string, out, errOut io.Writer) int {
 	if update {
 		held := wiring.HoldStore()
 		defer held.Close()
-		report, err := updateSignedIn(context.Background(), held, jevPinRaised)
+		report, err := updateSignedIn(ctx, held, jevPinRaised)
 		code := showUpdate(out, errOut, asJSON, report, err)
 		wiring.StampUpdate(code)
 		return code
@@ -290,7 +294,6 @@ func windowShort(tokens int) string {
 
 type ModelUpdate struct {
 	host.ModelUpdate
-	Jev jevcatalog.PinCheck `json:"jev,omitzero"`
 }
 
 func modelChangeMark(c host.ModelChange) cli.Mark {
@@ -406,7 +409,7 @@ func updateSignedIn(ctx context.Context, held wiring.HeldStore, pinning jevPinni
 		}
 	}
 	report, err := UpdateModels(ctx, client, accounts, settled)
-	report.Versions, report.Jev = checked, pinned
+	report.Versions, report.Jev = checked, host.JevPin(pinned)
 	return report, err
 }
 

@@ -2,6 +2,7 @@ package host
 
 import (
 	"tofu/internal/agent/hooks"
+	jevcatalog "tofu/internal/models/classifiers/catalog"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
@@ -51,7 +52,10 @@ type ModelUpdate struct {
 	Sources        []ModelUpdateSource `json:"sources"`
 	Unresolved     []string            `json:"unresolved_tiers,omitempty"`
 	Versions       VersionCheck        `json:"versions"`
+	Jev            JevPin              `json:"jev,omitzero"`
 }
+
+type JevPin jevcatalog.PinCheck
 
 type VersionCheck struct {
 	Raised  []settingspkg.RaisedVersion `json:"raised,omitempty"`

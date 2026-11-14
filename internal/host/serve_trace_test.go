@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 )
@@ -8,7 +9,7 @@ import (
 func TestServeSessionTraceCarriesMemoryModelCalls(t *testing.T) {
 	printed := `{"session":"s1","handle":"h","events":4,"agents":[],"requests":[],"calls":[],"cache":{},` +
 		`"memory":[{"request":"r9","at":"2026-10-09T10:00:00Z","why":"memory recall","model":"claude-sub/claude-haiku-5","usage":{"input_tokens":610,"output_tokens":12},"cost_usd":0}]}`
-	verb := func(args []string) (VerbResult, error) {
+	verb := func(_ context.Context, args []string) (VerbResult, error) {
 		return VerbResult{OK: true, Data: json.RawMessage(printed)}, nil
 	}
 	c, _, _ := serving(t, nil, ServeConfig{Verb: verb})

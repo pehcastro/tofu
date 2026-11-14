@@ -2,6 +2,7 @@ package loop
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -257,12 +258,12 @@ const (
 	causeBudget   shrinkCause = "the conversation crossed its context budget"
 )
 
-func shrinkOverflow(artifacts Artifacts, messages []core.Message, sentTokens, windowTokens int) (overflowShrink, error) {
+func shrinkOverflow(ctx context.Context, artifacts Artifacts, messages []core.Message, sentTokens, windowTokens int) (overflowShrink, error) {
 	target := sentTokens
 	if windowTokens > 0 {
 		target = min(target, windowTokens)
 	}
-	return shrinkTo(artifacts, messages, sentTokens, target*konst.TurnOverflowKeepPercent/100, causeOverflow)
+	return shrinkFrom(ctx, artifacts, messages, sentTokens, target*konst.TurnOverflowKeepPercent/100, 0, causeOverflow, "")
 }
 
 type Compacted struct {
@@ -306,7 +307,7 @@ func BranchCarried(wire string, carried []core.Message, message int) (Compacted,
 	return Compacted{Kind: ForkBranch, Message: message, Words: words, Kept: at, TokensBefore: HistoryTokens(preview, carried), TokensAfter: HistoryTokens(preview, kept), Before: carried, Messages: kept}, nil
 }
 
-func CompactCarried(project string, places platformproject.Places, wire, task, focus string, carried []core.Message) (Compacted, error) {
+func CompactCarried(ctx context.Context, project string, places platformproject.Places, wire, task, focus string, carried []core.Message) (Compacted, error) {
 	artifacts, err := NewArtifacts(filepath.Join(places.State, "artifacts"), true)
 	if err != nil {
 		return Compacted{}, err
@@ -321,7 +322,7 @@ func CompactCarried(project string, places platformproject.Places, wire, task, f
 	shrunk := slices.Clone(carried)
 	before := HistoryTokens(artifacts.preview, shrunk)
 	kept := warmFrom(artifacts.preview, shrunk)
-	shrink, err := shrinkFrom(artifacts, shrunk, before, 0, kept, causeCompact, focus)
+	shrink, err := shrinkFrom(ctx, artifacts, shrunk, before, 0, kept, causeCompact, focus)
 	if err != nil {
 		return Compacted{}, err
 	}
@@ -359,8 +360,12 @@ func RecordCarried(store *session.Store, from string, compacted Compacted, by st
 	if err != nil {
 		return "", errors.Join(err, ended.Close())
 	}
-	written := &record{store: store, log: log, scope: into, turn: into, said: map[string]string{}}
+	written, timed := &record{store: store, log: log, scope: into, turn: into, said: map[string]string{}}, map[string]ToolCallRow{}
 	for _, event := range events {
+		var ran ToolCallRow
+		if event.Kind == session.EventToolResult && json.Unmarshal(event.Body, &ran) == nil {
+			timed[event.Call] = ToolCallRow{DurationMS: ran.DurationMS, OutsideMS: ran.OutsideMS}
+		}
 		var prompt session.PromptBody
 		if event.Kind != session.EventPrompt || event.Agent != "" {
 			continue
@@ -390,7 +395,7 @@ func RecordCarried(store *session.Store, from string, compacted Compacted, by st
 		if message.Role == core.RoleAssistant {
 			request, steps = session.NewEventID(), steps+1
 		}
-		written.message(message, request, nil)
+		written.message(message, request, timed)
 	}
 	for _, drop := range compacted.Drops {
 		_, err := log.Append(session.Event{Kind: session.EventCompaction}, compactionRow{Compaction: &Compaction{Step: drop.Step,
@@ -412,10 +417,6 @@ func RecordCarried(store *session.Store, from string, compacted Compacted, by st
 	return into, errors.Join(forked, edited, log.Close(), ended.Close())
 }
 
-func shrinkTo(artifacts Artifacts, messages []core.Message, estimate, target int, cause shrinkCause) (overflowShrink, error) {
-	return shrinkFrom(artifacts, messages, estimate, target, 0, cause, "")
-}
-
 func lastAssistant(messages []core.Message) int {
 	last := len(messages) - 1
 	for last >= 0 && messages[last].Role != core.RoleAssistant {
@@ -424,7 +425,7 @@ func lastAssistant(messages []core.Message) int {
 	return last
 }
 
-func shrinkFrom(artifacts Artifacts, messages []core.Message, estimate, target, from int, cause shrinkCause, focus string) (overflowShrink, error) {
+func shrinkFrom(ctx context.Context, artifacts Artifacts, messages []core.Message, estimate, target, from int, cause shrinkCause, focus string) (overflowShrink, error) {
 	lastStep := lastAssistant(messages)
 	shrink := overflowShrink{bytesBefore: messagesBytes(messages)}
 	calls := make(map[string]core.ToolCall)
@@ -456,7 +457,7 @@ func shrinkFrom(artifacts Artifacts, messages []core.Message, estimate, target, 
 		}
 	}
 	if artifacts.keep != nil && estimate > target {
-		candidates = artifacts.keep.ordered(artifacts.preview, messages, candidates, cause != causeCompact)
+		candidates = artifacts.keep.ordered(ctx, artifacts.preview, messages, candidates, cause != causeCompact)
 	}
 	for _, candidate := range candidates {
 		if estimate <= target {
@@ -821,12 +822,12 @@ func warmFrom(preview recall.Config, messages []core.Message) int {
 	return 0
 }
 
-func trimRead(artifacts Artifacts, budget recall.Budget, step int, messages []core.Message, from int) (*Compaction, overflowShrink, error) {
+func trimRead(ctx context.Context, artifacts Artifacts, budget recall.Budget, step int, messages []core.Message, from int) (*Compaction, overflowShrink, error) {
 	tokens := budget.Tokens(artifacts.preview, historyOf(messages))
 	if tokens <= budget.Bands.Target() {
 		return nil, overflowShrink{}, nil
 	}
-	shrink, err := shrinkFrom(artifacts, messages, tokens, budget.Bands.Target()*konst.ContextTrimPercentOfTarget/100, from, causeBudget, "")
+	shrink, err := shrinkFrom(ctx, artifacts, messages, tokens, budget.Bands.Target()*konst.ContextTrimPercentOfTarget/100, from, causeBudget, "")
 	if err != nil || shrink.results == 0 {
 		return nil, shrink, err
 	}

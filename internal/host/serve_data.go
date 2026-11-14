@@ -3,6 +3,7 @@ package host
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"encoding/json"
 	"maps"
 	"slices"
@@ -18,9 +19,9 @@ import (
 	"tofu/internal/store/session"
 )
 
-func verbAs[T any](s *server, args ...string) (T, error) {
+func verbAs[T any](ctx context.Context, s *server, args ...string) (T, error) {
 	var typed T
-	result, err := s.Verb(args)
+	result, err := s.Verb(ctx, args)
 	if err != nil {
 		return typed, err
 	}
@@ -53,15 +54,15 @@ func verbLine(words []string, switches map[string]bool, options map[string]strin
 	return append(words, slices.DeleteFunc(operands, func(operand string) bool { return operand == "" })...)
 }
 
-func typedVerb[T any](s *server, raw json.RawMessage, args ...string) (any, error) {
-	return handle(raw, func(NoParams) (any, error) { return verbAs[T](s, args...) })
+func typedVerb[T any](ctx context.Context, s *server, raw json.RawMessage, args ...string) (any, error) {
+	return handle(raw, func(NoParams) (any, error) { return verbAs[T](ctx, s, args...) })
 }
 
-func (s *server) data(method string, raw json.RawMessage) (any, error) {
+func (s *server) data(ctx context.Context, method string, raw json.RawMessage) (any, error) {
 	switch method {
 	case queryPrefix + "models":
 		return handle(raw, func(NoParams) (any, error) {
-			report, err := verbAs[ModelsQuery](s, "models")
+			report, err := verbAs[ModelsQuery](ctx, s, "models")
 			if s.Wires != nil {
 				report.Wires = s.Wires()
 			}
@@ -69,54 +70,56 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 			return report, err
 		})
 	case queryPrefix + "settings":
-		return typedVerb[SettingsReport](s, raw, "settings")
+		return typedVerb[SettingsReport](ctx, s, raw, "settings")
 	case queryPrefix + "commands":
 		return handle(raw, func(NoParams) (any, error) { return CommandList{Commands: commands.Table()}, nil })
 	case queryPrefix + "rules":
 		return handle(raw, func(NoParams) (any, error) {
-			report, err := verbAs[RuleListReport](s, "rules", "list")
+			report, err := verbAs[RuleListReport](ctx, s, "rules", "list")
 			if err != nil {
 				return nil, err
 			}
 			return s.withRuleText(report)
 		})
 	case queryPrefix + "session":
-		return handle(raw, s.sessionDetail)
+		return handle(raw, func(p SessionParams) (any, error) { return s.sessionDetail(ctx, p) })
 	case queryPrefix + "usage.history":
 		return handle(raw, s.usageHistory)
 	case queryPrefix + "limits":
-		return handle(raw, s.limits)
+		return handle(raw, func(NoParams) (any, error) { return s.limits(ctx) })
 	case queryPrefix + "skills":
 		return handle(raw, s.skills)
 	case queryPrefix + "ledger.summary":
 		return handle(raw, s.ledgerSummary)
 	case queryPrefix + "agents":
-		return typedVerb[roster.Found](s, raw, "agents")
+		return typedVerb[roster.Found](ctx, s, raw, "agents")
 	case queryPrefix + "library":
-		return typedVerb[LibraryReport](s, raw, "library")
+		return typedVerb[LibraryReport](ctx, s, raw, "library")
 	case queryPrefix + "memory":
-		return typedVerb[MemoryReport](s, raw, "memory", "list")
+		return typedVerb[MemoryReport](ctx, s, raw, "memory", "list")
 	case queryPrefix + "hooks":
-		return typedVerb[HooksReport](s, raw, "hooks")
+		return typedVerb[HooksReport](ctx, s, raw, "hooks")
 	case queryPrefix + "changelog":
-		return typedVerb[ChangelogReport](s, raw, "changelog")
+		return typedVerb[ChangelogReport](ctx, s, raw, "changelog")
 	case queryPrefix + "update":
-		return typedVerb[UpdateReport](s, raw, "update", "--check")
+		return typedVerb[UpdateReport](ctx, s, raw, "update", "--check")
 	case queryPrefix + "docs":
-		return handle(raw, s.docs)
+		return handle(raw, func(p DocsParams) (any, error) { return s.docs(ctx, p) })
 	case "reload":
-		return typedVerb[ReloadDiff](s, raw, "reload")
+		return typedVerb[ReloadDiff](ctx, s, raw, "reload")
 	case "models.update":
-		return typedVerb[ModelUpdate](s, raw, "models", "update")
+		return typedVerb[ModelUpdate](ctx, s, raw, "models", "update")
 	case "hooks.trust":
-		return typedVerb[HooksTrusted](s, raw, "hooks", "trust")
+		return typedVerb[HooksTrusted](ctx, s, raw, "hooks", "trust")
 	case "learn.scan":
-		return typedVerb[learn.Run](s, raw, "learn", "scan")
+		return typedVerb[learn.Run](ctx, s, raw, "learn", "scan")
 	case "learn.show":
-		return handle(raw, func(p LearnParams) (any, error) { return verbAs[learn.Finding](s, "learn", "show", strconv.Itoa(p.ID)) })
+		return handle(raw, func(p LearnParams) (any, error) {
+			return verbAs[learn.Finding](ctx, s, "learn", "show", strconv.Itoa(p.ID))
+		})
 	case "learn.reject":
 		return handle(raw, func(p LearnParams) (any, error) {
-			return verbAs[learn.Finding](s, "learn", "reject", strconv.Itoa(p.ID), "--reason", p.Reason)
+			return verbAs[learn.Finding](ctx, s, "learn", "reject", strconv.Itoa(p.ID), "--reason", p.Reason)
 		})
 	case "memory.view":
 		return handle(raw, func(p MemoryViewParams) (any, error) { return s.memoryRead(p.Scope, nil) })
@@ -152,7 +155,7 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 			if s.SaveKey == nil {
 				return nil, &Refusal{Code: CodeRefused, Message: "this tofu stores no keys"}
 			}
-			note, err := s.SaveKey(p.Provider, p.Key)
+			note, err := s.SaveKey(ctx, p.Provider, p.Key)
 			return LoginNote{Note: note}, err
 		})
 	case "login.logout":
@@ -164,9 +167,9 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 			return LoginNote{Note: note}, err
 		})
 	case queryPrefix + "usage":
-		return handle(raw, func(NoParams) (any, error) { return s.usageNow() })
+		return handle(raw, func(NoParams) (any, error) { return s.usageNow(ctx) })
 	case queryPrefix + "doctor":
-		return typedVerb[DoctorReport](s, raw, "doctor")
+		return typedVerb[DoctorReport](ctx, s, raw, "doctor")
 	case queryPrefix + "context":
 		return handle(raw, func(p SessionParams) (any, error) {
 			asked := cmp.Or(p.Session, s.focus().host.ID())
@@ -179,18 +182,18 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 					return ContextReport{Session: asked, Unmeasured: "the session open here has recorded no turn yet"}, nil
 				}
 			}
-			report, err := verbAs[ContextReport](s, "context", asked)
+			report, err := verbAs[ContextReport](ctx, s, "context", asked)
 			if err != nil {
 				return nil, err
 			}
 			return s.withItems(report)
 		})
 	case "session.info":
-		return handle(raw, func(p SessionParams) (any, error) { return verbAs[SessionInfo](s, "session", "info", p.Session) })
+		return handle(raw, func(p SessionParams) (any, error) { return verbAs[SessionInfo](ctx, s, "session", "info", p.Session) })
 	case "mention.resolve":
 		return handle(raw, s.resolveMention)
 	case "session.trace":
-		return handle(raw, func(p SessionParams) (any, error) { return verbAs[SessionTrace](s, "session", "trace", p.Session) })
+		return handle(raw, func(p SessionParams) (any, error) { return verbAs[SessionTrace](ctx, s, "session", "trace", p.Session) })
 	case queryPrefix + "request":
 		return handle(raw, func(p RequestParams) (any, error) {
 			store, err := session.OpenIn(s.Host.dir)
@@ -200,18 +203,18 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 			return store.RequestParts(cmp.Or(p.Session, s.focus().host.ID()), p.Request)
 		})
 	case queryPrefix + "drain":
-		return handle(raw, func(p SessionParams) (any, error) { return verbAs[DrainReport](s, "session", "drain", p.Session) })
+		return handle(raw, func(p SessionParams) (any, error) { return verbAs[DrainReport](ctx, s, "session", "drain", p.Session) })
 	case queryPrefix + "accounts":
-		return typedVerb[Accounts](s, raw, "login", "--status")
+		return typedVerb[Accounts](ctx, s, raw, "login", "--status")
 	case "session.find":
 		return handle(raw, func(p SessionFindParams) (any, error) {
 			options := map[string]string{"--tool": p.Tool, "--command": p.Command, "--file": p.File, "--text": p.Text, "--agent": p.Agent, "--since": p.Since, "--until": p.Until}
-			return verbAs[SessionFind](s, verbLine([]string{"session", "find"}, map[string]bool{"--failed": p.Failed}, options, p.Session)...)
+			return verbAs[SessionFind](ctx, s, verbLine([]string{"session", "find"}, map[string]bool{"--failed": p.Failed}, options, p.Session)...)
 		})
 	case "rules.add", "rules.off", "rules.remove", "rules.restore":
 		return handle(raw, func(p RuleWriteParams) (any, error) {
 			switches, options := map[string]bool{"--global": p.Global, "--replace": p.Replace}, map[string]string{"--reason": p.Reason, "--concern": p.Concern}
-			return verbAs[WriteReceipt](s, verbLine([]string{"rules", strings.TrimPrefix(method, "rules.")}, switches, options, p.ID, p.Text)...)
+			return verbAs[WriteReceipt](ctx, s, verbLine([]string{"rules", strings.TrimPrefix(method, "rules.")}, switches, options, p.ID, p.Text)...)
 		})
 	case "agents.add", "agents.set", "agents.remove":
 		return handle(raw, func(p AgentWriteParams) (any, error) {
@@ -221,18 +224,18 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 			} else {
 				options["--model"] = p.Model
 			}
-			return verbAs[WriteReceipt](s, verbLine([]string{"agents", verb}, map[string]bool{"--global": p.Global}, options, operands...)...)
+			return verbAs[WriteReceipt](ctx, s, verbLine([]string{"agents", verb}, map[string]bool{"--global": p.Global}, options, operands...)...)
 		})
 	case "learn.apply":
 		return handle(raw, func(p LearnApplyParams) (any, error) {
-			return verbAs[WriteReceipt](s, verbLine([]string{"learn", "apply"}, map[string]bool{"--project": p.Project}, nil, strconv.Itoa(p.ID))...)
+			return verbAs[WriteReceipt](ctx, s, verbLine([]string{"learn", "apply"}, map[string]bool{"--project": p.Project}, nil, strconv.Itoa(p.ID))...)
 		})
 	}
 	return nil, &Refusal{Code: CodeNoMethod, Message: "tofu.host/1 has no method " + strconv.Quote(method)}
 }
 
-func (s *server) usageNow() (UsageAnswer, error) {
-	report, err := verbAs[UsageReport](s, "usage")
+func (s *server) usageNow(ctx context.Context) (UsageAnswer, error) {
+	report, err := verbAs[UsageReport](ctx, s, "usage")
 	now := time.Now()
 	answer := UsageAnswer{UsageReport: report, ReadAt: now}
 	for _, provider := range report.Providers {
@@ -244,15 +247,15 @@ func (s *server) usageNow() (UsageAnswer, error) {
 	return answer, err
 }
 
-func (s *server) docs(p DocsParams) (any, error) {
+func (s *server) docs(ctx context.Context, p DocsParams) (any, error) {
 	if p.Topic == "" {
-		index, err := verbAs[DocsCorpus](s, "docs")
+		index, err := verbAs[DocsCorpus](ctx, s, "docs")
 		return DocsAnswer{DocsCorpus: index}, err
 	}
 	if strings.ContainsAny(p.Topic, " \t") {
 		return nil, &Refusal{Code: CodeBadParams, Message: "a topic is one word, as query.docs lists it"}
 	}
-	page, err := verbAs[DocsTopic](s, "docs", p.Topic)
+	page, err := verbAs[DocsTopic](ctx, s, "docs", p.Topic)
 	return DocsAnswer{Page: &page}, err
 }
 

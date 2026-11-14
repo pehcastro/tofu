@@ -212,7 +212,7 @@ func (l *resumedLead) replay(messages []core.Message, generation int) {
 					l.watch.emit(Event{Kind: EventFailure, ID: recorded.result.ID, Text: err.Error()})
 					break
 				}
-				message.ToolExitCode, message.ToolHits = ran.ToolExitCode, ran.ToolHits
+				message.ToolExitCode, message.ToolHits, message.ToolDurationMS = ran.ToolExitCode, ran.ToolHits, ran.ToolDurationMS
 				l.replaying(recorded.result)
 			}
 			l.watch.result(message, "")
@@ -323,11 +323,12 @@ func callOf(event session.Event) core.ToolCall {
 func resultOf(event session.Event) (core.Message, error) {
 	var result struct {
 		session.ResultBody
-		Hits *int `json:"hits"`
+		Hits       *int  `json:"hits"`
+		DurationMS int64 `json:"duration_ms"`
 	}
 	_ = json.Unmarshal(event.Body, &result)
 	outcome, err := loop.ToolOutcomeOf(result.ToolOutcome)
-	return core.Message{Role: core.RoleTool, ToolCallID: event.Call, Content: loop.WithoutToolRef(result.Content), ToolResultBytes: result.ResultBytes, ToolExitCode: result.ExitCode, ToolHits: result.Hits, ToolOutcome: outcome}, err
+	return core.Message{Role: core.RoleTool, ToolCallID: event.Call, Content: loop.WithoutToolRef(result.Content), ToolResultBytes: result.ResultBytes, ToolExitCode: result.ExitCode, ToolHits: result.Hits, ToolOutcome: outcome, ToolDurationMS: result.DurationMS}, err
 }
 
 func (l *resumedLead) replayResult(event session.Event, agent string) {

@@ -2,6 +2,7 @@ package host
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
 	"io/fs"
 	"maps"
@@ -138,20 +139,20 @@ func readSettingsFiles(dir string) settingsFiles {
 	return files
 }
 
-func (s *server) setSetting(p SettingsSetParams) (any, error) {
+func (s *server) setSetting(ctx context.Context, p SettingsSetParams) (any, error) {
 	scope := cmp.Or(p.Scope, SettingGlobal)
-	if _, err := verbAs[WriteReceipt](s, "settings", "set", "--scope", string(scope), p.Key, p.Value); err != nil {
+	if _, err := verbAs[WriteReceipt](ctx, s, "settings", "set", "--scope", string(scope), p.Key, p.Value); err != nil {
 		return nil, err
 	}
-	now, err := verbAs[SettingValue](s, "settings", "get", p.Key)
+	now, err := verbAs[SettingValue](ctx, s, "settings", "get", p.Key)
 	if err != nil {
 		return nil, err
 	}
-	s.settingsMoved()
+	s.settingsMoved(ctx)
 	return SettingsSet{Key: now.Key, Value: now.Value, Scope: scope, Source: now.Source}, nil
 }
 
-func (s *server) settingsMoved() {
+func (s *server) settingsMoved(ctx context.Context) {
 	s.seen.mu.Lock()
 	defer s.seen.mu.Unlock()
 	files := readSettingsFiles(s.Dir)
@@ -168,7 +169,7 @@ func (s *server) settingsMoved() {
 	if len(changed) == 0 {
 		return
 	}
-	report, err := verbAs[SettingsReport](s, "settings")
+	report, err := verbAs[SettingsReport](ctx, s, "settings")
 	if err != nil {
 		return
 	}
@@ -188,7 +189,7 @@ func (s *server) settingsWriting(writing boardy.Writing) {
 	s.seen.by = writing.By
 	s.seen.mu.Unlock()
 	if writing.Done {
-		s.settingsMoved()
+		s.settingsMoved(context.Background())
 		s.seen.mu.Lock()
 		s.seen.by = ""
 		s.seen.mu.Unlock()
@@ -198,7 +199,7 @@ func (s *server) settingsWriting(writing boardy.Writing) {
 func (s *server) settingsScan() func() {
 	files, assigned := ConfigSeen(s.Dir), readAgentModels(s.Dir)
 	return func() {
-		s.settingsMoved()
+		s.settingsMoved(context.Background())
 		s.sessionSettingsMoved()
 		files, assigned = s.modelsMoved(files, assigned)
 	}

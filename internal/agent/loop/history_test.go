@@ -359,7 +359,7 @@ func TestCompactCarriedKeepsTheWarmHeadAndTheNewSessionReadsBackShrunk(t *testin
 	if tail := HistoryTokens(preview, carried[5:]); tail <= konst.TrimWarmSuffixTokens {
 		t.Fatalf("b and c hold %d tokens, under the %d token warm suffix, so a would fall inside it and the case proves nothing", tail, konst.TrimWarmSuffixTokens)
 	}
-	compacted, err := CompactCarried(t.TempDir(), places, "", "read b and c", "", carried)
+	compacted, err := CompactCarried(t.Context(), t.TempDir(), places, "", "read b and c", "", carried)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -382,7 +382,7 @@ func TestCompactCarriedKeepsTheWarmHeadAndTheNewSessionReadsBackShrunk(t *testin
 	if carried[6].Content != big {
 		t.Fatal("the history handed in was shrunk in place, so a failed write would leave it shrunk")
 	}
-	if again, err := CompactCarried(t.TempDir(), places, "", "read b and c", "", shrunk); err != nil || again.Messages[6].Content != shrunk[6].Content {
+	if again, err := CompactCarried(t.Context(), t.TempDir(), places, "", "read b and c", "", shrunk); err != nil || again.Messages[6].Content != shrunk[6].Content {
 		t.Fatalf("a second compact rewrote b's note again, err %v", err)
 	}
 
@@ -476,7 +476,7 @@ func TestCompactWithAFocusKeepsTheResultItNamesWhole(t *testing.T) {
 		{"B.TXT", 0, 1},
 		{"a name no result carries", 1, 0},
 	} {
-		compacted, err := CompactCarried(t.TempDir(), places, "", "read b and c", c.focus, carried)
+		compacted, err := CompactCarried(t.Context(), t.TempDir(), places, "", "read b and c", c.focus, carried)
 		if err != nil {
 			t.Fatal(err)
 		}

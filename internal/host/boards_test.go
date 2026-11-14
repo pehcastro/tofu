@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 	"path/filepath"
 	"slices"
@@ -23,7 +24,7 @@ func TestBoardQueriesAnswerTypedReportsFromTheProjectsOwnRecords(t *testing.T) {
 		"context g":      `{"session":"g"}`,
 		"login --status": `{"subscriptions":[{"role":"llm","source":"claude-sub","accounts":[{"id":2,"account":"a","state":"standby","login":"ok"},{"id":1,"account":"b","state":"in_use","login":"ok"}]}],"keys":[]}`,
 	}
-	verb := func(args []string) (VerbResult, error) {
+	verb := func(_ context.Context, args []string) (VerbResult, error) {
 		line := strings.Join(args, " ")
 		if strings.HasPrefix(line, "session info ") {
 			return VerbResult{OK: true, Data: json.RawMessage(`{"id":"` + args[2] + `","handle":"h","at":"2026-10-08T10:00:00Z","turns":1,"sub_agents":0,"steps":1,"carried_messages":0,"reads":0}`)}, nil

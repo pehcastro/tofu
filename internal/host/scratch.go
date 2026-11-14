@@ -1,6 +1,7 @@
 package host
 
 import (
+	"context"
 	"encoding/json"
 
 	platformscratch "tofu/internal/platform/scratch"
@@ -27,19 +28,19 @@ func scratchRequests() []method {
 	}
 }
 
-func (s *server) scratch(method string, raw json.RawMessage) (any, error) {
+func (s *server) scratch(ctx context.Context, method string, raw json.RawMessage) (any, error) {
 	switch method {
 	case scratchPrefix + "list":
 		return handle(raw, func(NoParams) (any, error) { return platformscratch.ReadScratch(s.Dir) })
 	case scratchPrefix + "clean":
-		return handle(raw, s.scratchClean)
+		return handle(raw, func(p ScratchCleanParams) (any, error) { return s.scratchClean(ctx, p) })
 	}
 	return nil, &Refusal{Code: CodeNoMethod, Message: "no method " + method}
 }
 
-func (s *server) scratchClean(p ScratchCleanParams) (any, error) {
+func (s *server) scratchClean(ctx context.Context, p ScratchCleanParams) (any, error) {
 	args := verbLine([]string{"scratch", "clean"}, map[string]bool{"--cache": p.Cache, "--dry-run": p.DryRun}, map[string]string{"--session": p.Session})
-	cleaned, err := verbAs[ScratchCleaned](s, args...)
+	cleaned, err := verbAs[ScratchCleaned](ctx, s, args...)
 	if err == nil && !cleaned.DryRun {
 		if report, readErr := platformscratch.ReadScratch(s.Dir); readErr == nil {
 			s.box.push(notify(scratchPrefix+"changed", report))

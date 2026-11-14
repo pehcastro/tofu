@@ -40,7 +40,7 @@ type ServeConfig struct {
 	Out      io.Writer
 	Shells   *process.Registry
 	Carry    func(handle string) (Carry, error)
-	Verb     func(args []string) (VerbResult, error)
+	Verb     func(ctx context.Context, args []string) (VerbResult, error)
 	Quota    func() []QuotaWindow
 	Accounts func() []AccountNow
 	Sessions func(open string, wanted SessionListParams) (SessionList, error)
@@ -53,7 +53,7 @@ type ServeConfig struct {
 	Fork     func(live *Host, ask HandFork) (Compacted, error)
 	Stale    func() bool
 	Setup    func() []Requirement
-	SaveKey  func(provider, key string) (note string, err error)
+	SaveKey  func(ctx context.Context, provider, key string) (note string, err error)
 	Logout   func(LogoutParams) (note string, err error)
 	Spawn    func() (*Host, func())
 	Release  func()
@@ -394,7 +394,7 @@ func (s *server) call(ctx context.Context, method string, raw json.RawMessage) (
 	case queryPrefix + "ledger":
 		return handle(raw, s.ledgerPage)
 	case "undo":
-		return handle(raw, s.undo)
+		return handle(raw, func(p UndoParams) (any, error) { return s.undo(ctx, p) })
 	case "shell.read":
 		return handle(raw, s.shellRead)
 	case "shell.kill":
@@ -409,16 +409,16 @@ func (s *server) call(ctx context.Context, method string, raw json.RawMessage) (
 		return handle(raw, s.shellRelease)
 	case "label":
 		return handle(raw, func(p LabelParams) (any, error) {
-			return verbAs[LabelResult](s, "label", cmp.Or(p.Row, "--last"), p.Outcome)
+			return verbAs[LabelResult](ctx, s, "label", cmp.Or(p.Row, "--last"), p.Outcome)
 		})
 	case "settings.set":
-		return handle(raw, s.setSetting)
+		return handle(raw, func(p SettingsSetParams) (any, error) { return s.setSetting(ctx, p) })
 	case "login.start":
 		return handle(raw, func(p LoginParams) (any, error) {
 			if !slices.Contains(AccountRole("").enum(), p.Role) {
 				return nil, &Refusal{Code: CodeBadParams, Message: "role " + strconv.Quote(p.Role) + " is none of " + strings.Join(AccountRole("").enum(), ", ")}
 			}
-			return verbAs[LoginStarted](s, "login", p.Role, p.Provider)
+			return verbAs[LoginStarted](ctx, s, "login", p.Role, p.Provider)
 		})
 	case statusMethod + ".list":
 		return handle(raw, s.statusList)
@@ -429,9 +429,9 @@ func (s *server) call(ctx context.Context, method string, raw json.RawMessage) (
 	case strings.HasPrefix(method, boardyPrefix):
 		return s.boardy(method, raw)
 	case strings.HasPrefix(method, scratchPrefix):
-		return s.scratch(method, raw)
+		return s.scratch(ctx, method, raw)
 	}
-	return s.data(method, raw)
+	return s.data(ctx, method, raw)
 }
 
 func (s *server) initialize(p InitializeParams) (any, error) {
@@ -550,8 +550,10 @@ func (h *Host) Fork(ask HandFork) (_ Compacted, err error) {
 		return Compacted{}, turnRunning(turn)
 	}
 	id, carried, compacting := h.ID(), h.Carried(), time.Now()
+	ctx, clock := outside.Open(context.Background(), time.Now)
 	defer func() {
-		h.wall(walls.Wall{Op: walls.OpCompaction, Name: string(ask.Kind), MS: time.Since(compacting).Milliseconds(), At: compacting.UnixMilli(), Session: id, OK: err == nil})
+		outsideMS := clock.Outside().Milliseconds()
+		h.wall(walls.Wall{Op: walls.OpCompaction, Name: string(ask.Kind), MS: time.Since(compacting).Milliseconds(), At: compacting.UnixMilli(), Session: id, OK: err == nil, OutsideMS: &outsideMS})
 	}()
 	if id == "" || len(carried) == 0 {
 		if ask.Kind == loop.ForkCompact {
@@ -576,7 +578,7 @@ func (h *Host) Fork(ask HandFork) (_ Compacted, err error) {
 	case loop.ForkBranch:
 		shrunk, err = loop.BranchCarried(header.Wire, carried, ask.Message)
 	case loop.ForkCompact, loop.ForkByHand:
-		shrunk, err = loop.CompactCarried(h.dir, places, header.Wire, cmp.Or(loop.NewestTask(carried), header.Task), ask.Focus, carried)
+		shrunk, err = loop.CompactCarried(ctx, h.dir, places, header.Wire, cmp.Or(loop.NewestTask(carried), header.Task), ask.Focus, carried)
 	default:
 		err = errors.New("a hand fork is " + string(loop.ForkCompact) + ", " + string(loop.ForkByHand) + " or " + string(loop.ForkBranch) + ", not " + strconv.Quote(string(ask.Kind)))
 	}
@@ -771,7 +773,7 @@ func (s *server) shellRun(ctx context.Context, p ShellRunParams) (any, error) {
 	return ShellRunResult{Output: focus.host.Ran(p.Command, output, stopped), Stopped: stopped}, nil
 }
 
-func (s *server) undo(p UndoParams) (any, error) {
+func (s *server) undo(ctx context.Context, p UndoParams) (any, error) {
 	l, err := s.lane(p.Session)
 	if err != nil {
 		return nil, err
@@ -783,7 +785,7 @@ func (s *server) undo(p UndoParams) (any, error) {
 	if p.Turn != "" {
 		args = append(args, "--turn", p.Turn)
 	}
-	return verbAs[snapshot.Report](s, args...)
+	return verbAs[snapshot.Report](ctx, s, args...)
 }
 
 func (s *server) shellRead(p ShellParams) (any, error) {

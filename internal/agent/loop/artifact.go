@@ -121,7 +121,7 @@ func (j *keepJudge) open(project string) error {
 	return err
 }
 
-func (j *keepJudge) ordered(preview recall.Config, messages []llm.Message, candidates []dropCandidate, keptYield bool) []dropCandidate {
+func (j *keepJudge) ordered(ctx context.Context, preview recall.Config, messages []llm.Message, candidates []dropCandidate, keptYield bool) []dropCandidate {
 	latest := ""
 	for _, message := range messages {
 		if message.Role == llm.RoleAssistant {
@@ -135,7 +135,7 @@ func (j *keepJudge) ordered(preview recall.Config, messages []llm.Message, candi
 	var asking sync.WaitGroup
 	for i, candidate := range candidates {
 		asking.Go(func() {
-			decided[i] = j.decide(candidate.call, shownToJudge(preview, WithoutToolRef(messages[candidate.at].Content)), shownToJudge(preview, strings.TrimSpace(latest)))
+			decided[i] = j.decide(ctx, candidate.call, shownToJudge(preview, WithoutToolRef(messages[candidate.at].Content)), shownToJudge(preview, strings.TrimSpace(latest)))
 		})
 	}
 	asking.Wait()
@@ -165,7 +165,7 @@ func shownToJudge(preview recall.Config, text string) string {
 	return runeSafeHead(text, preview.HeadBytes) + truncationMarker + runeSafeTail(text, preview.TailBytes)
 }
 
-func (j *keepJudge) decide(call llm.ToolCall, result, latest string) keepDecision {
+func (j *keepJudge) decide(ctx context.Context, call llm.ToolCall, result, latest string) keepDecision {
 	j.mu.Lock()
 	decided, done := j.decided[call.ID]
 	j.mu.Unlock()
@@ -184,7 +184,7 @@ func (j *keepJudge) decide(call llm.ToolCall, result, latest string) keepDecisio
 	if j.unasked != nil {
 		why := "jev cannot be asked, so the age rule decides: " + j.unasked.Error()
 		row.Reason.ModeReason = &why
-	} else if decision, err := j.client.Ask(context.Background(), core.Request{State: body, Questions: []core.Question{j.asked}}); err != nil {
+	} else if decision, err := j.client.Ask(ctx, core.Request{State: body, Questions: []core.Question{j.asked}}); err != nil {
 		why := "jev could not answer, so the age rule decides: " + err.Error()
 		row.Reason.ModeReason = &why
 	} else {

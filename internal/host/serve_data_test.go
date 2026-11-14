@@ -23,7 +23,7 @@ func TestServeDataQueriesAreTypedAndMemoryReachesTheLead(t *testing.T) {
 		"models": {OK: true, Data: json.RawMessage(`{"subscriptions":[],"defaults":[],"usable":0,"table":"","windowed":0,"published_windows":0,"models":[]}`)},
 	}
 	var ran []string
-	verb := func(args []string) (VerbResult, error) {
+	verb := func(_ context.Context, args []string) (VerbResult, error) {
 		ran = append(ran, strings.Join(args, " "))
 		return verbs[strings.Join(args, " ")], nil
 	}

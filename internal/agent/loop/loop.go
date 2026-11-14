@@ -572,7 +572,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	trims, shownReads := !config.NoCompaction && budget.Automatic, &contract.ReadWindow{}
 	trimFrom := func(step int, when string, from int, trigger string, trimming clocked) (*Compaction, error) {
 		before := slices.Clone(messages)
-		compaction, shrink, err := trimRead(artifacts, budget, step, messages, from)
+		compaction, shrink, err := trimRead(trimming.ctx, artifacts, budget, step, messages, from)
 		if compaction != nil {
 			shownReads.Rebuilt()
 			flush()
@@ -589,7 +589,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	landsFrom := func(step, from, tokens int) bool {
 		holdingNothing := Artifacts{preview: artifacts.preview, handles: artifacts.handles}
-		reached, _, err := trimRead(holdingNothing, budget, step, slices.Clone(messages), from)
+		reached, _, err := trimRead(ctx, holdingNothing, budget, step, slices.Clone(messages), from)
 		return err == nil && reached != nil && reached.TokensAfter <= tokens
 	}
 	compactionOffSaid, forkOffSaid := false, false
@@ -1097,7 +1097,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		if overflowed(err) {
 			before, shrinking := slices.Clone(messages), clockFrom(ctx)
-			shrink, shrinkErr := shrinkOverflow(artifacts, messages, asSent.Total(), budget.WindowTokens)
+			shrink, shrinkErr := shrinkOverflow(shrinking.ctx, artifacts, messages, asSent.Total(), budget.WindowTokens)
 			recorded.wall(session.Event{}, clockedWall(walls.OpCompaction, "overflow shrink", shrinking, shrinkErr == nil))
 			shownReads.Rebuilt()
 			flush()

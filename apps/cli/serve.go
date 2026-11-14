@@ -352,10 +352,10 @@ func serveSetup() []host.Requirement {
 	return steps
 }
 
-func serveKey(provider, key string) (string, error) {
+func serveKey(ctx context.Context, provider, key string) (string, error) {
 	for _, stored := range wiring.KeyStatuses(func(string) string { return "" }) {
 		if stored.Provider == provider {
-			return loginverb.StoreKeyFor(context.Background(), stored.Variable, key)
+			return loginverb.StoreKeyFor(ctx, stored.Variable, key)
 		}
 	}
 	return "", &host.Refusal{Code: host.CodeBadParams, Message: "tofu stores no key for " + strconv.Quote(provider)}
@@ -387,14 +387,14 @@ func signedInWires() []string {
 	return names
 }
 
-func serveVerbs(errOut io.Writer, recent *sessionstore.Recent) func([]string) (host.VerbResult, error) {
-	return func(args []string) (host.VerbResult, error) {
+func serveVerbs(errOut io.Writer, recent *sessionstore.Recent) func(context.Context, []string) (host.VerbResult, error) {
+	return func(ctx context.Context, args []string) (host.VerbResult, error) {
 		var out bytes.Buffer
 		asked := append(slices.Clone(args), output.JSONFlag)
 		if asked[0] == "session" {
 			sessionVerbRecalling(recent, asked[1:], strings.NewReader(""), &out, errOut)
 		} else {
-			run(asked, strings.NewReader(""), &out, errOut)
+			runIn(ctx, asked, strings.NewReader(""), &out, errOut)
 		}
 		var result host.VerbResult
 		if err := json.Unmarshal(out.Bytes(), &result); err != nil {
