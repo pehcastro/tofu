@@ -35,6 +35,7 @@ type Log struct {
 	side       map[string]*os.File
 	watch      func(Event)
 	saved      fileStamp
+	appendTook map[string]time.Duration
 }
 
 func (l *Log) Observe(watch func(Event)) {
@@ -67,7 +68,7 @@ func (s *Store) Reopen(header Header, closed *Log) (log *Log, err error) {
 			err = errors.Join(err, platformfs.Unlock(lock))
 		}
 	}()
-	log = &Log{store: s, lock: lock, last: map[string]string{}, prompts: map[string][sha256.Size]byte{}, redact: s.redactor(), side: map[string]*os.File{}}
+	log = &Log{store: s, lock: lock, last: map[string]string{}, prompts: map[string][sha256.Size]byte{}, redact: s.redactor(), side: map[string]*os.File{}, appendTook: map[string]time.Duration{}}
 	kept, err := s.read(header.ID)
 	created := errors.Is(err, fs.ErrNotExist)
 	switch {
@@ -191,6 +192,7 @@ func (l *Log) Header() Header {
 }
 
 func (l *Log) Append(event Event, body any) (Event, error) {
+	started := time.Now()
 	if body != nil {
 		raw, err := json.Marshal(body)
 		if err != nil {
@@ -228,7 +230,14 @@ func (l *Log) Append(event Event, body any) (Event, error) {
 		}
 		l.watch(watched)
 	}
+	l.appendTook[event.Agent] += time.Since(started)
 	return event, nil
+}
+
+func (l *Log) AppendTook(agent string) time.Duration {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.appendTook[agent]
 }
 
 func (l *Log) Spent(agent, model string, usage Usage, cost float64) {

@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"cmp"
 	"context"
 	"net/http/httptrace"
 	"strconv"
@@ -44,6 +45,38 @@ type clocked struct {
 func clockFrom(ctx context.Context) clocked {
 	ctx, clock := outside.Open(ctx, time.Now)
 	return clocked{ctx: ctx, clock: clock, started: time.Now()}
+}
+
+type ownGap struct {
+	clock       *outside.Clock
+	running     bool
+	at, from    time.Time
+	outsideFrom time.Duration
+	took        time.Duration
+	outside     time.Duration
+}
+
+func (g *ownGap) resume() {
+	if !g.running {
+		g.running, g.from, g.outsideFrom = true, time.Now(), g.clock.Outside()
+		g.at = cmp.Or(g.at, g.from)
+	}
+}
+
+func (g *ownGap) pause() {
+	if g.running {
+		g.running, g.took, g.outside = false, g.took+time.Since(g.from), g.outside+g.clock.Outside()-g.outsideFrom
+	}
+}
+
+func (g *ownGap) wall(name string) walls.Wall {
+	outsideMS := g.outside.Milliseconds()
+	wall := walls.Wall{Op: walls.OpTurnStep, Name: name, MS: g.took.Milliseconds(), At: g.at.UnixMilli(), OK: true, OutsideMS: &outsideMS}
+	g.took, g.outside, g.at = 0, 0, time.Time{}
+	if g.running {
+		g.at = g.from
+	}
+	return wall
 }
 
 func clockedWall(op walls.Op, name string, since clocked, ok bool) walls.Wall {

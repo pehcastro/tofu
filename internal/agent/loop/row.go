@@ -537,6 +537,7 @@ type record struct {
 	instructionFiles string
 	announce         CalledAsEachRequestIsSent
 	lastSent         *messagesKept
+	appendTookBefore time.Duration
 }
 
 type toolsKept struct {
@@ -616,7 +617,7 @@ func (r *record) begin(row Row, task core.Origin, files *shadow.Started) {
 	if r == nil {
 		return
 	}
-	r.task = task
+	r.task, r.appendTookBefore = task, r.log.AppendTook(r.agent)
 	start := session.TurnStart{Task: row.Task, From: RecordedOrigin(task), Wire: row.Wire, Spend: string(row.Spend), Account: row.Account, Tofu: konst.Version}
 	if row.Budget != (recall.Budget{}) {
 		start.ContextCeiling, start.ContextTarget, start.AutoCompaction = row.Budget.CeilingTokens, row.Budget.Bands.Target(), row.Budget.Record()
@@ -897,6 +898,9 @@ func (r *record) end(row Row) {
 	if r == nil {
 		return
 	}
+	var outsideMS int64
+	took := r.log.AppendTook(r.agent) - r.appendTookBefore
+	r.wall(session.Event{}, walls.Wall{Op: walls.OpTurnStep, Name: "log append", MS: took.Milliseconds(), At: time.Now().UnixMilli(), OK: true, OutsideMS: &outsideMS})
 	r.add(session.Event{Kind: session.EventTurnEnd}, row.Summary())
 	if !r.own {
 		return

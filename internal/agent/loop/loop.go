@@ -540,6 +540,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	var lastAnswered time.Time
 	var lastAttempts []core.Attempt
+	gap := &ownGap{clock: turnClock.clock}
 	ask := func(ctx context.Context, why string, on Model, request core.Request) (core.Decision, requestTiming, string, error) {
 		id, started := session.NewEventID(), time.Now()
 		request.Turn = row.ID
@@ -553,7 +554,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			*keptPrefix = *config.Prefix
 		}
 		tapped, tap := core.Tapped(ctx)
+		gap.pause()
 		decision, timing, err := askCountingAttempts(tapped, on, request)
+		gap.resume()
 		lastAttempts = tap.Attempts()
 		recorded.exchange(id, why, config.Wire, request, timing, lastAttempts, decision, err)
 		recorded.requested(id, walls.OpRequest, cmp.Or(decision.Build, config.Wire), timing, decision, err)
@@ -987,6 +990,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	noticeStep := config.Caps.MaxSteps - max(1, int(math.Ceil(float64(config.Caps.MaxSteps)*konst.TurnStepCapNoticeShare)))
 	underForgetShare := !slices.ContainsFunc(messages, forgetOffered) || sentTokens(messages[:len(messages)-1]) <= forgetShareTokens(budget)
 	for step := 1; ; step++ {
+		gap.resume()
 		if err := ctx.Err(); err != nil {
 			return fail(err)
 		}
@@ -1168,6 +1172,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			decision, timing, requestID, err = ask(ctx, "step "+strconv.Itoa(step)+", asked again on "+on+" after a rate limit", model,
 				core.Request{Messages: withPlan(messages), Tools: definitions})
 		}
+		recorded.wall(session.Event{Request: requestID}, gap.wall("between steps"))
 		if err != nil {
 			var cut core.CutReply
 			if errors.As(err, &cut) {
@@ -1364,13 +1369,14 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				width := max(stepTools.parallelPrefix(pending), 1)
 				heard := make([]heardCall, width)
 				ordered, released := callOrders(ctx, width)
+				gap.pause()
 				inParallel(crashes, "parallel gate", width, func(i int) {
 					defer released[i]()
-					asked := pending[i]
+					asked, heardAt := pending[i], clockFrom(ctx)
 					call := asked
-					proxied, proxyRow := config.Proxy.rewrite(ctx, asked)
+					proxied, proxyRow := config.Proxy.rewrite(heardAt.ctx, asked)
 					call.Arguments = proxied
-					pre := hear(ctx, hook.Input{Event: hook.PreToolUse, Tool: call.Name, Args: call.Arguments, CallID: call.ID})
+					pre := hear(heardAt.ctx, hook.Input{Event: hook.PreToolUse, Tool: call.Name, Args: call.Arguments, CallID: call.ID})
 					if pre.Args != nil {
 						call.Arguments = pre.Args
 					}
@@ -1384,16 +1390,25 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 						heard[i].boundary = boundaryRefusal(stepTools, call)
 					}
 					reachesGate := pre.Block == "" && pre.Ask == "" && !heard[i].asksCode && heard[i].boundary == ""
+					var judgedOutside time.Duration
 					if reachesGate && config.Gate != nil && !gateExempt(call.Name) && config.GateMode == GateEnforce {
-						heard[i].verdict, heard[i].gateErr = decide(ordered[i], config.Gate, request)
-						heard[i].judged = true
+						judging := clockFrom(ordered[i])
+						heard[i].verdict, heard[i].gateErr = decide(judging.ctx, config.Gate, request)
+						heard[i].judged, judgedOutside = true, judging.clock.Outside()
 					}
+					heard[i].took, heard[i].outside = time.Since(heardAt.started), heardAt.clock.Outside()+judgedOutside
 				})
 				wave := make([]gatedCall, 0, width)
 				for i, asked := range pending[:width] {
-					call, pre, request := heard[i].call, heard[i].pre, heard[i].request
+					call, pre, request, serial := heard[i].call, heard[i].pre, heard[i].request, clockFrom(ctx)
+					admit := func(gated gatedCall) {
+						outsideMS := (heard[i].outside + serial.clock.Outside()).Milliseconds()
+						recorded.wall(session.Event{Call: call.ID}, walls.Wall{Op: walls.OpTurnStep, Name: "pre-tool " + call.Name, MS: (heard[i].took + time.Since(serial.started)).Milliseconds(),
+							At: serial.started.Add(-heard[i].took).UnixMilli(), OK: true, OutsideMS: &outsideMS})
+						wave = append(wave, gated)
+					}
 					keepHooks(call.ID, pre)
-					asking, held := outside.Open(ctx, time.Now)
+					asking, held := outside.Open(serial.ctx, time.Now)
 					gated := gatedCall{call: call, asked: asked, proxy: heard[i].proxy, id: session.EventIDFor(origin, call.ID), parent: stepRow.id, author: author, sift: sifter, redact: redactor, task: config.Task, site: recorded.site(call.ID, messages), model: model, fire: fire, hooks: hookRunOf(hook.PreToolUse, pre), before: pre.Context, held: held}
 					code, asksCode := heard[i].code, heard[i].asksCode
 					gated.refusal = heard[i].boundary
@@ -1407,7 +1422,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 						}
 					}
 					if gated.refusal != "" || asksCode {
-						wave = append(wave, gated)
+						admit(gated)
 						continue
 					}
 					switch {
@@ -1437,7 +1452,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 						})
 					default:
 						if !heard[i].judged {
-							heard[i].verdict, heard[i].gateErr = decide(ctx, config.Gate, request)
+							heard[i].verdict, heard[i].gateErr = decide(serial.ctx, config.Gate, request)
 						}
 						gated.verdict, gated.gateErr = heard[i].verdict, heard[i].gateErr
 						if gated.verdict.ID != "" {
@@ -1447,7 +1462,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					if config.GateMode == GateEnforce {
 						decided, hooked := gated.verdict, ""
 						if gated.gateErr == "" && decided.Verdict != ledger.VerdictUnset && !decided.PersonOnly {
-							judged := fire(ctx, hook.Input{Event: hook.GateVerdict, Tool: call.Name, Args: call.Arguments, CallID: call.ID,
+							judged := fire(serial.ctx, hook.Input{Event: hook.GateVerdict, Tool: call.Name, Args: call.Arguments, CallID: call.ID,
 								Gate: &hook.GateFacts{Verdict: decided.Verdict, Risk: decided.Reason, Questions: append([]ledger.Answer{}, decided.Answers...)}})
 							gated.hooks = append(gated.hooks, hookRunOf(hook.GateVerdict, judged)...)
 							if judged.Gate != ledger.VerdictUnset && judged.Gate != decided.Verdict {
@@ -1459,8 +1474,9 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 							gated.refusal = hooked + gated.refusal
 						}
 					}
-					wave = append(wave, gated)
+					admit(gated)
 				}
+				gap.resume()
 
 				rows := make([]ToolCallRow, len(wave))
 				answers := make([]core.Message, len(wave))
@@ -1471,10 +1487,12 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					batches++
 					batch = batches
 				}
+				gap.pause()
 				inParallel(crashes, "parallel tool call", len(wave), func(i int) {
 					gated := wave[i]
 					rows[i], answers[i], memoHits[i] = gated.run(withShellCall(waveCtx, gated.id), toolsFor(gated), config.ResultBytesCap, artifacts, batch)
 				})
+				gap.resume()
 				leadStop = waveEnded()
 				shown := make([]core.Message, 0, len(answers))
 				for i := range answers {
@@ -1901,6 +1919,8 @@ type heardCall struct {
 	verdict  GateDecision
 	gateErr  string
 	judged   bool
+	took     time.Duration
+	outside  time.Duration
 }
 
 func decide(ctx context.Context, gate Gate, request GateRequest) (GateDecision, string) {
