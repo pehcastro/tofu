@@ -1,7 +1,9 @@
 package contract
 
 import (
+	"cmp"
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -29,7 +31,7 @@ func RepairPath(requested, noun string, found []string) (string, string, error) 
 }
 
 func Lookalikes(r Root, requested string) ([]string, error) {
-	if listed, err := GitListing(r); err == nil {
+	if listed, err := GitListing(context.Background(), r); err == nil {
 		if found := namedLike(r, listed, requested); len(found) > 0 {
 			return found, nil
 		}
@@ -52,7 +54,7 @@ func RealPaths(r Root, candidates []string) []string {
 			}
 		}
 		if listed == nil && listErr == nil {
-			if listed, listErr = GitListing(r); listErr != nil {
+			if listed, listErr = GitListing(context.Background(), r); listErr != nil {
 				listed, listErr = WalkListing(r)
 			}
 		}
@@ -63,12 +65,115 @@ func RealPaths(r Root, candidates []string) []string {
 	return real
 }
 
-func GitListing(r Root) ([]string, error) {
-	listed, err := outside.Command(context.Background(), "git", "-C", string(r), "ls-files", "-z", "--cached", "--others", "--exclude-standard").Output()
+func GitListing(ctx context.Context, r Root) ([]string, error) {
+	listed, err := outside.Command(ctx, "git", "-C", string(r), "ls-files", "-z", "--cached", "--others", "--exclude-standard").Output()
 	if err != nil {
 		return nil, err
 	}
 	return strings.FieldsFunc(string(listed), func(c rune) bool { return c == 0 }), nil
+}
+
+var ErrListingBound = errors.New("the tree holds more files and folders than the listing walks")
+
+type ignoreRule struct {
+	base, pattern             string
+	negate, dirOnly, anchored bool
+}
+
+func ignoreRules(dir, base string) []ignoreRule {
+	raw, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
+	if err != nil {
+		return nil
+	}
+	var read []ignoreRule
+	for _, line := range strings.Split(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		rule := ignoreRule{base: base}
+		line, rule.negate = strings.CutPrefix(line, "!")
+		line, rule.dirOnly = strings.CutSuffix(line, "/")
+		rule.anchored = strings.Contains(line, "/")
+		rule.pattern = strings.TrimPrefix(line, "/")
+		read = append(read, rule)
+	}
+	return read
+}
+
+func ignored(rules []ignoreRule, rel string, dir bool) bool {
+	out := false
+	for _, rule := range rules {
+		under, inside := strings.CutPrefix(rel, rule.base)
+		if !inside || rule.dirOnly && !dir {
+			continue
+		}
+		if !rule.anchored {
+			under = path.Base(under)
+		}
+		if globMatch(strings.Split(rule.pattern, "/"), strings.Split(under, "/")) {
+			out = !rule.negate
+		}
+	}
+	return out
+}
+
+func globMatch(pattern, name []string) bool {
+	for len(pattern) > 0 {
+		if pattern[0] == "**" {
+			for at := range len(name) + 1 {
+				if globMatch(pattern[1:], name[at:]) {
+					return true
+				}
+			}
+			return false
+		}
+		if len(name) == 0 {
+			return false
+		}
+		if matched, _ := path.Match(pattern[0], name[0]); !matched {
+			return false
+		}
+		pattern, name = pattern[1:], name[1:]
+	}
+	return len(name) == 0
+}
+
+func BoundedListing(ctx context.Context, r Root, most int) ([]string, error) {
+	var listed []string
+	var ignores []ignoreRule
+	walked := 0
+	err := filepath.WalkDir(string(r), func(full string, entry fs.DirEntry, err error) error {
+		rel, relErr := filepath.Rel(string(r), full)
+		slash := filepath.ToSlash(rel)
+		switch {
+		case err != nil || relErr != nil:
+			return cmp.Or(err, relErr)
+		case ctx.Err() != nil:
+			return ctx.Err()
+		case walked == most:
+			return ErrListingBound
+		case slash == ".":
+			ignores = ignoreRules(full, "")
+			return nil
+		case entry.IsDir() && (neverListed(entry.Name()) || ignored(ignores, slash, true)):
+			return fs.SkipDir
+		case ignored(ignores, slash, entry.IsDir()):
+			return nil
+		}
+		walked++
+		if entry.IsDir() {
+			ignores = append(ignores, ignoreRules(full, slash+"/")...)
+			return nil
+		}
+		listed = append(listed, slash)
+		return nil
+	})
+	return listed, err
+}
+
+func neverListed(name string) bool {
+	return rules.NeverWalked(name) || slices.Contains([]string{".local", "target", "zig-out", ".zig-cache"}, name)
 }
 
 func WalkListing(r Root) ([]string, error) {

@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 
 	"tofu/internal/agent/subagents"
@@ -215,13 +216,19 @@ func generatedFiles(steps []subagents.ShellStep) []string {
 	return generated
 }
 
-func sources(r contract.Root) map[string]string {
-	listed, err := contract.GitListing(r)
+func sources(ctx context.Context, r contract.Root) (map[string]string, error) {
+	listed, err := contract.GitListing(ctx, r)
 	if err != nil {
-		listed, _ = contract.WalkListing(r)
+		listed, err = contract.BoundedListing(ctx, r, konst.BashDiskWalkEntries)
+	}
+	if err != nil {
+		return nil, err
 	}
 	held := map[string]string{}
 	for _, file := range listed {
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
 		if sourceLanguage(file) == "" {
 			continue
 		}
@@ -229,7 +236,29 @@ func sources(r contract.Root) map[string]string {
 			held[file] = string(body)
 		}
 	}
-	return held
+	return held, nil
+}
+
+func notCounted(command string, err error) string {
+	why := "ran past the call's timeout"
+	if errors.Is(err, contract.ErrListingBound) {
+		why = fmt.Sprintf("stopped at the %d files and folders that keep it cheap, because the project is not a git repository and holds more outside its .gitignore", konst.BashDiskWalkEntries)
+	}
+	first, _, _ := strings.Cut(command, "\n")
+	return fmt.Sprintf("\n\nthe source lines %q changed were not counted against the orchestrator's budget: listing the project's source %s", first, why)
+}
+
+func withTimeout(raw json.RawMessage, left time.Duration) json.RawMessage {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil {
+		return raw
+	}
+	fields["timeout_ms"] = json.RawMessage(strconv.FormatInt(max(left.Milliseconds(), 1), 10))
+	rewritten, err := json.Marshal(fields)
+	if err != nil {
+		return raw
+	}
+	return rewritten
 }
 
 func changedLines(before, after string) int {
@@ -323,12 +352,13 @@ func (b *sourceBudget) spendScript(command string, lines int) string {
 }
 
 type budgetArgs struct {
-	Path    string `json:"path"`
-	Content string `json:"content"`
-	Append  bool   `json:"append"`
-	Old     string `json:"-"`
-	New     string `json:"-"`
-	Command string `json:"command"`
+	Path      string `json:"path"`
+	Content   string `json:"content"`
+	Append    bool   `json:"append"`
+	Old       string `json:"-"`
+	New       string `json:"-"`
+	Command   string `json:"command"`
+	TimeoutMS int    `json:"timeout_ms"`
 }
 
 func (b *sourceBudget) linesChanged(tool string, args budgetArgs) int {
@@ -445,7 +475,8 @@ func (t budgetedTool) refuse(refusal SourceBudgetError) SourceBudgetError {
 	return refusal
 }
 
-func (t budgetedTool) runShell(ctx context.Context, raw json.RawMessage, command string) (contract.Result, error) {
+func (t budgetedTool) runShell(ctx context.Context, raw json.RawMessage, args budgetArgs) (contract.Result, error) {
+	command := args.Command
 	if refusal, refused := shellRefusal(command); refused {
 		return contract.Result{}, t.refuse(refusal)
 	}
@@ -461,12 +492,26 @@ func (t budgetedTool) runShell(ctx context.Context, raw json.RawMessage, command
 	if t.budget.spent >= konst.OrchestratorSourceLinesPerTurn && !scriptsOutsideSource(root, steps) {
 		return contract.Result{}, t.refuse(SourceBudgetError{Reason: RefusedSpentScript})
 	}
+	millis, corrected := bashDeadline(args.TimeoutMS)
+	started, deadline := time.Now(), time.Duration(millis)*time.Millisecond
+	listing, cancel := context.WithTimeout(ctx, deadline)
+	defer cancel()
 	mark, held := t.budget.writes.Begin(), t.budget.heldBySubAgents()
-	before := sources(root)
+	before, listErr := sources(listing, root)
+	if corrected == "" {
+		raw = withTimeout(raw, deadline-time.Since(started))
+	}
 	result, err := t.tool.Run(ctx, raw)
-	after := sources(root)
+	var after map[string]string
+	if listErr == nil {
+		after, listErr = sources(listing, root)
+	}
 	held = append(held, t.budget.heldBySubAgents()...)
 	uncounted := append(generatedFiles(steps), t.budget.writtenBySubAgents(t.budget.writes.End(mark))...)
+	if listErr != nil {
+		result.Content += notCounted(command, listErr)
+		return result, err
+	}
 	result.Content += t.budget.spendScript(command, changedSince(before, after, func(file string) bool {
 		owned, _ := subagents.Matches(file, held)
 		return !owned && !slices.Contains(uncounted, file)
@@ -480,7 +525,7 @@ func (t budgetedTool) Run(ctx context.Context, raw json.RawMessage) (contract.Re
 		return t.tool.Run(ctx, raw)
 	}
 	if t.Name() == "bash" {
-		return t.runShell(ctx, raw, args.Command)
+		return t.runShell(ctx, raw, args)
 	}
 	changes := []budgetArgs{args}
 	if t.Name() == "edit" {
