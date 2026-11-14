@@ -32,6 +32,7 @@ import (
 	"tofu/internal/platform/safe"
 	isession "tofu/internal/store/session"
 	isettings "tofu/internal/store/settings"
+	"tofu/internal/store/walls"
 	"tofu/internal/ui/keymap"
 	"tofu/internal/ui/statusline"
 	"tofu/internal/ui/tui/chat/feed"
@@ -179,7 +180,8 @@ type Options struct {
 	Pose          string
 	Keymap        string
 	PromptHistory string
-	FirstFrame    func()
+	FirstFrame    func(built time.Time)
+	Walls         func([]walls.Wall)
 }
 
 type screen int
@@ -262,6 +264,8 @@ type App struct {
 	width          int
 	height         int
 	started        time.Time
+	built          time.Time
+	timings        timings
 	framed         bool
 	busy           bool
 	leading        bool
@@ -362,7 +366,10 @@ func New(options Options) *App {
 		options.Promotions = isession.NewPromotionLog(state)
 	}
 	if options.FirstFrame == nil {
-		options.FirstFrame = func() {}
+		options.FirstFrame = func(time.Time) {}
+	}
+	if options.Walls == nil {
+		options.Walls = func([]walls.Wall) {}
 	}
 	if options.Keymap == "" {
 		options.Keymap, _ = keymap.ShortcutsPath()
@@ -423,6 +430,8 @@ func New(options Options) *App {
 	app.ownPick = app.pick()
 	app.flushFeed()
 	app.syncFeed()
+	app.built = time.Now()
+	app.timings.since = app.built
 	return app
 }
 
@@ -493,7 +502,8 @@ func Run(options Options) error {
 	if runtime.GOOS == "windows" {
 		programOptions = append(programOptions, tea.WithOutput(conhostOutput{os.Stdout}))
 	}
-	program := tea.NewProgram(New(options), programOptions...)
+	built := New(options)
+	program := tea.NewProgram(built, programOptions...)
 	hangup, root := make(chan os.Signal, 1), options.Root
 	signal.Notify(hangup, syscall.SIGHUP)
 	unheard := func(p safe.Panic) {
@@ -510,6 +520,7 @@ func Run(options Options) error {
 		}
 	})
 	_, err := program.Run()
+	built.options.Walls(built.timings.summary())
 	signal.Stop(hangup)
 	close(hangup)
 	_, _ = io.WriteString(os.Stdout, exitReset+statusline.Encode(statusline.Record{State: statusline.Clear}))
@@ -608,6 +619,9 @@ func caught(cmd tea.Cmd) tea.Cmd {
 func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if panicked, inACommand := msg.(commandPanicked); inACommand {
 		panic(string(panicked))
+	}
+	if _, pressed := msg.(tea.KeyPressMsg); pressed && a.timings.keyAt.IsZero() {
+		a.timings.keyAt = time.Now()
 	}
 	a.followStatus(msg)
 	cmd := a.update(msg)
@@ -838,5 +852,5 @@ func (a *App) closed() tea.Cmd {
 		a.view.Release()
 		a.steeredUnread = append(a.steeredUnread, carried...)
 	}
-	return tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells(), a.listen())
+	return tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells(), a.listen(), a.wallsDue())
 }

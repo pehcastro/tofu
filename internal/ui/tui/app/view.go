@@ -64,6 +64,11 @@ func (a *App) slug() string {
 func (a *App) theme() look.Theme { return look.Theme(a.text(isettings.Theme)) }
 
 func (a *App) View() tea.View {
+	defer a.timings.add(timedFrame, time.Now())
+	if !a.timings.keyAt.IsZero() {
+		defer a.timings.add(timedKey, a.timings.keyAt)
+		a.timings.keyAt = time.Time{}
+	}
 	content := a.frozen
 	if !a.selection.Dragged || content == "" {
 		content = a.frame()
@@ -72,7 +77,7 @@ func (a *App) View() tea.View {
 	if a.current == screenChat && len(a.dialogs) == 0 && !a.settingUp() {
 		if !a.framed {
 			a.framed = true
-			a.options.FirstFrame()
+			a.options.FirstFrame(a.built)
 		}
 		caret = a.view.Cursor()
 		if caret != nil {

@@ -101,6 +101,7 @@ func (a *App) shortOf(full string) string {
 }
 
 func (a *App) send() tea.Cmd {
+	began := time.Now()
 	task := a.view.Value()
 	if task == "" {
 		return nil
@@ -137,6 +138,7 @@ func (a *App) send() tea.Cmd {
 	}
 	a.view.Append(session.Entry{Kind: session.User, Body: task, Chips: chips})
 	a.start(whole)
+	a.timings.add(timedSend, began)
 	return nil
 }
 
@@ -578,6 +580,7 @@ func (a *App) listen() tea.Cmd {
 }
 
 func (a *App) absorb(event Event) {
+	defer a.timings.add(timedAbsorb, time.Now())
 	if answered(event) && event.Agent == "" {
 		a.view.Returned()
 	}

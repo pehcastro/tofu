@@ -97,6 +97,12 @@ type appLaunch struct {
 	turnRunning   *func() (string, bool)
 	stopRestoring func()
 	started       time.Time
+	marks         []launchMark
+}
+
+type launchMark struct {
+	step string
+	at   time.Time
 }
 
 func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
@@ -104,6 +110,7 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	if !known {
 		started = time.Now()
 	}
+	entered := time.Now()
 	registry, registryErr := shellsverb.LaunchShellRegistry(dir)
 	home, _ := os.UserHomeDir()
 	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: browser.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), turnRunning: new(func() (string, bool)), stopRestoring: func() {}, started: started}
@@ -124,19 +131,21 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 			}
 		})
 	})
-	if registryErr != nil {
-		return launch
+	if registryErr == nil {
+		_ = registry.Prune()
+		found, _ := registry.List()
+		if leftOver := len(slices.DeleteFunc(found, func(one process.Shell) bool { return !one.LeftOver() })); leftOver > 0 {
+			launch.note = leftOverNote + strconv.Itoa(leftOver) + leftOverFix
+		}
 	}
-	_ = registry.Prune()
-	found, _ := registry.List()
-	if leftOver := len(slices.DeleteFunc(found, func(one process.Shell) bool { return !one.LeftOver() })); leftOver > 0 {
-		launch.note = leftOverNote + strconv.Itoa(leftOver) + leftOverFix
-	}
+	launch.marks = []launchMark{{"process", entered}, {"state and shells", time.Now()}}
 	return launch
 }
 
 func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaunch, held wiring.HeldStore) app.Options {
 	defer launch.stopRestoring()
+	marks := launch.marks
+	mark := func(step string) { marks = append(marks, launchMark{step, time.Now()}) }
 	places, _ := platformproject.ResolvePlaces(".")
 	engine := &appEngine{dir: dir, arms: arms, open: wired.open, quota: wired.quota, tabs: launch.tabs, places: places}
 	var readKeys func() (map[string]string, error)
@@ -144,6 +153,7 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 		readKeys = held.Store.Keys
 	}
 	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: shellsverb.CronChecker(dir), Resumed: launch.resumed.hosted(), Joins: wired.joins, Now: wired.now, ReadKeys: readKeys})
+	mark("host")
 	notes := append([]string{launch.note}, troubles...)
 	if _, err := wiring.GateKeyFrom(held.Keys()); err != nil {
 		notes = append(notes, wiring.GateOffSaid(err))
@@ -166,6 +176,7 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 	if note := resumeNote(launch.resumed); note != "" {
 		opening.Chat = append(opening.Chat, app.Event{Kind: app.EventNote, Text: note})
 	}
+	mark("opening")
 	if memoryOn(dir) {
 		shelves, err := memory.Open(dir)
 		if err != nil {
@@ -175,7 +186,20 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 			opening.Chat = append(opening.Chat, app.Event{Kind: app.EventNote, Text: line})
 		}
 	}
-	return app.Options{
+	mark("memory")
+	record := func(rows []walls.Wall) {
+		places, err := platformproject.ResolvePlaces(dir)
+		if err != nil {
+			return
+		}
+		writer := walls.Writer{State: places.State}
+		for _, row := range rows {
+			row.Session = live.ID()
+			_ = writer.Append(row)
+		}
+		_ = writer.Close()
+	}
+	options := app.Options{
 		Repo:         filepath.Base(dir),
 		Root:         dir,
 		Branch:       branchOf(dir),
@@ -214,17 +238,23 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 		Resumed: opening,
 		Keymap:  shortcuts,
 		Agents:  func() roster.Found { found, _ := discoverAgents(); return found },
-		FirstFrame: func() {
+		Walls:   record,
+		FirstFrame: func(built time.Time) {
 			name := "resume"
 			if launch.fresh {
 				name = "fresh"
 			}
-			if places, err := platformproject.ResolvePlaces(dir); err == nil {
-				_ = walls.Append(places.State, walls.Wall{Op: walls.OpFirstFrame, Name: name, MS: time.Since(launch.started).Milliseconds(),
-					At: launch.started.UnixMilli(), Session: live.ID(), OK: true, OutsideMS: new(int64)})
+			var rows []walls.Wall
+			from := launch.started
+			for _, step := range append(marks, launchMark{"tui new", built}, launchMark{"first view", time.Now()}) {
+				rows = append(rows, walls.Wall{Op: walls.OpFirstFrame, Name: "step " + step.step, MS: step.at.Sub(from).Milliseconds(), At: from.UnixMilli(), OK: true, OutsideMS: new(int64)})
+				from = step.at
 			}
+			record(append(rows, walls.Wall{Op: walls.OpFirstFrame, Name: name, MS: from.Sub(launch.started).Milliseconds(), At: launch.started.UnixMilli(), OK: true, OutsideMS: new(int64)}))
 		},
 	}
+	mark("options")
+	return options
 }
 
 func modelsUpdate(dir string, update func(context.Context, io.Writer) int) func() string {

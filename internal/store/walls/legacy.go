@@ -14,6 +14,7 @@ type legacyBody struct {
 	Model            string `json:"model"`
 	Error            string `json:"error"`
 	Exit             int    `json:"exit"`
+	Refused          bool   `json:"refused"`
 	Text             string `json:"text"`
 	DurationMS       int64  `json:"duration_ms"`
 	OutsideMS        *int64 `json:"outside_ms"`
@@ -48,7 +49,11 @@ func legacyEvent(event session.Event, id, tool string) Reading {
 	}
 	switch event.Kind {
 	case session.EventToolResult:
-		took(OpTool, tool, body.DurationMS, body.Error == "")
+		name := tool
+		if body.Refused {
+			name += " refused"
+		}
+		took(OpTool, name, body.DurationMS, body.Error == "")
 		walls[len(walls)-1].OutsideMS = body.OutsideMS
 		tookSome(OpPermissionWait, tool, body.PermissionWaitMS, true)
 	case session.EventRequest:

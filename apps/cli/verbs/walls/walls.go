@@ -179,15 +179,30 @@ func rowsOf(all []walls.Wall, opts options) []wallRow {
 		op   walls.Op
 		name string
 	}
-	grouped := map[key][]float64{}
+	type group struct {
+		ms      []float64
+		weights []int
+		n       int
+		max     int64
+	}
+	grouped := map[key]*group{}
 	for _, wall := range all {
 		at := key{wall.Op, wall.Name}
-		grouped[at] = append(grouped[at], float64(wall.MS))
+		if grouped[at] == nil {
+			grouped[at] = &group{}
+		}
+		one, weight := grouped[at], max(wall.N, 1)
+		one.ms, one.weights, one.n, one.max = append(one.ms, float64(wall.MS)), append(one.weights, weight), one.n+weight, max(one.max, wall.MS, wall.MaxMS)
 	}
 	rows := make([]wallRow, 0, len(grouped))
-	for at, ms := range grouped {
-		rounded := func(p float64) int64 { return int64(math.Round(stat.Percentile(ms, p))) }
-		row := wallRow{Op: at.op, Name: at.name, N: len(ms), P50: rounded(50), P90: rounded(90), Max: int64(slices.Max(ms))}
+	for at, one := range grouped {
+		rounded := func(p float64) int64 {
+			if one.n == len(one.ms) {
+				return int64(math.Round(stat.Percentile(one.ms, p)))
+			}
+			return weightedPercentile(one.ms, one.weights, one.n, p)
+		}
+		row := wallRow{Op: at.op, Name: at.name, N: one.n, P50: rounded(50), P90: rounded(90), Max: one.max}
 		if opts.own {
 			row.Tier = tierOf(row.P50)
 		}
@@ -199,6 +214,22 @@ func rowsOf(all []walls.Wall, opts options) []wallRow {
 		return cmp.Or(cmp.Compare(slices.Index(walls.Ops(), a.Op), slices.Index(walls.Ops(), b.Op)), cmp.Compare(b.N, a.N), strings.Compare(a.Name, b.Name))
 	})
 	return rows
+}
+
+func weightedPercentile(ms []float64, weights []int, n int, p float64) int64 {
+	order := make([]int, len(ms))
+	for at := range order {
+		order[at] = at
+	}
+	slices.SortFunc(order, func(a, b int) int { return cmp.Compare(ms[a], ms[b]) })
+	rank := int(p / 100 * float64(n-1))
+	for _, at := range order {
+		if rank < weights[at] {
+			return int64(ms[at])
+		}
+		rank -= weights[at]
+	}
+	return int64(ms[order[len(order)-1]])
 }
 
 func wallLines(page cli.Page, read report, opts options) []string {

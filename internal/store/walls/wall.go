@@ -21,6 +21,7 @@ const (
 	OpVerb           Op = "verb"
 	OpTool           Op = "tool"
 	OpTurn           Op = "turn"
+	OpTurnStep       Op = "turn_step"
 	OpRequest        Op = "request"
 	OpFirstToken     Op = "first_token"
 	OpLastByte       Op = "last_byte"
@@ -39,6 +40,10 @@ const (
 	OpSpawn          Op = "spawn"
 	OpSpawnStep      Op = "spawn_step"
 	OpFirstFrame     Op = "first_frame"
+	OpFrame          Op = "frame"
+	OpKey            Op = "key"
+	OpAbsorb         Op = "absorb"
+	OpSend           Op = "send"
 	OpSessionOpen    Op = "session_open"
 	OpSessionResume  Op = "session_resume"
 	OpCompaction     Op = "compaction"
@@ -52,9 +57,9 @@ const (
 )
 
 func Ops() []Op {
-	return []Op{OpVerb, OpTool, OpTurn, OpRequest, OpFirstToken, OpLastByte, OpHTTPHeaders, OpHTTPStream, OpPermissionWait, OpHook, OpJev,
+	return []Op{OpVerb, OpTool, OpTurn, OpTurnStep, OpRequest, OpFirstToken, OpLastByte, OpHTTPHeaders, OpHTTPStream, OpPermissionWait, OpHook, OpJev,
 		OpAdvisor, OpForkBlocked, OpBrowserStep, OpShell, OpSift, OpStartup, OpStartupStep, OpSpawn, OpSpawnStep, OpFirstFrame,
-		OpSessionOpen, OpSessionResume, OpCompaction, OpMemoryRequest, OpUndoSnapshot, OpHostStart, OpHostJoin, OpWire, OpCron, OpDoctorStep}
+		OpFrame, OpKey, OpAbsorb, OpSend, OpSessionOpen, OpSessionResume, OpCompaction, OpMemoryRequest, OpUndoSnapshot, OpHostStart, OpHostJoin, OpWire, OpCron, OpDoctorStep}
 }
 
 func ParseOp(text string) (Op, error) {
@@ -72,6 +77,8 @@ type Wall struct {
 	Session   string `json:"session,omitempty"`
 	OK        bool   `json:"ok"`
 	OutsideMS *int64 `json:"outside_ms,omitempty"`
+	N         int    `json:"n,omitempty"`
+	MaxMS     int64  `json:"max_ms,omitempty"`
 }
 
 const (

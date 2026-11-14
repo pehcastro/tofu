@@ -19,6 +19,11 @@ const (
 )
 
 const (
+	TUIWallBucketMillis = 1
+	TUIWallBuckets      = 250
+)
+
+const (
 	WallTierSUnderMillis = 100
 	WallTierAUnderMillis = 300
 	WallTierBUnderMillis = 700
