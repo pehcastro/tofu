@@ -17,7 +17,7 @@ import (
 
 const snapshotsKeptPerPath = 20
 
-func snapshot(env Env, ev event) {
+func snapshot(ctx context.Context, env Env, ev event) {
 	path := ev.ToolInput.FilePath
 	if blank(path) {
 		return
@@ -28,7 +28,7 @@ func snapshot(env Env, ev event) {
 	}
 	rootFull := filepath.Clean(env.Root)
 	rel, inside := underRoot(rootFull, path)
-	if !inside || blank(rel) || strings.EqualFold(rel, ".boji") || foldPrefix(rel, ".boji/") || ignoredByGit(rootFull, rel) {
+	if !inside || blank(rel) || strings.EqualFold(rel, ".boji") || foldPrefix(rel, ".boji/") || ignoredByGit(ctx, rootFull, rel) {
 		return
 	}
 	snapshots := filepath.Join(rootFull, ".boji", "snapshots")
@@ -45,8 +45,8 @@ func snapshot(env Env, ev event) {
 	pruneSnapshots(snapshots, relNative)
 }
 
-func ignoredByGit(root, rel string) bool {
-	err := outside.Command(context.Background(), "git", "-C", root, "check-ignore", "-q", "--", rel).Run()
+func ignoredByGit(ctx context.Context, root, rel string) bool {
+	err := outside.Command(ctx, "git", "-C", root, "check-ignore", "-q", "--", rel).Run()
 	var exited *exec.ExitError
 	return err == nil || !errors.As(err, &exited)
 }

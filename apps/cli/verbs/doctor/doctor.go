@@ -55,7 +55,7 @@ func Clocked(ctx context.Context, args []string, _ io.Reader, out, errOut io.Wri
 		}
 	}
 	if imports {
-		return Imports(".", asJSON, out, errOut)
+		return Imports(ctx, ".", asJSON, out, errOut)
 	}
 	steps := clockSteps(ctx)
 	report, places, placesErr := stateOn(steps, now)

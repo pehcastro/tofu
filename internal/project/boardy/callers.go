@@ -3,6 +3,7 @@ package boardy
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"go/ast"
@@ -89,7 +90,8 @@ func ImpactOf(root string, wrote []string) Impact {
 	if len(files) == 0 {
 		return Impact{}
 	}
-	lines, touched := sourceLines{root: root, read: map[string][]string{}}, changedIn(root, files)
+	ctx := context.Background()
+	lines, touched := sourceLines{root: root, read: map[string][]string{}}, changedIn(ctx, root, files)
 	declared := engine.Index(root, files, func(string) bool { return true })
 	impact := Impact{Unread: declared.Unread}
 	var changed []engine.Definition
@@ -103,7 +105,7 @@ func ImpactOf(root string, wrote []string) Impact {
 	if len(changed) == 0 {
 		return impact
 	}
-	sources, stopped := callerSources(root)
+	sources, stopped := callerSources(ctx, root)
 	if sources == nil {
 		sources, stopped = walkedSources(root)
 	}
@@ -228,9 +230,9 @@ func walkedSources(root string) ([]string, string) {
 	return sources, stopped
 }
 
-func changedIn(root string, files []string) func(engine.Definition) bool {
-	tracked, listErr := gitOut(root, "", append([]string{"ls-tree", "-r", "--name-only", "HEAD", "--"}, files...)...)
-	diff, diffErr := gitOut(root, "", append([]string{"diff", "-U0", "--no-color", "--no-ext-diff", "--relative", "HEAD", "--"}, files...)...)
+func changedIn(ctx context.Context, root string, files []string) func(engine.Definition) bool {
+	tracked, listErr := gitOut(ctx, root, "", append([]string{"ls-tree", "-r", "--name-only", "HEAD", "--"}, files...)...)
+	diff, diffErr := gitOut(ctx, root, "", append([]string{"diff", "-U0", "--no-color", "--no-ext-diff", "--relative", "HEAD", "--"}, files...)...)
 	if listErr != nil || diffErr != nil {
 		return func(engine.Definition) bool { return true }
 	}
@@ -287,7 +289,7 @@ func (m Managed) callersOutside(ticket Ticket) (callerScan, error) {
 	if m.Store.Root == "" || len(ticket.Owns) == 0 {
 		return callerScan{}, nil
 	}
-	return scanCallers(m.Store.Root, ticket)
+	return scanCallers(m.waits(), m.Store.Root, ticket)
 }
 
 func (m Managed) waive(hooks []rules.Hook, s subject, reason string) (string, string, error) {
@@ -309,8 +311,8 @@ func (m Managed) waive(hooks []rules.Hook, s subject, reason string) (string, st
 	return reason + " (" + scan.recorded() + ")", waived, nil
 }
 
-func callerSources(root string) ([]string, string) {
-	listed, err := gitOut(root, "", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.go", "*.rs", "*.ts", "*.tsx")
+func callerSources(ctx context.Context, root string) ([]string, string) {
+	listed, err := gitOut(ctx, root, "", "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.go", "*.rs", "*.ts", "*.tsx")
 	if err != nil {
 		return nil, "the scan for callers did not run: " + err.Error()
 	}
@@ -328,8 +330,8 @@ func callerSources(root string) ([]string, string) {
 	return sources, ""
 }
 
-func scanCallers(root string, ticket Ticket) (callerScan, error) {
-	sources, stopped := callerSources(root)
+func scanCallers(ctx context.Context, root string, ticket Ticket) (callerScan, error) {
+	sources, stopped := callerSources(ctx, root)
 	scan := callerScan{stopped: stopped}
 	owns := rootedOwns(root, ticket.Owns)
 	owned := func(rel string) bool {

@@ -376,7 +376,7 @@ func (m Managed) check(h rules.Hook, s subject) (checked, error) {
 		}
 		return run(m, h, s, arg)
 	case rules.DoCommand:
-		output, failed, err := rules.RunCommand(h.Action.Arg, s.path, []string{"TOFU_BOARD_EVENT=" + string(s.event), "TOFU_TICKET=" + s.path,
+		output, failed, err := rules.RunCommand(m.waits(), h.Action.Arg, s.path, []string{"TOFU_BOARD_EVENT=" + string(s.event), "TOFU_TICKET=" + s.path,
 			"TOFU_TICKET_ID=" + s.ticket.ID, "TOFU_FROM=" + string(s.from), "TOFU_TO=" + string(s.to), "TOFU_ACTOR=" + s.actor})
 		if err != nil {
 			return checked{}, fmt.Errorf("hook %q %w", h.ID, err)

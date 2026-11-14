@@ -62,7 +62,7 @@ func stampHead(t *testing.T, repo, kind string) {
 func shellHook(t *testing.T, repo, command string) string {
 	t.Helper()
 	stdin, _ := json.Marshal(map[string]any{"tool_name": "Bash", "tool_input": map[string]string{"command": command}})
-	answer, err := Hook(Shell, Env{Root: repo, Temp: t.TempDir()}, stdin)
+	answer, err := Hook(t.Context(), Shell, Env{Root: repo, Temp: t.TempDir()}, stdin)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestReleaseCommitNeedsBothStampsOnHead(t *testing.T) {
 		if step.before != nil {
 			step.before()
 		}
-		answer := CommitMsg(repo, message)
+		answer := CommitMsg(t.Context(), repo, message)
 		if answer.Code == 0 {
 			t.Fatalf("%s: the release commit was allowed", step.name)
 		}
@@ -194,7 +194,7 @@ func TestReleaseCommitNeedsBothStampsOnHead(t *testing.T) {
 		}
 	}
 	put(t, dir, "COMMIT_EDITMSG", "fix(turn): a plain change\n")
-	if answer := CommitMsg(repo, message); answer.Code != 0 {
+	if answer := CommitMsg(t.Context(), repo, message); answer.Code != 0 {
 		t.Fatalf("a non-release commit was gated: %s", answer.Stderr)
 	}
 }

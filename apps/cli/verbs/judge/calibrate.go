@@ -90,7 +90,7 @@ type calibrateReport struct {
 	CalibrationError    float64 `json:"calibration_error,omitempty"`
 }
 
-func CalibrateVerb(args []string, out, errOut io.Writer) int {
+func CalibrateVerb(ctx context.Context, args []string, out, errOut io.Writer) int {
 	o := output.Verb{Name: "calibrate", UsageLine: CalibrateUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	ref, casesPath, splitPath, dryRun, err := parseCalibrateArgs(output.WithoutJSON(args))
 	if err != nil {
@@ -137,7 +137,7 @@ func CalibrateVerb(args []string, out, errOut io.Writer) int {
 		outcome, _, err := AskFresh(ctx, client, core.Request{State: c.State, Questions: set.Questions}, set)
 		return askedCase{Answers: outcome.Decision.Answers, Build: outcome.Decision.Build}, err
 	}
-	result, err := calibrate(context.Background(), rule, corpus, ask, time.Now)
+	result, err := calibrate(ctx, rule, corpus, ask, time.Now)
 	var refused calibrationRefusal
 	if errors.As(err, &refused) {
 		return o.Fail(fmt.Errorf("%s; refused after %d jev calls, no lock written", refused, report.Calls))

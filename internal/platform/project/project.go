@@ -61,6 +61,7 @@ type Project struct {
 	remote     string
 	root       string
 	identified bool
+	waits      context.Context
 }
 
 func projectKey(path string) string {
@@ -303,12 +304,15 @@ func (r Registry) Places(dir string) (Places, error) {
 	return Places{State: state, Log: filepath.Join(state, "log")}, nil
 }
 
-func OpenProject(dir string) (Project, error) {
+func OpenProject(dir string) (Project, error) { return OpenProjectIn(context.Background(), dir) }
+
+func OpenProjectIn(ctx context.Context, dir string) (Project, error) {
 	read, err := ReadRegistry()
 	if err != nil {
 		return Project{}, err
 	}
 	project, registry, err := read.locate(dir)
+	project.waits = ctx
 	if err != nil || project.Registered || !slices.ContainsFunc(registry.Projects, movedAway) {
 		return project, err
 	}
@@ -331,13 +335,13 @@ func pathExists(path string) bool {
 }
 
 func (p *Project) identify() {
-	p.remote, p.root = gitIdentity(p.Path)
+	p.remote, p.root = gitIdentity(p.waits, p.Path)
 	p.identified = true
 }
 
-func gitIdentity(dir string) (remote, root string) {
+func gitIdentity(ctx context.Context, dir string) (remote, root string) {
 	git := func(args ...string) string {
-		out, err := outside.Command(context.Background(), "git", append([]string{"-C", dir}, args...)...).Output()
+		out, err := outside.Command(ctx, "git", append([]string{"-C", dir}, args...)...).Output()
 		if err != nil {
 			return ""
 		}
@@ -371,7 +375,7 @@ func RecordIdentity(dir string) error {
 	if err != nil {
 		return err
 	}
-	project := Project{Path: resolvedPath(dir), home: home}
+	project := Project{Path: resolvedPath(dir), home: home, waits: context.Background()}
 	registry, err := readProjectRegistry(home)
 	if entry := registry.holding(project.Path); err != nil || entry == nil || entry.Remote != "" || entry.Root != "" {
 		return err

@@ -34,11 +34,12 @@ func StampPath(repo, kind, tree string) string {
 }
 
 func HeadTree(repo string) (string, []string, error) {
-	tree, err := headTreeWithoutDesk(repo)
+	ctx := context.Background()
+	tree, err := headTreeWithoutDesk(ctx, repo)
 	if err != nil {
 		return "", nil, err
 	}
-	changed, err := gitOut(repo, "", "status", "--porcelain", "--untracked-files=all", "--", ":(exclude)"+deskArea+"/")
+	changed, err := gitOut(ctx, repo, "", "status", "--porcelain", "--untracked-files=all", "--", ":(exclude)"+deskArea+"/")
 	var dirty []string
 	for _, line := range strings.Split(changed, "\n") {
 		path, untracked := strings.CutPrefix(line, "?? ")
@@ -50,17 +51,17 @@ func HeadTree(repo string) (string, []string, error) {
 	return tree, dirty, err
 }
 
-func headTreeWithoutDesk(repo string) (string, error) {
-	tree, err := treeWithout(repo, "HEAD", deskArea)
+func headTreeWithoutDesk(ctx context.Context, repo string) (string, error) {
+	tree, err := treeWithout(ctx, repo, "HEAD", deskArea)
 	if tree == "" && err == nil {
-		return gitOut(repo, "", "mktree", "-z")
+		return gitOut(ctx, repo, "", "mktree", "-z")
 	}
 	return tree, err
 }
 
-func treeWithout(repo, tree, drop string) (string, error) {
+func treeWithout(ctx context.Context, repo, tree, drop string) (string, error) {
 	first, rest, nested := strings.Cut(drop, "/")
-	listing, err := gitOut(repo, "", "ls-tree", "-z", tree)
+	listing, err := gitOut(ctx, repo, "", "ls-tree", "-z", tree)
 	if err != nil {
 		return "", err
 	}
@@ -71,7 +72,7 @@ func treeWithout(repo, tree, drop string) (string, error) {
 			continue
 		}
 		if fields := strings.Fields(meta); name == first && len(fields) == 3 && fields[1] == "tree" {
-			sub, err := treeWithout(repo, fields[2], rest)
+			sub, err := treeWithout(ctx, repo, fields[2], rest)
 			if err != nil {
 				return "", err
 			}
@@ -85,11 +86,11 @@ func treeWithout(repo, tree, drop string) (string, error) {
 	if kept.Len() == 0 {
 		return "", nil
 	}
-	return gitOut(repo, kept.String(), "mktree", "-z")
+	return gitOut(ctx, repo, kept.String(), "mktree", "-z")
 }
 
-func Unstamped(repo string, kinds ...string) (string, []string, error) {
-	tree, err := headTreeWithoutDesk(repo)
+func Unstamped(ctx context.Context, repo string, kinds ...string) (string, []string, error) {
+	tree, err := headTreeWithoutDesk(ctx, repo)
 	if err != nil {
 		return "", nil, err
 	}
@@ -103,11 +104,12 @@ func Unstamped(repo string, kinds ...string) (string, []string, error) {
 }
 
 func DeskTree(repo string) (string, []string, error) {
-	tree, err := gitOut(repo, "", "rev-parse", "HEAD:"+deskArea)
+	ctx := context.Background()
+	tree, err := gitOut(ctx, repo, "", "rev-parse", "HEAD:"+deskArea)
 	if err != nil {
 		return "", nil, err
 	}
-	dirty, err := uncommitted(repo, deskArea)
+	dirty, err := uncommitted(ctx, repo, deskArea)
 	return tree, dirty, err
 }
 
@@ -131,11 +133,11 @@ type DoneGate struct {
 	stamps        string
 }
 
-func checkDone(repo string, owns []string) DoneGate {
+func checkDone(ctx context.Context, repo string, owns []string) DoneGate {
 	if len(flowsAreas(owns)) == 0 && len(lostFlowsAreas(repo)) == 0 {
 		return DoneGate{}
 	}
-	return headGate(repo).owning(repo, owns)
+	return headGate(ctx, repo).owning(ctx, repo, owns)
 }
 
 func lostFlowsAreas(repo string) []string {
@@ -155,23 +157,23 @@ func lostFlowsAreas(repo string) []string {
 	return lost
 }
 
-func headGate(repo string) DoneGate {
+func headGate(ctx context.Context, repo string) DoneGate {
 	if repo == "" {
 		return DoneGate{Unread: "no repository is known for this board, so no stamp can be checked"}
 	}
-	tree, run, err := Unstamped(repo, FlowsStamps)
+	tree, run, err := Unstamped(ctx, repo, FlowsStamps)
 	if err != nil {
 		return DoneGate{Unread: "HEAD's tree could not be read: " + err.Error()}
 	}
 	g := DoneGate{Tree: tree, Unstamped: len(run) > 0, stamps: StampDir(repo)}
-	if g.DeskTree, err = gitOut(repo, "", "rev-parse", "HEAD:"+deskArea); err != nil {
+	if g.DeskTree, err = gitOut(ctx, repo, "", "rev-parse", "HEAD:"+deskArea); err != nil {
 		g.deskUnread = "HEAD's " + deskArea + " tree could not be read, so no desk stamp can be checked: " + err.Error()
 	}
 	g.DeskUnstamped = !stamped(repo, DeskStamps, g.DeskTree)
 	return g
 }
 
-func (g DoneGate) owning(repo string, owns []string) DoneGate {
+func (g DoneGate) owning(ctx context.Context, repo string, owns []string) DoneGate {
 	if lost := lostFlowsAreas(repo); len(lost) > 0 {
 		return DoneGate{lost: true, Unread: strings.Join(lost, ", ") + " is not a folder in " + repo + ", and the done stamp gate names it as a flows area, so it cannot tell which tickets the flows cover until the area list moves with the tree."}
 	}
@@ -185,7 +187,7 @@ func (g DoneGate) owning(repo string, owns []string) DoneGate {
 		return g
 	}
 	var err error
-	if g.Dirty, err = uncommitted(repo, ownedPathspecs(owns)...); err != nil {
+	if g.Dirty, err = uncommitted(ctx, repo, ownedPathspecs(owns)...); err != nil {
 		g.Unread = "the owned paths could not be checked for uncommitted work: " + err.Error()
 	}
 	return g
@@ -224,7 +226,7 @@ func (g DoneGate) Refusal() string {
 	return why + "\nOn 2026-10-15 two regressions in turn and sub-agent work reached 0.5.15-rc2 with every ticket accepted on its tests, and the owner's nine-day session waited 55 minutes on two finished agents."
 }
 
-func DoneRefusal(repo, id string, owns []string) string {
+func DoneRefusal(ctx context.Context, repo, id string, owns []string) string {
 	ref, err := SplitID(id)
 	store, openErr := OpenStore(repo)
 	var hooks []rules.Hook
@@ -234,7 +236,7 @@ func DoneRefusal(repo, id string, owns []string) string {
 	if err == nil && !slices.ContainsFunc(hooks, func(h rules.Hook) bool { return runsCheck(h, checkDoneStamp) }) {
 		return ""
 	}
-	return checkDone(repo, owns).Refusal()
+	return checkDone(ctx, repo, owns).Refusal()
 }
 
 func flowsAreaList() []string {
@@ -263,19 +265,19 @@ func ownedPathspecs(owns []string) []string {
 }
 
 func (m Managed) wallsStamp(_ rules.Hook, s subject, _ string) (checked, error) {
-	why := wallsRefusal(m.Store.Root, s.ticket.ID, s.ticket.Owns)
+	why := wallsRefusal(m.waits(), m.Store.Root, s.ticket.ID, s.ticket.Owns)
 	return checked{detail: why, failed: why != ""}, nil
 }
 
-func wallsRefusal(repo, id string, owns []string) string {
+func wallsRefusal(ctx context.Context, repo, id string, owns []string) string {
 	if repo == "" || len(owns) == 0 {
 		return ""
 	}
-	tracked, _ := gitOut(repo, "", append([]string{"ls-files", "--"}, ownedPathspecs(owns)...)...)
+	tracked, _ := gitOut(ctx, repo, "", append([]string{"ls-files", "--"}, ownedPathspecs(owns)...)...)
 	if !slices.ContainsFunc(strings.Split(tracked, "\n"), func(path string) bool { return strings.HasSuffix(path, ".go") }) {
 		return ""
 	}
-	tree, run, err := Unstamped(repo, WallsStamps)
+	tree, run, err := Unstamped(ctx, repo, WallsStamps)
 	switch {
 	case err != nil:
 		return "HEAD's tree could not be read, so no walls stamp can be checked: " + err.Error()
@@ -294,8 +296,8 @@ func wallsRefusal(repo, id string, owns []string) string {
 		"\nWhen an op cannot be faster, because the app now does more there and the time is real, be realistic: tofu boardy move " + id + " done --bypass walls_stamp --why \"<op>: <why it cannot be faster>\", which records the reason on the ticket, then go run ./bench/gates/walls -update so the next ticket is measured against the new time."
 }
 
-func uncommitted(repo string, pathspecs ...string) ([]string, error) {
-	out, err := gitOut(repo, "", append([]string{"status", "--porcelain", "--untracked-files=all", "--"}, pathspecs...)...)
+func uncommitted(ctx context.Context, repo string, pathspecs ...string) ([]string, error) {
+	out, err := gitOut(ctx, repo, "", append([]string{"status", "--porcelain", "--untracked-files=all", "--"}, pathspecs...)...)
 	var paths []string
 	for _, line := range strings.Split(out, "\n") {
 		if len(line) > 3 {
@@ -305,8 +307,8 @@ func uncommitted(repo string, pathspecs ...string) ([]string, error) {
 	return paths, err
 }
 
-func gitOut(repo, stdin string, args ...string) (string, error) {
-	cmd := outside.Command(context.Background(), "git", args...)
+func gitOut(ctx context.Context, repo, stdin string, args ...string) (string, error) {
+	cmd := outside.Command(ctx, "git", args...)
 	cmd.Dir, cmd.Stdin = repo, strings.NewReader(stdin)
 	out, err := cmd.Output()
 	if exited := (*exec.ExitError)(nil); errors.As(err, &exited) {

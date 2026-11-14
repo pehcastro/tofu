@@ -27,6 +27,7 @@ const (
 )
 
 type who struct {
+	waits    context.Context
 	identity string
 	resolved bool
 	authors  map[string]string
@@ -64,7 +65,7 @@ func (m *Memory) identity() string {
 			return "gh:" + string(bytes.TrimSpace(id))
 		}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), konst.MemoryIdentityTimeoutMillis*time.Millisecond)
+	ctx, cancel := context.WithTimeout(m.who.waits, konst.MemoryIdentityTimeoutMillis*time.Millisecond)
 	defer cancel()
 	if !testing.Testing() {
 		id, err := outside.Command(ctx, "gh", "api", "user", "--jq", ".id").Output()

@@ -42,7 +42,7 @@ func (m Managed) Attention(key string, now time.Time) (Attention, error) {
 	if err = errors.Join(err, eventsErr, requestsErr); err != nil {
 		return Attention{}, err
 	}
-	head := headGate(m.Store.Root)
+	head := headGate(m.waits(), m.Store.Root)
 	m.head = &head
 	a := Attention{Board: key, Statuses: BuildReport(key, time.Time{}, now, tickets, events, nil, nil).Statuses, Tree: head.Tree}
 	started := map[string]time.Time{}

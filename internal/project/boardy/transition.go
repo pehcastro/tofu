@@ -2,7 +2,6 @@ package boardy
 
 import (
 	"cmp"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -204,14 +203,14 @@ func (m Managed) firstCommit(ticket Ticket) (time.Time, string, error) {
 		return time.Time{}, "", err
 	}
 	entered := events[at].At
-	if _, noCommit := gitOut(m.Store.Root, "", "rev-parse", "--verify", "--quiet", "HEAD"); noCommit != nil {
+	if _, noCommit := gitOut(m.waits(), m.Store.Root, "", "rev-parse", "--verify", "--quiet", "HEAD"); noCommit != nil {
 		return entered, "", nil
 	}
 	args := []string{"log", "--format=%h %ct", "--since=@" + strconv.FormatInt(entered.Unix(), 10), "--"}
 	for _, glob := range ticket.Owns {
 		args = append(args, ":(glob,icase)"+glob)
 	}
-	out, err := gitOut(m.Store.Root, "", args...)
+	out, err := gitOut(m.waits(), m.Store.Root, "", args...)
 	first := ""
 	for line := range strings.Lines(out) {
 		hash, committed, _ := strings.Cut(strings.TrimSpace(line), " ")
@@ -369,9 +368,9 @@ func (m Managed) validMove(ticket Ticket, to Status) error {
 
 func (m Managed) doneGate(owns []string) DoneGate {
 	if m.head == nil {
-		return checkDone(m.Store.Root, owns)
+		return checkDone(m.waits(), m.Store.Root, owns)
 	}
-	return m.head.owning(m.Store.Root, owns)
+	return m.head.owning(m.waits(), m.Store.Root, owns)
 }
 
 func (m Managed) referencesResolve(ticket Ticket) error {
@@ -510,7 +509,7 @@ func (m Managed) judged(ref, decides string, state any, options []core.Option) r
 		row.Version, row.Reason.Threshold, row.Reason.Comparison = set.QuestionsVersion, ruled.threshold, decides+"_at"
 		var client *core.Client
 		if client, err = classifiers.Open(m.Store.Root, core.ReadKeyring(), 1); err == nil {
-			decision, err = client.Ask(context.Background(), core.Request{State: json.RawMessage(body), Questions: asked})
+			decision, err = client.Ask(m.waits(), core.Request{State: json.RawMessage(body), Questions: asked})
 		}
 	}
 	if err != nil {

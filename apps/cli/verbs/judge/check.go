@@ -36,13 +36,13 @@ type checkReport struct {
 	Verdict ledger.Verdict `json:"verdict"`
 }
 
-func CheckVerb(args []string, out, errOut io.Writer) int {
+func CheckVerb(ctx context.Context, args []string, out, errOut io.Writer) int {
 	o := output.Verb{Name: "check", UsageLine: CheckUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	opts, err := parseCheckArgs(args)
 	if err != nil {
 		return o.Usage(err)
 	}
-	row, err := checkedRow(opts.command)
+	row, err := checkedRow(ctx, opts.command)
 	if err != nil {
 		return wiring.Failed(o, err)
 	}
@@ -54,7 +54,7 @@ func CheckVerb(args []string, out, errOut io.Writer) int {
 	})
 }
 
-func checkedRow(command string) (ledger.Row, error) {
+func checkedRow(ctx context.Context, command string) (ledger.Row, error) {
 	libraryDir, err := fs.LibraryDir()
 	if err != nil {
 		return ledger.Row{}, err
@@ -79,7 +79,7 @@ func checkedRow(command string) (ledger.Row, error) {
 	if err != nil {
 		return ledger.Row{}, err
 	}
-	return RunCheck(context.Background(), client, rulePath, command)
+	return RunCheck(ctx, client, rulePath, command)
 }
 
 func verdictRow(v ledger.Verdict, command, id string) cli.Row {

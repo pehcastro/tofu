@@ -24,7 +24,7 @@ const (
 	statusFlags    = "tofu login --status [--json] [--redact]"
 )
 
-func LoginVerb(args []string, out, errOut io.Writer, now time.Time, urls map[quota.Provider]string) int {
+func LoginVerb(ctx context.Context, args []string, out, errOut io.Writer, now time.Time, urls map[quota.Provider]string) int {
 	asJSON, redact := false, false
 	for _, arg := range args {
 		switch arg {
@@ -36,7 +36,7 @@ func LoginVerb(args []string, out, errOut io.Writer, now time.Time, urls map[quo
 			return output.Refused(statusVerbName, output.UsageRefusal("unknown flag "+arg, statusFlags), asJSON, out, errOut, now)
 		}
 	}
-	data, problems, err := credentialStatus(now, redact, urls)
+	data, problems, err := credentialStatus(ctx, now, redact, urls)
 	if err != nil {
 		return output.Refused(statusVerbName, output.Failure(err.Error(), "tofu doctor"), asJSON, out, errOut, now)
 	}
@@ -50,9 +50,9 @@ func LoginVerb(args []string, out, errOut io.Writer, now time.Time, urls map[quo
 	return output.ExitOK
 }
 
-func credentialStatus(now time.Time, redact bool, urls map[quota.Provider]string) (host.Accounts, []cli.Problem, error) {
+func credentialStatus(ctx context.Context, now time.Time, redact bool, urls map[quota.Provider]string) (host.Accounts, []cli.Problem, error) {
 	data := host.Accounts{Keys: wiring.KeyStatuses(wiring.ResolvedKey)}
-	polled, err := withSpend(context.Background(), data.Keys, now)
+	polled, err := withSpend(ctx, data.Keys, now)
 	defer polled()
 	if err != nil {
 		return data, nil, err
@@ -66,7 +66,7 @@ func credentialStatus(now time.Time, redact bool, urls map[quota.Provider]string
 	if err != nil {
 		return data, nil, err
 	}
-	results, err := wiring.PollRows(context.Background(), store, rows, time.Now, urls)
+	results, err := wiring.PollRows(ctx, store, rows, time.Now, urls)
 	if err != nil {
 		return data, nil, err
 	}

@@ -102,8 +102,8 @@ func parseLearnArgs(args []string) (learnOpts, error) {
 	return opts, nil
 }
 
-func Verb(deps Deps) Run {
-	return func(args []string, out, errOut io.Writer) int {
+func Verb(deps Deps) func(ctx context.Context, args []string, out, errOut io.Writer) int {
+	return func(ctx context.Context, args []string, out, errOut io.Writer) int {
 		if len(args) == 0 {
 			args = []string{"scan"}
 		}
@@ -120,7 +120,7 @@ func Verb(deps Deps) Run {
 			return o.Fail(err)
 		}
 		if args[0] == "scan" {
-			return learnScan(o, opts, home)
+			return learnScan(ctx, o, opts, home)
 		}
 		if args[0] == "upstream" && opts.list {
 			return learnDrafts(o, home)
@@ -159,7 +159,7 @@ func Verb(deps Deps) Run {
 			}
 			return learnDraft(o, home, finding, decide)
 		}
-		return learnApply(o, deps, opts, home, finding, decide)
+		return learnApply(ctx, o, deps, opts, home, finding, decide)
 	}
 }
 
@@ -193,12 +193,12 @@ func learnSources(opts learnOpts) ([]learn.Source, string, error) {
 	return sources, "every project, the last " + strconv.Itoa(opts.last) + " conversations of each", err
 }
 
-func learnScan(o output.Verb, opts learnOpts, home learn.Home) int {
+func learnScan(ctx context.Context, o output.Verb, opts learnOpts, home learn.Home) int {
 	sources, scope, err := learnSources(opts)
 	if err != nil {
 		return o.Fail(err)
 	}
-	shelves, err := entries.Open(opts.dir)
+	shelves, err := entries.OpenIn(ctx, opts.dir)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -216,10 +216,10 @@ func learnScan(o output.Verb, opts learnOpts, home learn.Home) int {
 	}
 	run.Scope, run.Sent.Local = scope, opts.local || !learnOn(opts.dir)
 	if !run.Sent.Local && len(run.Said) > 0 {
-		if err := labelWindows(&run, o.ErrOut); err != nil {
+		if err := labelWindows(ctx, &run, o.ErrOut); err != nil {
 			return o.Fail(err)
 		}
-		groupByMeaning(&run, known, opts.dir, o.ErrOut)
+		groupByMeaning(ctx, &run, known, opts.dir, o.ErrOut)
 	}
 	file, err := home.Save(run)
 	if err != nil {
@@ -233,7 +233,7 @@ func learnOn(dir string) bool {
 	return err == nil && store.Bool(settingspkg.Learn)
 }
 
-func labelWindows(run *learn.Run, errOut io.Writer) error {
+func labelWindows(ctx context.Context, run *learn.Run, errOut io.Writer) error {
 	set, err := learn.Questions()
 	if err != nil {
 		return err
@@ -260,7 +260,7 @@ func labelWindows(run *learn.Run, errOut io.Writer) error {
 	_ = page.Print(errOut, []string{page.Label(fmt.Sprintf("sending %d windows to Jev, one request each, %d bytes of your sessions", len(states), run.Sent.Bytes))})
 	for i, state := range states {
 		label := learn.Label{Said: i}
-		decision, err := client.Ask(context.Background(), core.Request{State: state, Questions: asked.Questions})
+		decision, err := client.Ask(ctx, core.Request{State: state, Questions: asked.Questions})
 		if err == nil {
 			var row ledger.Row
 			row, err = wiring.AppendRow(state, asked, wiring.RowInput{Decision: &decision, Answers: wiring.ToLedgerAnswers(set.QuestionsVersion, decision.Answers), StateBuilder: set.Name + "@" + strconv.Itoa(set.QuestionsVersion)})
@@ -283,7 +283,7 @@ func labelWindows(run *learn.Run, errOut io.Writer) error {
 	return nil
 }
 
-func groupByMeaning(run *learn.Run, known learn.Known, dir string, errOut io.Writer) {
+func groupByMeaning(ctx context.Context, run *learn.Run, known learn.Known, dir string, errOut io.Writer) {
 	opts := wiring.OnTheBoundWire(wiring.RunOpts{Dir: dir, Effort: llm.EffortDefault})
 	if opts.Wire == wiring.WireKey {
 		run.Sent.Kept = "the lead model is reached through the OpenRouter key, which learning never spends"
@@ -296,7 +296,7 @@ func groupByMeaning(run *learn.Run, known learn.Known, dir string, errOut io.Wri
 		page := cli.Detect(errOut, os.Environ())
 		_ = page.Print(errOut, []string{page.Label(fmt.Sprintf("grouping %d messages by meaning with %s on your subscription, one request, %d bytes", len(run.Said), selected.Slug(), len(prompt)))})
 		var decision llm.Decision
-		decision, err = wiring.SubscriptionModel{Opts: opts}.Ask(context.Background(), llm.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: prompt}}})
+		decision, err = wiring.SubscriptionModel{Opts: opts}.Ask(ctx, llm.Request{Messages: []llm.Message{{Role: llm.RoleUser, Content: prompt}}})
 		run.Sent.GroupTokens = decision.Usage.InputTokens + decision.Usage.OutputTokens
 		if err == nil {
 			err = run.Group(cmp.Or(decision.Content, decision.Refusal), known, selected.Slug())
@@ -307,7 +307,7 @@ func groupByMeaning(run *learn.Run, known learn.Known, dir string, errOut io.Wri
 	}
 }
 
-func learnApply(o output.Verb, deps Deps, opts learnOpts, home learn.Home, finding learn.Finding, decide func(learn.Action) error) int {
+func learnApply(ctx context.Context, o output.Verb, deps Deps, opts learnOpts, home learn.Home, finding learn.Finding, decide func(learn.Action) error) int {
 	switch finding.Target() {
 	case learn.TargetUpstream:
 		return learnDraft(o, home, finding, decide)
@@ -339,7 +339,7 @@ func learnApply(o output.Verb, deps Deps, opts learnOpts, home learn.Home, findi
 			}
 			return output.ExitOK
 		}
-		shelves, err := entries.Open(opts.dir)
+		shelves, err := entries.OpenIn(ctx, opts.dir)
 		if err == nil {
 			_, err = shelves.Remove(finding.Scope, finding.Retire)
 		}
@@ -349,7 +349,7 @@ func learnApply(o output.Verb, deps Deps, opts learnOpts, home learn.Home, findi
 		return o.Receipt(host.WriteReceipt{Changes: []host.FileChange{{Change: host.ChangeRemoved, What: "memory " + finding.Retire + ", now the rule " + learnRuleID + finding.Key}},
 			Undo: "tofu memory add --scope " + string(finding.Scope) + " --said " + strconv.Quote(finding.Said) + " " + strconv.Quote(finding.Rule)})
 	}
-	shelves, err := entries.Open(opts.dir)
+	shelves, err := entries.OpenIn(ctx, opts.dir)
 	if err != nil {
 		return o.Fail(err)
 	}

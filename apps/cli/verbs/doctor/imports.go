@@ -118,8 +118,8 @@ type packageImports struct {
 	Imports    []string
 }
 
-func moduleImports(dir string) ([]packageImports, error) {
-	list := outside.Command(context.Background(), "go", "list", "-e", "-json=ImportPath,Imports", "./...")
+func moduleImports(ctx context.Context, dir string) ([]packageImports, error) {
+	list := outside.Command(ctx, "go", "list", "-e", "-json=ImportPath,Imports", "./...")
 	list.Dir = dir
 	var stderr strings.Builder
 	list.Stderr = &stderr
@@ -145,8 +145,8 @@ type importsReport struct {
 	Violations []importViolation `json:"violations"`
 }
 
-func readImports(dir string) (importsReport, error) {
-	pkgs, err := moduleImports(dir)
+func readImports(ctx context.Context, dir string) (importsReport, error) {
+	pkgs, err := moduleImports(ctx, dir)
 	if err != nil {
 		return importsReport{}, err
 	}
@@ -171,9 +171,9 @@ func readImports(dir string) (importsReport, error) {
 	return report, nil
 }
 
-func Imports(dir string, asJSON bool, out, errOut io.Writer) int {
+func Imports(ctx context.Context, dir string, asJSON bool, out, errOut io.Writer) int {
 	now := time.Now()
-	report, err := readImports(dir)
+	report, err := readImports(ctx, dir)
 	if err != nil {
 		return output.PrintFailure(errOut, output.ExitUsage, "tofu doctor --imports: unreadable: "+err.Error(), "")
 	}

@@ -1,7 +1,6 @@
 package boardy
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -100,7 +99,7 @@ func (m Managed) askJev(ref string, s subject) (string, string) {
 	client, err := classifiers.Open(m.Store.Root, core.ReadKeyring(), 1)
 	var decision core.Decision
 	if err == nil {
-		decision, err = client.Ask(context.Background(), core.Request{State: state, Questions: []core.Question{request}})
+		decision, err = client.Ask(m.waits(), core.Request{State: state, Questions: []core.Question{request}})
 	}
 	answer := decision.Answers[asked.Name]
 	p := answer.Probabilities[answer.Choice]

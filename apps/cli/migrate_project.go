@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -69,12 +70,12 @@ func reapTemporaryProjects(out io.Writer, registry platformproject.Registry, err
 	return true
 }
 
-func openProject(out io.Writer, in io.Reader, dir string, mayAsk, temporary bool, register func(platformproject.Project) error) {
+func openProject(ctx context.Context, out io.Writer, in io.Reader, dir string, mayAsk, temporary bool, register func(platformproject.Project) error) {
 	if isDir, _ := fs.IsDir(dir); !isDir {
 		return
 	}
 	page := cli.Detect(out, os.Environ())
-	project, err := platformproject.OpenProject(dir)
+	project, err := platformproject.OpenProjectIn(ctx, dir)
 	if err != nil {
 		_ = page.Print(out, page.ErrorLine("the project folder of "+page.Path(dir)+" was not opened: "+err.Error(), ""))
 		return

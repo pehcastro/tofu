@@ -19,17 +19,17 @@ import (
 
 const TreeUsage = `tofu memory tree <log.jsonl> [--budget BYTES], tofu memory zoom <log.jsonl> <id> <n>, tofu memory recall <log.jsonl> <regex>`
 
-func Verb(open wiring.Opener) func(args []string, out, errOut io.Writer) int {
-	return func(args []string, out, errOut io.Writer) int {
+func Verb(open wiring.Opener) func(ctx context.Context, args []string, out, errOut io.Writer) int {
+	return func(ctx context.Context, args []string, out, errOut io.Writer) int {
 		if len(args) == 0 || (args[0] != "tree" && args[0] != "zoom" && args[0] != "recall") {
-			return shelvesVerb(args, out, errOut)
+			return shelvesVerb(ctx, args, out, errOut)
 		}
 		verb, args := args[0], args[1:]
-		return treeVerb(output.Verb{Name: "memory " + verb, UsageLine: TreeUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}, open, verb, args)
+		return treeVerb(ctx, output.Verb{Name: "memory " + verb, UsageLine: TreeUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}, open, verb, args)
 	}
 }
 
-func treeVerb(o output.Verb, open wiring.Opener, verb string, args []string) int {
+func treeVerb(ctx context.Context, o output.Verb, open wiring.Opener, verb string, args []string) int {
 	budget := konst.MemtreeViewBytes
 	var rest []string
 	for i := 0; i < len(args); i++ {
@@ -62,7 +62,7 @@ func treeVerb(o output.Verb, open wiring.Opener, verb string, args []string) int
 	var lines []string
 	switch verb {
 	case "tree":
-		return buildTree(o, open, store, budget)
+		return buildTree(ctx, o, open, store, budget)
 	case "zoom":
 		id, idErr := strconv.Atoi(rest[1])
 		n, nErr := strconv.Atoi(rest[2])
@@ -80,7 +80,7 @@ func treeVerb(o output.Verb, open wiring.Opener, verb string, args []string) int
 	return output.ExitOK
 }
 
-func buildTree(o output.Verb, open wiring.Opener, store *tree.Store, budget int) int {
+func buildTree(ctx context.Context, o output.Verb, open wiring.Opener, store *tree.Store, budget int) int {
 	dir, err := os.Getwd()
 	if err != nil {
 		return o.Fail(err)
@@ -107,7 +107,7 @@ func buildTree(o output.Verb, open wiring.Opener, store *tree.Store, budget int)
 	var built tree.Built
 	err = store.Advance(budget, budget/2)
 	if err == nil {
-		built, err = tree.BuildInReplies(context.Background(), func(building func(*tree.Store) error) error { return building(store) }, one, all)
+		built, err = tree.BuildInReplies(ctx, func(building func(*tree.Store) error) error { return building(store) }, one, all)
 	}
 	if err == nil {
 		err = store.Advance(budget, budget/2)

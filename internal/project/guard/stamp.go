@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -26,7 +27,7 @@ func HeadTree(repo string) (string, []string, error) { return boardy.HeadTree(re
 
 func DeskTree(repo string) (string, []string, error) { return boardy.DeskTree(repo) }
 
-func flowsRefusal(env Env, command string) string {
+func flowsRefusal(ctx context.Context, env Env, command string) string {
 	if !strings.Contains(command, "boardy") {
 		return ""
 	}
@@ -37,25 +38,25 @@ func flowsRefusal(env Env, command string) string {
 		if err != nil {
 			return "The flows gate could not read " + id + ": " + err.Error()
 		}
-		if why := boardy.DoneRefusal(env.Root, id, moved.Owns); why != "" {
+		if why := boardy.DoneRefusal(ctx, env.Root, id, moved.Owns); why != "" {
 			return boardy.RefusedError{Ticket: id, Why: why}.Error()
 		}
 	}
 	return ""
 }
 
-func releaseRefusal(dir string) string {
-	tree, run, err := boardy.Unstamped(dir, FlowsStamps, TreewideStamps)
+func releaseRefusal(ctx context.Context, dir string) string {
+	tree, run, err := boardy.Unstamped(ctx, dir, FlowsStamps, TreewideStamps)
 	if err != nil {
 		return "release refused: HEAD's tree could not be read, so no stamp can be checked: " + err.Error()
 	}
 	var why []string
-	if outside := slices.DeleteFunc(gitLines(dir, "diff", "--cached", "--name-only", "HEAD"), releaseFile); len(outside) > 0 {
+	if outside := slices.DeleteFunc(gitLines(ctx, dir, "diff", "--cached", "--name-only", "HEAD"), releaseFile); len(outside) > 0 {
 		why = append(why, "these staged files are not release files, so the commit is not the stamped HEAD plus a version bump:\n  "+strings.Join(outside, "\n  "))
 	}
 	var broken []string
-	for _, page := range gitLines(dir, "diff", "--cached", "--name-only", "--diff-filter=d", "HEAD", "--", ":(glob)library/docs/*.md") {
-		broken = append(broken, DocsBroken(page, strings.Join(gitLines(dir, "show", ":"+page), "\n")+"\n")...)
+	for _, page := range gitLines(ctx, dir, "diff", "--cached", "--name-only", "--diff-filter=d", "HEAD", "--", ":(glob)library/docs/*.md") {
+		broken = append(broken, DocsBroken(page, strings.Join(gitLines(ctx, dir, "show", ":"+page), "\n")+"\n")...)
 	}
 	if len(broken) > 0 {
 		why = append(why, "these staged docs pages break the docs contract:\n  "+strings.Join(broken, "\n  "))

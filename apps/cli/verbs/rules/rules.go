@@ -2,6 +2,7 @@ package rules
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -44,8 +45,8 @@ type OverridesReport struct {
 	Overrides []host.OverrideListing `json:"overrides"`
 }
 
-func Verb(deps Deps) func(args []string, out, errOut io.Writer) int {
-	return func(args []string, out, errOut io.Writer) int {
+func Verb(deps Deps) func(ctx context.Context, args []string, out, errOut io.Writer) int {
+	return func(ctx context.Context, args []string, out, errOut io.Writer) int {
 		bare := output.Verb{Name: "rules", UsageLine: subcommandsUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 		if len(output.WithoutJSON(args)) == 0 {
 			return bare.Usage(errors.New("no subcommand"))
@@ -62,7 +63,7 @@ func Verb(deps Deps) func(args []string, out, errOut io.Writer) int {
 		case "list":
 			return listVerb(args[1:], out, errOut)
 		case "check":
-			return checkVerb(args[1:], out, errOut)
+			return checkVerb(ctx, args[1:], out, errOut)
 		case "fired":
 			return firedVerb(args[1:], out, errOut)
 		case "index":

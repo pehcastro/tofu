@@ -1,6 +1,7 @@
 package entries
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -139,11 +140,14 @@ type Memory struct {
 	who                                      *who
 }
 
-func Open(project string) (Memory, error) {
+func Open(project string) (Memory, error) { return OpenIn(context.Background(), project) }
+
+func OpenIn(ctx context.Context, project string) (Memory, error) {
 	m, err := Placed(project)
 	if err != nil {
 		return m, err
 	}
+	m.who.waits = ctx
 	weights, err := loadWeights()
 	if err != nil {
 		return Memory{}, err
@@ -178,7 +182,7 @@ func Placed(project string) (Memory, error) {
 	if err != nil {
 		return Memory{}, err
 	}
-	m := Memory{home: home, state: state, repo: repo, project: full, allUsers: chosen.Text(settings.MemoryFromAllUsers) == settings.AllUsersOn, who: &who{authors: map[string]string{}}}
+	m := Memory{home: home, state: state, repo: repo, project: full, allUsers: chosen.Text(settings.MemoryFromAllUsers) == settings.AllUsersOn, who: &who{waits: context.Background(), authors: map[string]string{}}}
 	m.Global = Shelf{Scope: Global, Dir: filepath.Join(home, dirName, "user")}
 	m.Project = Shelf{Scope: Project, Dir: filepath.Join(state, dirName)}
 	m.UserLocal = Shelf{Scope: UserLocal, Dir: filepath.Join(repo, dirName, "user")}

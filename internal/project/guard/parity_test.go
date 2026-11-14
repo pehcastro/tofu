@@ -219,13 +219,13 @@ func guardSide() side {
 			var answer Answer
 			switch step.Rule {
 			case "git commit-msg":
-				answer = CommitMsg(fx.root, msgFile)
+				answer = CommitMsg(t.Context(), fx.root, msgFile)
 			case "git release-docs":
-				answer = ReleaseDocs(fx.root, msgFile)
+				answer = ReleaseDocs(t.Context(), fx.root, msgFile)
 			default:
 				var err error
 				env := Env{Root: fx.root, Temp: filepath.Join(base, "temp"), Cache: filepath.Join(base, "cache"), Boardy: fx.boardy}
-				if answer, err = Hook(Rule(step.Rule), env, stdin); err != nil {
+				if answer, err = Hook(t.Context(), Rule(step.Rule), env, stdin); err != nil {
 					t.Fatal(err)
 				}
 			}

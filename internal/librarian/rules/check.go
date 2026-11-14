@@ -40,12 +40,12 @@ const (
 	CheckerPersonApproves = "person_approves"
 )
 
-func RunCommand(command, ticketPath string, env []string) (string, bool, error) {
+func RunCommand(ctx context.Context, command, ticketPath string, env []string) (string, bool, error) {
 	argv := commandWords(command)
 	for i := range argv {
 		argv[i] = strings.ReplaceAll(argv[i], "{ticket}", ticketPath)
 	}
-	cmd := outside.Command(context.Background(), argv[0], argv[1:]...)
+	cmd := outside.Command(ctx, argv[0], argv[1:]...)
 	cmd.Env = append(os.Environ(), env...)
 	output, err := cmd.CombinedOutput()
 	var exit *exec.ExitError

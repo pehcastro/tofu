@@ -81,14 +81,14 @@ func refusedBy(display, hint string, err error) *output.Refusal {
 }
 
 type Deps struct {
-	Status func(args []string, out, errOut io.Writer, now time.Time, urls map[quota.Provider]string) int
+	Status func(ctx context.Context, args []string, out, errOut io.Writer, now time.Time, urls map[quota.Provider]string) int
 }
 
 func Verb(deps Deps) func(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) int {
 	return func(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) int {
 		now := time.Now()
 		if len(args) > 0 && args[0] == "--status" {
-			return deps.Status(args[1:], out, errOut, now, nil)
+			return deps.Status(ctx, args[1:], out, errOut, now, nil)
 		}
 		return answerVerb("login", args, out, errOut, now, func(args []string) (Receipt, *output.Refusal) {
 			return login(ctx, args, in, errOut, now)

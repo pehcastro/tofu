@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -67,7 +68,7 @@ type event struct {
 	} `json:"tool_input"`
 }
 
-func Hook(rule Rule, env Env, stdin []byte) (Answer, error) {
+func Hook(ctx context.Context, rule Rule, env Env, stdin []byte) (Answer, error) {
 	if rule == Emdash {
 		return emdash(stdin), nil
 	}
@@ -81,11 +82,11 @@ func Hook(rule Rule, env Env, stdin []byte) (Answer, error) {
 	case LibraryWording:
 		return libraryWording(ev), nil
 	case Shell:
-		return shell(env, ev)
+		return shell(ctx, env, ev)
 	case LocTrack:
 		return Answer{}, locTrack(env, ev)
 	case Snapshot:
-		snapshot(env, ev)
+		snapshot(ctx, env, ev)
 		return Answer{}, nil
 	case MinifyGate:
 		return minifyGate(env, ev)

@@ -2,6 +2,7 @@ package memory
 
 import (
 	"cmp"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -66,7 +67,7 @@ func parseMemoryArgs(args []string) (memoryOpts, error) {
 	return opts, nil
 }
 
-func shelvesVerb(args []string, out, errOut io.Writer) int {
+func shelvesVerb(ctx context.Context, args []string, out, errOut io.Writer) int {
 	verb := "list"
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		verb, args = args[0], args[1:]
@@ -76,7 +77,7 @@ func shelvesVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.Usage(err)
 	}
-	shelves, err := memory.Open(opts.dir)
+	shelves, err := memory.OpenIn(ctx, opts.dir)
 	say := func() {
 		for _, notice := range shelves.Notices {
 			_, _ = fmt.Fprintln(errOut, notice)

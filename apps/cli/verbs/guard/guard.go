@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -14,8 +15,8 @@ import (
 
 const Usage = "usage: tofu guard <rule> < hook.json, or tofu guard git commit-msg|release-docs <message file>"
 
-func Verb(args []string, in io.Reader, out, errOut io.Writer) int {
-	answer, err := guardAnswer(args, in)
+func Verb(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) int {
+	answer, err := guardAnswer(ctx, args, in)
 	if err != nil {
 		_, _ = fmt.Fprintln(errOut, "tofu guard: "+err.Error())
 		_, _ = fmt.Fprintln(errOut, Usage)
@@ -26,15 +27,15 @@ func Verb(args []string, in io.Reader, out, errOut io.Writer) int {
 	return answer.Code
 }
 
-func guardAnswer(args []string, in io.Reader) (guard.Answer, error) {
+func guardAnswer(ctx context.Context, args []string, in io.Reader) (guard.Answer, error) {
 	wd, err := os.Getwd()
 	switch {
 	case err != nil:
 		return guard.Answer{}, err
 	case len(args) == 3 && args[0] == "git" && args[1] == "commit-msg":
-		return guard.CommitMsg(wd, args[2]), nil
+		return guard.CommitMsg(ctx, wd, args[2]), nil
 	case len(args) == 3 && args[0] == "git" && args[1] == "release-docs":
-		return guard.ReleaseDocs(wd, args[2]), nil
+		return guard.ReleaseDocs(ctx, wd, args[2]), nil
 	case len(args) != 1:
 		return guard.Answer{}, fmt.Errorf("one rule: %v, or git commit-msg|release-docs <file>", guard.Rules())
 	}
@@ -53,5 +54,5 @@ func guardAnswer(args []string, in io.Reader) (guard.Answer, error) {
 		Cache:  cache,
 		Boardy: settings.TextSaying(root, boardy.ManagementSetting, nil) == string(boardy.ManagementBoardy),
 	}
-	return guard.Hook(guard.Rule(args[0]), env, stdin)
+	return guard.Hook(ctx, guard.Rule(args[0]), env, stdin)
 }

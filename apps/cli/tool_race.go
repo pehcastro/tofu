@@ -33,7 +33,7 @@ func newRaceTool(dir string) (contract.Tool, error) {
 		}
 		bound := wiring.OnTheBoundWire(wiring.RunOpts{Dir: dir})
 		opts.Wire, opts.Model = bound.Wire, bound.Model
-		project, err := platformproject.OpenProject(tree)
+		project, err := platformproject.OpenProjectIn(ctx, tree)
 		if err != nil {
 			return race.Ran{}, err
 		}

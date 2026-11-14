@@ -1,6 +1,7 @@
 package guard
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -48,13 +49,13 @@ const (
 	scriptBytes  = 64 << 10
 )
 
-func shell(env Env, ev event) (Answer, error) {
+func shell(ctx context.Context, env Env, ev event) (Answer, error) {
 	command := ev.ToolInput.Command
 	if blank(command) {
 		return Answer{}, nil
 	}
 	stripped := stripHeredocs(command)
-	if reason := flowsRefusal(env, stripped); reason != "" {
+	if reason := flowsRefusal(ctx, env, stripped); reason != "" {
 		return deny(reason), nil
 	}
 	git := withoutQuotedText(stripped) + "\n" + scriptCode(scriptText(env, command))

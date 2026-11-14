@@ -24,7 +24,7 @@ func TestLoginStatusJSONIsOneEnvelopeOfCodes(t *testing.T) {
 		savedAccount(t)
 		storeGateKey(t, madeUpGateKey)
 		var errOut bytes.Buffer
-		if code := statusverb.LoginVerb([]string{output.JSONFlag}, &out, &errOut, fixtureMoment(), nil); code != output.ExitOK {
+		if code := statusverb.LoginVerb(t.Context(), []string{output.JSONFlag}, &out, &errOut, fixtureMoment(), nil); code != output.ExitOK {
 			t.Fatalf("login --status --json exited %d:\n%s", code, errOut.String())
 		}
 	})

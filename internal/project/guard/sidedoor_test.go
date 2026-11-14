@@ -41,7 +41,7 @@ func TestShellHasNoSideDoors(t *testing.T) {
 	}
 	for _, c := range cases {
 		stdin, _ := json.Marshal(map[string]any{"tool_name": "Bash", "agent_id": c.agent, "tool_input": map[string]string{"command": c.command}})
-		answer, err := Hook(Shell, Env{Root: t.TempDir(), Temp: t.TempDir()}, stdin)
+		answer, err := Hook(t.Context(), Shell, Env{Root: t.TempDir(), Temp: t.TempDir()}, stdin)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -56,7 +56,7 @@ func TestShellHasNoSideDoors(t *testing.T) {
 }
 
 func TestCommitMsgRefusesAMissingMessageFile(t *testing.T) {
-	if answer := CommitMsg(t.TempDir(), filepath.Join(t.TempDir(), "COMMIT_EDITMSG")); answer.Code == 0 {
+	if answer := CommitMsg(t.Context(), t.TempDir(), filepath.Join(t.TempDir(), "COMMIT_EDITMSG")); answer.Code == 0 {
 		t.Fatalf("a missing message file was allowed: %+v", answer)
 	}
 }

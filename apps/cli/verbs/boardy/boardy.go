@@ -2,6 +2,7 @@ package boardy
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -86,7 +87,7 @@ type boardyList struct {
 	Tickets []boardy.Ticket `json:"tickets"`
 }
 
-func Verb(args []string, out, errOut io.Writer) int {
+func Verb(ctx context.Context, args []string, out, errOut io.Writer) int {
 	o := output.Verb{Name: "boardy", UsageLine: Usage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	args = output.WithoutJSON(args)
 	if len(args) == 0 || UsageOf(args[0]) == "" {
@@ -107,7 +108,7 @@ func Verb(args []string, out, errOut io.Writer) int {
 		return o.Fail(err)
 	}
 	actor, lead := wiring.BoardyIdentity(flags["as"])
-	call := boardyCall{o: o, dir: dir, managed: boardy.Managed{Local: boardy.Local{Store: store}, Person: string(boardy.RolePerson), Lead: lead}, actor: actor, store: store, words: flow.Words(), flags: flags, args: rest}
+	call := boardyCall{o: o, dir: dir, managed: boardy.Managed{Local: boardy.Local{Store: store}, Person: string(boardy.RolePerson), Lead: lead, Waits: ctx}, actor: actor, store: store, words: flow.Words(), flags: flags, args: rest}
 	sizes := store.EventSizes()
 	written := host.BoardyWriting(dir, actor)
 	code := call.run(args[0])

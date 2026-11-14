@@ -45,7 +45,7 @@ type checkReport struct {
 	Blocked int           `json:"blocked"`
 }
 
-func checkVerb(args []string, out, errOut io.Writer) int {
+func checkVerb(ctx context.Context, args []string, out, errOut io.Writer) int {
 	o := output.Verb{Name: "rules check", UsageLine: checkUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	opts, err := parseFlags(args)
 	if err == nil && len(opts.rest) > 1 {
@@ -76,7 +76,7 @@ func checkVerb(args []string, out, errOut io.Writer) int {
 		if err != nil {
 			return o.Fail(err)
 		}
-		listed, err := patternFiles(rules, root)
+		listed, err := patternFiles(ctx, rules, root)
 		if err != nil {
 			return o.Fail(err)
 		}
@@ -104,11 +104,11 @@ func checkVerb(args []string, out, errOut io.Writer) int {
 	return o.Done(report.Blocked == 0, report, report.lines)
 }
 
-func patternFiles(rules []rule.Rule, root string) ([]string, error) {
+func patternFiles(ctx context.Context, rules []rule.Rule, root string) ([]string, error) {
 	if !slices.ContainsFunc(rules, func(r rule.Rule) bool { return r.Pattern != nil }) {
 		return nil, nil
 	}
-	if listed, err := outside.Command(context.Background(), "git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", root).Output(); err == nil {
+	if listed, err := outside.Command(ctx, "git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", root).Output(); err == nil {
 		return strings.FieldsFunc(string(listed), func(r rune) bool { return r == 0 }), nil
 	}
 	var walked []string

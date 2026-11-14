@@ -30,7 +30,7 @@ var (
 	docsWaiver       = fs.LazyRegexp(`(?i)^Docs: none, (\S+\s+){2,}\S+`)
 )
 
-func CommitMsg(dir, file string) Answer {
+func CommitMsg(ctx context.Context, dir, file string) Answer {
 	body, err := messageBody(file)
 	if err != nil {
 		return refuseCommit("the message file could not be read: " + err.Error())
@@ -65,13 +65,13 @@ func CommitMsg(dir, file string) Answer {
 	if release == nil {
 		return Answer{}
 	}
-	if why := releaseRefusal(dir); why != "" {
+	if why := releaseRefusal(ctx, dir); why != "" {
 		return refuse(1, why)
 	}
-	return releaseDocs(dir, release[1], body)
+	return releaseDocs(ctx, dir, release[1], body)
 }
 
-func ReleaseDocs(dir, file string) Answer {
+func ReleaseDocs(ctx context.Context, dir, file string) Answer {
 	body, err := messageBody(file)
 	if err != nil {
 		return refuse(1, "release refused: the message file could not be read: "+err.Error())
@@ -83,7 +83,7 @@ func ReleaseDocs(dir, file string) Answer {
 	if release == nil {
 		return Answer{}
 	}
-	return releaseDocs(dir, release[1], body)
+	return releaseDocs(ctx, dir, release[1], body)
 }
 
 func messageBody(file string) ([]string, error) {
@@ -108,8 +108,8 @@ func refuseCommit(why string) Answer {
   under 72 characters, present tense, no trailing period`)
 }
 
-func releaseDocs(dir, version string, message []string) Answer {
-	changelog := gitLines(dir, "show", ":CHANGELOG.md")
+func releaseDocs(ctx context.Context, dir, version string, message []string) Answer {
+	changelog := gitLines(ctx, dir, "show", ":CHANGELOG.md")
 	header := regexp.MustCompile(`(?i)^## ` + regexp.QuoteMeta(version) + `(\s|$)`)
 	start := slices.IndexFunc(changelog, header.MatchString)
 	if start < 0 {
@@ -134,10 +134,10 @@ func releaseDocs(dir, version string, message []string) Answer {
 	}
 	var missing []string
 	if addsOrChanges && !slices.ContainsFunc(message, docsWaiver().MatchString) {
-		previous := strings.TrimSpace(strings.Join(gitLines(dir, "log", "-1", "--format=%H", "--grep=^chore(release): ", "HEAD"), "\n"))
-		changed, since := gitLines(dir, "ls-files", "--", "docs/"), "in this repository"
+		previous := strings.TrimSpace(strings.Join(gitLines(ctx, dir, "log", "-1", "--format=%H", "--grep=^chore(release): ", "HEAD"), "\n"))
+		changed, since := gitLines(ctx, dir, "ls-files", "--", "docs/"), "in this repository"
 		if previous != "" {
-			changed, since = gitLines(dir, "diff", "--cached", "--name-only", previous, "--", "docs/"), "since "+previous[:min(8, len(previous))]
+			changed, since = gitLines(ctx, dir, "diff", "--cached", "--name-only", previous, "--", "docs/"), "since "+previous[:min(8, len(previous))]
 		}
 		if len(changed) == 0 {
 			missing = append(missing, "no file under docs/ changed "+since+". Every Added and Changed line goes into docs/ before the release, or the body says Docs: none, <reason>.")
@@ -145,7 +145,7 @@ func releaseDocs(dir, version string, message []string) Answer {
 	}
 	slices.SortFunc(names, func(a, b string) int { return strings.Compare(strings.ToLower(a), strings.ToLower(b)) })
 	for _, name := range slices.CompactFunc(names, strings.EqualFold) {
-		if outside.Command(context.Background(), "git", "-C", dir, "grep", "--cached", "-q", "-I", "-F", "-w", "-e", name, "--", "docs/").Run() != nil {
+		if outside.Command(ctx, "git", "-C", dir, "grep", "--cached", "-q", "-I", "-F", "-w", "-e", name, "--", "docs/").Run() != nil {
 			missing = append(missing, "`"+name+"` is in the "+version+" entry and nowhere under docs/.")
 		}
 	}
@@ -159,8 +159,8 @@ func announces(section string) bool {
 	return strings.EqualFold(section, "Added") || strings.EqualFold(section, "Changed")
 }
 
-func gitLines(dir string, args ...string) []string {
-	out, _ := outside.Command(context.Background(), "git", append([]string{"-C", dir}, args...)...).Output()
+func gitLines(ctx context.Context, dir string, args ...string) []string {
+	out, _ := outside.Command(ctx, "git", append([]string{"-C", dir}, args...)...).Output()
 	text := strings.TrimSuffix(strings.ReplaceAll(string(out), "\r\n", "\n"), "\n")
 	if text == "" {
 		return nil

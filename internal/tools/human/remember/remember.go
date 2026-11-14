@@ -267,7 +267,7 @@ func (r Remember) Run(ctx context.Context, raw json.RawMessage) (contract.Result
 	if family, err := r.Store.Identity(r.Session); err == nil {
 		entry.Session = family.Family
 	}
-	shelves, err := entries.Open(r.Project)
+	shelves, err := entries.OpenIn(ctx, r.Project)
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("remember: %w", err)
 	}

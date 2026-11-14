@@ -51,7 +51,7 @@ func TestScriptGitIsRefusedLikePlainGit(t *testing.T) {
 	}
 	for _, c := range cases {
 		stdin, _ := json.Marshal(map[string]any{"tool_name": "Bash", "agent_id": c.agent, "tool_input": map[string]string{"command": c.command}})
-		answer, err := Hook(Shell, Env{Root: root, Temp: temp}, stdin)
+		answer, err := Hook(t.Context(), Shell, Env{Root: root, Temp: temp}, stdin)
 		if err != nil {
 			t.Fatal(err)
 		}

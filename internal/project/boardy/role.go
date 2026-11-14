@@ -2,6 +2,7 @@ package boardy
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"slices"
 	"strconv"
@@ -23,7 +24,15 @@ type Managed struct {
 	Person string
 	Lead   string
 	Bypass Bypassing
+	Waits  context.Context
 	head   *DoneGate
+}
+
+func (m Managed) waits() context.Context {
+	if m.Waits == nil {
+		return context.Background()
+	}
+	return m.Waits
 }
 
 type Bypassing struct {

@@ -54,7 +54,7 @@ func TestImportsFailsOnACommandImportingBench(t *testing.T) {
 	}))
 
 	out := &bytes.Buffer{}
-	code := Imports(dir, false, out, out)
+	code := Imports(t.Context(), dir, false, out, out)
 	if code != output.ExitVerdict {
 		t.Fatalf("exit = %d, want %d, output %q", code, output.ExitVerdict, out.String())
 	}
@@ -79,7 +79,7 @@ func TestImportsFailsOnJudgeImportingTurn(t *testing.T) {
 		"internal/judge/points/points.go":    "package points\n\nimport \"tofu/internal/judge/ledger\"\n\nfunc N() int { return ledger.N() }\n",
 	}))
 
-	report, err := readImports(dir)
+	report, err := readImports(t.Context(), dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestImportsPassesOnATreeThatObeysTheRules(t *testing.T) {
 	}))
 
 	out := &bytes.Buffer{}
-	code := Imports(dir, false, out, out)
+	code := Imports(t.Context(), dir, false, out, out)
 	if code != output.ExitOK {
 		t.Fatalf("exit = %d, want %d, output %q", code, output.ExitOK, out.String())
 	}
@@ -118,7 +118,7 @@ func TestImportsNamesEveryRuleItChecked(t *testing.T) {
 	dir := writeFixtureModule(t, everyRuleMatched(nil))
 
 	out := &bytes.Buffer{}
-	if code := Imports(dir, true, out, out); code != output.ExitOK {
+	if code := Imports(t.Context(), dir, true, out, out); code != output.ExitOK {
 		t.Fatalf("exit = %d, output %q", code, out.String())
 	}
 	var envelope struct {
@@ -145,7 +145,7 @@ func TestImportsFailsOnARuleThatMatchesNoPackage(t *testing.T) {
 	delete(tree, "bench/suites/judge/cost/cost.go")
 	dir := writeFixtureModule(t, tree)
 
-	report, err := readImports(dir)
+	report, err := readImports(t.Context(), dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,13 +161,13 @@ func TestImportsFailsOnARuleThatMatchesNoPackage(t *testing.T) {
 		t.Fatalf("violations %+v, want one per rule matching no package: %v", report.Violations, want)
 	}
 	out := &bytes.Buffer{}
-	if code := Imports(dir, false, out, out); code != output.ExitVerdict || !strings.Contains(out.String(), "tofu/bench  matches no package: nothing under tofu/internal imports") {
+	if code := Imports(t.Context(), dir, false, out, out); code != output.ExitVerdict || !strings.Contains(out.String(), "tofu/bench  matches no package: nothing under tofu/internal imports") {
 		t.Fatalf("exit %d, output\n%s\nwant exit %d and the dead rule named", code, out.String(), output.ExitVerdict)
 	}
 }
 
 func TestImportsOnThisTreeFindsNothing(t *testing.T) {
-	report, err := readImports(filepath.Join("..", "..", "..", ".."))
+	report, err := readImports(t.Context(), filepath.Join("..", "..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestImportsOnThisTreeFindsNothing(t *testing.T) {
 
 func TestImportsReportsAnUnreadableTreeOnStderr(t *testing.T) {
 	var out, errOut bytes.Buffer
-	code := Imports(filepath.Join(t.TempDir(), "absent"), false, &out, &errOut)
+	code := Imports(t.Context(), filepath.Join(t.TempDir(), "absent"), false, &out, &errOut)
 	if code != output.ExitUsage || out.Len() > 0 || !strings.Contains(errOut.String(), "✗ tofu doctor --imports: unreadable:") {
 		t.Fatalf("exit %d, stdout %q, stderr %q, want exit %d, nothing on stdout and the refusal on stderr", code, out.String(), errOut.String(), output.ExitUsage)
 	}

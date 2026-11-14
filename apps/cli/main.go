@@ -51,6 +51,10 @@ const (
 	profiledVariable = "TOFU_PROFILED"
 )
 
+const browserUsage = "tofu browser [install | uninstall | tabs | build | recipes | open <url> | close <tab id> | bench [--jev] [--n 12] [--rows file] | motion capture <scenario.json>] [--json], " +
+	"tofu browser observe [--all] | click <ref> | fill <ref> <text> | select <ref> <option> | press <key> | scroll [<ref>] [up|down] | back --tab <id> [--json], " +
+	"tofu browser read [--tab <id>] [--json], tofu browser batch [<steps.json> | -] [--tab <id>] [--json], " + browserverb.ProfileUsage
+
 const usage = `tofu is a coding agent harness.
 
 Usage:
@@ -162,10 +166,11 @@ func main() {
 	if opensTheApp {
 		register = platformproject.Project.RegisterIdentityLater
 	}
+	ctx, clock := outside.Open(context.Background(), time.Now)
 	letGo := func() {}
 	if opens {
 		safe.Go(wiring.CrashTold(".", func(said string) { _, _ = fmt.Fprintln(os.Stderr, "tofu: "+said) }), "time zone load", loadLocalTimeZone)
-		openProject(os.Stderr, os.Stdin, dir, opensTheApp && isTerminal(os.Stdin) && isTerminal(os.Stderr), temporary, register)
+		openProject(ctx, os.Stderr, os.Stdin, dir, opensTheApp && isTerminal(os.Stdin) && isTerminal(os.Stderr), temporary, register)
 		letGo = platformproject.HoldProjectOpen(dir)
 	}
 	stopSnapshots := func() {}
@@ -177,7 +182,6 @@ func main() {
 	}
 	moveHomeKeys(os.Stderr)
 	pages := console.ReadConsolePages()
-	ctx, clock := outside.Open(context.Background(), time.Now)
 	rewritesRegistry := opens || len(args) > 0 && args[0] == "migrate"
 	var places platformproject.Places
 	placesErr := registryErr
@@ -383,7 +387,7 @@ func verbNamed(name string) verb {
 	case "hooks":
 		return verb{run: withoutIn(hooksverb.Verb)}
 	case "guard":
-		return verb{run: guardverb.Verb, usage: guardverb.Usage}
+		return verb{clocked: guardverb.Verb, usage: guardverb.Usage}
 	case "undo":
 		return verb{clocked: clockedWithoutIn(undoVerb), usage: undoUsage}
 	case "version":
@@ -430,7 +434,7 @@ func verbNamed(name string) verb {
 	case "judge":
 		return verb{clocked: judgeverb.Verb, usage: judgeverb.Usage}
 	case "check":
-		return verb{run: withoutIn(judgeverb.CheckVerb), usage: judgeverb.CheckUsage}
+		return verb{clocked: clockedWithoutIn(judgeverb.CheckVerb), usage: judgeverb.CheckUsage}
 	case "context":
 		return verb{run: withoutIn(contextVerb)}
 	case "sift":
@@ -438,7 +442,7 @@ func verbNamed(name string) verb {
 	case "label":
 		return verb{run: withClock(judgeverb.LabelVerb), usage: judgeverb.LabelUsage}
 	case "calibrate":
-		return verb{run: withoutIn(judgeverb.CalibrateVerb), usage: judgeverb.CalibrateUsage}
+		return verb{clocked: clockedWithoutIn(judgeverb.CalibrateVerb), usage: judgeverb.CalibrateUsage}
 	case "replay":
 		return verb{run: withClock(judgeverb.ReplayVerb), usage: judgeverb.ReplayUsage}
 	case "library":
@@ -451,15 +455,15 @@ func verbNamed(name string) verb {
 	case "lint":
 		return verb{run: withoutIn(lintverb.Verb), usage: lintverb.Usage}
 	case "rules":
-		return verb{run: withoutIn(rulesverb.Verb(rulesverb.Deps{Agents: agentsIn, Why: rulesWhyVerb})), usage: rulesverb.Usage + " " + rulesWhyUsage}
+		return verb{clocked: clockedWithoutIn(rulesverb.Verb(rulesverb.Deps{Agents: agentsIn, Why: rulesWhyVerb})), usage: rulesverb.Usage + " " + rulesWhyUsage}
 	case "boardy":
-		return verb{run: withoutIn(boardyverb.Verb), usage: boardyverb.Usage}
+		return verb{clocked: clockedWithoutIn(boardyverb.Verb), usage: boardyverb.Usage}
 	case "scratch":
 		return verb{run: withoutIn(shellsverb.Scratch), usage: shellsverb.ScratchUsage}
 	case "memory":
-		return verb{run: withoutIn(memoryverb.Verb(wireOpener())), usage: memoryverb.Usage + " " + memoryverb.TreeUsage}
+		return verb{clocked: clockedWithoutIn(memoryverb.Verb(wireOpener())), usage: memoryverb.Usage + " " + memoryverb.TreeUsage}
 	case "learn":
-		return verb{run: withoutIn(learnverb.Verb(learnverb.Deps{SetSetting: settingsverb.Verb, AddRule: rulesverb.AddVerb})), usage: learnverb.Usage}
+		return verb{clocked: clockedWithoutIn(learnverb.Verb(learnverb.Deps{SetSetting: settingsverb.Verb, AddRule: rulesverb.AddVerb})), usage: learnverb.Usage}
 	case "settings":
 		return verb{run: withoutIn(settingsverb.Verb), usage: settingsverb.Usage}
 	case "reload":
@@ -467,7 +471,7 @@ func verbNamed(name string) verb {
 	case "migrate":
 		return verb{run: withoutIn(migrateVerb), usage: migrateUsage}
 	case "browser":
-		return verb{clocked: clockedWithoutIn(browserverb.Verb)}
+		return verb{clocked: clockedWithoutIn(browserverb.Verb), usage: browserUsage}
 	case "walls":
 		return verb{run: withoutIn(wallsverb.Verb), usage: wallsverb.Usage}
 	case "preview":
@@ -508,10 +512,6 @@ func verbHelp(name string, args []string) string {
 		text = "tofu context [<name|id|head>] [--json]"
 	case "preview":
 		text = "tofu preview [--json]"
-	case "browser":
-		text = "tofu browser [install | uninstall | tabs | build | recipes | open <url> | close <tab id> | bench [--jev] [--n 12] [--rows file] | motion capture <scenario.json>] [--json], " +
-			"tofu browser observe [--all] | click <ref> | fill <ref> <text> | select <ref> <option> | press <key> | scroll [<ref>] [up|down] | back --tab <id> [--json], " +
-			"tofu browser read [--tab <id>] [--json], tofu browser batch [<steps.json> | -] [--tab <id>] [--json], " + browserverb.ProfileUsage
 	}
 	if strings.Contains(text, "\n") {
 		return text
