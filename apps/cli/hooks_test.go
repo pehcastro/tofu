@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -68,7 +69,7 @@ func TestHooksRunFiresSessionStartFirstAndSessionEndWhenItsLeadReturns(t *testin
 	}
 	t.Setenv(cassetteVariable, deck)
 	var out, errOut bytes.Buffer
-	if code := runVerb([]string{"--dir", project, "--wire", wiring.WireSubscription, "--no-gate", "--sift", "free", "say hi"}, &out, &errOut); code != output.ExitOK {
+	if code := runVerb(context.Background(), []string{"--dir", project, "--wire", wiring.WireSubscription, "--no-gate", "--sift", "free", "say hi"}, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("tofu run exited %d: %s", code, errOut.String())
 	}
 	seen := sessionEvents(t, logged)

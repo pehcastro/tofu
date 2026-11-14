@@ -2,6 +2,7 @@ package main
 
 import (
 	"cmp"
+	"context"
 	"fmt"
 	"io"
 	"slices"
@@ -13,8 +14,8 @@ import (
 	"tofu/internal/librarian/rules"
 )
 
-func showPrompt(opts wiring.RunOpts, out, errOut io.Writer) int {
-	hand, err := handConfig(opts, "", nil, writeNotice(errOut))
+func showPrompt(ctx context.Context, opts wiring.RunOpts, out, errOut io.Writer) int {
+	hand, err := handConfig(ctx, opts, "", nil, writeNotice(errOut))
 	if err != nil {
 		return runFail(errOut, err)
 	}

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"cmp"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -131,7 +132,7 @@ func TestUpdateAgainstAFakeRelease(t *testing.T) {
 			}
 			t.Setenv(updateTargetVariable, target)
 			var out, errOut bytes.Buffer
-			code := updateFrom(c.current, c.isRelease, c.args, &out, &errOut)
+			code := updateFrom(context.Background(), c.current, c.isRelease, c.args, &out, &errOut)
 			t.Logf("exit %d\n%s%s", code, out.String(), errOut.String())
 			printed := strings.Join(strings.Fields(out.String()+errOut.String()), " ")
 			if code != c.code {

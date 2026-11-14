@@ -22,7 +22,9 @@ import (
 	"tofu/internal/cli/render"
 	"tofu/internal/konst"
 	"tofu/internal/platform/fs"
+	platformproject "tofu/internal/platform/project"
 	settingspkg "tofu/internal/store/settings"
+	"tofu/internal/store/walls"
 	browsertool "tofu/internal/tools/web/browser"
 	browser "tofu/internal/tools/web/browser/driver"
 	"tofu/internal/tools/web/browser/loop"
@@ -50,6 +52,7 @@ type benchReport struct {
 }
 
 type browserOutput struct {
+	ctx         context.Context
 	page        cli.Page
 	asJSON      bool
 	verb        string
@@ -58,9 +61,12 @@ type browserOutput struct {
 
 func HostVerb(origin string, in io.Reader, out, errOut io.Writer) int {
 	home, err := os.UserHomeDir()
+	places, _ := platformproject.ResolvePlaces(".")
+	heard := walls.Writer{State: places.State}
 	if err == nil {
-		err = browser.Host(origin, in, out, home)
+		err = browser.Host(origin, in, out, home, func(wall walls.Wall) { _ = heard.Append(wall) })
 	}
+	_ = heard.Close()
 	if err != nil {
 		_, _ = fmt.Fprintf(errOut, "tofu host: %v\n", err)
 		return output.ExitVerdict
@@ -68,7 +74,7 @@ func HostVerb(origin string, in io.Reader, out, errOut io.Writer) int {
 	return output.ExitOK
 }
 
-func Verb(args []string, out, errOut io.Writer) int {
+func Verb(ctx context.Context, args []string, out, errOut io.Writer) int {
 	asJSON, all := slices.Contains(args, output.JSONFlag), slices.Contains(args, "--all")
 	args = slices.DeleteFunc(slices.Clone(args), func(arg string) bool { return arg == output.JSONFlag || arg == "--all" })
 	tab, tabErr := 0, error(nil)
@@ -85,7 +91,7 @@ func Verb(args []string, out, errOut io.Writer) int {
 	err := flags.Parse(args)
 	verb, operands := flags.Arg(0), flags.Args()[min(1, flags.NArg()):]
 	page := cli.Detect(out, os.Environ())
-	o := browserOutput{page: page, asJSON: asJSON, verb: strings.TrimSpace("browser " + verb), out: out, errOut: errOut}
+	o := browserOutput{ctx: ctx, page: page, asJSON: asJSON, verb: strings.TrimSpace("browser " + verb), out: out, errOut: errOut}
 	if err == nil && verb == "bench" {
 		return o.bench(operands)
 	}
@@ -227,7 +233,7 @@ func (o browserOutput) batch(home string, tab int, from string) int {
 	tabs := browsertool.NewBrowserTabs(home)
 	report, failed := "", 0
 	if err == nil {
-		report, failed, err = browsertool.BrowserBatch(context.Background(), browserEndpoint(home), tabs, tab, steps)
+		report, failed, err = browsertool.BrowserBatch(o.ctx, browserEndpoint(home), tabs, tab, steps)
 	}
 	if tab == 0 {
 		tabs.Close()
@@ -335,7 +341,7 @@ func (o browserOutput) bench(args []string) int {
 		if err != nil {
 			return err
 		}
-		rows := steps.Run(context.Background(), browser.SharedTab{Client: client, ID: tab}, judge, moves[:*n])
+		rows := steps.Run(o.ctx, browser.SharedTab{Client: client, ID: tab}, judge, moves[:*n])
 		report.Summary = steps.Summarise(rows)
 		var written bytes.Buffer
 		err = errors.Join(client.CloseTab(tab), steps.Write(&written, rows))
@@ -440,19 +446,20 @@ func tabToRead(tabs []browser.Tab, tab int) (browser.Tab, error) {
 
 func (o browserOutput) withBrowser(home string, use func(*browser.Client) error) error {
 	at := browserEndpoint(home)
-	client, err := at.Dial(context.Background())
+	client, err := at.Dial(o.ctx)
 	if errors.Is(err, browser.ErrRelayRestarting) && !o.asJSON {
 		_, _ = fmt.Fprintln(o.out, o.page.Glyph(cli.Changed)+" updating: the relay restarts on this build")
 	}
 	restarting := errors.Is(err, browser.ErrRelayRestarting)
 	for until := time.Now().Add(konst.BrowserCallTimeoutMillis * time.Millisecond); restarting && err != nil && time.Now().Before(until); {
 		time.Sleep(konst.BrowserDialTimeoutMillis * time.Millisecond)
-		client, err = at.Dial(context.Background())
+		client, err = at.Dial(o.ctx)
 	}
 	if err != nil {
 		return err
 	}
 	defer func() { _ = client.Close() }()
+	client.WaitsOn(o.ctx)
 	return use(client)
 }
 

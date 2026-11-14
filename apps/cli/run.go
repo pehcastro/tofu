@@ -44,6 +44,7 @@ import (
 	"tofu/internal/store/memory/tree"
 	"tofu/internal/store/session"
 	settingspkg "tofu/internal/store/settings"
+	"tofu/internal/store/walls"
 	crontool "tofu/internal/tools/agents/cron"
 	"tofu/internal/tools/code/lsp"
 	"tofu/internal/tools/code/search"
@@ -349,7 +350,7 @@ TOFU_DRIVE_CASSETTE names a recorded model, read as tofu drive reads it, and
 then the run opens no live wire for the orchestrator or for any sub-agent.
 `
 
-func runVerb(args []string, out, errOut io.Writer) int {
+func runVerb(ctx context.Context, args []string, out, errOut io.Writer) int {
 	if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
 		_, _ = fmt.Fprint(out, runUsage())
 		return output.ExitOK
@@ -384,7 +385,7 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	}
 	opts.LeadMayWorkAlone = true
 	if opts.ShowPrompt {
-		return showPrompt(opts, out, errOut)
+		return showPrompt(ctx, opts, out, errOut)
 	}
 	clock.step("settings", 0)
 
@@ -397,13 +398,13 @@ func runVerb(args []string, out, errOut io.Writer) int {
 	}
 	clock.step("model choice", 0)
 	if opts.DryRun {
-		return dryRun(opts, selected, dir, say, out, errOut)
+		return dryRun(ctx, opts, selected, dir, say, out, errOut)
 	}
-	return runTurn(opts, resumed, selected, clock, out, errOut)
+	return runTurn(ctx, opts, resumed, selected, clock, out, errOut)
 }
 
-func dryRun(opts wiring.RunOpts, selected models.Model, dir string, say func(string), out, errOut io.Writer) int {
-	shell, err := loop.ResolveRunShell(context.Background(), settingspkg.TextSaying(dir, settingspkg.Shell, say))
+func dryRun(ctx context.Context, opts wiring.RunOpts, selected models.Model, dir string, say func(string), out, errOut io.Writer) int {
+	shell, err := loop.ResolveRunShell(ctx, settingspkg.TextSaying(dir, settingspkg.Shell, say))
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -437,7 +438,7 @@ func dryRun(opts wiring.RunOpts, selected models.Model, dir string, say func(str
 	return output.ExitOK
 }
 
-func runTurn(opts wiring.RunOpts, resumed runResumed, selected models.Model, clock *startupClock, out, errOut io.Writer) int {
+func runTurn(ctx context.Context, opts wiring.RunOpts, resumed runResumed, selected models.Model, clock *startupClock, out, errOut io.Writer) int {
 	places, err := platformproject.ResolvePlaces(cmp.Or(opts.Dir, "."))
 	if err != nil {
 		return runFail(errOut, err)
@@ -466,7 +467,7 @@ func runTurn(opts wiring.RunOpts, resumed runResumed, selected models.Model, clo
 		_ = registry.Prune()
 	}
 	head, rows := "", []loop.Row{}
-	interrupted, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	interrupted, stop := signal.NotifyContext(ctx, os.Interrupt)
 	defer stop()
 	context.AfterFunc(interrupted, stop)
 	leading, err := shellsverb.LeadScratch(interrupted, config, errOut)
@@ -478,7 +479,7 @@ func runTurn(opts wiring.RunOpts, resumed runResumed, selected models.Model, clo
 		printRunRow(out, row, selected.Slug(), selected.WindowText())
 		head, rows = cmp.Or(row.Session, head), append(rows, row)
 	})
-	for _, warning := range loop.EndSession(context.Background(), cmp.Or(opts.Dir, "."), head, sessionEndOther) {
+	for _, warning := range loop.EndSession(ctx, cmp.Or(opts.Dir, "."), head, sessionEndOther) {
 		_, _ = fmt.Fprintln(errOut, "tofu run: "+warning)
 	}
 	leaveShells(registry)
@@ -1208,6 +1209,11 @@ func assembleRunTools(dir, set string, ledger *contract.ReadLedger, warm *warmPr
 		Judge:    func() (jevloop.Jev, error) { return wiring.BrowserJudge(dir) },
 		Model:    func() (loop.Model, string, error) { return browserModel(settingsDir) },
 		Tabs:     warm.tabs,
+		Wall: func(wall walls.Wall) {
+			if places, err := platformproject.ResolvePlaces(settingsDir); err == nil {
+				_ = walls.Append(places.State, wall)
+			}
+		},
 	})
 	var led []contract.Tool
 	var unstarted unstartedTools

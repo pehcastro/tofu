@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -21,6 +22,7 @@ import (
 	"tofu/internal/platform/outside"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/settings"
+	"tofu/internal/store/walls"
 )
 
 const idleAfter = konst.BrowserIdleAfterMillis * time.Millisecond
@@ -74,15 +76,16 @@ type relay struct {
 	sleepAfter   func() time.Duration
 	cursor       bool
 	report       safe.Report
+	heard        func(walls.Wall)
 }
 
-func Host(origin string, stdin io.Reader, stdout io.Writer, home string) error {
+func Host(origin string, stdin io.Reader, stdout io.Writer, home string, heard func(walls.Wall)) error {
 	tofu, err := Build()
 	if err != nil {
 		return err
 	}
 	reapLeftovers(home)
-	return host(origin, stdin, stdout, home, tofu, installedBuild, func() time.Duration { return sleepAfter(home) })
+	return host(origin, stdin, stdout, home, tofu, installedBuild, func() time.Duration { return sleepAfter(home) }, heard)
 }
 
 func sleepAfter(home string) time.Duration {
@@ -122,7 +125,7 @@ func cursorOn(home string) bool {
 	return store.Bool(settings.BrowserCursor)
 }
 
-func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, installed func(exe string) (string, error), sleepAfter func() time.Duration) error {
+func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, installed func(exe string) (string, error), sleepAfter func() time.Duration, heard func(walls.Wall)) error {
 	extensionDir, manifestPath := installPaths(home)
 	var installedHost hostManifest
 	raw, err := os.ReadFile(manifestPath)
@@ -152,7 +155,7 @@ func host(origin string, stdin io.Reader, stdout io.Writer, home, tofu string, i
 		return err
 	}
 	r := &relay{extension: stdout, tabs: map[int]Tab{}, claims: map[int]*session{}, pending: map[int64]route{}, sessions: map[*session]bool{}, shown: statusIdle, home: home, extensionDir: extensionDir, builds: Builds{Tofu: tofu}, restart: make(chan struct{}, 1),
-		manifestTofu: installedHost.Path, installed: installed, sleepAfter: sleepAfter, cursor: cursorOn(home), report: func(p safe.Panic) { p.Saved(fs.StateDir(home)) }}
+		manifestTofu: installedHost.Path, installed: installed, sleepAfter: sleepAfter, cursor: cursorOn(home), report: func(p safe.Panic) { p.Saved(fs.StateDir(home)) }, heard: heard}
 	r.idle = time.AfterFunc(idleAfter, func() {
 		_ = safe.Call(r.report, "browser idle", func() error {
 			r.mu.Lock()
@@ -257,15 +260,19 @@ func (r *relay) readExtension(stdin io.Reader) error {
 		if errors.Is(err, io.EOF) {
 			return nil
 		}
+		began := time.Now()
+		var message extensionMessage
+		if err == nil {
+			message, err = parseExtensionMessage(raw)
+		}
+		if err == nil {
+			if to, answer := r.receive(message); to != nil {
+				to.send(answer)
+			}
+		}
+		r.heard(walls.Wall{Op: walls.OpVerb, Name: "browser host " + string(cmp.Or(message.T, "unread")), MS: time.Since(began).Milliseconds(), At: began.UnixMilli(), OK: err == nil, OutsideMS: new(int64)})
 		if err != nil {
 			return err
-		}
-		message, err := parseExtensionMessage(raw)
-		if err != nil {
-			return err
-		}
-		if to, answer := r.receive(message); to != nil {
-			to.send(answer)
 		}
 	}
 }

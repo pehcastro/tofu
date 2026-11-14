@@ -338,6 +338,12 @@ func withoutIn(run func(args []string, out, errOut io.Writer) int) verbRun {
 	return func(args []string, _ io.Reader, out, errOut io.Writer) int { return run(args, out, errOut) }
 }
 
+func clockedWithoutIn(run func(ctx context.Context, args []string, out, errOut io.Writer) int) clockedRun {
+	return func(ctx context.Context, args []string, _ io.Reader, out, errOut io.Writer) int {
+		return run(ctx, args, out, errOut)
+	}
+}
+
 func withClock(run func(args []string, out, errOut io.Writer, now func() time.Time) int) verbRun {
 	return func(args []string, _ io.Reader, out, errOut io.Writer) int { return run(args, out, errOut, time.Now) }
 }
@@ -365,11 +371,11 @@ func verbNamed(name string) verb {
 	case "guard":
 		return verb{run: guardverb.Verb, usage: guardverb.Usage}
 	case "undo":
-		return verb{run: withoutIn(undoVerb), usage: undoUsage}
+		return verb{clocked: clockedWithoutIn(undoVerb), usage: undoUsage}
 	case "version":
 		return verb{run: withoutIn(version)}
 	case "update":
-		return verb{run: withoutIn(updateVerb), usage: updateUsage}
+		return verb{clocked: clockedWithoutIn(updateVerb), usage: updateUsage}
 	case "changelog":
 		return verb{run: func(args []string, _ io.Reader, out, errOut io.Writer) int {
 			return changelogVerb(args, changelog.Markdown, out, errOut)
@@ -404,9 +410,9 @@ func verbNamed(name string) verb {
 	case host.HubVerb:
 		return verb{run: withoutIn(projectHostVerb), usage: projectHostUsage}
 	case "run":
-		return verb{run: withoutIn(runVerb)}
+		return verb{clocked: clockedWithoutIn(runVerb)}
 	case "tool":
-		return verb{run: withoutIn(toolVerb), usage: toolUsage}
+		return verb{clocked: clockedWithoutIn(toolVerb), usage: toolUsage}
 	case "judge":
 		return verb{clocked: judgeverb.Verb, usage: judgeverb.Usage}
 	case "check":
@@ -447,7 +453,7 @@ func verbNamed(name string) verb {
 	case "migrate":
 		return verb{run: withoutIn(migrateVerb), usage: migrateUsage}
 	case "browser":
-		return verb{run: withoutIn(browserverb.Verb)}
+		return verb{clocked: clockedWithoutIn(browserverb.Verb)}
 	case "walls":
 		return verb{run: withoutIn(wallsverb.Verb), usage: wallsverb.Usage}
 	case "preview":

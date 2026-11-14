@@ -21,7 +21,7 @@ import (
 
 const undoUsage = "tofu undo [N] [--dir path] [--session id] [--turn id] [--force] [--dry-run] [--json]"
 
-func undoVerb(args []string, out, errOut io.Writer) int {
+func undoVerb(ctx context.Context, args []string, out, errOut io.Writer) int {
 	o := output.Verb{Name: "undo", UsageLine: undoUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	ask, handle, dir, err := undoArgs(output.WithoutJSON(args))
 	if err != nil {
@@ -38,7 +38,7 @@ func undoVerb(args []string, out, errOut io.Writer) int {
 		}
 		handle = head.ID
 	}
-	report, err := undoSession(store, handle, ask)
+	report, err := undoSession(ctx, store, handle, ask)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -85,7 +85,7 @@ func undoCount(word string) (int, error) {
 	return turns, nil
 }
 
-func undoSession(store *sessionstore.Store, handle string, ask rewind.Ask) (rewind.Report, error) {
+func undoSession(ctx context.Context, store *sessionstore.Store, handle string, ask rewind.Ask) (rewind.Report, error) {
 	headers, err := store.Resolve(handle)
 	if err != nil {
 		return rewind.Report{}, err
@@ -94,7 +94,7 @@ func undoSession(store *sessionstore.Store, handle string, ask rewind.Ask) (rewi
 		return rewind.Report{}, fmt.Errorf("%s names %d sessions: give the id", handle, len(headers))
 	}
 	repo := rewind.Repo{State: store.State(), Session: store.Dir(cmp.Or(headers[0].Root, headers[0].ID)), Tree: store.Project()}
-	return repo.Undo(context.Background(), ask)
+	return repo.Undo(ctx, ask)
 }
 
 func undoLines(page cli.Page, report rewind.Report) []string {
@@ -127,7 +127,7 @@ func undoTurns(id, count string) string {
 	if err != nil {
 		return "/undo: " + err.Error()
 	}
-	report, err := undoSession(store, id, rewind.Ask{Turns: turns})
+	report, err := undoSession(context.Background(), store, id, rewind.Ask{Turns: turns})
 	if id == "" || errors.Is(err, fs.ErrNotExist) {
 		err = rewind.NothingRecorded{Asked: turns}
 	}

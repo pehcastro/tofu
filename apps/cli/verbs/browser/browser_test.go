@@ -2,6 +2,7 @@ package browser
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io"
 	"net"
@@ -85,7 +86,7 @@ func fakeRelay(t *testing.T, home string, tabs []driver.Tab) {
 func runBrowser(t *testing.T, args ...string) (int, string, string) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	code := Verb(args, &out, &errOut)
+	code := Verb(context.Background(), args, &out, &errOut)
 	return code, stable(out.String()), errOut.String()
 }
 

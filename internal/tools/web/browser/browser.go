@@ -21,8 +21,10 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/scratch"
 	"tofu/internal/store/settings"
+	"tofu/internal/store/walls"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/web"
 	browser "tofu/internal/tools/web/browser/driver"
@@ -53,6 +55,7 @@ type BrowserSettings struct {
 	Judge    func() (jevloop.Jev, error)
 	Model    func() (loop.Model, string, error)
 	Tabs     *BrowserTabs
+	Wall     func(walls.Wall)
 }
 
 type BrowserTabs struct {
@@ -126,7 +129,7 @@ func NewBrowser(config BrowserSettings) ([]contract.Tool, error) {
 	case settings.DriverSteps, settings.DriverSubagent:
 		reads, acts = browserObserve{session}, browserAct{session}
 	case settings.DriverGoal:
-		reads, acts = browserRead{session}, browserDo{session, config.Steps, config.Judge, config.Model}
+		reads, acts = browserRead{session}, browserDo{session, config.Steps, config.Judge, config.Model, config.Wall}
 	default:
 		return nil, fmt.Errorf("the %s setting is %q, and it takes %s, %s or %s", settings.BrowserDriver, config.Driver, settings.DriverSteps, settings.DriverGoal, settings.DriverSubagent)
 	}
@@ -157,6 +160,7 @@ func (s *browserSession) redial(ctx context.Context) (*browser.Driver, error) {
 		return nil, err
 	}
 	s.client = client
+	client.WaitsOn(ctx)
 	return s.driverOn(client), nil
 }
 
@@ -210,6 +214,7 @@ func (s *browserSession) with(ctx context.Context, use func(*browser.Client) err
 		}
 		s.client = client
 	}
+	s.client.WaitsOn(ctx)
 	err := use(s.client)
 	if errors.Is(err, browser.ErrNotConnected) {
 		_ = s.client.Close()
@@ -1254,6 +1259,7 @@ type browserDo struct {
 	steps   int
 	judge   func() (jevloop.Jev, error)
 	model   func() (loop.Model, string, error)
+	wall    func(walls.Wall)
 }
 
 func (browserDo) Name() string { return "browser_do" }
@@ -1326,6 +1332,19 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 		}
 		judge.Decided = map[string]jevloop.Choice{}
 		at := id
+		stepping, clock := outside.Open(ctx, time.Now)
+		client.WaitsOn(stepping)
+		var step walls.Wall
+		var outsideBefore int64
+		walled := func(ok bool) {
+			if step.At == 0 {
+				return
+			}
+			outsideMS := clock.Outside().Milliseconds() - outsideBefore
+			step.MS, step.OK, step.OutsideMS = time.Now().UnixMilli()-step.At, ok, &outsideMS
+			t.wall(step)
+		}
+		defer func() { walled(result.Status == jevloop.StatusDone) }()
 		result = jevloop.Loop{
 			Browser: jevloop.Browser{
 				Snapshot: func(ctx context.Context) (browser.Page, error) {
@@ -1341,7 +1360,16 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 				},
 				Tab: func() int { return at },
 			},
-			Choose: judge.Choose,
+			Choose: func(ctx context.Context, goal string, page browser.Page, steps []jevloop.Step) (jevloop.Choice, error) {
+				walled(true)
+				step, outsideBefore = walls.Wall{Op: walls.OpBrowserStep, At: time.Now().UnixMilli()}, clock.Outside().Milliseconds()
+				choice, err := judge.Choose(ctx, goal, page, steps)
+				step.Name = "unchosen"
+				if err == nil {
+					step.Name = choice.Action.Op.String()
+				}
+				return choice, err
+			},
 			Write: func(ctx context.Context, goal string, page browser.Page, field browser.Element) (string, error) {
 				if text, named := args.Values.named(page, field); named {
 					return text, nil
@@ -1350,7 +1378,7 @@ func (t browserDo) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 					goal, field.Label, web.Untrusted("the Chrome tab "+page.URL, page.Title+"\n"+page.Text)))
 			},
 			Actions: t.steps,
-		}.Run(ctx, args.Goal)
+		}.Run(stepping, args.Goal)
 		args.Tab = at
 		if ours && result.Status == jevloop.StatusBlocked && len(result.Steps) == 0 {
 			closed = client.CloseTab(id) == nil

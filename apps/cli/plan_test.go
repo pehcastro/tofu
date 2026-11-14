@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -20,7 +21,7 @@ import (
 func TestADryRunListsThePlanToolAndTheOffArmDoesNot(t *testing.T) {
 	t.Setenv("TYPESAFE_API_KEY", "")
 	var out, errOut bytes.Buffer
-	if code := runVerb([]string{"--dir", t.TempDir(), "--wire", wiring.WireSubscription, "--dry-run", "write hello.txt"}, &out, &errOut); code != output.ExitOK {
+	if code := runVerb(context.Background(), []string{"--dir", t.TempDir(), "--wire", wiring.WireSubscription, "--dry-run", "write hello.txt"}, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("tofu run --dry-run exited %d: %s", code, errOut.String())
 	}
 	var body struct {

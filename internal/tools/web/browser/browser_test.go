@@ -27,7 +27,9 @@ import (
 	rule "tofu/internal/librarian/rules"
 	"tofu/internal/models/classifiers/core"
 	llm "tofu/internal/models/llm/core"
+	"tofu/internal/platform/outside"
 	"tofu/internal/store/settings"
+	"tofu/internal/store/walls"
 	"tofu/internal/tools/contract"
 	browsertool "tofu/internal/tools/web/browser"
 	browser "tofu/internal/tools/web/browser/driver"
@@ -69,6 +71,7 @@ type fakeChrome struct {
 	absent int
 	blanks int
 	opens  int
+	delay  time.Duration
 }
 
 const blankPage = `{"url":"about:blank","title":"","text":"","fingerprint":"blank","scroll":{"up":false,"down":false},"elements":[]}`
@@ -95,6 +98,7 @@ func (f *fakeChrome) serve(fromHost io.Reader, toHost io.Writer, hello []byte) {
 		f.mu.Lock()
 		f.calls = append(f.calls, fmt.Sprintf("tab %d %s %s", call.TabID, call.Op, call.Args))
 		f.mu.Unlock()
+		time.Sleep(f.delay)
 		answer := `"ok":true,"value":{}`
 		switch {
 		case call.Op == "snapshot" && f.absent > 0:
@@ -162,7 +166,7 @@ func hostWithTwoTabs(t *testing.T, chrome *fakeChrome) string {
 	fromHostR, fromHostW := io.Pipe()
 	hostDone := make(chan error, 1)
 	go func() {
-		hostDone <- browser.Host(browserFixtureOrigin, toHostR, fromHostW, home)
+		hostDone <- browser.Host(browserFixtureOrigin, toHostR, fromHostW, home, func(walls.Wall) {})
 		_ = fromHostW.Close()
 	}()
 	t.Cleanup(func() {
@@ -229,7 +233,7 @@ func (w *writerStub) Ask(_ context.Context, request llm.Request) (llm.Decision, 
 }
 
 func drive(home, driver string) browsertool.BrowserSettings {
-	return browsertool.BrowserSettings{Home: home, Mode: settings.BrowserDrive, Driver: driver, Steps: 30,
+	return browsertool.BrowserSettings{Home: home, Mode: settings.BrowserDrive, Driver: driver, Steps: 30, Wall: func(walls.Wall) {},
 		Model: func() (loop.Model, string, error) { return &writerStub{}, "a stub", nil }}
 }
 
@@ -610,7 +614,7 @@ func browserOn(t *testing.T, page *cdpPage, driver string) func(name, args strin
 	toHostR, toHostW := io.Pipe()
 	fromHostR, fromHostW := io.Pipe()
 	go func() {
-		_ = browser.Host(browserFixtureOrigin, toHostR, fromHostW, home)
+		_ = browser.Host(browserFixtureOrigin, toHostR, fromHostW, home, func(walls.Wall) {})
 		_ = fromHostW.Close()
 	}()
 	t.Cleanup(func() {
@@ -791,7 +795,7 @@ func TestTheBrowserSubAgentObservesActsObservesAndReportsItsTab(t *testing.T) {
 	toHostR, toHostW := io.Pipe()
 	fromHostR, fromHostW := io.Pipe()
 	go func() {
-		_ = browser.Host(browserFixtureOrigin, toHostR, fromHostW, home)
+		_ = browser.Host(browserFixtureOrigin, toHostR, fromHostW, home, func(walls.Wall) {})
 		_ = fromHostW.Close()
 	}()
 	t.Cleanup(func() {
@@ -1223,6 +1227,67 @@ func (w *recordedJev) Post(_ context.Context, body []byte) (core.Raw, error) {
 	answer := w.answers[min(w.posted, len(w.answers)-1)]
 	w.posted++
 	return core.Raw{Body: answer, Attempts: 1, Latency: 3 * time.Millisecond}, nil
+}
+
+type slowJev struct {
+	*recordedJev
+	takes time.Duration
+}
+
+func (w slowJev) Post(ctx context.Context, body []byte) (core.Raw, error) {
+	defer outside.Wait(ctx, outside.Jev)()
+	time.Sleep(w.takes)
+	return w.recordedJev.Post(ctx, body)
+}
+
+func TestBrowserDoWritesOneBrowserStepWallPerDecisionWithJevAndChromeOutside(t *testing.T) {
+	const chromeTakes, jevTakes = 20 * time.Millisecond, 30 * time.Millisecond
+	home := hostWithTwoTabs(t, &fakeChrome{delay: chromeTakes})
+	var written []walls.Wall
+	config := drive(home, settings.DriverGoal)
+	config.Wall = func(wall walls.Wall) { written = append(written, wall) }
+	set, _, err := question.Resolve("browser_step@1", []question.Layer{{Name: "library", Origin: "library/questions", FS: questions.Files()}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wire core.Wire = slowJev{jevSaying("CLICK", "DONE"), jevTakes}
+	config.Judge = func() (jevloop.Jev, error) {
+		client, err := core.NewClient(core.Config{Wire: wire})
+		return jevloop.Jev{Client: client, Set: set, Ledger: ledger.NewWriter(shortHome(t))}, err
+	}
+	offered, err := browsertool.NewBrowser(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	do := browserTool(t, offered, "browser_do")
+	if _, err := do.Run(context.Background(), json.RawMessage(`{"tab":8,"goal":"change a setting"}`)); err == nil || len(written) != 0 {
+		t.Fatalf("a browser_do refused before any step answered %v and wrote %+v", err, written)
+	}
+	started := time.Now()
+	if _, err := do.Run(context.Background(), json.RawMessage(`{"tab":7,"goal":"book the room"}`)); err != nil {
+		t.Fatal(err)
+	}
+	took := time.Since(started).Milliseconds()
+	wants := []struct {
+		name       string
+		chromeCall int
+	}{{"CLICK", 2}, {"DONE", 1}}
+	if len(written) != len(wants) {
+		t.Fatalf("CLICK then DONE wrote %d walls, want %d: %+v", len(written), len(wants), written)
+	}
+	var whole int64
+	for i, want := range wants {
+		wall := written[i]
+		least := (jevTakes + time.Duration(want.chromeCall)*chromeTakes).Milliseconds()
+		if wall.Op != walls.OpBrowserStep || wall.Name != want.name || !wall.OK || wall.OutsideMS == nil || *wall.OutsideMS < least || wall.MS < *wall.OutsideMS || wall.At < started.UnixMilli() {
+			t.Fatalf("wall %d is %+v, want a %s browser_step that is ok with at least %d ms outside and no more outside than its whole", i, wall, want.name, least)
+		}
+		t.Logf("browser_step %s: %d ms, %d ms outside, own %d ms", wall.Name, wall.MS, *wall.OutsideMS, wall.MS-*wall.OutsideMS)
+		whole += wall.MS
+	}
+	if whole > took {
+		t.Fatalf("the steps add to %d ms and the whole call took %d ms", whole, took)
+	}
 }
 
 func formAnswer(op string) []byte {

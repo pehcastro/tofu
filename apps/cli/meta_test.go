@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -154,7 +155,7 @@ func TestAMetaTurnSendsTheKeyAndTheModelAndRunsTheStreamedToolCall(t *testing.T)
 	})
 
 	var out, errOut bytes.Buffer
-	code := runVerb([]string{"--dir", project, "--model", "meta/muse-spark-1.3", "--no-gate", "--sift", wiring.SiftFree, "read note.txt"}, &out, &errOut)
+	code := runVerb(context.Background(), []string{"--dir", project, "--model", "meta/muse-spark-1.3", "--no-gate", "--sift", wiring.SiftFree, "read note.txt"}, &out, &errOut)
 	if code != output.ExitOK {
 		t.Fatalf("tofu run exited %d\n%s\n%s", code, out.String(), errOut.String())
 	}
@@ -219,7 +220,7 @@ func TestABoundMetaOrchestratorRunsOnMetaWithNoModelAndTheAppListsItsWire(t *tes
 		_, _ = io.WriteString(w, metaAnswer)
 	})
 	var out, errOut bytes.Buffer
-	if code := runVerb([]string{"--dir", project, "--no-gate", "--sift", wiring.SiftFree, "--tools", toolSetThree, "say ok"}, &out, &errOut); code != output.ExitOK {
+	if code := runVerb(context.Background(), []string{"--dir", project, "--no-gate", "--sift", wiring.SiftFree, "--tools", toolSetThree, "say ok"}, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("tofu run with the orchestrator bound to meta exited %d\n%s", code, errOut.String())
 	}
 	if len(*heard) == 0 || !strings.Contains((*heard)[0].body, `"model":"muse-spark-1.3-contributor"`) {
@@ -238,7 +239,7 @@ func TestAMetaTurnWithNoKeySaysHowToStoreOne(t *testing.T) {
 	_, project := metaHome(t)
 	heard := metaStub(t, func(heardMeta, http.ResponseWriter) {})
 	var out, errOut bytes.Buffer
-	code := runVerb([]string{"--dir", project, "--model", "meta/muse-spark-1.3", "--no-gate", "--sift", wiring.SiftFree, "--tools", toolSetThree, "say ok"}, &out, &errOut)
+	code := runVerb(context.Background(), []string{"--dir", project, "--model", "meta/muse-spark-1.3", "--no-gate", "--sift", wiring.SiftFree, "--tools", toolSetThree, "say ok"}, &out, &errOut)
 	if code == output.ExitOK || !strings.Contains(errOut.String(), "tofu login llm meta") || len(*heard) != 0 {
 		t.Fatalf("with no key the run exited %d after %d requests and said:\n%s", code, len(*heard), errOut.String())
 	}

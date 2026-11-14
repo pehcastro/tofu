@@ -15,6 +15,7 @@ import (
 
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/store/walls"
 	"tofu/internal/tools/web/browser/driver"
 	"tofu/internal/tools/web/browser/loop"
 	libraryquestions "tofu/library/questions"
@@ -186,7 +187,7 @@ func sharedTab(t *testing.T, ext *fakeExtension) driver.SharedTab {
 	fromHostR, fromHostW := io.Pipe()
 	hostDone := make(chan error, 1)
 	go func() {
-		hostDone <- driver.Host(fakeOrigin, toHostR, fromHostW, home)
+		hostDone <- driver.Host(fakeOrigin, toHostR, fromHostW, home, func(walls.Wall) {})
 		_ = fromHostW.Close()
 	}()
 	t.Cleanup(func() {

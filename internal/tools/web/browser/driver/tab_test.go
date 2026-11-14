@@ -19,6 +19,7 @@ import (
 	"tofu/internal/dummy"
 	question "tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/store/walls"
 	browser "tofu/internal/tools/web/browser/driver"
 	jevloop "tofu/internal/tools/web/browser/loop"
 	"tofu/library/questions"
@@ -90,7 +91,7 @@ func sharedTab(t *testing.T, answer func(extensionCall) string) (browser.SharedT
 	fromHostR, fromHostW := io.Pipe()
 	hostDone := make(chan error, 1)
 	go func() {
-		hostDone <- browser.Host(fakeOrigin, toHostR, fromHostW, home)
+		hostDone <- browser.Host(fakeOrigin, toHostR, fromHostW, home, func(walls.Wall) {})
 		_ = fromHostW.Close()
 	}()
 	t.Cleanup(func() {
@@ -628,7 +629,7 @@ func drivenPage(t *testing.T, name string) (*browser.Driver, *fakePage) {
 	toHostR, toHostW := io.Pipe()
 	fromHostR, fromHostW := io.Pipe()
 	go func() {
-		_ = browser.Host(fakeOrigin, toHostR, fromHostW, home)
+		_ = browser.Host(fakeOrigin, toHostR, fromHostW, home, func(walls.Wall) {})
 		_ = fromHostW.Close()
 	}()
 	t.Cleanup(func() {

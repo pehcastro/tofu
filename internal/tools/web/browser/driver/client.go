@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
 )
 
 const (
@@ -49,6 +51,13 @@ type Client struct {
 	out    *json.Encoder
 	in     *json.Decoder
 	lastID int64
+	waits  context.Context
+}
+
+func (c *Client) WaitsOn(ctx context.Context) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.waits = ctx
 }
 
 func Dial(home string) (*Client, error) {
@@ -147,6 +156,9 @@ func (c *Client) callBy(deadline time.Time, tab int, op string, args json.RawMes
 	for err == nil && answer.ID < c.lastID {
 		answer = result{}
 		err = c.in.Decode(&answer)
+	}
+	if c.waits != nil {
+		outside.Waited(c.waits, outside.Network, time.Since(started))
 	}
 	if err == nil && c.Timed != nil {
 		c.Timed(CallTime{Wall: time.Since(started), Host: answer.Host, Extension: answer.Timing})

@@ -18,6 +18,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/platform/fs"
 	"tofu/internal/store/settings"
+	"tofu/internal/store/walls"
 )
 
 const testOrigin = "chrome-extension://abcdefghijklmnopabcdefghijklmnop/"
@@ -160,7 +161,7 @@ func startHostWith(t *testing.T, home, build string, installed func(exe string) 
 	stdoutR, stdoutW := io.Pipe()
 	done := make(chan error, 1)
 	go func() {
-		err := host(testOrigin, stdinR, stdoutW, home, build, installed, func() time.Duration { return sleepAfter })
+		err := host(testOrigin, stdinR, stdoutW, home, build, installed, func() time.Duration { return sleepAfter }, func(walls.Wall) {})
 		_ = stdinR.CloseWithError(errors.New("the host returned"))
 		_ = stdoutW.Close()
 		done <- err
@@ -461,7 +462,7 @@ func TestHostRefusesAWrongOrigin(t *testing.T) {
 			if installed != "" {
 				installFor(t, home, installed)
 			}
-			if err := Host(testOrigin, unreadable{t}, io.Discard, home); err == nil || !strings.Contains(err.Error(), testOrigin) {
+			if err := Host(testOrigin, unreadable{t}, io.Discard, home, func(walls.Wall) {}); err == nil || !strings.Contains(err.Error(), testOrigin) {
 				t.Fatalf("Host returned %v for an origin that is not installed", err)
 			}
 			if _, err := os.Stat(socketOf(t, home)); !errors.Is(err, os.ErrNotExist) {
@@ -500,7 +501,7 @@ func TestSecondHostKeepsOffTheSocket(t *testing.T) {
 	ext, _ := startHost(t, home)
 	ext.send(`{"t":"hello","version":2,"tabs":[{"id":3,"url":"https://a.test/","title":"A"}]}`)
 	ext.send(`{"t":"result","id":1,"ok":true}`)
-	if err := Host(testOrigin, unreadable{t}, io.Discard, home); err == nil || !strings.Contains(err.Error(), "already") {
+	if err := Host(testOrigin, unreadable{t}, io.Discard, home, func(walls.Wall) {}); err == nil || !strings.Contains(err.Error(), "already") {
 		t.Fatalf("a second host returned %v", err)
 	}
 	if tabs, err := dial(t, home).Tabs(); err != nil || len(tabs) != 1 || tabs[0].ID != 3 {
@@ -524,7 +525,7 @@ func TestSocketPathOverTheLimitIsNamed(t *testing.T) {
 	home, path := homeWithSocketPathOf(t, 108)
 	installFor(t, home, testOrigin)
 	for name, err := range map[string]error{
-		"Host": Host(testOrigin, unreadable{t}, io.Discard, home),
+		"Host": Host(testOrigin, unreadable{t}, io.Discard, home, func(walls.Wall) {}),
 		"Dial": func() error { _, err := Dial(home); return err }(),
 	} {
 		if err == nil || !strings.Contains(err.Error(), path) || !strings.Contains(err.Error(), "108 bytes") || !strings.Contains(err.Error(), "107") {

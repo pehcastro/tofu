@@ -59,12 +59,12 @@ type latestRelease struct {
 
 type updateReport = host.UpdateReport
 
-func updateVerb(args []string, out, errOut io.Writer) int {
+func updateVerb(ctx context.Context, args []string, out, errOut io.Writer) int {
 	build := frame.Release(platformbuild.Version(), platformbuild.BuildRevision())
-	return updateFrom(build, build == konst.Version, args, out, errOut)
+	return updateFrom(ctx, build, build == konst.Version, args, out, errOut)
 }
 
-func updateFrom(current string, release bool, args []string, out, errOut io.Writer) int {
+func updateFrom(ctx context.Context, current string, release bool, args []string, out, errOut io.Writer) int {
 	o := output.Verb{Name: "update", UsageLine: updateUsage, AsJSON: output.JSONAsked(args), Out: out, ErrOut: errOut}
 	var check, force bool
 	for _, arg := range output.WithoutJSON(args) {
@@ -81,7 +81,6 @@ func updateFrom(current string, release bool, args []string, out, errOut io.Writ
 	if err != nil {
 		return o.Fail(err)
 	}
-	ctx := context.Background()
 	report := updateReport{Current: current, Release: release, Source: updateSource()}
 	latest, err := readLatest(ctx, client)
 	var failed *transport.Error

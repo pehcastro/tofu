@@ -38,7 +38,7 @@ const toolListTask = "run one tool call by hand"
 
 const toolCallID = "tofu_tool"
 
-func toolVerb(args []string, out, errOut io.Writer) int {
+func toolVerb(ctx context.Context, args []string, out, errOut io.Writer) int {
 	runArgs, words, recorded := []string{"--show-prompt", "--dir", "."}, []string{}, ""
 	for i := 0; i < len(args); i++ {
 		switch arg := args[i]; {
@@ -93,7 +93,7 @@ func toolVerb(args []string, out, errOut io.Writer) int {
 		home, _ := os.UserHomeDir()
 		warm := newWarmProcesses(browser.NewBrowserTabs(home))
 		defer warm.Close()
-		hand, err = handConfig(settled(opts, notify), recorded, warm, notify)
+		hand, err = handConfig(ctx, settled(opts, notify), recorded, warm, notify)
 	}
 	if err != nil {
 		return refuseTool(errOut, err.Error())
@@ -121,7 +121,7 @@ func toolVerb(args []string, out, errOut io.Writer) int {
 			_, _ = fmt.Fprintln(errOut, footer)
 		}()
 	}
-	answer, err := hand.config.CallByHand(context.Background(), call)
+	answer, err := hand.config.CallByHand(ctx, call)
 	if err != nil {
 		return refuseTool(errOut, err.Error())
 	}
@@ -203,9 +203,9 @@ func handStores(opts wiring.RunOpts, recorded string) (wiring.RunOpts, *session.
 	return opts, sessions, places, err
 }
 
-func handConfig(opts wiring.RunOpts, recorded string, warm *warmProcesses, notify func(string)) (handRun, error) {
+func handConfig(ctx context.Context, opts wiring.RunOpts, recorded string, warm *warmProcesses, notify func(string)) (handRun, error) {
 	var hand handRun
-	shell, err := loop.ResolveRunShell(context.Background(), settingspkg.TextSaying(opts.Dir, settingspkg.Shell, notify))
+	shell, err := loop.ResolveRunShell(ctx, settingspkg.TextSaying(opts.Dir, settingspkg.Shell, notify))
 	if err != nil {
 		return hand, err
 	}

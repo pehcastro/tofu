@@ -453,7 +453,7 @@ func TestARunAtACeilingUnderItsPromptIsRefusedAndJustAboveItCompactsAndRecordsTh
 
 func TestRunHelpKeepsTheCeilingFlagWorkingAndDoesNotOfferIt(t *testing.T) {
 	var out, errOut bytes.Buffer
-	if code := runVerb([]string{"--help"}, &out, &errOut); code != output.ExitOK {
+	if code := runVerb(context.Background(), []string{"--help"}, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("tofu run --help exited %d: %s", code, errOut.String())
 	}
 	if strings.Contains(out.String(), "ceiling") {
@@ -952,7 +952,7 @@ func TestTheLeadTakesACleanReportUncheckedOnlyWithTheCheckOff(t *testing.T) {
 			}
 			t.Setenv(cassetteVariable, deck)
 			var out, errOut bytes.Buffer
-			if code := runVerb([]string{"--dir", dir, "--wire", wiring.WireSubscription, "--no-gate", "--sift", "free", "add Extra to package stats"}, &out, &errOut); code != output.ExitOK {
+			if code := runVerb(context.Background(), []string{"--dir", dir, "--wire", wiring.WireSubscription, "--no-gate", "--sift", "free", "add Extra to package stats"}, &out, &errOut); code != output.ExitOK {
 				t.Fatalf("tofu run exited %d: %s", code, errOut.String())
 			}
 			t.Logf("tofu run printed:\n%s", out.String())
