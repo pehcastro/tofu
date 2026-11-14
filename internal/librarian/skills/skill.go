@@ -150,8 +150,22 @@ func ReferenceFiles(library fs.FS, owner string, names []string) ([]string, erro
 }
 
 func LibraryFiles(library fs.FS, folder, name string) []string {
-	found, _ := fs.Glob(library, "*/"+folder+"/"+name+".md")
-	deeper, _ := fs.Glob(library, "*/*/"+folder+"/"+name+".md")
+	var found, deeper []string
+	tops, _ := fs.ReadDir(library, ".")
+	for _, top := range tops {
+		if !top.IsDir() {
+			continue
+		}
+		here, _ := fs.Glob(library, path.Join(top.Name(), folder, name+".md"))
+		found = append(found, here...)
+		subs, _ := fs.ReadDir(library, top.Name())
+		for _, sub := range subs {
+			if sub.IsDir() {
+				below, _ := fs.Glob(library, path.Join(top.Name(), sub.Name(), folder, name+".md"))
+				deeper = append(deeper, below...)
+			}
+		}
+	}
 	return append(found, deeper...)
 }
 

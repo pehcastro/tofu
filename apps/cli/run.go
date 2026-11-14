@@ -184,40 +184,18 @@ func (r runtime) applyThinkingSummary(accounts loop.Accounts) loop.Accounts {
 	return omitting
 }
 
-func boundSubAgent(opts wiring.RunOpts) (string, error) {
-	library, err := wiring.ModelLibrary(opts.Dir)
-	if err != nil {
-		return "", err
-	}
-	if subAgent, bound := library.Bound(models.RoleSubAgent); bound {
-		return subAgent.Slug(), nil
-	}
-	return "", nil
-}
-
 type subAgentTarget struct {
 	named   string
 	wire    string
 	offered []llm.Effort
 }
 
-func (r runtime) subAgentTarget(opts wiring.RunOpts, definition subagents.Definition) (subAgentTarget, error) {
-	if r.current != nil {
-		definition = r.current(definition)
-	}
+func (r runtime) subAgentTarget(opts wiring.RunOpts, definition subagents.Definition, library models.Library) (subAgentTarget, error) {
 	target := subAgentTarget{named: definition.Model, wire: opts.Wire, offered: r.orchestrator.Efforts}
-	if definition.Model == "" {
-		bound, err := boundSubAgent(opts)
-		if err != nil {
-			return subAgentTarget{}, err
-		}
-		target.named = bound
+	if subAgent, bound := library.Bound(models.RoleSubAgent); bound && definition.Model == "" {
+		target.named = subAgent.Slug()
 	}
 	if target.named != "" {
-		library, err := wiring.ModelLibrary(opts.Dir)
-		if err != nil {
-			return subAgentTarget{}, err
-		}
 		model, err := library.Select(target.named)
 		if err != nil {
 			return subAgentTarget{}, err
@@ -230,12 +208,27 @@ func (r runtime) subAgentTarget(opts wiring.RunOpts, definition subagents.Defini
 	return target, nil
 }
 
-func (r runtime) subAgentTakes(opts wiring.RunOpts) func(subagents.Definition) ([]llm.Effort, error) {
+func heldAsDefined(now []subagents.Definition, held subagents.Definition) subagents.Definition {
+	runs := func(one subagents.Definition) bool {
+		return one.Name == held.Name && (one.Runs == subagents.RunsModel || one.Runs == subagents.RunsInherit)
+	}
+	if at := slices.IndexFunc(now, runs); at >= 0 {
+		held.Model, held.Effort = now[at].Model, now[at].Effort
+	}
+	return held
+}
+
+func (r runtime) subAgentTakes(opts wiring.RunOpts, thisTurn []subagents.Definition) func(subagents.Definition) ([]llm.Effort, error) {
 	if r.open == nil {
 		return nil
 	}
+	library := sync.OnceValues(func() (models.Library, error) { return wiring.ModelLibrary(opts.Dir) })
 	return func(definition subagents.Definition) ([]llm.Effort, error) {
-		target, err := r.subAgentTarget(opts, definition)
+		loaded, err := library()
+		if err != nil {
+			return nil, err
+		}
+		target, err := r.subAgentTarget(opts, heldAsDefined(thisTurn, definition), loaded)
 		return target.offered, err
 	}
 }
@@ -246,7 +239,15 @@ func (r runtime) subAgentOpener(opts wiring.RunOpts) func(subagents.Definition, 
 	}
 	var told sync.Map
 	return func(definition subagents.Definition, wanted llm.Effort) (loop.SubAgentModel, error) {
-		target, err := r.subAgentTarget(opts, definition)
+		held := definition
+		if r.current != nil {
+			held = r.current(definition)
+		}
+		library, err := wiring.ModelLibrary(opts.Dir)
+		if err != nil {
+			return loop.SubAgentModel{}, err
+		}
+		target, err := r.subAgentTarget(opts, held, library)
 		if err != nil {
 			return loop.SubAgentModel{}, err
 		}
@@ -861,16 +862,9 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 	spawner := loop.NewSpawnTool(orchestratorID, subAgentBase, cmp.Or(run.roster, &subagents.Roster{}))
 	spawner.Inbox, spawner.SubAgents, spawner.Project, spawner.ChecksWork = config.Inbox, prompt.subAgents, dir, prompt.checksWork
 	run.current = func(held subagents.Definition) subagents.Definition {
-		now := scanSubAgents(dir, built).Definitions
-		runs := func(one subagents.Definition) bool {
-			return one.Name == held.Name && (one.Runs == subagents.RunsModel || one.Runs == subagents.RunsInherit)
-		}
-		if at := slices.IndexFunc(now, runs); at >= 0 {
-			held.Model, held.Effort = now[at].Model, now[at].Effort
-		}
-		return held
+		return heldAsDefined(scanSubAgents(dir, built).Definitions, held)
 	}
-	spawner.SubAgents.Open, spawner.SubAgents.Takes = run.subAgentOpener(opts), run.subAgentTakes(opts)
+	spawner.SubAgents.Open, spawner.SubAgents.Takes = run.subAgentOpener(opts), run.subAgentTakes(opts, prompt.subAgents.Defined)
 	if run.plan != nil && settingspkg.TextSaying(dir, settingspkg.PlanAdvisor, run.notify) == settingspkg.AdvisorShadow {
 		run.plan.Advise = spawner.Advise
 	}

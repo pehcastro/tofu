@@ -249,8 +249,9 @@ func TestAMetaSlugPicksItsOwnWireAndRefusesAnother(t *testing.T) {
 	if err != nil || opts.Wire != wiring.WireMeta || wiring.WireSpend(opts.Wire) != loop.SpendAPIKey {
 		t.Fatalf("meta/muse-spark-1.3-contributor parsed to wire %q spend %q (%v)", opts.Wire, wiring.WireSpend(opts.Wire), err)
 	}
-	if bound, err := boundSubAgent(opts); bound != "" || err != nil {
-		t.Errorf("an unnamed sub-agent under a meta orchestrator bound %q (%v)", bound, err)
+	projected, err := wiring.ModelLibrary(opts.Dir)
+	if bound, held := projected.Bound(catalog.RoleSubAgent); held || err != nil {
+		t.Errorf("an unnamed sub-agent under a meta orchestrator bound %q (%v)", bound.Slug(), err)
 	}
 	if _, err := parseRunArgs([]string{"--dir", ".", "--wire", wiring.WireSubscription, "--model", "meta/muse-spark-1.3", "task"}); err == nil {
 		t.Errorf("--wire anthropic with a meta model was taken")
