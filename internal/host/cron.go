@@ -10,6 +10,7 @@ import (
 	"tofu/internal/agent/cron"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/store/walls"
@@ -46,7 +47,7 @@ func (h *Host) CronCommand(line string) (cron.Reply, error) {
 		}
 	}
 	if reply.CheckGoals && idle {
-		h.fireAfterTurn()
+		h.fireDue(cron.TurnEnded)
 	}
 	h.armCron()
 	return reply, nil
@@ -83,7 +84,7 @@ func (h *Host) armCron() {
 		h.dropRead()
 		h.mu.Unlock()
 		_ = safe.Call(h.report, "cron", func() error {
-			h.fire(h.cron.Due(context.Background(), h.now(), cron.Tick))
+			h.fireDue(cron.Tick)
 			return nil
 		})
 		h.armCron()
@@ -191,7 +192,7 @@ func (h *Host) ended(out *emitter) {
 	h.carrySteers(out)
 	h.fire(unread)
 	if !stopped {
-		h.fireAfterTurn()
+		h.fireDue(cron.TurnEnded)
 	}
 	h.armCron()
 }
@@ -203,6 +204,15 @@ func (h *Host) turnOutside() time.Duration {
 	return h.turnClock.Outside()
 }
 
-func (h *Host) fireAfterTurn() {
-	h.fire(h.cron.Due(context.Background(), h.now(), cron.TurnEnded))
+func (h *Host) fireDue(moment cron.Moment) {
+	checks, clock := outside.Open(context.Background(), time.Now)
+	fires := h.cron.Due(checks, h.now(), moment)
+	h.mu.Lock()
+	for _, fired := range fires {
+		if fired.Prompt != "" {
+			h.cronOut[fired.ID] += clock.Outside()
+		}
+	}
+	h.mu.Unlock()
+	h.fire(fires)
 }
