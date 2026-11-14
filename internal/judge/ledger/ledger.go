@@ -115,17 +115,6 @@ func (a *Answer) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-type answerShape struct {
-	Question string      `json:"question"`
-	Kind     *AnswerKind `json:"kind"`
-	Choice   *string     `json:"choice"`
-	Dist     []struct{}  `json:"dist"`
-}
-
-func (s answerShape) readable() error {
-	return answerReadable(s.Question, s.Kind, s.Choice, len(s.Dist))
-}
-
 func answerReadable(question string, kind *AnswerKind, choice *string, dist int) error {
 	switch {
 	case kind != nil && *kind != AnswerNoul && *kind != AnswerChoice && *kind != AnswerScore:
