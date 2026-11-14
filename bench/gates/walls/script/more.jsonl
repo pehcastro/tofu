@@ -1,0 +1,8 @@
+{"text":"running a shell and handing it to a worker","tools":[{"name":"bash","args":{"command":"sleep 1","timeout_ms":60000}},{"name":"spawn","args":{"task":"walls worker: report at once","owns":["work/**"]}}]}
+{"agent":"c1","text":"WALLSREPORT the worker is done"}
+{"text":"WALLSANSWER one"}
+{"text":"WALLSANSWER two"}
+{"text":"WALLSANSWER three"}
+{"text":"WALLSANSWER four"}
+{"text":"WALLSANSWER five"}
+{"text":"WALLSANSWER six"}

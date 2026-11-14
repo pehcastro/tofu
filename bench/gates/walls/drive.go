@@ -24,7 +24,9 @@ var scripts embed.FS
 
 const (
 	noteBody     = "a mock note\n"
+	goalFile     = "goal.done"
 	answerWithin = 60 * time.Second
+	pollEvery    = 50 * time.Millisecond
 )
 
 var verbs = [][]string{
@@ -32,18 +34,20 @@ var verbs = [][]string{
 	{"session", "list"}, {"projects"}, {"doctor"},
 }
 
+var expectedOps = []walls.Op{walls.OpSpawn, walls.OpSpawnStep, walls.OpShell, walls.OpHook, walls.OpCron}
+
 type scratch struct {
 	exe, home, project, cassette, steps string
 }
 
-func fresh(exe, work string) (scratch, error) {
-	s := scratch{exe: exe, home: filepath.Join(work, "home"), project: filepath.Join(work, "project")}
+func fresh(exe, work, cassette string) (scratch, error) {
+	s := scratch{exe: exe, home: filepath.Join(work, "home"), project: filepath.Join(work, "project"),
+		cassette: filepath.Join(work, cassette), steps: filepath.Join(work, "frame.steps")}
 	for _, made := range []string{s.home, s.project} {
 		if err := os.MkdirAll(made, 0o755); err != nil {
 			return s, err
 		}
 	}
-	s.cassette, s.steps = filepath.Join(work, "turn.jsonl"), filepath.Join(work, "frame.steps")
 	for _, path := range []string{s.cassette, s.steps} {
 		body, err := scripts.ReadFile("script/" + filepath.Base(path))
 		if err != nil {
@@ -56,8 +60,27 @@ func fresh(exe, work string) (scratch, error) {
 	if out, err := s.tofu("boardy", "init", "--key", "WALL").CombinedOutput(); err != nil {
 		return s, fmt.Errorf("setup tofu boardy init: %v: %s", err, out)
 	}
-	fmt.Println("setup, not timed: tofu boardy init --key WALL, so the project state exists and boardy has a board")
+	fmt.Printf("setup, not timed, in %s: tofu boardy init --key WALL, so the project state exists and boardy has a board\n", work)
 	return s, nil
+}
+
+func (s scratch) hooked() error {
+	body, err := scripts.ReadFile("script/hook.json")
+	if err != nil {
+		return err
+	}
+	settings := filepath.Join(s.project, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(settings), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(settings, body, 0o644); err != nil {
+		return err
+	}
+	if out, err := s.tofu("hooks", "trust").CombinedOutput(); err != nil {
+		return fmt.Errorf("setup tofu hooks trust: %v: %s", err, out)
+	}
+	fmt.Println("setup, not timed: a project PostToolUse hook on bash running exit 0 in .claude/settings.json, then tofu hooks trust")
+	return nil
 }
 
 func (s scratch) env() []string {
@@ -75,44 +98,78 @@ func (s scratch) tofu(args ...string) *exec.Cmd {
 	return cmd
 }
 
-func (s scratch) measure(runs int) ([]measured, error) {
+func measure(first, more scratch, runs int) ([]measured, error) {
 	since := time.Now()
 	for range runs {
-		if err := os.WriteFile(filepath.Join(s.project, "note.txt"), []byte(noteBody), 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(first.project, "note.txt"), []byte(noteBody), 0o644); err != nil {
 			return nil, err
 		}
 		for _, verb := range verbs {
-			_ = s.tofu(verb...).Run()
+			_ = first.tofu(verb...).Run()
 		}
-		drive := s.tofu("drive", s.steps, "--plain", "--fresh", "--dir", s.project, "--home", s.home, "--cassette", s.cassette, "--timeout", "30s")
+		drive := first.tofu("drive", first.steps, "--plain", "--fresh", "--dir", first.project, "--home", first.home, "--cassette", first.cassette, "--timeout", "30s")
 		if out, err := drive.CombinedOutput(); err != nil {
 			return nil, fmt.Errorf("tofu drive first frame: %v: %s", err, out)
 		}
-		if err := s.serve(); err != nil {
+		if err := first.serve(lead); err != nil {
+			return nil, err
+		}
+		if err := more.serve(more.spawnShellCron); err != nil {
 			return nil, err
 		}
 	}
-	return s.read(since)
+	own, err := first.read(since)
+	if err != nil {
+		return nil, err
+	}
+	extra, err := more.read(since)
+	for key, ms := range extra {
+		if slices.Contains(expectedOps, walls.Op(key.op)) {
+			kind := opName{key.op, strings.TrimRight(key.name, "0123456789-")}
+			own[kind] = append(own[kind], ms...)
+		}
+	}
+	return rowsOf(own), err
 }
 
-func (s scratch) read(since time.Time) ([]measured, error) {
+func (s scratch) walls(since time.Time) ([]walls.Wall, error) {
 	states, err := filepath.Glob(filepath.Join(platformfs.StateDir(s.home), platformfs.ProjectsDirName, "*"))
 	if err != nil || len(states) != 1 {
 		return nil, fmt.Errorf("the fresh home holds %d project states, not one: %v %v", len(states), states, err)
 	}
 	reading, err := walls.ReadProject(platformproject.Places{State: states[0], Log: filepath.Join(states[0], "log")}, since)
-	if err != nil {
-		return nil, err
+	if err == nil && reading.Bad+reading.Unread > 0 {
+		err = fmt.Errorf("%d wall lines and %d files could not be read", reading.Bad, reading.Unread)
 	}
-	if reading.Bad+reading.Unread > 0 {
-		return nil, fmt.Errorf("%d wall lines and %d files could not be read", reading.Bad, reading.Unread)
-	}
+	return reading.Walls, err
+}
+
+func (s scratch) read(since time.Time) (map[opName][]float64, error) {
+	read, err := s.walls(since)
 	own := map[opName][]float64{}
-	for _, wall := range reading.Walls {
+	for _, wall := range read {
 		key := opName{string(wall.Op), wall.Name}
 		own[key] = append(own[key], float64(wall.MS-*cmp.Or(wall.OutsideMS, new(int64))))
 	}
-	return rowsOf(own), nil
+	return own, err
+}
+
+func (s scratch) await(since time.Time, ops ...walls.Op) error {
+	for deadline := time.Now().Add(answerWithin); ; time.Sleep(pollEvery) {
+		read, err := s.walls(since)
+		if err != nil {
+			return err
+		}
+		missing := slices.DeleteFunc(slices.Clone(ops), func(op walls.Op) bool {
+			return slices.ContainsFunc(read, func(wall walls.Wall) bool { return wall.Op == op })
+		})
+		if len(missing) == 0 {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("no %v wall within %s", missing, answerWithin)
+		}
+	}
 }
 
 type wire struct {
@@ -121,7 +178,7 @@ type wire struct {
 	next  int
 }
 
-func (s scratch) serve() error {
+func (s scratch) serve(script func(*wire) error) error {
 	cmd := s.tofu("serve", "--stdio", "--dir", s.project, "--cassette", s.cassette)
 	in, err := cmd.StdinPipe()
 	if err != nil {
@@ -143,7 +200,7 @@ func (s scratch) serve() error {
 		}
 		close(w.lines)
 	}()
-	err = w.script()
+	err = script(w)
 	_ = in.Close()
 	for range w.lines {
 	}
@@ -157,29 +214,37 @@ func (s scratch) serve() error {
 	return nil
 }
 
-func (w *wire) script() error {
+func (w *wire) open() (string, error) {
 	if _, err := w.call("initialize", map[string]any{"client": "walls", "versions": []string{"tofu.host/1"}}, ""); err != nil {
-		return err
+		return "", err
 	}
 	opened, err := w.call("session.open", map[string]any{}, "")
 	if err != nil {
-		return err
+		return "", err
 	}
 	var first struct {
 		Session string `json:"session"`
 	}
 	if err := json.Unmarshal(opened, &first); err != nil || first.Session == "" {
-		return fmt.Errorf("session.open answered no session: %s", opened)
+		return "", fmt.Errorf("session.open answered no session: %s", opened)
+	}
+	return first.Session, nil
+}
+
+func lead(w *wire) error {
+	id, err := w.open()
+	if err != nil {
+		return err
 	}
 	steps := []struct {
 		method string
 		params map[string]any
 		until  string
 	}{
-		{"turn.send", map[string]any{"session": first.Session, "text": "read, glob, search and edit the note"}, "turn.completed"},
-		{"session.compact", map[string]any{"session": first.Session, "focus": "the note"}, ""},
+		{"turn.send", map[string]any{"session": id, "text": "read, glob, search and edit the note"}, "turn.completed"},
+		{"session.compact", map[string]any{"session": id, "focus": "the note"}, ""},
 		{"session.open", map[string]any{}, ""},
-		{"session.open", map[string]any{"session": first.Session}, ""},
+		{"session.open", map[string]any{"session": id}, ""},
 	}
 	for _, step := range steps {
 		if _, err := w.call(step.method, step.params, step.until); err != nil {
@@ -187,6 +252,61 @@ func (w *wire) script() error {
 		}
 	}
 	return nil
+}
+
+func (s scratch) spawnShellCron(w *wire) error {
+	began := time.Now()
+	if err := os.Remove(filepath.Join(s.project, goalFile)); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	id, err := w.open()
+	if err != nil {
+		return err
+	}
+	if _, err := w.call("turn.send", map[string]any{"session": id, "text": "run a shell and hand it to a worker"}, "tool.started"); err != nil {
+		return err
+	}
+	if _, err := w.call("turn.send", map[string]any{"session": id, "text": "typed while the shell runs, so it moves to the background"}, ""); err != nil {
+		return err
+	}
+	if err := s.await(began, walls.OpSpawn, walls.OpShell, walls.OpHook); err != nil {
+		return err
+	}
+	if _, err := w.call("cron.command", map[string]any{"line": `/goal close the goal --until "cat ` + goalFile + `"`}, ""); err != nil {
+		return err
+	}
+	if err := w.fired(); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(s.project, goalFile), []byte("done\n"), 0o644); err != nil {
+		return err
+	}
+	return s.await(began, walls.OpCron)
+}
+
+func (w *wire) fired() error {
+	for deadline := time.Now().Add(answerWithin); ; time.Sleep(pollEvery) {
+		got, err := w.call("query.cron", map[string]any{}, "")
+		if err != nil {
+			return err
+		}
+		var state struct {
+			Jobs []struct {
+				Fires int `json:"fires"`
+			} `json:"jobs"`
+		}
+		if err := json.Unmarshal(got, &state); err != nil {
+			return fmt.Errorf("query.cron: %w: %s", err, got)
+		}
+		for _, job := range state.Jobs {
+			if job.Fires > 0 {
+				return nil
+			}
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("the goal did not fire within %s: %s", answerWithin, got)
+		}
+	}
 }
 
 func (w *wire) call(method string, params map[string]any, until string) (json.RawMessage, error) {

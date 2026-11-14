@@ -112,12 +112,20 @@ func run(update bool, src string, runs int, keep bool) (bool, error) {
 		return false, err
 	}
 	fmt.Printf("built %s in %s\n", exe, time.Since(building).Round(time.Second))
-	s, err := fresh(exe, work)
+	first, err := fresh(exe, work, "turn.jsonl")
 	if err != nil {
 		return false, err
 	}
+	more, err := fresh(exe, filepath.Join(work, "more"), "more.jsonl")
+	if err == nil {
+		err = more.hooked()
+	}
+	if err != nil {
+		return false, err
+	}
+	fmt.Printf("the second home drives a spawn, a bash moved to the background, the hook and a goal cron; only its %v rows are kept\n", expectedOps)
 	timing := time.Now()
-	rows, err := s.measure(runs)
+	rows, err := measure(first, more, runs)
 	if err != nil {
 		return false, err
 	}
@@ -130,7 +138,9 @@ func run(update bool, src string, runs int, keep bool) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	printRows(rows, nil)
+	if failures := printRows(rows, nil); len(failures) > 0 {
+		return true, fmt.Errorf("no baseline written: %s", strings.Join(failures, "; "))
+	}
 	fmt.Println("baseline", path)
 	return false, os.WriteFile(path, append(written, '\n'), 0o644)
 }
@@ -147,7 +157,7 @@ func (g gate) judge(path string, rows []measured) (bool, error) {
 	fmt.Printf("baseline %s: %s, %s, HEAD %s\n", path, base.Machine, base.Date, base.Head)
 	failures := printRows(rows, base.Ops)
 	if len(failures) > 0 {
-		fmt.Printf("FAIL, these ops left their tier:\n  %s\n", strings.Join(failures, "\n  "))
+		fmt.Printf("FAIL, these ops left their tier or were not recorded:\n  %s\n", strings.Join(failures, "\n  "))
 		fmt.Println("Go back and make each op faster first, then run this gate again.")
 		fmt.Println("When an op cannot be faster, because the app now does more there and the time is real, be realistic: tofu boardy move <ticket> done --bypass walls_stamp --why \"<op>: <why it cannot be faster>\", which records the reason on the ticket, then go run ./bench/gates/walls -update so the next ticket is measured against the new time.")
 	}
@@ -220,6 +230,12 @@ func printRows(rows, base []measured) []string {
 		if !slices.ContainsFunc(rows, func(now measured) bool { return now.Op == b.Op && now.Name == b.Name }) {
 			fmt.Printf("| %s | %s | 0 | - | - | %d %s | FAIL not produced |\n", b.Op, b.Name, b.OwnP50, b.Tier)
 			failures = append(failures, fmt.Sprintf("%s %s: %d ms %s, now not produced", b.Op, b.Name, b.OwnP50, b.Tier))
+		}
+	}
+	for _, op := range expectedOps {
+		if !slices.ContainsFunc(rows, func(now measured) bool { return now.Op == string(op) }) {
+			fmt.Printf("| %s | - | 0 | - | - | - | FAIL expected, not recorded |\n", op)
+			failures = append(failures, fmt.Sprintf("%s: expected, and this run recorded no %s wall", op, op))
 		}
 	}
 	return failures
