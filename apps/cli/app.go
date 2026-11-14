@@ -107,9 +107,12 @@ func launchOf(dir string, resumed sessionResume, fresh bool) appLaunch {
 	registry, registryErr := shellsverb.LaunchShellRegistry(dir)
 	home, _ := os.UserHomeDir()
 	launch := appLaunch{resumed: resumed, fresh: fresh, registry: registry, registryErr: registryErr, tabs: browser.NewBrowserTabs(home), release: new(func()), endSession: new(func() []string), turnRunning: new(func() (string, bool)), stopRestoring: func() {}, started: started}
+	state, stateErr := platformproject.ProjectStateDirAt(dir)
+	if stateErr == nil {
+		stateErr = os.MkdirAll(state, 0o755)
+	}
 	safe.Go(platformproject.Crashes(dir), "state sweep", func() {
-		state, err := platformproject.ProjectStateDirAt(dir)
-		if err != nil {
+		if stateErr != nil {
 			return
 		}
 		scratch.OncePerDay(filepath.Join(state, sweptStampName), time.Now(), func() {
@@ -136,7 +139,11 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 	defer launch.stopRestoring()
 	places, _ := platformproject.ResolvePlaces(".")
 	engine := &appEngine{dir: dir, arms: arms, open: wired.open, quota: wired.quota, tabs: launch.tabs, places: places}
-	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: shellsverb.CronChecker(dir), Resumed: launch.resumed.hosted(), Joins: wired.joins, Now: wired.now})
+	var readKeys func() (map[string]string, error)
+	if held.Store != nil {
+		readKeys = held.Store.Keys
+	}
+	live, troubles := host.New(host.Config{Dir: dir, Engine: engine, Shells: launch.registry, Check: shellsverb.CronChecker(dir), Resumed: launch.resumed.hosted(), Joins: wired.joins, Now: wired.now, ReadKeys: readKeys})
 	notes := append([]string{launch.note}, troubles...)
 	if _, err := wiring.GateKeyFrom(held.Keys()); err != nil {
 		notes = append(notes, wiring.GateOffSaid(err))

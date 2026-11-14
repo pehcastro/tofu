@@ -61,19 +61,11 @@ func Path() (string, error) {
 }
 
 func Open(path string, specs Specs) (*Store, error) {
-	db, err := platformcredential.OpenCredentialStore(path)
+	db, err := platformcredential.OpenCredentialStore(path, migrateSchema)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := db.Exec(schemaStatements); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
 	store := &Store{db: db, specs: specs}
-	if err := store.renameRetiredSources(); err != nil {
-		_ = store.Close()
-		return nil, err
-	}
 	if err := store.captureMissingKeys(); err != nil {
 		_ = store.Close()
 		return nil, err
@@ -81,9 +73,12 @@ func Open(path string, specs Specs) (*Store, error) {
 	return store, nil
 }
 
-func (s *Store) renameRetiredSources() error {
+func migrateSchema(tx *sql.Tx) error {
+	if _, err := tx.Exec(schemaStatements); err != nil {
+		return err
+	}
 	for retired, source := range retiredProviderWords() {
-		if _, err := s.db.Exec(
+		if _, err := tx.Exec(
 			`UPDATE OR IGNORE credentials SET provider = ? WHERE provider = ?`,
 			string(source), retired); err != nil {
 			return err

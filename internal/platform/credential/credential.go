@@ -138,7 +138,7 @@ func CredentialStorePath() (string, error) {
 	return filepath.Join(home, CredentialStoreName), nil
 }
 
-func OpenCredentialStore(path string) (*sql.DB, error) {
+func OpenCredentialStore(path string, migrate func(*sql.Tx) error) (*sql.DB, error) {
 	if err := os.MkdirAll(filepath.Dir(path), credentialStoreDirMode); err != nil {
 		return nil, err
 	}
@@ -146,12 +146,31 @@ func OpenCredentialStore(path string) (*sql.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := db.Exec(keyTableSchema); err != nil {
+	if err := createSchema(db, migrate); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
 	_ = os.Chmod(path, credentialStoreMode)
 	return db, nil
+}
+
+func createSchema(db *sql.DB, migrate func(*sql.Tx) error) error {
+	if migrate == nil {
+		_, err := db.Exec(keyTableSchema)
+		return err
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	if _, err := tx.Exec(keyTableSchema); err != nil {
+		return err
+	}
+	if err := migrate(tx); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func SaveKey(name, value string) error {
@@ -166,7 +185,7 @@ func SaveKey(name, value string) error {
 	if err := refuseOwnerCredential(path); err != nil {
 		return err
 	}
-	db, err := OpenCredentialStore(path)
+	db, err := OpenCredentialStore(path, nil)
 	if err != nil {
 		return err
 	}
@@ -189,7 +208,7 @@ func RemoveKey(name string) (bool, error) {
 	if err != nil || !present {
 		return false, err
 	}
-	db, err := OpenCredentialStore(path)
+	db, err := OpenCredentialStore(path, nil)
 	if err != nil {
 		return false, err
 	}
@@ -214,7 +233,7 @@ func StoredKeys() (map[string]string, error) {
 	if err != nil || !present {
 		return nil, err
 	}
-	db, err := OpenCredentialStore(path)
+	db, err := OpenCredentialStore(path, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -309,6 +328,7 @@ type HeldKeys struct {
 	stored   map[string]string
 	err      error
 	redactor KeyRedactor
+	Read     func() (map[string]string, error)
 }
 
 func (k *HeldKeys) Live() KeyRedactor { return KeyRedactor{held: k} }
@@ -335,7 +355,11 @@ func (k *HeldKeys) refresh() bool {
 		return false
 	}
 	k.stamp = stamp
-	stored, err := StoredKeys()
+	read := k.Read
+	if read == nil {
+		read = StoredKeys
+	}
+	stored, err := read()
 	k.err = err
 	if k.built && (err != nil || maps.Equal(stored, k.stored)) {
 		return true

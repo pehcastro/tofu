@@ -67,21 +67,30 @@ func BraveReports() string {
 		strconv.FormatFloat(konst.BraveSearchDollarsPerCall*1000, 'f', -1, 64) + " USD per 1000 calls"
 }
 
-func KeyTable() []KeyFacts {
-	bound, err := BoundClassifier()
-	boundOn := func(provider catalog.Provider) string {
-		if err != nil || bound.Provider != provider {
-			return ""
-		}
-		return bound.Slug()
-	}
+func unboundKeyTable() []KeyFacts {
 	return []KeyFacts{
 		{host.RoleLLM, MetaName, credential.MetaMuseKeyName, catalog.Meta.Display(), "serves the meta models", metaReports, ""},
 		{host.RoleLLM, OpenRouterName, credential.OpenRouterKeyName, catalog.OpenRouter.Display(), "serves the openrouter models on your own key", openRouterReports, ""},
-		{host.RoleClassifier, TypeSafeName, classifiers.KeyName(catalog.TypeSafe), catalog.TypeSafe.Display(), classifierKeyUse(bound, err, catalog.TypeSafe), typeSafeReports, boundOn(catalog.TypeSafe)},
-		{host.RoleClassifier, OpenRouterName, classifiers.KeyName(catalog.OpenRouter), catalog.OpenRouter.Display(), classifierKeyUse(bound, err, catalog.OpenRouter), openRouterReports, boundOn(catalog.OpenRouter)},
+		{host.RoleClassifier, TypeSafeName, classifiers.KeyName(catalog.TypeSafe), catalog.TypeSafe.Display(), "", typeSafeReports, ""},
+		{host.RoleClassifier, OpenRouterName, classifiers.KeyName(catalog.OpenRouter), catalog.OpenRouter.Display(), "", openRouterReports, ""},
 		{host.RoleSearch, BraveName, credential.BraveSearchKeyName, BraveDisplay, "backs the web search tool", BraveReports(), ""},
 	}
+}
+
+func KeyTable() []KeyFacts {
+	bound, err := BoundClassifier()
+	table := unboundKeyTable()
+	for i, fact := range table {
+		if fact.Role != host.RoleClassifier {
+			continue
+		}
+		provider := catalog.Provider(fact.Provider)
+		table[i].Use = classifierKeyUse(bound, err, provider)
+		if err == nil && bound.Provider == provider {
+			table[i].Model = bound.Slug()
+		}
+	}
+	return table
 }
 
 func KeyFactsOf(of host.AccountRole, provider string) KeyFacts {
@@ -98,7 +107,7 @@ func KeyStatuses(resolve func(variable string) string) []host.KeyStatus {
 }
 
 func firstRoleOf(provider string) host.AccountRole {
-	table := KeyTable()
+	table := unboundKeyTable()
 	if at := slices.IndexFunc(table, func(fact KeyFacts) bool { return fact.Provider == provider }); at >= 0 {
 		return table[at].Role
 	}

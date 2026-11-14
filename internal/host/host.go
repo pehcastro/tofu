@@ -80,6 +80,7 @@ type Config struct {
 	ProjectTurn *sync.Mutex
 	Joins       bool
 	Unrecorded  bool
+	ReadKeys    func() (map[string]string, error)
 }
 
 type Host struct {
@@ -183,6 +184,7 @@ func New(cfg Config) (h *Host, troubles []string) {
 		cronMove:    cronMove,
 		cronOut:     map[string]time.Duration{},
 		turnLock:    cfg.ProjectTurn,
+		heldKeys:    credential.HeldKeys{Read: cfg.ReadKeys},
 		done:        make(chan struct{}),
 		joins:       cfg.Joins,
 		member:      MemberTUI,
