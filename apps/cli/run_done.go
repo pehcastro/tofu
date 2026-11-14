@@ -12,6 +12,7 @@ import (
 	"tofu/internal/judge/ledger"
 	stopcheck "tofu/internal/judge/points/stop_check"
 	"tofu/internal/models/classifiers/core"
+	platformproject "tofu/internal/platform/project"
 	settingspkg "tofu/internal/store/settings"
 )
 
@@ -70,7 +71,11 @@ func resolveStopCheckPoint() (wiring.Battery, error) {
 		return wiring.Battery{}, fmt.Errorf("rule %s names the question set %s@%d and the battery resolved %s@%d",
 			doneReviewPoint, pol.Questions, pol.QuestionsVersion, set.SetName, set.QuestionsVersion)
 	}
-	resolution, err := wiring.ResolveRuleMode(pol)
+	places, err := platformproject.ResolvePlaces(".")
+	if err != nil {
+		return wiring.Battery{}, err
+	}
+	resolution, err := wiring.ResolveRuleMode(places, pol)
 	if err != nil {
 		return wiring.Battery{}, err
 	}

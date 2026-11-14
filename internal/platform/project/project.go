@@ -153,19 +153,48 @@ func readRegistryFile(name string) (raw []byte, err error) {
 	return raw, err
 }
 
-func readProjectRegistry(home string) (projectRegistry, error) {
-	var registry projectRegistry
+type Registry struct {
+	home string
+	raw  []byte
+}
+
+func ReadRegistry() (Registry, error) {
+	home, err := fs.HomeConfigDir()
+	if err != nil {
+		return Registry{}, err
+	}
+	return registryAt(home)
+}
+
+func registryAt(home string) (Registry, error) {
 	raw, err := readRegistryFile(filepath.Join(home, ProjectRegistryName))
-	if errors.Is(err, iofs.ErrNotExist) {
+	if err != nil && !errors.Is(err, iofs.ErrNotExist) {
+		return Registry{}, Registry{home: home}.failed(err)
+	}
+	return Registry{home: home, raw: raw}, nil
+}
+
+func (r Registry) failed(err error) error {
+	return fmt.Errorf("the project registry %s: %w", filepath.Join(r.home, ProjectRegistryName), err)
+}
+
+func (r Registry) projects() (projectRegistry, error) {
+	var registry projectRegistry
+	if r.raw == nil {
 		return registry, nil
 	}
-	if err == nil {
-		err = json.Unmarshal(raw, &registry)
-	}
-	if err != nil {
-		return registry, fmt.Errorf("the project registry %s: %w", filepath.Join(home, ProjectRegistryName), err)
+	if err := json.Unmarshal(r.raw, &registry); err != nil {
+		return registry, r.failed(err)
 	}
 	return registry, nil
+}
+
+func readProjectRegistry(home string) (projectRegistry, error) {
+	registry, err := registryAt(home)
+	if err != nil {
+		return projectRegistry{}, err
+	}
+	return registry.projects()
 }
 
 type registeredEntry struct {
@@ -173,19 +202,15 @@ type registeredEntry struct {
 	Paths  []string `json:"paths"`
 }
 
-func registeredFolder(home, path string) (registeredEntry, error) {
-	name := filepath.Join(home, ProjectRegistryName)
-	raw, err := readRegistryFile(name)
-	if errors.Is(err, iofs.ErrNotExist) {
+func (r Registry) registeredFolder(path string) (registeredEntry, error) {
+	if r.raw == nil {
 		return registeredEntry{}, nil
 	}
-	if err == nil {
-		var found registeredEntry
-		if found, err = folderHolding(json.NewDecoder(bytes.NewReader(raw)), path); err == nil {
-			return found, nil
-		}
+	found, err := folderHolding(json.NewDecoder(bytes.NewReader(r.raw)), path)
+	if err != nil {
+		return registeredEntry{}, r.failed(err)
 	}
-	return registeredEntry{}, fmt.Errorf("the project registry %s: %w", name, err)
+	return found, nil
 }
 
 func folderHolding(decoder *json.Decoder, path string) (registeredEntry, error) {
@@ -228,14 +253,14 @@ func folderHolding(decoder *json.Decoder, path string) (registeredEntry, error) 
 	return found, err
 }
 
-func locateProject(home, dir string) (Project, projectRegistry, error) {
+func (r Registry) locate(dir string) (Project, projectRegistry, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return Project{}, projectRegistry{}, err
 	}
-	project := Project{Path: resolvedPath(abs), home: home}
-	projects := filepath.Join(home, fs.ProjectsDirName)
-	found, err := registeredFolder(home, project.Path)
+	project := Project{Path: resolvedPath(abs), home: r.home}
+	projects := filepath.Join(r.home, fs.ProjectsDirName)
+	found, err := r.registeredFolder(project.Path)
 	if err != nil {
 		return Project{}, projectRegistry{}, err
 	}
@@ -243,7 +268,7 @@ func locateProject(home, dir string) (Project, projectRegistry, error) {
 		project.State, project.Registered = filepath.Join(projects, found.Folder), true
 		return project, projectRegistry{}, nil
 	}
-	registry, err := readProjectRegistry(home)
+	registry, err := r.projects()
 	if err != nil {
 		return Project{}, registry, err
 	}
@@ -269,17 +294,21 @@ func (p Project) reading() string {
 	return p.State
 }
 
-func projectStateIn(home, dir string) (string, error) {
-	project, _, err := locateProject(home, dir)
-	return project.reading(), err
+func (r Registry) Places(dir string) (Places, error) {
+	project, _, err := r.locate(dir)
+	if err != nil {
+		return Places{}, err
+	}
+	state := project.reading()
+	return Places{State: state, Log: filepath.Join(state, "log")}, nil
 }
 
 func OpenProject(dir string) (Project, error) {
-	home, err := fs.HomeConfigDir()
+	read, err := ReadRegistry()
 	if err != nil {
 		return Project{}, err
 	}
-	project, registry, err := locateProject(home, dir)
+	project, registry, err := read.locate(dir)
 	if err != nil || project.Registered || !slices.ContainsFunc(registry.Projects, movedAway) {
 		return project, err
 	}
@@ -392,27 +421,22 @@ func Registered(home string) ([]ProjectEntry, error) {
 	return registry.Projects, err
 }
 
-func ReapTemporaryProjects(home string, now time.Time) ([]string, error) {
-	projects := filepath.Join(home, fs.ProjectsDirName)
-	reaped, err := reapIdle(home, projects, now)
+func (r Registry) ReapTemporary(now time.Time) ([]string, error) {
+	projects := filepath.Join(r.home, fs.ProjectsDirName)
+	reaped, err := r.reapIdle(projects, now)
 	if trash := filepath.Join(projects, reapedDirName); pathExists(trash) {
 		err = errors.Join(err, os.RemoveAll(trash))
 	}
 	return reaped, err
 }
 
-func reapIdle(home, projects string, now time.Time) ([]string, error) {
-	name := filepath.Join(home, ProjectRegistryName)
-	raw, err := readRegistryFile(name)
-	if errors.Is(err, iofs.ErrNotExist) || err == nil && !bytes.Contains(raw, []byte(`"temporary": true`)) {
+func (r Registry) reapIdle(projects string, now time.Time) ([]string, error) {
+	if !bytes.Contains(r.raw, []byte(`"temporary": true`)) {
 		return nil, nil
 	}
-	var read projectRegistry
-	if err == nil {
-		err = json.Unmarshal(raw, &read)
-	}
+	read, err := r.projects()
 	if err != nil {
-		return nil, fmt.Errorf("the project registry %s: %w", name, err)
+		return nil, err
 	}
 	idleSince := now.Add(-konst.TemporaryProjectIdleHours * time.Hour)
 	idle := slices.DeleteFunc(read.Projects, func(entry ProjectEntry) bool {
@@ -425,7 +449,7 @@ func reapIdle(home, projects string, now time.Time) ([]string, error) {
 	var reaped []string
 	var failed []error
 	trash := filepath.Join(projects, reapedDirName)
-	err = Project{home: home}.editRegistry(func(registry *projectRegistry) (*ProjectEntry, error) {
+	err = Project{home: r.home}.editRegistry(func(registry *projectRegistry) (*ProjectEntry, error) {
 		if err := os.MkdirAll(trash, 0o755); err != nil {
 			return nil, err
 		}
@@ -470,11 +494,11 @@ func usedSince(entry ProjectEntry, state string, since time.Time) bool {
 
 func HoldProjectOpen(dir string) (release func()) {
 	release = func() {}
-	home, err := fs.HomeConfigDir()
+	registry, err := ReadRegistry()
 	if err != nil {
 		return release
 	}
-	project, _, err := locateProject(home, dir)
+	project, _, err := registry.locate(dir)
 	open := filepath.Join(project.State, projectOpenDirName)
 	if err != nil || !project.Registered || os.MkdirAll(open, 0o755) != nil {
 		return release

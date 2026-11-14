@@ -39,18 +39,21 @@ func BoardyIdentity(as string) (actor, lead string) {
 	return boardy.HarnessActor(harness, session, as), ""
 }
 
-func ProjectHasBoard(project string) bool {
-	store, err := boardy.OpenStore(project)
-	if err != nil {
+func ProjectHasBoard(boards boardy.Store, opened error) bool {
+	if opened != nil {
 		return false
 	}
-	boards, _ := store.Boards()
-	return len(boards) > 0
+	found, _ := boards.Boards()
+	return len(found) > 0
 }
 
-func BoardManaged(project string) bool {
+func BoardManaged(boards boardy.Store, opened error) bool {
+	return ProjectHasBoard(boards, opened) && managementOn(boards.Root)
+}
+
+func managementOn(project string) bool {
 	store, err := settingspkg.OpenFor(project)
-	if err != nil || !ProjectHasBoard(project) {
+	if err != nil {
 		return false
 	}
 	_, set := store.Source(boardy.ManagementSetting)

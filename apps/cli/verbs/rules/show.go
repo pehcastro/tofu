@@ -15,6 +15,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/platform/text"
+	"tofu/internal/project/boardy"
 )
 
 const showUsage = "tofu rules show <id> [--library dir] [--dir project] [--json]"
@@ -45,7 +46,8 @@ func showVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.Usage(err)
 	}
-	stack, err := wiring.StackRules(opts.library, opts.dir)
+	boards, opened := boardy.OpenStore(opts.dir)
+	stack, err := wiring.StackRules(opts.library, boards, opened)
 	if err != nil {
 		return o.Fail(err)
 	}

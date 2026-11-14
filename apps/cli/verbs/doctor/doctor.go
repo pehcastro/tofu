@@ -60,7 +60,7 @@ func Clocked(ctx context.Context, args []string, _ io.Reader, out, errOut io.Wri
 	steps := clockSteps(ctx)
 	report, places, placesErr := stateOn(steps, now)
 	ready := report.Verdict == host.DoctorReady
-	unruled, fixed := unruledBoards(report.Root, fix)
+	unruled, fixed := unruledBoards(boardy.StoreAt(places, report.Root), placesErr, fix)
 	steps.took("boards with no rules", true)
 	var err error
 	if asJSON {
@@ -145,15 +145,15 @@ func stateOn(steps *stepClock, now time.Time) (host.DoctorReport, project.Places
 	located, err := wiring.LocateGateKey(core.ReadKeyring())
 	report.Gate = host.DoctorGate{Variable: located.Name, Source: gateSource(located), Path: located.Path}
 	steps.took("gate key", err == nil)
-	report.Library, report.Rules = wiring.ReadLibrary()
+	places, placesErr := project.RunPlaces(steps.parent)
+	report.Library, report.Rules = wiring.ReadLibrary(places, placesErr)
 	steps.took("library", report.Library.Unreadable == "")
-	places, placesErr := project.ResolvePlaces(root)
 	for i, point := range report.Rules {
 		switch {
 		case point.Point == wiring.ShellSiftPoint:
 			report.Rules[i] = wiring.ShellSiftRule(point)
 		case placesErr == nil:
-			report.Rules[i] = withLockStanding(point, places.Calibration())
+			report.Rules[i] = withLockStanding(point, places)
 		}
 	}
 	steps.took("rule locks", true)
@@ -165,9 +165,9 @@ func stateOn(steps *stepClock, now time.Time) (host.DoctorReport, project.Places
 	}))
 	report.Store = accounts.DoctorState(now, wiring.Specs())
 	steps.took("credential store", true)
-	report.Calibration = wiring.CalibrationState()
+	report.Calibration = wiring.CalibrationState(places, placesErr)
 	steps.took("calibration", true)
-	report.Ledger = wiring.LedgerState()
+	report.Ledger = wiring.LedgerState(places, placesErr)
 	steps.took("ledger", true)
 	report.SpendLimit = quota.SpendLimitLine()
 	steps.took("spend limit", true)
@@ -178,7 +178,7 @@ func stateOn(steps *stepClock, now time.Time) (host.DoctorReport, project.Places
 	home, _ := os.UserHomeDir()
 	report.Browser = driver.Hosts(home, driver.ChromeHostsKey)
 	steps.took("browser hosts", true)
-	stack, err := wiring.StackRules("", root)
+	stack, err := wiring.StackRules("", boardy.StoreAt(places, root), placesErr)
 	if err != nil {
 		report.Unreadable = err.Error()
 	}
@@ -193,7 +193,7 @@ func stateOn(steps *stepClock, now time.Time) (host.DoctorReport, project.Places
 	return report, places, placesErr
 }
 
-func withLockStanding(point host.DoctorRule, calibration string) host.DoctorRule {
+func withLockStanding(point host.DoctorRule, places project.Places) host.DoctorRule {
 	if point.Fallback != "" || point.Unusable != "" {
 		return point
 	}
@@ -201,10 +201,10 @@ func withLockStanding(point host.DoctorRule, calibration string) host.DoctorRule
 	if err != nil {
 		return point
 	}
-	if present, _ := fs.Exists(gate.LockPath(calibration, r)); !present {
+	if present, _ := fs.Exists(gate.LockPath(places.Calibration(), r)); !present {
 		return point
 	}
-	res, err := wiring.ResolveRuleMode(r)
+	res, err := wiring.ResolveRuleMode(places, r)
 	if err != nil {
 		point.Unusable = err.Error()
 		return point
@@ -213,10 +213,9 @@ func withLockStanding(point host.DoctorRule, calibration string) host.DoctorRule
 	return point
 }
 
-func unruledBoards(root string, fix bool) (unruled []cli.Problem, fixed []string) {
-	store, err := boardy.OpenStore(root)
+func unruledBoards(store boardy.Store, opened error, fix bool) (unruled []cli.Problem, fixed []string) {
 	boards, listed := store.Boards()
-	if err = errors.Join(err, listed); err != nil {
+	if err := errors.Join(opened, listed); err != nil {
 		unruled = append(unruled, cli.Problem{What: "boards: " + err.Error()})
 	}
 	ids, err := boardy.StarterHookIDs()

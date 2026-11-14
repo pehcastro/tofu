@@ -49,8 +49,12 @@ type Store struct {
 }
 
 func OpenStore(project string) (Store, error) {
-	state, err := platformproject.ProjectStateDirAt(project)
-	return Store{Dir: filepath.Join(state, BoardsDirName), Root: project}, err
+	places, err := platformproject.ResolvePlaces(project)
+	return StoreAt(places, project), err
+}
+
+func StoreAt(places platformproject.Places, project string) Store {
+	return Store{Dir: filepath.Join(places.State, BoardsDirName), Root: project}
 }
 
 var boardKey = platformfs.LazyRegexp(`^[A-Z][A-Z0-9]{1,9}$`)

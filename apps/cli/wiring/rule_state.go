@@ -17,7 +17,7 @@ import (
 	"tofu/library/questions"
 )
 
-func ReadLibrary() (host.DoctorLibrary, []host.DoctorRule) {
+func ReadLibrary(places project.Places, placesErr error) (host.DoctorLibrary, []host.DoctorRule) {
 	dir, refs, err := ruleRefs()
 	if err != nil {
 		return host.DoctorLibrary{Dir: dir, Unreadable: err.Error()}, nil
@@ -29,7 +29,7 @@ func ReadLibrary() (host.DoctorLibrary, []host.DoctorRule) {
 	library := host.DoctorLibrary{Dir: dir, Points: len(refs)}
 	points := make([]host.DoctorRule, 0, len(refs))
 	for _, ref := range refs {
-		point := rulePoint(ref, layers)
+		point := rulePoint(ref, layers, places, placesErr)
 		if point.Origin == string(gate.OriginProject) {
 			library.FromProject++
 		}
@@ -70,11 +70,11 @@ func ruleRefs() (string, []string, error) {
 	return dir, refs, nil
 }
 
-func CalibrationState() string {
-	dir, err := project.CalibrationDir()
-	if err != nil {
-		return "unknown: " + err.Error()
+func CalibrationState(places project.Places, placesErr error) string {
+	if placesErr != nil {
+		return "unknown: " + placesErr.Error()
 	}
+	dir := places.Calibration()
 	isDir, err := fs.IsDir(dir)
 	if err != nil {
 		return Unreadable + err.Error()
@@ -102,7 +102,7 @@ func CalibrationState() string {
 	return strings.Join(points, " ")
 }
 
-func rulePoint(ref string, layers []question.Layer) host.DoctorRule {
+func rulePoint(ref string, layers []question.Layer, places project.Places, placesErr error) host.DoctorRule {
 	set, _, err := question.Resolve(ref, layers)
 	if err != nil {
 		return host.DoctorRule{Point: ref, Unusable: err.Error()}
@@ -122,7 +122,10 @@ func rulePoint(ref string, layers []question.Layer) host.DoctorRule {
 	if r.ModeDeclared {
 		point.Declared = r.Mode.String()
 	}
-	res, err := ResolveRuleMode(r)
+	res, err := gate.Resolution{}, placesErr
+	if err == nil {
+		res, err = ResolveRuleMode(places, r)
+	}
 	if err != nil {
 		point.Unusable = err.Error()
 		return point
@@ -147,12 +150,11 @@ func rulePoint(ref string, layers []question.Layer) host.DoctorRule {
 	return point
 }
 
-func LedgerState() string {
-	dir, err := project.LogDir()
-	if err != nil {
-		return "unknown: " + err.Error()
+func LedgerState(places project.Places, placesErr error) string {
+	if placesErr != nil {
+		return "unknown: " + placesErr.Error()
 	}
-	stats, err := ledger.Summary(dir)
+	stats, err := ledger.Summary(places.Log)
 	if err != nil {
 		return Unreadable + err.Error()
 	}

@@ -85,10 +85,11 @@ func joinedWhy(source, because string) string {
 
 func managementInForce(store *settingspkg.Store, dir string) (string, string) {
 	_, set := store.Source(boardy.ManagementSetting)
+	boards, opened := boardy.OpenStore(dir)
 	switch {
-	case !wiring.ProjectHasBoard(dir):
+	case !wiring.ProjectHasBoard(boards, opened):
 		return string(boardy.ManagementOff), "off until the project has a board: tofu boardy init"
-	case wiring.BoardManaged(dir) && !set:
+	case wiring.BoardManaged(boards, opened) && !set:
 		return string(boardy.ManagementBoardy), "on because the project has a board"
 	}
 	return store.Text(boardy.ManagementSetting), ""

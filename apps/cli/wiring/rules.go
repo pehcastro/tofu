@@ -48,6 +48,7 @@ type RuleStack struct {
 	Origin     string
 	Under      map[string][]rule.Rule
 	Overrides  []LayerOverride
+	hasBoard   bool
 }
 
 type RuleLayer struct{ Name, Dir, Flag string }
@@ -82,11 +83,15 @@ func (o LayerOverride) Listing() *host.OverrideListing {
 	return listed
 }
 
-func StackRules(library, project string) (RuleStack, error) {
-	var verifying, managed bool
+func StackRules(library string, boards boardy.Store, opened error) (RuleStack, error) {
+	project := boards.Root
+	var verifying, hasBoard, managed bool
 	var reading sync.WaitGroup
 	reading.Go(func() { verifying = settingspkg.IntSaying(project, settingspkg.VerifySubAgents, nil) != 0 })
-	reading.Go(func() { managed = BoardManaged(project) })
+	reading.Go(func() {
+		hasBoard = ProjectHasBoard(boards, opened)
+		managed = hasBoard && managementOn(project)
+	})
 	rules, origin, err := BaseRules(library)
 	reading.Wait()
 	if err != nil {
@@ -96,7 +101,7 @@ func StackRules(library, project string) (RuleStack, error) {
 	if err != nil {
 		return RuleStack{}, err
 	}
-	stack := RuleStack{Origin: origin, Under: map[string][]rule.Rule{}}
+	stack := RuleStack{Origin: origin, Under: map[string][]rule.Rule{}, hasBoard: hasBoard}
 	for _, layer := range layers {
 		over, err := layer.Load()
 		if err != nil {
@@ -133,12 +138,12 @@ func StackRules(library, project string) (RuleStack, error) {
 	return stack, nil
 }
 
-func (s RuleStack) SwitchOn(id, project string) string {
+func (s RuleStack) SwitchOn(id string) string {
 	key := RuleSetting(id)
 	switch {
 	case slices.Contains(s.BySetting, id):
 		return "off by the setting " + key + ": tofu settings set " + key + " " + ruleSettingOnValue(key)
-	case key == boardy.ManagementSetting && !ProjectHasBoard(project):
+	case key == boardy.ManagementSetting && !s.hasBoard:
 		return "off until the project has a board: tofu boardy init"
 	case key != "":
 		return "ships off: tofu rules restore " + id + ", or tofu settings set " + key + " " + ruleSettingOnValue(key)
@@ -166,7 +171,8 @@ func (s RuleStack) SwitchedOff() []LayerOverride {
 }
 
 func LoadRules(library, project string) ([]rule.Rule, string, error) {
-	stack, err := StackRules(library, project)
+	boards, opened := boardy.OpenStore(project)
+	stack, err := StackRules(library, boards, opened)
 	return stack.Rules, stack.Origin, err
 }
 

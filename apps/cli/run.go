@@ -732,9 +732,9 @@ func droppedRules(stack wiring.RuleStack, kept []rule.Rule, switchedOff []rule.O
 		reason, why := rule.ReasonSetting, "the run's setting --tools three sends no "+one.ID
 		switch {
 		case one.Mode == rule.ModeOff && wiring.RuleSetting(one.ID) == "":
-			reason, why = rule.ReasonMode, stack.SwitchOn(one.ID, cmp.Or(opts.Dir, "."))
+			reason, why = rule.ReasonMode, stack.SwitchOn(one.ID)
 		case one.Mode == rule.ModeOff:
-			why = stack.SwitchOn(one.ID, cmp.Or(opts.Dir, "."))
+			why = stack.SwitchOn(one.ID)
 		case opts.LeadAlone:
 			why = "the run's lead alone setting: the task names few files in one folder, so the spawn rules are not sent"
 		}
@@ -847,11 +847,7 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 		asking = append(asking, remember.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: judgeverb.MemoryScopeJudge(dir, run.places.Log, run.keys.keyring(), run.notify),
 			Auto: func() bool { on, _ := settingspkg.IntFor(dir, settingspkg.AutoMemory); return on != 0 }})
 	}
-	if wiring.BoardManaged(dir) {
-		store, err := boardy.OpenStore(dir)
-		if err != nil {
-			return loop.Config{}, nil, err
-		}
+	if store, opened := boardy.OpenStore(dir); wiring.BoardManaged(store, opened) {
 		store.Speakers = map[string]boardy.Author{sessionID: *boardy.LeadAuthor(sessionID, "", "", config.Slug)}
 		board := boardy.Managed{Local: boardy.Local{Store: store}, Person: string(boardy.RolePerson), Lead: sessionID}
 		config.Board, config.TicketGrant, config.TicketTools = &board, ticket.Grant, ticket.Tools
@@ -1145,7 +1141,8 @@ func readRuleStack(report safe.Report, dir string) ruleStackRead {
 	var reading sync.WaitGroup
 	reading.Go(func() {
 		err = safe.Call(report, "rule stack", func() (stackErr error) {
-			stack, stackErr = wiring.StackRules("", cmp.Or(dir, "."))
+			boards, opened := boardy.OpenStore(cmp.Or(dir, "."))
+			stack, stackErr = wiring.StackRules("", boards, opened)
 			return stackErr
 		})
 	})

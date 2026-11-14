@@ -1,6 +1,7 @@
 package project
 
 import (
+	"context"
 	"path/filepath"
 
 	"tofu/internal/platform/fs"
@@ -9,11 +10,8 @@ import (
 func ProjectStateDir() (string, error) { return ProjectStateDirAt(".") }
 
 func ProjectStateDirAt(dir string) (string, error) {
-	home, err := fs.HomeConfigDir()
-	if err != nil {
-		return "", err
-	}
-	return projectStateIn(home, dir)
+	places, err := ResolvePlaces(dir)
+	return places.State, err
 }
 
 func OwnerProjectStateDir(project string) string {
@@ -21,11 +19,15 @@ func OwnerProjectStateDir(project string) string {
 	if home == "" {
 		return ""
 	}
-	state, err := projectStateIn(home, project)
+	registry, err := registryAt(home)
 	if err != nil {
 		return ""
 	}
-	return state
+	places, err := registry.Places(project)
+	if err != nil {
+		return ""
+	}
+	return places.State
 }
 
 func RecordedStateDir(elem ...string) string {
@@ -57,13 +59,22 @@ type Places struct {
 }
 
 func ResolvePlaces(dir string) (Places, error) {
-	home, err := fs.HomeConfigDir()
+	registry, err := ReadRegistry()
 	if err != nil {
 		return Places{}, err
 	}
-	state, err := projectStateIn(home, dir)
-	if err != nil {
-		return Places{}, err
+	return registry.Places(dir)
+}
+
+type runPlacesKey struct{}
+
+func WithRunPlaces(ctx context.Context, places Places) context.Context {
+	return context.WithValue(ctx, runPlacesKey{}, places)
+}
+
+func RunPlaces(ctx context.Context) (Places, error) {
+	if places, found := ctx.Value(runPlacesKey{}).(Places); found {
+		return places, nil
 	}
-	return Places{State: state, Log: filepath.Join(state, "log")}, nil
+	return ResolvePlaces(".")
 }

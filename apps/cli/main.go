@@ -143,7 +143,10 @@ func main() {
 		started = time.Now()
 	}
 	stopProfile := profile.StartProfile()
-	reapTemporaryProjects(os.Stderr)
+	registry, registryErr := platformproject.ReadRegistry()
+	if reapTemporaryProjects(os.Stderr, registry, registryErr) {
+		registry, registryErr = platformproject.ReadRegistry()
+	}
 	args, temporary := temporaryProject(os.Args[1:])
 	args, profiled := withoutProjectFlag(args, profileFlag)
 	if profiled {
@@ -175,12 +178,25 @@ func main() {
 	moveHomeKeys(os.Stderr)
 	pages := console.ReadConsolePages()
 	ctx, clock := outside.Open(context.Background(), time.Now)
+	rewritesRegistry := opens || len(args) > 0 && args[0] == "migrate"
+	var places platformproject.Places
+	placesErr := registryErr
+	if placesErr == nil && !rewritesRegistry {
+		if places, placesErr = registry.Places("."); placesErr == nil {
+			ctx = platformproject.WithRunPlaces(ctx, places)
+		}
+	}
 	code := runIn(ctx, args, os.Stdin, os.Stdout, os.Stderr)
 	if name, timed := verbWallName(args); timed {
 		if verbNamed(args[0]).clocked == nil {
 			clock = nil
 		}
-		appendVerbWall(dir, name, started, code, clock)
+		if rewritesRegistry {
+			places, placesErr = platformproject.ResolvePlaces(cmp.Or(dir, "."))
+		}
+		if placesErr == nil {
+			appendVerbWall(places.State, name, started, code, clock)
+		}
 	}
 	pages.Restore()
 	letGo()
@@ -199,16 +215,14 @@ func verbWallName(args []string) (string, bool) {
 	return args[0], true
 }
 
-func appendVerbWall(dir, name string, started time.Time, code int, measured *outside.Clock) {
+func appendVerbWall(state, name string, started time.Time, code int, measured *outside.Clock) {
 	wall := walls.Wall{Op: walls.OpVerb, Name: name, At: started.UnixMilli(), Session: os.Getenv(subagents.SessionEnv), OK: code == output.ExitOK}
 	if measured != nil {
 		outsideMS := measured.Outside().Milliseconds()
 		wall.OutsideMS = &outsideMS
 	}
 	wall.MS = time.Since(started).Milliseconds()
-	if places, err := platformproject.ResolvePlaces(cmp.Or(dir, ".")); err == nil {
-		_ = walls.Append(places.State, wall)
-	}
+	_ = walls.Append(state, wall)
 }
 
 func withoutProjectFlag(args []string, flag string) ([]string, bool) {

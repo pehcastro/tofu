@@ -14,6 +14,7 @@ import (
 	"tofu/internal/judge/questions"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/platform/project"
 )
 
 const Usage = "tofu judge [--dry-run] [--no-cache] [--no-rule] [--json] < request.json, or tofu judge --lint file [--json]"
@@ -79,7 +80,11 @@ func Verb(ctx context.Context, args []string, in io.Reader, out, errOut io.Write
 		if err != nil {
 			return wiring.Failed(o, err)
 		}
-		res, err := wiring.ResolveRuleMode(pol)
+		places, err := project.ResolvePlaces(".")
+		if err != nil {
+			return wiring.Failed(o, err)
+		}
+		res, err := wiring.ResolveRuleMode(places, pol)
 		if err != nil {
 			return wiring.Failed(o, err)
 		}

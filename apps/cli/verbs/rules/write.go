@@ -16,6 +16,7 @@ import (
 	"tofu/internal/host"
 	"tofu/internal/librarian/rules"
 	"tofu/internal/platform/fs"
+	"tofu/internal/project/boardy"
 )
 
 const (
@@ -88,7 +89,8 @@ func parseIDArgs(args []string) (writeOpts, error) {
 }
 
 func (opts writeOpts) under(id string) (rules.Rule, bool, error) {
-	stack, err := wiring.StackRules("", opts.dir)
+	boards, opened := boardy.OpenStore(opts.dir)
+	stack, err := wiring.StackRules("", boards, opened)
 	below := stack.Under[opts.layer.Name]
 	at := slices.IndexFunc(below, func(r rules.Rule) bool { return r.ID == id })
 	if err != nil || at < 0 {

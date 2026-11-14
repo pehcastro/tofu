@@ -16,6 +16,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/host"
 	rule "tofu/internal/librarian/rules"
+	"tofu/internal/project/boardy"
 )
 
 type IndexListing struct {
@@ -82,7 +83,8 @@ func indexVerb(args []string, out, errOut io.Writer, agentsIn func(dir string) (
 		return o.Usage(err)
 	}
 	o.AsJSON = opts.json
-	stack, err := wiring.StackRules(opts.library, opts.dir)
+	boards, opened := boardy.OpenStore(opts.dir)
+	stack, err := wiring.StackRules(opts.library, boards, opened)
 	if err != nil {
 		return o.Fail(err)
 	}

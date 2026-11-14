@@ -119,7 +119,11 @@ func CalibrateVerb(args []string, out, errOut io.Writer) int {
 				page.Label(fmt.Sprintf("%d fit and %d held-out cases, each asked twice, nothing asked yet", report.Fit, report.Verify))}
 		})
 	}
-	resolved, err := wiring.ResolveRuleMode(rule)
+	places, err := project.ResolvePlaces(".")
+	if err != nil {
+		return o.Fail(err)
+	}
+	resolved, err := wiring.ResolveRuleMode(places, rule)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -141,11 +145,7 @@ func CalibrateVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return wiring.Failed(o, err)
 	}
-	dir, err := project.CalibrationDir()
-	if err != nil {
-		return o.Fail(err)
-	}
-	report.Lock = gate.LockPath(dir, rule)
+	report.Lock = gate.LockPath(places.Calibration(), rule)
 	if err := gate.WriteLock(report.Lock, result.Lock); err != nil {
 		return o.Fail(err)
 	}

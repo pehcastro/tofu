@@ -16,6 +16,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
+	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/scratch"
 	"tofu/library/questions"
 )
@@ -73,7 +74,11 @@ func resolvePoint(point, dir string) (wiring.Battery, error) {
 	if err := thresholdsInRange(pol, set); err != nil {
 		return wiring.Battery{}, err
 	}
-	resolution, err := wiring.ResolveRuleMode(pol)
+	places, err := platformproject.ResolvePlaces(".")
+	if err != nil {
+		return wiring.Battery{}, err
+	}
+	resolution, err := wiring.ResolveRuleMode(places, pol)
 	if err != nil {
 		return wiring.Battery{}, err
 	}

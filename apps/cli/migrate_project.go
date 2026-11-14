@@ -52,19 +52,21 @@ func temporaryProject(args []string) ([]string, bool) {
 	return rest, true
 }
 
-func reapTemporaryProjects(out io.Writer) {
-	home, err := fs.HomeConfigDir()
+func reapTemporaryProjects(out io.Writer, registry platformproject.Registry, err error) (rewrote bool) {
 	var reaped []string
 	if err == nil {
-		reaped, err = platformproject.ReapTemporaryProjects(home, time.Now())
+		reaped, err = registry.ReapTemporary(time.Now())
 	}
 	page := cli.Detect(out, os.Environ())
 	if err != nil {
 		_ = page.Print(out, page.ErrorLine("temporary projects not all removed: "+err.Error(), ""))
 	}
-	if len(reaped) > 0 {
-		_ = page.Print(out, []string{page.Receipt(cli.Removed, output.Plural(len(reaped), "temporary project")+" unused for "+strconv.Itoa(konst.TemporaryProjectIdleHours)+" hours", filepath.Join(home, fs.ProjectsDirName))})
+	if len(reaped) == 0 {
+		return false
 	}
+	home, _ := fs.HomeConfigDir()
+	_ = page.Print(out, []string{page.Receipt(cli.Removed, output.Plural(len(reaped), "temporary project")+" unused for "+strconv.Itoa(konst.TemporaryProjectIdleHours)+" hours", filepath.Join(home, fs.ProjectsDirName))})
+	return true
 }
 
 func openProject(out io.Writer, in io.Reader, dir string, mayAsk, temporary bool, register func(platformproject.Project) error) {

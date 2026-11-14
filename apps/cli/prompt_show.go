@@ -12,6 +12,7 @@ import (
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	"tofu/internal/librarian/rules"
+	platformproject "tofu/internal/platform/project"
 )
 
 func showPrompt(ctx context.Context, opts wiring.RunOpts, out, errOut io.Writer) int {
@@ -66,7 +67,7 @@ func showPrompt(ctx context.Context, opts wiring.RunOpts, out, errOut io.Writer)
 	for _, effect := range board.effects {
 		_, _ = fmt.Fprintf(out, "board hook %s after lead.attach; show-prompt ran nothing\n", effect)
 	}
-	library, points := wiring.ReadLibrary()
+	library, points := wiring.ReadLibrary(platformproject.ResolvePlaces("."))
 	if library.Unreadable != "" {
 		_, _ = fmt.Fprintf(out, "points unreadable: %s\n", library.Unreadable)
 	}

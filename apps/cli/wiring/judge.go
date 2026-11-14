@@ -25,11 +25,7 @@ type Battery struct {
 	ModeReason       string
 }
 
-func ResolveRuleMode(r gate.Rule) (gate.Resolution, error) {
-	places, err := project.ResolvePlaces(".")
-	if err != nil {
-		return gate.Resolution{}, err
-	}
+func ResolveRuleMode(places project.Places, r gate.Rule) (gate.Resolution, error) {
 	lookup := lookupLock(gate.LockPath(places.Calibration(), r))
 	current, err := CurrentBuild(places.Log, r.Questions)
 	if err != nil {

@@ -16,6 +16,8 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/host"
 	"tofu/internal/librarian/rules"
+	platformproject "tofu/internal/platform/project"
+	"tofu/internal/project/boardy"
 )
 
 const (
@@ -117,7 +119,8 @@ func listVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.Usage(err)
 	}
-	stack, err := wiring.StackRules(opts.library, opts.dir)
+	boards, opened := boardy.OpenStore(opts.dir)
+	stack, err := wiring.StackRules(opts.library, boards, opened)
 	if err != nil {
 		return o.Fail(err)
 	}
@@ -143,10 +146,10 @@ func listVerb(args []string, out, errOut io.Writer) int {
 		listing = append(listing, host.RuleListing{ID: off.Base.ID, Kind: string(off.Base.Kind), Origin: off.Layer, Mode: string(rules.ModeOff), File: off.Rule.File, Override: off.Listing()})
 	}
 	for _, off := range stack.ShippedOff {
-		listing = append(listing, host.RuleListing{ID: off.ID, Kind: string(off.Kind), Origin: listedOrigin(stack, off), Mode: string(rules.ModeOff), Switch: stack.SwitchOn(off.ID, opts.dir)})
+		listing = append(listing, host.RuleListing{ID: off.ID, Kind: string(off.Kind), Origin: listedOrigin(stack, off), Mode: string(rules.ModeOff), Switch: stack.SwitchOn(off.ID)})
 	}
 	if opts.library == "" {
-		library, points := wiring.ReadLibrary()
+		library, points := wiring.ReadLibrary(platformproject.ResolvePlaces("."))
 		if library.Unreadable != "" {
 			return o.Fail(errors.New(library.Unreadable))
 		}
@@ -228,7 +231,8 @@ func overridesVerb(args []string, out, errOut io.Writer) int {
 	if err != nil {
 		return o.Usage(err)
 	}
-	stack, err := wiring.StackRules(opts.library, opts.dir)
+	boards, opened := boardy.OpenStore(opts.dir)
+	stack, err := wiring.StackRules(opts.library, boards, opened)
 	if err != nil {
 		return o.Fail(err)
 	}

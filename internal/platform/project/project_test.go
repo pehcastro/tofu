@@ -390,6 +390,14 @@ func stateHome(t *testing.T) string {
 	return home
 }
 
+func reapAt(home string, now time.Time) ([]string, error) {
+	registry, err := registryAt(home)
+	if err != nil {
+		return nil, err
+	}
+	return registry.ReapTemporary(now)
+}
+
 func TestProjectReapRemovesOnlyTemporaryStateIdlePastTheLimit(t *testing.T) {
 	home := stateHome(t)
 	root := t.TempDir()
@@ -402,7 +410,7 @@ func TestProjectReapRemovesOnlyTemporaryStateIdlePastTheLimit(t *testing.T) {
 	if err := os.Chtimes(filepath.Join(used.State, "sessions", "s1", "session.json"), later, later.Add(-time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	removed, err := ReapTemporaryProjects(home, later)
+	removed, err := reapAt(home, later)
 	if err != nil || len(removed) != 1 || removed[0] != filepath.Base(idle.State) {
 		t.Fatalf("the reap removed %v, %v, want only %s", removed, err, filepath.Base(idle.State))
 	}
@@ -424,7 +432,7 @@ func TestProjectReapRemovesOnlyTemporaryStateIdlePastTheLimit(t *testing.T) {
 			t.Fatalf("%s lost its session: %v", survivor.State, err)
 		}
 	}
-	if removed, err := ReapTemporaryProjects(home, later.Add(1000*limit)); err != nil || len(removed) != 1 || removed[0] != filepath.Base(used.State) {
+	if removed, err := reapAt(home, later.Add(1000*limit)); err != nil || len(removed) != 1 || removed[0] != filepath.Base(used.State) {
 		t.Fatalf("far later the reap removed %v, %v, want only %s and never the permanent project", removed, err, filepath.Base(used.State))
 	}
 }
@@ -438,13 +446,13 @@ func TestProjectReapKeepsAnIdleTemporaryProjectWhileATofuHoldsItsSession(t *test
 	}
 	t.Cleanup(func() { _ = held.Close() })
 	far := time.Now().Add(1000 * time.Hour)
-	if removed, err := ReapTemporaryProjects(home, far); err != nil || len(removed) != 0 {
+	if removed, err := reapAt(home, far); err != nil || len(removed) != 0 {
 		t.Fatalf("the reap removed %v, %v while a session lock was held", removed, err)
 	}
 	if err := held.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if removed, err := ReapTemporaryProjects(home, far); err != nil || len(removed) != 1 {
+	if removed, err := reapAt(home, far); err != nil || len(removed) != 1 {
 		t.Fatalf("the reap removed %v, %v once the lock was let go, want the project", removed, err)
 	}
 }
@@ -454,11 +462,11 @@ func TestProjectReapKeepsAnIdleTemporaryProjectWhileATofuHasItOpen(t *testing.T)
 	open := openedAs(t, true, filepath.Join(t.TempDir(), "open"))
 	release := HoldProjectOpen(open.Path)
 	far := time.Now().Add(1000 * time.Hour)
-	if removed, err := ReapTemporaryProjects(home, far); err != nil || len(removed) != 0 {
+	if removed, err := reapAt(home, far); err != nil || len(removed) != 0 {
 		t.Fatalf("the reap removed %v, %v while a tofu had the project open", removed, err)
 	}
 	release()
-	if removed, err := ReapTemporaryProjects(home, far); err != nil || len(removed) != 1 {
+	if removed, err := reapAt(home, far); err != nil || len(removed) != 1 {
 		t.Fatalf("the reap removed %v, %v once the tofu let go, want the project", removed, err)
 	}
 }
@@ -470,7 +478,7 @@ func TestProjectReapDeletesLeftoverReapedFolders(t *testing.T) {
 	if err := fs.WriteFile(filepath.Join(leftover, "sessions", "s1", "session.json"), []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if removed, err := ReapTemporaryProjects(home, time.Now()); err != nil || len(removed) != 0 {
+	if removed, err := reapAt(home, time.Now()); err != nil || len(removed) != 0 {
 		t.Fatalf("the reap removed %v, %v", removed, err)
 	}
 	if _, err := os.Stat(leftover); !os.IsNotExist(err) {
@@ -494,7 +502,7 @@ func TestProjectReapNeverRemovesOutsideTheProjectsFolder(t *testing.T) {
 	if err := fs.WriteFile(filepath.Join(home, ProjectRegistryName), []byte(`{"projects": [`+strings.Join(entries, ",")+`]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if removed, err := ReapTemporaryProjects(home, time.Now().Add(1000*time.Hour)); len(removed) != 0 || err != nil {
+	if removed, err := reapAt(home, time.Now().Add(1000*time.Hour)); len(removed) != 0 || err != nil {
 		t.Fatalf("the reap removed %v from a registry naming folders outside %s, %v", removed, fs.ProjectsDirName, err)
 	}
 	for _, dir := range sentinels {
@@ -519,7 +527,7 @@ func TestProjectOpenedWithoutTheFlagStopsBeingTemporaryAndTheFlagNeverMarksAKept
 			t.Fatalf("%s is still temporary: %+v", folder, entry)
 		}
 	}
-	if removed, err := ReapTemporaryProjects(home, time.Now().Add(1000*time.Hour)); err != nil || len(removed) != 0 {
+	if removed, err := reapAt(home, time.Now().Add(1000*time.Hour)); err != nil || len(removed) != 0 {
 		t.Fatalf("the reap removed %v, %v from projects opened without the flag", removed, err)
 	}
 }
@@ -554,7 +562,7 @@ func TestProjectReapWithNothingIdleLeavesTheRegistryUnwritten(t *testing.T) {
 		if err := os.Chtimes(name, past, past); err != nil {
 			t.Fatal(err)
 		}
-		if removed, err := ReapTemporaryProjects(home, step.at); err != nil || len(removed) != 0 {
+		if removed, err := reapAt(home, step.at); err != nil || len(removed) != 0 {
 			t.Fatalf("the reap removed %v, %v", removed, err)
 		}
 		if info, err := os.Stat(name); err != nil || !info.ModTime().Equal(past) {
