@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/internal/konst"
 	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/project/guard"
 	"tofu/internal/stat"
@@ -112,40 +113,46 @@ func run(update bool, src string, runs int, keep bool) (bool, error) {
 		return false, err
 	}
 	fmt.Printf("built %s in %s\n", exe, time.Since(building).Round(time.Second))
-	first, err := fresh(exe, work, "turn.jsonl")
+	first, err := fresh(exe, work, "turn.jsonl", "frame.steps")
 	if err != nil {
 		return false, err
 	}
-	more, err := fresh(exe, filepath.Join(work, "more"), "more.jsonl")
+	more, err := fresh(exe, filepath.Join(work, "more"), "more.jsonl", "frame.steps")
 	if err == nil {
 		err = more.hooked()
 	}
 	if err != nil {
 		return false, err
 	}
-	fmt.Printf("the second home drives a spawn, a bash moved to the background, the hook and a goal cron; only its %v rows are kept\n", expectedOps)
+	sifted, err := fresh(exe, filepath.Join(work, "sift"), "sift.jsonl", "sift.steps")
+	if err != nil {
+		return false, err
+	}
+	fmt.Printf("the first home drives a lead turn, then a second turn.send in the same session; of the second turn only its %v rows are kept\n", laterOps)
+	fmt.Printf("the second home drives a spawn, a bash moved to the background, the hook and a goal cron; only its %v rows are kept\n", spawnedOps)
+	fmt.Printf("the third home drives a foreground bash under the %d line drain floor, on tofu drive --sift free, cheap marks and no jev call; only its %v rows are kept\n", konst.ShellDrainLinesFloor, siftedOps)
 	timing := time.Now()
-	rows, err := measure(first, more, runs)
+	rows, stopped, err := measure(first, more, sifted, runs)
 	if err != nil {
 		return false, err
 	}
 	fmt.Printf("timed %d ops in %s\n", len(rows), time.Since(timing).Round(100*time.Millisecond))
 	path := filepath.Join(repo, filepath.FromSlash(baselineFile))
 	if !update {
-		return g.judge(path, rows)
+		return g.judge(path, rows, stopped)
 	}
 	written, err := json.MarshalIndent(baseline{Machine: g.machine, Date: time.Now().Format(time.RFC3339), Head: g.head, Runs: runs, Ops: rows}, "", "  ")
 	if err != nil {
 		return false, err
 	}
-	if failures := printRows(rows, nil); len(failures) > 0 {
+	if failures := printRows(rows, nil, stopped); len(failures) > 0 {
 		return true, fmt.Errorf("no baseline written: %s", strings.Join(failures, "; "))
 	}
 	fmt.Println("baseline", path)
 	return false, os.WriteFile(path, append(written, '\n'), 0o644)
 }
 
-func (g gate) judge(path string, rows []measured) (bool, error) {
+func (g gate) judge(path string, rows []measured, stopped error) (bool, error) {
 	body, err := os.ReadFile(path)
 	if err != nil {
 		return false, fmt.Errorf("%w; go run ./bench/gates/walls -update writes it", err)
@@ -155,7 +162,7 @@ func (g gate) judge(path string, rows []measured) (bool, error) {
 		return false, fmt.Errorf("%s: %w", path, err)
 	}
 	fmt.Printf("baseline %s: %s, %s, HEAD %s\n", path, base.Machine, base.Date, base.Head)
-	failures := printRows(rows, base.Ops)
+	failures := printRows(rows, base.Ops, stopped)
 	if len(failures) > 0 {
 		fmt.Printf("FAIL, these ops left their tier or were not recorded:\n  %s\n", strings.Join(failures, "\n  "))
 		fmt.Println("Go back and make each op faster first, then run this gate again.")
@@ -203,7 +210,7 @@ func rowsOf(own map[opName][]float64) []measured {
 	return rows
 }
 
-func printRows(rows, base []measured) []string {
+func printRows(rows, base []measured, stopped error) []string {
 	var failures []string
 	fmt.Println("| op | name | n | own p50 ms | tier | baseline | verdict |")
 	fmt.Println("|---|---|---|---|---|---|---|")
@@ -237,6 +244,9 @@ func printRows(rows, base []measured) []string {
 			fmt.Printf("| %s | - | 0 | - | - | - | FAIL expected, not recorded |\n", op)
 			failures = append(failures, fmt.Sprintf("%s: expected, and this run recorded no %s wall", op, op))
 		}
+	}
+	if stopped != nil {
+		failures = append(failures, "the run stopped early, so every n above is short: "+stopped.Error())
 	}
 	return failures
 }

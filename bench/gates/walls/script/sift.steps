@@ -1,0 +1,6 @@
+wait Ask tofu
+type run the mock build
+key enter
+wait WALLSTURN
+key ctrl+c
+key ctrl+c

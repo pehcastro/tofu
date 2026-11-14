@@ -34,15 +34,22 @@ var verbs = [][]string{
 	{"session", "list"}, {"projects"}, {"doctor"},
 }
 
-var expectedOps = []walls.Op{walls.OpSpawn, walls.OpSpawnStep, walls.OpShell, walls.OpHook, walls.OpCron}
+var (
+	spawnedOps  = []walls.Op{walls.OpSpawn, walls.OpSpawnStep, walls.OpShell, walls.OpHook, walls.OpCron}
+	siftedOps   = []walls.Op{walls.OpSift}
+	expectedOps = slices.Concat(spawnedOps, siftedOps)
+	laterOps    = []walls.Op{walls.OpStartup, walls.OpStartupStep}
+)
 
 type scratch struct {
 	exe, home, project, cassette, steps string
 }
 
-func fresh(exe, work, cassette string) (scratch, error) {
+type unixMilliWindow struct{ from, to int64 }
+
+func fresh(exe, work, cassette, steps string) (scratch, error) {
 	s := scratch{exe: exe, home: filepath.Join(work, "home"), project: filepath.Join(work, "project"),
-		cassette: filepath.Join(work, cassette), steps: filepath.Join(work, "frame.steps")}
+		cassette: filepath.Join(work, cassette), steps: filepath.Join(work, steps)}
 	for _, made := range []string{s.home, s.project} {
 		if err := os.MkdirAll(made, 0o755); err != nil {
 			return s, err
@@ -98,38 +105,47 @@ func (s scratch) tofu(args ...string) *exec.Cmd {
 	return cmd
 }
 
-func measure(first, more scratch, runs int) ([]measured, error) {
+func (s scratch) drive(arm ...string) error {
+	args := append([]string{"drive", s.steps, "--plain", "--fresh", "--dir", s.project, "--home", s.home, "--cassette", s.cassette, "--timeout", "30s"}, arm...)
+	if out, err := s.tofu(args...).CombinedOutput(); err != nil {
+		return fmt.Errorf("tofu drive %s: %v: %s", s.steps, err, out)
+	}
+	return nil
+}
+
+func measure(first, more, sifted scratch, runs int) ([]measured, error, error) {
 	since := time.Now()
-	for range runs {
+	var later []unixMilliWindow
+	var stopped error
+	for run := 0; run < runs && stopped == nil; run++ {
 		if err := os.WriteFile(filepath.Join(first.project, "note.txt"), []byte(noteBody), 0o644); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		for _, verb := range verbs {
 			_ = first.tofu(verb...).Run()
 		}
-		drive := first.tofu("drive", first.steps, "--plain", "--fresh", "--dir", first.project, "--home", first.home, "--cassette", first.cassette, "--timeout", "30s")
-		if out, err := drive.CombinedOutput(); err != nil {
-			return nil, fmt.Errorf("tofu drive first frame: %v: %s", err, out)
-		}
-		if err := first.serve(lead); err != nil {
-			return nil, err
-		}
-		if err := more.serve(more.spawnShellCron); err != nil {
-			return nil, err
+		stopped = cmp.Or(first.drive(), first.serve(func(w *wire) error { return lead(w, &later) }), more.serve(more.spawnShellCron), sifted.drive("--sift", "free"))
+		if stopped != nil {
+			stopped = fmt.Errorf("run %d of %d: %w", run+1, runs, stopped)
 		}
 	}
-	own, err := first.read(since)
-	if err != nil {
-		return nil, err
-	}
-	extra, err := more.read(since)
-	for key, ms := range extra {
-		if slices.Contains(expectedOps, walls.Op(key.op)) {
+	own, err := first.read(since, func(wall walls.Wall) bool {
+		return slices.Contains(laterOps, wall.Op) || !slices.ContainsFunc(later, func(w unixMilliWindow) bool {
+			return wall.At >= w.from && wall.At < w.to
+		})
+	})
+	for _, extra := range []struct {
+		home scratch
+		ops  []walls.Op
+	}{{more, spawnedOps}, {sifted, siftedOps}} {
+		read, readErr := extra.home.read(since, func(wall walls.Wall) bool { return slices.Contains(extra.ops, wall.Op) })
+		for key, ms := range read {
 			kind := opName{key.op, strings.TrimRight(key.name, "0123456789-")}
 			own[kind] = append(own[kind], ms...)
 		}
+		err = cmp.Or(err, readErr)
 	}
-	return rowsOf(own), err
+	return rowsOf(own), stopped, err
 }
 
 func (s scratch) walls(since time.Time) ([]walls.Wall, error) {
@@ -144,10 +160,10 @@ func (s scratch) walls(since time.Time) ([]walls.Wall, error) {
 	return reading.Walls, err
 }
 
-func (s scratch) read(since time.Time) (map[opName][]float64, error) {
+func (s scratch) read(since time.Time, kept func(walls.Wall) bool) (map[opName][]float64, error) {
 	read, err := s.walls(since)
 	own := map[opName][]float64{}
-	for _, wall := range read {
+	for _, wall := range slices.DeleteFunc(read, func(wall walls.Wall) bool { return !kept(wall) }) {
 		key := opName{string(wall.Op), wall.Name}
 		own[key] = append(own[key], float64(wall.MS-*cmp.Or(wall.OutsideMS, new(int64))))
 	}
@@ -231,24 +247,30 @@ func (w *wire) open() (string, error) {
 	return first.Session, nil
 }
 
-func lead(w *wire) error {
+func lead(w *wire, later *[]unixMilliWindow) error {
 	id, err := w.open()
 	if err != nil {
 		return err
 	}
 	steps := []struct {
-		method string
-		params map[string]any
-		until  string
+		method    string
+		params    map[string]any
+		until     string
+		laterTurn bool
 	}{
-		{"turn.send", map[string]any{"session": id, "text": "read, glob, search and edit the note"}, "turn.completed"},
-		{"session.compact", map[string]any{"session": id, "focus": "the note"}, ""},
-		{"session.open", map[string]any{}, ""},
-		{"session.open", map[string]any{"session": id}, ""},
+		{"turn.send", map[string]any{"session": id, "text": "read, glob, search and edit the note"}, "turn.completed", false},
+		{"turn.send", map[string]any{"session": id, "text": "a second turn in the same session"}, "turn.completed", true},
+		{"session.compact", map[string]any{"session": id, "focus": "the note"}, "", false},
+		{"session.open", map[string]any{}, "", false},
+		{"session.open", map[string]any{"session": id}, "", false},
 	}
 	for _, step := range steps {
+		ran := unixMilliWindow{from: time.Now().UnixMilli()}
 		if _, err := w.call(step.method, step.params, step.until); err != nil {
 			return err
+		}
+		if ran.to = time.Now().UnixMilli(); step.laterTurn {
+			*later = append(*later, ran)
 		}
 	}
 	return nil

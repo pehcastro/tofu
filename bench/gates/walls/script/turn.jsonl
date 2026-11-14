@@ -1,6 +1,7 @@
 {"text":"looking around","tools":[{"name":"read","args":{"path":"note.txt"}},{"name":"glob","args":{"pattern":"*.txt"}},{"name":"search","args":{"pattern":"mock"}}]}
 {"text":"editing the note","tools":[{"name":"edit","args":{"path":"note.txt","old_string":"a mock note","new_string":"an edited note"}}]}
 {"text":"WALLSTURN the note is edited"}
+{"text":"WALLSLATER the second turn answers"}
 {"text":"WALLSSUMMARY a read, a glob, a search and an edit of note.txt"}
 {"text":"WALLSSPARE one"}
 {"text":"WALLSSPARE two"}
