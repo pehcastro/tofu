@@ -114,7 +114,7 @@ func (h *Host) fire(fires []cron.Fire) {
 			h.mu.Unlock()
 			return
 		}
-		h.fired = append(h.fired, fired.ID)
+		h.fired, h.cronOut[fired.ID] = append(h.fired, fired.ID), h.cronOut[fired.ID]-h.turnOutside()
 		if !h.running {
 			h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort, Fired: fired.ID}, fired.Prompt, origin)
 			h.mu.Unlock()
@@ -160,8 +160,12 @@ func (h *Host) finishRead() {
 
 func (h *Host) finish(fired []string, answer string) {
 	for _, id := range fired {
+		h.mu.Lock()
+		outsideMS := (h.cronOut[id] + h.turnOutside()).Milliseconds()
+		delete(h.cronOut, id)
+		h.mu.Unlock()
 		if job, err := h.cron.Job(id); err == nil {
-			h.wall(walls.Wall{Op: walls.OpCron, Name: id, MS: h.now().Sub(job.LastFired).Milliseconds(), At: job.LastFired.UnixMilli(), OK: true})
+			h.wall(walls.Wall{Op: walls.OpCron, Name: id, MS: h.now().Sub(job.LastFired).Milliseconds(), At: job.LastFired.UnixMilli(), OK: true, OutsideMS: &outsideMS})
 		}
 		if note := h.cron.Finished(id, answer); note != "" {
 			h.note(note)
@@ -175,7 +179,10 @@ func (h *Host) finish(fired []string, answer string) {
 func (h *Host) ended(out *emitter) {
 	h.mu.Lock()
 	stopped, fired, unread, answer := h.stopped, h.fired, h.unread, h.answer
-	h.running, h.cancel, h.fired, h.unread = false, nil, nil, nil
+	for _, id := range fired {
+		h.cronOut[id] += h.turnOutside()
+	}
+	h.running, h.cancel, h.fired, h.unread, h.turnClock = false, nil, nil, nil, nil
 	h.mu.Unlock()
 	out.emit(Event{Kind: EventTurnEnded})
 	h.finish(slices.DeleteFunc(fired, func(id string) bool {
@@ -187,6 +194,13 @@ func (h *Host) ended(out *emitter) {
 		h.fireAfterTurn()
 	}
 	h.armCron()
+}
+
+func (h *Host) turnOutside() time.Duration {
+	if h.turnClock == nil {
+		return 0
+	}
+	return h.turnClock.Outside()
 }
 
 func (h *Host) fireAfterTurn() {

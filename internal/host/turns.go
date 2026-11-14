@@ -16,6 +16,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 	"tofu/internal/tools/files/write"
 )
 
@@ -192,7 +193,7 @@ func sessionTurns(store *session.Store, handle string) (SessionTurns, error) {
 	if err != nil {
 		return SessionTurns{}, err
 	}
-	digests := &turnDigests{byTurn: map[string]*TurnDigest{}, reports: map[string]string{}, calls: map[string]calledWith{}}
+	digests := &turnDigests{byTurn: map[string]*TurnDigest{}, reports: map[string]string{}, calls: map[string]calledWith{}, walledMS: map[string]int64{}}
 	for _, event := range events {
 		digests.note(event)
 	}
@@ -214,10 +215,11 @@ func sessionTurns(store *session.Store, handle string) (SessionTurns, error) {
 }
 
 type turnDigests struct {
-	order   []string
-	byTurn  map[string]*TurnDigest
-	reports map[string]string
-	calls   map[string]calledWith
+	order    []string
+	byTurn   map[string]*TurnDigest
+	reports  map[string]string
+	calls    map[string]calledWith
+	walledMS map[string]int64
 }
 
 type calledWith struct {
@@ -276,8 +278,15 @@ func (d *turnDigests) note(event session.Event) {
 		d.calls[event.Call] = args
 	case session.EventToolResult:
 		d.result(digest, event)
+	case session.EventWall:
+		if wall, err := session.DecodeWall(event); err == nil && wall.Op == string(walls.OpTurn) && event.Agent == "" {
+			d.walledMS[event.Turn] = wall.MS
+		}
 	case session.EventTurnEnd:
-		var ended loop.Row
+		var ended struct {
+			loop.Row
+			WallClockMS int64 `json:"wall_clock_ms"`
+		}
 		if event.Agent != "" || json.Unmarshal(event.Body, &ended) != nil {
 			return
 		}
@@ -287,7 +296,8 @@ func (d *turnDigests) note(event session.Event) {
 		}
 		at := event.At
 		digest.EndedAt, digest.Outcome, digest.LoopGuard, digest.Error = &at, TurnOutcome(ended.Outcome.String()), ended.Guard, ended.Error
-		digest.WorkedForMs += ended.WallClockMS
+		digest.WorkedForMs += cmp.Or(d.walledMS[event.Turn], ended.WallClockMS)
+		delete(d.walledMS, event.Turn)
 		digest.CostUSD += ended.TotalCostUSD
 	}
 }

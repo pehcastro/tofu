@@ -25,7 +25,6 @@ const (
 type openTool struct {
 	tool string
 	path string
-	at   time.Time
 }
 
 type awaiting struct {
@@ -39,6 +38,7 @@ type items struct {
 	turn     string
 	task     string
 	began    time.Time
+	workedMS int64
 	context  *ContextUse
 	status   Status
 	message  string
@@ -126,13 +126,13 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 	id := s.identity(event.Agent, event.ID)
 	switch event.Kind {
 	case EventTurnStarted:
-		s.turn, s.task, s.began, s.status = event.ID, event.Text, cmp.Or(event.At, now), StatusFailed
+		s.turn, s.task, s.began, s.status, s.workedMS = event.ID, event.Text, cmp.Or(event.At, now), StatusFailed, 0
 		return append(out, kept("turn.started", &TurnStarted{Identity: s.identity("", s.turn), Task: event.Text, Origin: event.Origin, StartedAt: s.began, Images: event.Images}))
 	case EventTurnEnded:
 		s.unlogged = nil
-		return append(out, kept("turn.completed", &TurnCompleted{Identity: s.identity("", s.turn), Status: s.status, StartedAt: s.began, WorkedForMs: now.Sub(s.began).Milliseconds()}))
+		return append(out, kept("turn.completed", &TurnCompleted{Identity: s.identity("", s.turn), Status: s.status, StartedAt: s.began, WorkedForMs: s.workedMS}))
 	case EventDone:
-		s.status = event.Status
+		s.status, s.workedMS = event.Status, s.workedMS+event.DurationMS
 		return append(out, s.agentChanges(event.SubAgents, now)...)
 	case EventSubAgent:
 		return append(out, s.agentChanges(event.SubAgents, now)...)
@@ -179,7 +179,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		}
 		_ = json.Unmarshal(event.Args, &args)
 		s.blankRate(event.Agent)
-		s.tools[event.ID] = openTool{tool: event.Tool, path: args.Path, at: now}
+		s.tools[event.ID] = openTool{tool: event.Tool, path: args.Path}
 		return append(out, notify("tool.started", &ToolStarted{Identity: id, Instance: event.Agent, Tool: event.Tool, Title: args.Title, Args: wholeJSON(event.Args), StartedAt: now, Card: event.Card, Group: event.Group}))
 	case EventToolResult:
 		return append(out, s.toolCompleted(id, event, now)...)
@@ -324,15 +324,11 @@ func wholeJSON(raw json.RawMessage) json.RawMessage {
 	return quoted
 }
 
-func (s *items) toolCompleted(id Identity, event Event, now time.Time) []outgoing {
-	opened, known := s.tools[event.ID]
+func (s *items) toolCompleted(id Identity, event Event, _ time.Time) []outgoing {
+	opened := s.tools[event.ID]
 	delete(s.tools, event.ID)
 	completed := &ToolCompleted{Identity: id, Instance: event.Agent, Tool: opened.tool, Failed: event.Outcome.Failed(), Outcome: event.Outcome, ExitCode: event.ExitCode, Bytes: event.Bytes, Lines: lineCount(event.Detail), Output: event.Detail,
-		Card: event.Card, Group: event.Group, GroupSummary: event.GroupSummary}
-	if known {
-		completed.DurationMs = now.Sub(opened.at).Milliseconds()
-	}
-	completed.Summary = ToolSummary{Exit: event.ExitCode, DurationMs: completed.DurationMs, Hits: event.Hits}
+		DurationMs: event.DurationMS, Summary: ToolSummary{Exit: event.ExitCode, DurationMs: event.DurationMS, Hits: event.Hits}, Card: event.Card, Group: event.Group, GroupSummary: event.GroupSummary}
 	var edit *FileEdit
 	switch {
 	case event.Created != "":

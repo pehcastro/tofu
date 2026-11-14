@@ -405,7 +405,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		if said, ended := WordsAfterLastCalls(row); ended && strings.TrimSpace(row.Steps[len(row.Steps)-1].AssistantText) == "" {
 			emit(Event{Kind: EventText, Text: said})
 		}
-		done := Event{Kind: EventDone, Text: words, Status: status}
+		done := Event{Kind: EventDone, Text: words, Status: status, DurationMS: row.WallClockMS}
 		if ctx.Err() == nil {
 			done.SubAgents = watch.subAgents()
 		}
@@ -697,7 +697,6 @@ func awaitPerson(emit func(Event), book *asks, config *loop.Config) loop.Person 
 		timer := time.NewTimer(unanswered.waited)
 		defer timer.Stop()
 		started := time.Now()
-		defer func() { loop.PersonWaited(ctx, time.Since(started)) }()
 		select {
 		case <-timer.C:
 			resumed.Resolution.Decision = unanswered.applied()

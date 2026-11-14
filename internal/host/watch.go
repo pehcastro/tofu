@@ -418,15 +418,16 @@ func (a *watcher) result(message core.Message, asker string) {
 		return
 	}
 	result := Event{
-		Kind:     EventToolResult,
-		ID:       a.eventID(asker, message.ToolCallID),
-		Text:     resultSummary(message.Content),
-		Detail:   message.Content,
-		Bytes:    message.ToolResultBytes,
-		ExitCode: message.ToolExitCode,
-		Hits:     message.ToolHits,
-		Outcome:  outcomeOf(message.ToolOutcome),
-		Agent:    asker,
+		Kind:       EventToolResult,
+		ID:         a.eventID(asker, message.ToolCallID),
+		Text:       resultSummary(message.Content),
+		Detail:     message.Content,
+		Bytes:      message.ToolResultBytes,
+		DurationMS: message.ToolDurationMS,
+		ExitCode:   message.ToolExitCode,
+		Hits:       message.ToolHits,
+		Outcome:    outcomeOf(message.ToolOutcome),
+		Agent:      asker,
 	}
 	if verdict, spawned := a.verdictOf(result.ID, message.Content); spawned {
 		result.Text = verdict

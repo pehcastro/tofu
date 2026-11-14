@@ -22,6 +22,7 @@ import (
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/quota"
+	"tofu/internal/platform/outside"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
@@ -271,12 +272,14 @@ func (s *server) receive(line []byte) {
 func (s *server) answer(id json.RawMessage, method string, params json.RawMessage) {
 	var result any
 	started := time.Now()
+	ctx, clock := outside.Open(context.Background(), time.Now)
 	err := safe.Call(s.report, method, func() (err error) {
-		result, err = s.call(method, params)
+		result, err = s.call(ctx, method, params)
 		return err
 	})
 	s.respond(id, result, err)
-	_ = s.wireLog.Append(walls.Wall{Op: walls.OpWire, Name: method, MS: time.Since(started).Milliseconds(), At: started.UnixMilli(), OK: err == nil})
+	outsideMS := clock.Outside().Milliseconds()
+	_ = s.wireLog.Append(walls.Wall{Op: walls.OpWire, Name: method, MS: time.Since(started).Milliseconds(), At: started.UnixMilli(), OK: err == nil, OutsideMS: &outsideMS})
 }
 
 func (s *server) report(p safe.Panic) {
@@ -309,7 +312,7 @@ func handle[P any](raw json.RawMessage, run func(P) (any, error)) (any, error) {
 	return run(params)
 }
 
-func (s *server) call(method string, raw json.RawMessage) (any, error) {
+func (s *server) call(ctx context.Context, method string, raw json.RawMessage) (any, error) {
 	if method != "initialize" && !s.ready {
 		return nil, &Refusal{Code: CodeInvalid, Message: "initialize first"}
 	}
@@ -371,7 +374,7 @@ func (s *server) call(method string, raw json.RawMessage) (any, error) {
 	case "turn.unsteer":
 		return handle(raw, func(p UnsteerParams) (any, error) { return UnsteerResult{Removed: s.focus().host.Unsteer(p.Text)}, nil })
 	case "shell.run":
-		return handle(raw, s.shellRun)
+		return handle(raw, func(p ShellRunParams) (any, error) { return s.shellRun(ctx, p) })
 	case "session.compact":
 		return handle(raw, func(p SessionCompactParams) (any, error) {
 			compacted, err := s.handFork(p.Session, HandFork{Kind: loop.ForkCompact, By: s.asker("session.compact"), Focus: p.Focus})
@@ -742,7 +745,7 @@ func (s *server) stopCommand() bool {
 	return s.command != nil
 }
 
-func (s *server) shellRun(p ShellRunParams) (any, error) {
+func (s *server) shellRun(ctx context.Context, p ShellRunParams) (any, error) {
 	if s.Run == nil {
 		return nil, &Refusal{Code: CodeRefused, Message: "this tofu runs no commands"}
 	}
@@ -750,7 +753,7 @@ func (s *server) shellRun(p ShellRunParams) (any, error) {
 	if turn, running := focus.host.Turn(); running {
 		return nil, turnRunning(turn)
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	s.mu.Lock()
 	if s.command != nil {
@@ -759,7 +762,9 @@ func (s *server) shellRun(p ShellRunParams) (any, error) {
 	}
 	s.command = cancel
 	s.mu.Unlock()
+	ran := outside.Wait(ctx, outside.Process)
 	output, stopped := s.Run(ctx, p.Command)
+	ran()
 	s.mu.Lock()
 	s.command = nil
 	s.mu.Unlock()

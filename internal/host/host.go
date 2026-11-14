@@ -25,6 +25,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/platform/credential"
+	"tofu/internal/platform/outside"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/store/memory/entries"
@@ -119,6 +120,8 @@ type Host struct {
 	pick      Pick
 	fired     []string
 	unread    []cron.Fire
+	turnClock *outside.Clock
+	cronOut   map[string]time.Duration
 	answer    string
 	previous  string
 	streaming bool
@@ -178,6 +181,7 @@ func New(cfg Config) (h *Host, troubles []string) {
 		sendNow:     make(chan struct{}, 1),
 		cron:        &cron.Book{Check: cfg.Check, Changed: cronMove},
 		cronMove:    cronMove,
+		cronOut:     map[string]time.Duration{},
 		turnLock:    cfg.ProjectTurn,
 		done:        make(chan struct{}),
 		joins:       cfg.Joins,
@@ -332,7 +336,9 @@ func (h *Host) Send(pick Pick, task string) bool {
 
 func (h *Host) begin(pick Pick, task string, origin core.Origin) {
 	h.dropCheckIn()
-	ctx, cancel := context.WithCancelCause(loop.WithLeadCheckIn(context.Background(), h.keepCheckIn))
+	clocked, clock := outside.Open(context.Background(), time.Now)
+	ctx, cancel := context.WithCancelCause(loop.WithLeadCheckIn(clocked, h.keepCheckIn))
+	h.turnClock = clock
 	turnOver := make(chan struct{})
 	h.running, h.stopped, h.cancelled, h.stopBy, h.cancel, h.turn, h.turnOver = true, false, false, "", cancel, loop.NewID(h.now()), turnOver
 	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers, Origin: origin, Unattended: origin.Source == core.SourceCronFire}
@@ -490,7 +496,7 @@ func (h *Host) opened(op walls.Op, opening time.Time, ok bool) {
 	if h.joins {
 		role = "member"
 	}
-	h.wall(walls.Wall{Op: op, Name: role, MS: time.Since(opening).Milliseconds(), At: opening.UnixMilli(), OK: ok})
+	h.wall(walls.Wall{Op: op, Name: role, MS: time.Since(opening).Milliseconds(), At: opening.UnixMilli(), OK: ok, OutsideMS: new(int64)})
 }
 
 func (h *Host) wall(wall walls.Wall) {

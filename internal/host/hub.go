@@ -286,7 +286,7 @@ func EnsureHub(project string) (_ HubStatus, err error) {
 		return HubStatus{}, fmt.Errorf("no tofu host answers on %s and this process, %s, is a go test binary, so it will not start itself as the host: it would run the whole suite again, detached and with no timeout. Start the host in the test", place.socket, exe)
 	}
 	defer func() {
-		projectWall(place.project, walls.Wall{Op: walls.OpHostStart, Name: HubVerb + " " + HubRunVerb, MS: time.Since(starting).Milliseconds(), At: starting.UnixMilli(), OK: err == nil})
+		projectWall(place.project, walls.Wall{Op: walls.OpHostStart, Name: HubVerb + " " + HubRunVerb, MS: time.Since(starting).Milliseconds(), At: starting.UnixMilli(), OK: err == nil, OutsideMS: new(int64)})
 	}()
 	if err := os.MkdirAll(filepath.Dir(place.log), 0o700); err != nil {
 		return HubStatus{}, err
@@ -338,7 +338,7 @@ func projectWall(project string, wall walls.Wall) {
 func joinHub(project, id string, member Member) (_ net.Conn, _ *json.Decoder, _ hubJoined, err error) {
 	joining := time.Now()
 	defer func() {
-		projectWall(project, walls.Wall{Op: walls.OpHostJoin, Name: string(member.Kind), MS: time.Since(joining).Milliseconds(), At: joining.UnixMilli(), Session: id, OK: err == nil})
+		projectWall(project, walls.Wall{Op: walls.OpHostJoin, Name: string(member.Kind), MS: time.Since(joining).Milliseconds(), At: joining.UnixMilli(), Session: id, OK: err == nil, OutsideMS: new(int64)})
 	}()
 	status, err := EnsureHub(project)
 	if err != nil {

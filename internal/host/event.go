@@ -59,6 +59,7 @@ type Event struct {
 	Text         string
 	Detail       string
 	Bytes        int
+	DurationMS   int64
 	Outcome      ToolOutcome `json:",omitempty"`
 	Model        string
 	TokensIn     int

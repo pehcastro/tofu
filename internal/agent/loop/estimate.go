@@ -20,8 +20,6 @@ import (
 	"tofu/internal/tools/contract"
 )
 
-func PersonWaited(context.Context, time.Duration) {}
-
 type estimateFor struct {
 	scope session.EstimateScope
 	agent string
