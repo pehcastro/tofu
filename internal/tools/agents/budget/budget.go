@@ -13,6 +13,7 @@ import (
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
 	"tofu/internal/store/session/drain"
+	"tofu/internal/store/walls"
 	"tofu/internal/tools/agents/context/window"
 	"tofu/internal/tools/contract"
 )
@@ -58,6 +59,9 @@ func timing(events []session.Event, keep func(session.Event) bool) string {
 		}
 		if event.Kind == session.EventRequest && json.Unmarshal(event.Body, &body) == nil {
 			model += body.DurationMS
+		}
+		if wall, err := session.DecodeWall(event); err == nil && wall.Op == string(walls.OpRequest) {
+			model += wall.MS
 		}
 	}
 	return fmt.Sprintf("model %d ms, wall %d ms", model, last.Sub(first).Milliseconds())

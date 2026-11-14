@@ -14,6 +14,8 @@ const (
 	hoursInADay  = 24
 	daysInAWeek  = 7
 	daysInAMonth = 30
+
+	turnWall = "turn"
 )
 
 type UsageSpan string
@@ -162,11 +164,15 @@ func (s *Store) UsageHistory(span UsageSpan, now time.Time, classifier []Classif
 				continuedInTheFork = i
 			}
 		}
-		started, models := map[string]TurnStart{}, map[string]string{}
+		started, models, walled := map[string]TurnStart{}, map[string]string{}, map[string]int64{}
 		for i, event := range events {
 			sessionOf[event.Turn], sessionOf[event.Agent] = header.ID, header.ID
 			var totals UsageTotals
 			switch event.Kind {
+			case EventWall:
+				if wall, err := DecodeWall(event); err == nil && wall.Op == turnWall && event.Agent == "" {
+					walled[event.Turn] = wall.MS
+				}
 			case EventTurnStart:
 				var start TurnStart
 				_ = json.Unmarshal(event.Body, &start)
@@ -186,8 +192,9 @@ func (s *Store) UsageHistory(span UsageSpan, now time.Time, classifier []Classif
 				totals.SiftedBytes = spentIn(event).SiftSavedBytes
 			case EventTurnEnd:
 				if event.Agent == "" && i != continuedInTheFork {
-					totals.TurnMS = spentIn(event).WallClockMS
+					totals.TurnMS = cmp.Or(walled[event.Turn], spentIn(event).WallClockMS)
 				}
+				delete(walled, event.Turn)
 			}
 			start := started[event.Agent]
 			spender := UsageSpender{Session: header.ID, Role: UsageLead, Wire: start.Wire, Spend: start.Spend, Account: start.Account, Model: models[event.Agent]}

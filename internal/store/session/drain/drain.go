@@ -10,6 +10,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 )
 
 const (
@@ -227,15 +228,22 @@ type pass struct {
 	breaks   map[string]string
 	calls    map[string]string
 	tests    map[string]bool
+	started  map[string]time.Time
 	signals  signals
 }
 
 func Read(id string, events []session.Event, in Input) Report {
 	p := pass{Input: in, report: Report{Session: id, Ceiling: konst.ContextCeilingTokens, Weights: defaultWeights(), PricedBy: map[string]string{}, CostRecorded: len(in.Classifier) > 0},
 		wires: map[string]string{}, threads: map[string]*thread{}, agents: map[string]*Agent{}, wakes: map[Wake]*Spend{}, children: map[Wake]*Spend{}, bands: map[string]*Spend{},
-		resident: map[string]*Resident{}, turns: map[string]float64{}, breaks: map[string]string{}, calls: map[string]string{}, tests: map[string]bool{}}
+		resident: map[string]*Resident{}, turns: map[string]float64{}, breaks: map[string]string{}, calls: map[string]string{}, tests: map[string]bool{}, started: map[string]time.Time{}}
 	for _, cut := range in.Breaks {
 		p.breaks[cut.Request] = cut.Differs
+	}
+	for _, event := range events {
+		var wall walls.Wall
+		if event.Kind == session.EventWall && json.Unmarshal(event.Body, &wall) == nil && wall.Op == walls.OpRequest {
+			p.started[event.Request] = time.UnixMilli(wall.At)
+		}
 	}
 	for _, event := range events {
 		p.read(event)
@@ -412,7 +420,10 @@ func (p *pass) request(event session.Event, body requestBody) {
 	}
 	th.resident[assistantBlock] += body.Completion
 	p.block(assistantBlock, body.Completion)
-	started := event.At.Add(-time.Duration(body.DurationMS) * time.Millisecond)
+	started, walled := p.started[event.ID]
+	if !walled {
+		started = event.At.Add(-time.Duration(body.DurationMS) * time.Millisecond)
+	}
 	gap := started.Sub(th.at)
 	if th.at.IsZero() {
 		gap = 0

@@ -81,6 +81,8 @@ func TestUsageHistoryBucketsEveryRequestOnceByLocalHour(t *testing.T) {
 		event(at(8, 10, 8), EventTurnStart, "research-1", 0, `{"task":"r","wire":"anthropic","spend":"subscription","account":3}`),
 		event(at(8, 10, 9), EventRequest, "research-1", 1, `{"model":"sonnet","prompt_tokens":40,"completion_tokens":4}`),
 		event(at(8, 10, 10), EventToolResult, "", 0, `{"content":"x","sift_saved_bytes":900}`),
+		event(at(8, 10, 9), EventWall, "", 0, `{"op":"request","name":"haiku","ms":60000}`),
+		event(at(8, 10, 11), EventWall, "research-1", 0, `{"op":"turn","name":"research","ms":50000}`),
 		event(at(8, 10, 11), EventTurnEnd, "research-1", 0, `{"model":"sonnet","wall_clock_ms":3000}`),
 		event(at(8, 10, 12), EventTurnEnd, "", 0, `{"model":"haiku","wall_clock_ms":7000}`),
 		event(at(8, 11, 0), EventRequest, "", 1, `{"model":"haiku","prompt_tokens":10,"completion_tokens":1}`),
@@ -95,7 +97,9 @@ func TestUsageHistoryBucketsEveryRequestOnceByLocalHour(t *testing.T) {
 		event(at(8, 7, 1), EventTurnStart, "", 0, started),
 		event(at(8, 7, 5), EventTurnEnd, "", 0, `{"wall_clock_ms":4000}`),
 	)
-	record(Header{ID: "g", At: at(8, 7, 5)}, nil, event(at(8, 7, 9), EventTurnEnd, "", 0, `{"wall_clock_ms":9000}`))
+	record(Header{ID: "g", At: at(8, 7, 5)}, nil,
+		event(at(8, 7, 9), EventWall, "", 0, `{"op":"turn","name":"lead","ms":9000}`),
+		event(at(8, 7, 9), EventTurnEnd, "", 0, `{}`))
 	record(Header{ID: "broken", At: at(8, 9, 0)}, nil, event(at(8, 9, 1), EventTurnStart, "", 0, started))
 	events, err := os.OpenFile(store.EventsPath("broken"), os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
