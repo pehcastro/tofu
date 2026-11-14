@@ -424,6 +424,7 @@ func (a *watcher) result(message core.Message, asker string) {
 		Detail:     message.Content,
 		Bytes:      message.ToolResultBytes,
 		DurationMS: message.ToolDurationMS,
+		Untimed:    message.ToolUntimed,
 		ExitCode:   message.ToolExitCode,
 		Hits:       message.ToolHits,
 		Outcome:    outcomeOf(message.ToolOutcome),

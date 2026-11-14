@@ -15,7 +15,7 @@
     [&orchestrator]   .    │  [&c2]  tool                        just now  [tool#7b2d01]      │     
     Waiting for request    │  edit                                                            │     
   › [&c2]             .    │  internal/judge/ledger/floor.go                                  │     
-    in review · write …    │  complete                                                        │     
+    in review · write …    │  complete  |  0ms                                                │     
                            │    +14 -2                                                        │     
   DEAD  1                  │                                                                  │     
     [&c3]             ✗    ╰──────────────────────────────────────────────────────────────────╯     

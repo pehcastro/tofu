@@ -15,7 +15,7 @@
     [&orchestrator]   .    │  [&c3]  tool                        just now  [tool#7c3e01]      │     
     Waiting for request    │  bash                                                            │     
     [&c2]             .    │  go test ./internal/tools/shell/process/...                      │     
-    in review · write …    │  complete                                                        │     
+    in review · write …    │  complete  |  0ms                                                │     
                            │    exit 1                                                        │     
   DEAD  1                  │    --- FAIL: TestKillTree (0.31s)                                │     
   › [&c3]             ✗    │                                                                  │     

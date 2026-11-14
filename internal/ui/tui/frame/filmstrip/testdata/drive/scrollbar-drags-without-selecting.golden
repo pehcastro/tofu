@@ -12,7 +12,7 @@
   WAITING  3               │  [&c3]  tool                        just now  [tool#7c3e01]      │    │
     [&orchestrator]   .    │  bash                                                            │    │
     Waiting for request    │  go test ./internal/tools/shell/process/...                      │    │
-    [&c1]             .    │  complete                                                        │    │
+    [&c1]             .    │  complete  |  0ms                                                │    │
     stopped · read the…    │    exit 1                                                        │    │
     [&c2]             .    │    --- FAIL: TestKillTree (0.31s)                                │    │
     in review · write …    │                                                                  │    │
@@ -23,7 +23,7 @@
                            │  [&orchestrator]  tool              just now  [tool#9d4f10]      │    ┃
                            │  read                                                            │    ┃
                            │  internal/agent/loop/loop.go                                     │    ┃
-                           │  complete                                                        │    ┃
+                           │  complete  |  0ms                                                │    ┃
                            │    412 lines, 11.8 KB                                            │    ┃
                            │                                                                  │    ┃
                            ╰──────────────────────────────────────────────────────────────────╯     
@@ -47,7 +47,7 @@
     [&c2]             .    │  [&c1]  tool                        just now  [tool#7a1c02]      │    │
     in review · write …    │  read                                                            │    │
                            │  internal/judge/policy/resolve.go                                │    │
-  DEAD  1                  │  complete                                                        │    │
+  DEAD  1                  │  complete  |  0ms                                                │    │
     [&c3]             ✗    │    209 lines, 6.2 KB                                             │    │
     failed · run the s…    │                                                                  │    │
                            ╰──────────────────────────────────────────────────────────────────╯    │

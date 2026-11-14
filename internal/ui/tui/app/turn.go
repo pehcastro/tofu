@@ -763,9 +763,11 @@ func (a *App) finished(held *feed.Event, event Event, at time.Time) (feed.Event,
 	if held != nil {
 		done = *held
 		done.Detail = slices.Clone(done.Detail)
+	}
+	done.Elapsed, done.State = time.Duration(event.DurationMS)*time.Millisecond, feed.StateComplete
+	if event.Untimed {
 		done.Elapsed = at.Sub(done.At)
 	}
-	done.State = feed.StateComplete
 	switch event.Outcome {
 	case host.ToolFailed:
 		done.State = feed.StateFailed

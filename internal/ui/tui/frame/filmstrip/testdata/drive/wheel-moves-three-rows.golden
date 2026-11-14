@@ -65,7 +65,7 @@
   3 agents · live acti…                                                                            │
                            │  read                                                            │    │
   OVERVIEW                 │  internal/agent/loop/loop.go                                     │    │
-  › All activity      9    │  complete                                                        │    │
+  › All activity      9    │  complete  |  0ms                                                │    │
                            │    412 lines, 11.8 KB                                            │    │
   ACTIVE  0                │                                                                  │    │
                            ╰──────────────────────────────────────────────────────────────────╯    │
@@ -75,7 +75,7 @@
     [&c1]             .    │  [&orchestrator]  tool              just now  [tool#6f2b01]      │    │
     stopped · read the…    │  bash                                                            │    │
     [&c2]             .    │  go test -v ./internal/agent/loop/...                            │    │
-    in review · write …    │  complete                                                        │    │
+    in review · write …    │  complete  |  0ms                                                │    │
                            │    line 1 of the tall result                                     │    │
   DEAD  1                  │    line 2 of the tall result                                     │    │
     [&c3]             ✗    │    line 3 of the tall result                                     │    │
@@ -98,7 +98,7 @@
   › All activity      9    │  [&orchestrator]  tool              just now  [tool#9d4f10]      │    │
                            │  read                                                            │    │
   ACTIVE  0                │  internal/agent/loop/loop.go                                     │    │
-                           │  complete                                                        │    │
+                           │  complete  |  0ms                                                │    │
   WAITING  3               │    412 lines, 11.8 KB                                            │    │
     [&orchestrator]   .    │                                                                  │    │
     Waiting for request    ╰──────────────────────────────────────────────────────────────────╯    │
@@ -108,7 +108,7 @@
     in review · write …    │  [&orchestrator]  tool              just now  [tool#6f2b01]      │    │
                            │  bash                                                            │    │
   DEAD  1                  │  go test -v ./internal/agent/loop/...                            │    │
-    [&c3]             ✗    │  complete                                                        │    │
+    [&c3]             ✗    │  complete  |  0ms                                                │    │
     failed · run the s…    │    line 1 of the tall result                                     │    ┃
                            │    line 2 of the tall result                                     │    ┃
                            │    line 3 of the tall result                                     │    ┃

@@ -68,7 +68,7 @@
   › All activity      1    │  [&orchestrator]  tool              just now  [tool#6f2b01]      │    ┃
                            │  bash                                                            │    ┃
   ACTIVE  0                │  go test -v ./internal/agent/loop/...                            │    ┃
-                           │  complete                                                        │    ┃
+                           │  complete  |  0ms                                                │    ┃
   WAITING  1               │    line 1 of the tall result                                     │    │
     [&orchestrator]   .    │    line 2 of the tall result                                     │    │
     Waiting for request    │    line 3 of the tall result                                     │    │

@@ -107,6 +107,7 @@ type Message struct {
 	ToolExitCode    *int  `json:"-"`
 	ToolHits        *int  `json:"-"`
 	ToolDurationMS  int64 `json:"-"`
+	ToolUntimed     bool  `json:"-"`
 	Thinking        Thinking
 	Origin          Origin `json:"-"`
 	KeptHead        bool   `json:"-"`

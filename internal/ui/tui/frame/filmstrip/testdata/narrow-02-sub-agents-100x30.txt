@@ -13,7 +13,7 @@
   │  just now  [tool#9d4f10]                          │    │
   │  read                                             │    │
   │  internal/agent/loop/loop.go                      │    │
-  │  complete                                         │    │
+  │  complete  |  0ms                                 │    │
   │    412 lines, 11.8 KB                             │    ┃
   │                                                   │    ┃
   ╰───────────────────────────────────────────────────╯     

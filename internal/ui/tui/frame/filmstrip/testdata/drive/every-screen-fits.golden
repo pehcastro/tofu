@@ -257,7 +257,7 @@ Select an edit reference to read every changed line.
   3 agents · live activ…                                                                               │
                             │  read                                                               │    │
   OVERVIEW                  │  internal/agent/loop/loop.go                                        │    │
-  › All activity      10    │  complete                                                           │    │
+  › All activity      10    │  complete  |  0ms                                                   │    │
                             │    412 lines, 11.8 KB                                               │    │
   ACTIVE  0                 │                                                                     │    │
                             ╰─────────────────────────────────────────────────────────────────────╯    │
@@ -433,7 +433,7 @@ Select an edit reference to read every changed line.
     [&orchestrator]         .    │  [&orchestrator]  tool                                                just now  [tool#9d4f10]      │    │
     Waiting for request          │  read                                                                                              │    │
     [&c1]                   .    │  internal/agent/loop/loop.go                                                                       │    │
-    stopped · read the polic…    │  complete                                                                                          │    │
+    stopped · read the polic…    │  complete  |  0ms                                                                                  │    │
     [&c2]                   .    │    412 lines, 11.8 KB                                                                              │    │
     in review · write the le…    │                                                                                                    │    │
                                  ╰────────────────────────────────────────────────────────────────────────────────────────────────────╯    │

@@ -12,7 +12,7 @@
   WAITING  3               │  [&c3]  tool                        just now  [tool#7c3e01]      │    │
     [&orchestrator]   .    │  bash                                                            │    │
     Waiting for request    │  go test ./internal/tools/shell/process/...                      │    │
-    [&c1]             .    │  complete                                                        │    │
+    [&c1]             .    │  complete  |  0ms                                                │    │
     stopped · read the…    │    exit 1                                                        │    │
     [&c2]             .    │    --- FAIL: TestKillTree (0.31s)                                │    │
     in review · write …    │                                                                  │    │
@@ -23,7 +23,7 @@
                            │  [&orchestrator]  tool              just now  [tool#9d4f10]      │    ┃
                            │  read                                                            │    ┃
                            │  internal/agent/loop/loop.go                                     │    ┃
-                           │  complete                                                        │    ┃
+                           │  complete  |  0ms                                                │    ┃
                            │    412 lines, 11.8 KB                                            │    ┃
                            │                                                                  │    ┃
                            ╰──────────────────────────────────────────────────────────────────╯     
@@ -44,7 +44,7 @@
     Waiting for request    │  [&c1]  tool                        just now  [tool#7a1c02]      │    ┃
   › [&c1]             .    │  read                                                            │    ┃
     stopped · read the…    │  internal/judge/policy/resolve.go                                │    ┃
-    [&c2]             .    │  complete                                                        │    ┃
+    [&c2]             .    │  complete  |  0ms                                                │    ┃
     in review · write …    │    209 lines, 6.2 KB                                             │    ┃
                            │                                                                  │    ┃
   DEAD  1                  ╰──────────────────────────────────────────────────────────────────╯    ┃
@@ -54,7 +54,7 @@
                            │  [&c1]  tool                        just now  [tool#7a1c03]      │    ┃
                            │  grep                                                            │    ┃
                            │  Resolve( internal/judge                                         │    ┃
-                           │  stopped                                                         │    ┃
+                           │  stopped  |  0ms                                                 │    ┃
                            │                                                                  │    ┃
                            ╰──────────────────────────────────────────────────────────────────╯     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                

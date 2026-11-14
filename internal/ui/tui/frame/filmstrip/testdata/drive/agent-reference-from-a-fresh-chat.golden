@@ -14,7 +14,7 @@
     Waiting for request    │  [&c1]  tool                        just now  [tool#7a1c02]      │    ┃
   › [&c1]             .    │  read                                                            │    ┃
     stopped · read the…    │  internal/judge/policy/resolve.go                                │    ┃
-    [&c2]             .    │  complete                                                        │    ┃
+    [&c2]             .    │  complete  |  0ms                                                │    ┃
     in review · write …    │    209 lines, 6.2 KB                                             │    ┃
                            │                                                                  │    ┃
   DEAD  1                  ╰──────────────────────────────────────────────────────────────────╯    ┃
@@ -24,7 +24,7 @@
                            │  [&c1]  tool                        just now  [tool#7a1c03]      │    ┃
                            │  grep                                                            │    ┃
                            │  Resolve( internal/judge                                         │    ┃
-                           │  stopped                                                         │    ┃
+                           │  stopped  |  0ms                                                 │    ┃
                            │                                                                  │    ┃
                            ╰──────────────────────────────────────────────────────────────────╯     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                

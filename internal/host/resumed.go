@@ -206,13 +206,14 @@ func (l *resumedLead) replay(messages []core.Message, generation int) {
 				}
 			}
 		case core.RoleTool:
+			message.ToolUntimed = true
 			if recorded := l.calls[message.ToolCallID]; recorded != nil && recorded.result.Call != "" {
 				ran, err := resultOf(recorded.result)
 				if err != nil {
 					l.watch.emit(Event{Kind: EventFailure, ID: recorded.result.ID, Text: err.Error()})
 					break
 				}
-				message.ToolExitCode, message.ToolHits, message.ToolDurationMS = ran.ToolExitCode, ran.ToolHits, ran.ToolDurationMS
+				message.ToolExitCode, message.ToolHits, message.ToolDurationMS, message.ToolUntimed = ran.ToolExitCode, ran.ToolHits, ran.ToolDurationMS, ran.ToolUntimed
 				l.replaying(recorded.result)
 			}
 			l.watch.result(message, "")
@@ -323,12 +324,16 @@ func callOf(event session.Event) core.ToolCall {
 func resultOf(event session.Event) (core.Message, error) {
 	var result struct {
 		session.ResultBody
-		Hits       *int  `json:"hits"`
-		DurationMS int64 `json:"duration_ms"`
+		Hits       *int   `json:"hits"`
+		DurationMS *int64 `json:"duration_ms"`
 	}
 	_ = json.Unmarshal(event.Body, &result)
 	outcome, err := loop.ToolOutcomeOf(result.ToolOutcome)
-	return core.Message{Role: core.RoleTool, ToolCallID: event.Call, Content: loop.WithoutToolRef(result.Content), ToolResultBytes: result.ResultBytes, ToolExitCode: result.ExitCode, ToolHits: result.Hits, ToolOutcome: outcome, ToolDurationMS: result.DurationMS}, err
+	ran := core.Message{Role: core.RoleTool, ToolCallID: event.Call, Content: loop.WithoutToolRef(result.Content), ToolResultBytes: result.ResultBytes, ToolExitCode: result.ExitCode, ToolHits: result.Hits, ToolOutcome: outcome, ToolUntimed: result.DurationMS == nil}
+	if result.DurationMS != nil {
+		ran.ToolDurationMS = *result.DurationMS
+	}
+	return ran, err
 }
 
 func (l *resumedLead) replayResult(event session.Event, agent string) {

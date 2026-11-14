@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"time"
 
 	"charm.land/lipgloss/v2"
 
@@ -17,37 +16,36 @@ import (
 )
 
 const (
-	cardCacheCap     = 2048
-	staleHeights     = 256
-	cardMinWidth     = 22
-	cardPadX         = 2
-	cardPadY         = 1
-	cardBorderRows   = 2
-	cardBorderSides  = 2
-	tabSpaces        = "    "
-	detailIndent     = "  "
-	headMinWidth     = 16
-	headInset        = 12
-	detailPreview    = 8
-	elapsedPrecision = 100 * time.Millisecond
-	fullDiffNote     = "Full diff in File edits."
-	runsTitle        = "runs"
-	unnamedAgent     = "(unnamed sub-agent)"
-	ownsTitle        = "owns"
-	reportTitle      = "report"
-	reviewTitle      = "review"
-	moveSeparator    = " · "
-	reasonSeparator  = ": "
-	overlapWord      = "  overlaps "
-	requesting       = "Requesting "
-	toWorkOn         = " to work on "
-	unnamedSubAgent  = "a sub-agent"
-	metaSeparator    = "  |  "
-	waitingOn        = "waiting on "
-	sentTo           = "to "
-	doneWord         = "done"
-	codeFence        = "```"
-	foldedCode       = "..."
+	cardCacheCap    = 2048
+	staleHeights    = 256
+	cardMinWidth    = 22
+	cardPadX        = 2
+	cardPadY        = 1
+	cardBorderRows  = 2
+	cardBorderSides = 2
+	tabSpaces       = "    "
+	detailIndent    = "  "
+	headMinWidth    = 16
+	headInset       = 12
+	detailPreview   = 8
+	fullDiffNote    = "Full diff in File edits."
+	runsTitle       = "runs"
+	unnamedAgent    = "(unnamed sub-agent)"
+	ownsTitle       = "owns"
+	reportTitle     = "report"
+	reviewTitle     = "review"
+	moveSeparator   = " · "
+	reasonSeparator = ": "
+	overlapWord     = "  overlaps "
+	requesting      = "Requesting "
+	toWorkOn        = " to work on "
+	unnamedSubAgent = "a sub-agent"
+	metaSeparator   = "  |  "
+	waitingOn       = "waiting on "
+	sentTo          = "to "
+	doneWord        = "done"
+	codeFence       = "```"
+	foldedCode      = "..."
 )
 
 type card struct {
@@ -418,8 +416,8 @@ func metaLine(e Event) string {
 	case e.Kind != KindSpawn && e.Target != "":
 		meta += look.Faint(metaSeparator+sentTo) + look.AgentRef(e.Target)
 	}
-	if e.Elapsed > 0 {
-		meta += look.Faint(metaSeparator + e.Elapsed.Round(elapsedPrecision).String())
+	if e.Elapsed > 0 || e.Kind == KindTool && e.State != StateRunning {
+		meta += look.Faint(fmt.Sprintf("%s%dms", metaSeparator, e.Elapsed.Milliseconds()))
 	}
 	return meta
 }

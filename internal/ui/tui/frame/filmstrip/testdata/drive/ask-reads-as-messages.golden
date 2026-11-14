@@ -45,7 +45,7 @@
     [&ts-dev-2]       .    │  [&ts-dev-2]  message               just now  [tool#a5c001]      │    ┃
     stopped · build th…    │  ts-dev-2 asked: may I start the dev server?                     │    ┃
                            │  orchestrator: no, bash-2 serves it on 3003                      │    ┃
-  DEAD  0                  │  complete                                                        │    ┃
+  DEAD  0                  │  complete  |  0ms                                                │    ┃
                            │                                                                  │    ┃
                            ╰──────────────────────────────────────────────────────────────────╯    ┃
                                                                                                    ┃
@@ -54,7 +54,7 @@
                            │  [&ts-dev-2]  message               just now  [tool#a5c002]      │    ┃
                            │  ts-dev-2 asked: may I bind port 3004?                           │    ┃
                            │  orchestrator did not answer, assumed: use port 3004             │    ┃
-                           │  complete                                                        │    ┃
+                           │  complete  |  0ms                                                │    ┃
                            │                                                                  │    ┃
                            ╰──────────────────────────────────────────────────────────────────╯     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
@@ -75,7 +75,7 @@
   › [&ts-dev-2]       .    │  [&ts-dev-2]  message               just now  [tool#a5c001]      │     
     stopped · build th…    │  ts-dev-2 asked: may I start the dev server?                     │     
                            │  orchestrator: no, bash-2 serves it on 3003                      │     
-  DEAD  0                  │  complete                                                        │     
+  DEAD  0                  │  complete  |  0ms                                                │     
                            │                                                                  │     
                            ╰──────────────────────────────────────────────────────────────────╯     
                                                                                                     
@@ -84,7 +84,7 @@
                            │  [&ts-dev-2]  message               just now  [tool#a5c002]      │     
                            │  ts-dev-2 asked: may I bind port 3004?                           │     
                            │  orchestrator did not answer, assumed: use port 3004             │     
-                           │  complete                                                        │     
+                           │  complete  |  0ms                                                │     
                            │                                                                  │     
                            ╰──────────────────────────────────────────────────────────────────╯     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                

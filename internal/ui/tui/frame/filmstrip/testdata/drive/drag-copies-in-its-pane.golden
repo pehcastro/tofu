@@ -31,9 +31,9 @@ clipboard: [tool#9d4f10] is the loop I read.
  the selection copied, 33 bytes   [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
 clipboard: read
 internal/agent/loop/loop.go
-complete
+complete  |  0ms
   412 lines, 11.8 KB
-clipboard: complete
+clipboard: complete  |  0ms
  tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
                                                                                                     
                                                                                                    │
@@ -48,7 +48,7 @@ clipboard: complete
   WAITING  3               │  [&c3]  tool                        just now  [tool#7c3e01]      │    │
     [&orchestrator]   .    │  bash                                                            │    │
     Waiting for request    │  go test ./internal/tools/shell/process/...                      │    │
-    [&c1]             .    │  complete                                                        │    │
+    [&c1]             .    │  complete  |  0ms                                                │    │
     stopped · read the…    │    exit 1                                                        │    │
     [&c2]             .    │    --- FAIL: TestKillTree (0.31s)                                │    │
     in review · write …    │                                                                  │    │
@@ -59,8 +59,8 @@ clipboard: complete
                            │  [&orchestrator]  tool              just now  [tool#9d4f10]      │    ┃
                            │  read                                                            │    ┃
                            │  internal/agent/loop/loop.go                                     │    ┃
-                           │  complete                                                        │    ┃
+                           │  complete  |  0ms                                                │    ┃
                            │    412 lines, 11.8 KB                                            │    ┃
                            │                                                                  │    ┃
                            ╰──────────────────────────────────────────────────────────────────╯     
- the selection copied, 8 bytes                                                                      
+ the selection copied, 16 bytes                                                                     

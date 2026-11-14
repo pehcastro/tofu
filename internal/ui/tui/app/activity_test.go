@@ -296,7 +296,7 @@ func TestAReplayedSpawnKeepsTheTimeItWasAskedAndALiveOneTakesTheClock(t *testing
 	app := liveApp(t, &at)
 	asked := at.Add(-time.Hour)
 	app.Update(Event{Kind: EventToolCall, ID: "5b01", Tool: "spawn", Text: "MOCKTASK-1", Promote: true, At: asked})
-	app.Update(Event{Kind: EventToolResult, ID: "5b01", Text: "sub-1 is running in the background", At: asked.Add(time.Second)})
+	app.Update(Event{Kind: EventToolResult, ID: "5b01", Text: "sub-1 is running in the background", At: asked.Add(time.Second), DurationMS: 1000})
 	app.Update(Event{Kind: EventToolCall, ID: "5b02", Tool: "spawn", Text: "MOCKTASK-2", Promote: true})
 	replayed, live := app.happened[app.happenedAt(app.shortOf("5b01"))], app.happened[app.happenedAt(app.shortOf("5b02"))]
 	if !replayed.At.Equal(asked) || replayed.Elapsed != time.Second {
@@ -304,5 +304,27 @@ func TestAReplayedSpawnKeepsTheTimeItWasAskedAndALiveOneTakesTheClock(t *testing
 	}
 	if !live.At.Equal(at) {
 		t.Errorf("a live spawn with no time of its own is stamped %v, want the clock %v", live.At, at)
+	}
+}
+
+func TestALiveAndAReplayedToolBothTakeTheLoopsDuration(t *testing.T) {
+	at := fixedStart()
+	app := liveApp(t, &at)
+	app.Update(Event{Kind: EventToolCall, ID: "d1", Tool: "read", Text: "a.txt"})
+	at = at.Add(3 * time.Second)
+	app.Update(Event{Kind: EventToolResult, ID: "d1", Text: "1 line", DurationMS: 250})
+	app.Update(Event{Kind: EventToolCall, ID: "d2", Tool: "read", Text: "b.txt"})
+	at = at.Add(3 * time.Second)
+	app.Update(Event{Kind: EventToolResult, ID: "d2", Text: "1 line"})
+	asked := at.Add(-time.Hour)
+	app.Update(Event{Kind: EventToolCall, ID: "d3", Tool: "read", Text: "c.txt", At: asked})
+	app.Update(Event{Kind: EventToolResult, ID: "d3", Text: "1 line", At: asked.Add(2 * time.Second), DurationMS: 40})
+	app.Update(Event{Kind: EventToolCall, ID: "d4", Tool: "read", Text: "d.txt", At: asked})
+	app.Update(Event{Kind: EventToolResult, ID: "d4", Text: "1 line", At: asked.Add(2 * time.Second), Untimed: true})
+	want := map[string]time.Duration{"d1": 250 * time.Millisecond, "d2": 0, "d3": 40 * time.Millisecond, "d4": 2 * time.Second}
+	for id, took := range want {
+		if got := app.happened[app.happenedAt(app.shortOf(id))].Elapsed; got != took {
+			t.Errorf("tool %s took %v on its row, want %v", id, got, took)
+		}
 	}
 }
