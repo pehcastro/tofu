@@ -1,17 +1,24 @@
 package overlay
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
-	"io/fs"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
+	"tofu/internal/platform/fs"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/scratch"
+	"tofu/internal/tools/contract"
+	"tofu/internal/tools/files/glob"
 )
 
 const (
@@ -93,30 +100,22 @@ func (o Overlay) GoFlag() string {
 	return "-overlay=" + filepath.Join(o.Dir, goOverlayFile)
 }
 
-func (o Overlay) Tree() (string, error) {
+func (o Overlay) Tree(ctx context.Context) (string, error) {
 	tree := filepath.Join(o.Dir, treeFolder)
-	overlays := filepath.Dir(o.Dir)
-	err := filepath.WalkDir(o.root, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		rel, _ := filepath.Rel(o.root, path)
-		switch {
-		case entry.IsDir() && (path == overlays || rel != "." && slices.Contains([]string{".git", "target"}, entry.Name())):
-			return filepath.SkipDir
-		case entry.IsDir() || !entry.Type().IsRegular() || slices.Contains(o.hidden, filepath.ToSlash(rel)):
-			return nil
-		}
-		info, err := entry.Info()
-		if err != nil {
-			return err
-		}
-		body, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		return writeFile(filepath.Join(tree, rel), body, info.Mode().Perm())
-	})
+	listed, err := o.readable(ctx)
+	copiers := runtime.GOMAXPROCS(0)
+	failed := make([]error, copiers)
+	var copying sync.WaitGroup
+	for at := range copiers {
+		copying.Go(func() {
+			for i := at; i < len(listed) && failed[at] == nil; i += copiers {
+				rel := filepath.FromSlash(listed[i])
+				failed[at] = cmp.Or(ctx.Err(), copyRegular(filepath.Join(o.root, rel), filepath.Join(tree, rel)))
+			}
+		})
+	}
+	copying.Wait()
+	err = cmp.Or(err, ctx.Err(), errors.Join(failed...))
 	for rel, body := range o.files {
 		if err != nil {
 			break
@@ -124,6 +123,30 @@ func (o Overlay) Tree() (string, error) {
 		err = writeFile(filepath.Join(tree, filepath.FromSlash(rel)), []byte(body), 0o644)
 	}
 	return tree, err
+}
+
+func (o Overlay) readable(ctx context.Context) ([]string, error) {
+	var listed []string
+	tracked, err := outside.Command(ctx, "git", "-C", o.root, "ls-files", "-z", "--cached", "--others", "--exclude-standard").Output()
+	switch {
+	case ctx.Err() != nil:
+		return nil, ctx.Err()
+	case err == nil:
+		listed = strings.FieldsFunc(string(tracked), func(c rune) bool { return c == 0 })
+	default:
+		walked, err := glob.FilesUnder(contract.Root(o.root), ".", false)
+		if err != nil {
+			return nil, err
+		}
+		listed = walked.Files
+	}
+	overlays := filepath.Dir(o.Dir)
+	return slices.DeleteFunc(listed, func(rel string) bool {
+		neverRead := slices.ContainsFunc(strings.Split(rel, "/"), func(part string) bool {
+			return slices.Contains([]string{".git", ".local", "target", "zig-out", ".zig-cache", "node_modules"}, part)
+		})
+		return neverRead || slices.Contains(o.hidden, rel) || fs.Inside(overlays, filepath.Join(o.root, filepath.FromSlash(rel)))
+	}), nil
 }
 
 func (o Overlay) Local(output, from string) string {
@@ -146,7 +169,24 @@ func (o Overlay) Remove() error {
 	return os.RemoveAll(o.Dir)
 }
 
-func writeFile(path string, body []byte, mode fs.FileMode) error {
+func copyRegular(from, to string) error {
+	info, err := os.Lstat(from)
+	switch {
+	case errors.Is(err, iofs.ErrNotExist):
+		return nil
+	case err != nil:
+		return err
+	case !info.Mode().IsRegular():
+		return nil
+	}
+	body, err := os.ReadFile(from)
+	if err != nil {
+		return err
+	}
+	return writeFile(to, body, info.Mode().Perm())
+}
+
+func writeFile(path string, body []byte, mode iofs.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}

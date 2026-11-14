@@ -93,16 +93,23 @@ func Try(ctx context.Context, root contract.Root, files map[string]string, check
 		return Answer{}, fmt.Errorf("whatif: the overlay was not made: %w", err)
 	}
 	defer func() { _ = made.Remove() }()
-	planned, err := planOf(made, files, string(root), from, check)
-	if err != nil {
+	ctx, cancel := context.WithTimeout(ctx, limits.Check)
+	defer cancel()
+	planned, err := planOf(ctx, made, files, string(root), from, check)
+	switch {
+	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+		return answered(TimedOut, "", fmt.Sprintf("the copy of the project ran past the %d ms limit and was stopped, so it says nothing about the edits", limits.Check.Milliseconds())), nil
+	case ctx.Err() != nil:
+		return answered(NotRun, "", "the call was cancelled while the project was copied"), nil
+	case err != nil:
 		return Answer{}, err
 	}
 	return planned.run(ctx, made, limits.Check), nil
 }
 
-func planOf(made overlay.Overlay, files map[string]string, root, from string, check Check) (plan, error) {
+func planOf(ctx context.Context, made overlay.Overlay, files map[string]string, root, from string, check Check) (plan, error) {
 	inTree := func(dir string) (string, error) {
-		tree, err := made.Tree()
+		tree, err := made.Tree(ctx)
 		rel, _ := filepath.Rel(root, dir)
 		return filepath.Join(tree, rel), err
 	}
@@ -154,8 +161,23 @@ func planOf(made overlay.Overlay, files map[string]string, root, from string, ch
 			argv = append(argv, check.Name)
 		}
 		return plan{steps: [][]string{argv}, dir: dir, parse: checkers.CargoTest, tests: true}, err
+	case zigBuild:
+		if check.Name != "" {
+			return plan{}, errors.New("whatif: zig build test takes no name filter here: give check command with the filter the build.zig reads")
+		}
+		scratchRoot, err := scratch.ScratchRootAt(root)
+		if err != nil {
+			return plan{}, fmt.Errorf("whatif: %w", err)
+		}
+		cache := filepath.Join(scratchRoot, scratch.ScratchCache, "zig")
+		argv := []string{"zig", "build", "--cache-dir", filepath.Join(cache, "local"), "--global-cache-dir", filepath.Join(cache, "global")}
+		if check.Kind == Test {
+			argv = slices.Insert(argv, 2, "test")
+		}
+		dir, err := inTree(at)
+		return plan{steps: [][]string{argv}, dir: dir, parse: unparsed}, err
 	case otherProject:
-		return plan{}, fmt.Errorf("whatif: build and test run on a go module or a rust crate, and no go.mod or Cargo.toml is at %s or above it inside the project: give check command with the command that checks it", from)
+		return plan{}, fmt.Errorf("whatif: build and test run on a go module, a rust crate or a zig build, and no go.mod, Cargo.toml or build.zig is at %s or above it inside the project: give check command with the command that checks it", from)
 	}
 	return plan{}, fmt.Errorf("whatif: no check for project kind %d", project)
 }
@@ -165,6 +187,7 @@ type projectKind int
 const (
 	goModule projectKind = iota
 	rustCrate
+	zigBuild
 	otherProject
 )
 
@@ -175,6 +198,8 @@ func projectOf(root, from string) (projectKind, string) {
 			return goModule, at
 		case contract.IsFile(filepath.Join(at, "Cargo.toml")):
 			return rustCrate, at
+		case contract.IsFile(filepath.Join(at, "build.zig")):
+			return zigBuild, at
 		case at == root || filepath.Dir(at) == at:
 			return otherProject, root
 		}
@@ -182,8 +207,6 @@ func projectOf(root, from string) (projectKind, string) {
 }
 
 func (p plan) run(ctx context.Context, made overlay.Overlay, limit time.Duration) Answer {
-	ctx, cancel := context.WithTimeout(ctx, limit)
-	defer cancel()
 	var output bytes.Buffer
 	var ran []string
 	started, outcome, exit := time.Now(), Passed, 0

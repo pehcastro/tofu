@@ -146,7 +146,7 @@ func (e Eval) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 	}
 	defer func() { _ = made.Remove() }()
 	if prog.inTree {
-		tree, err := made.Tree()
+		tree, err := made.Tree(ctx)
 		if err != nil {
 			return contract.Result{}, fmt.Errorf("eval: the copy of the project was not made: %w", err)
 		}

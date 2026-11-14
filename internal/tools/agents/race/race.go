@@ -146,7 +146,7 @@ func (r Race) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 			return contract.Result{}, fmt.Errorf("race: run %d's copy was not made: %w", i+1, err)
 		}
 		defer func() { _ = made.Remove() }()
-		if trees[i], err = made.Tree(); err == nil {
+		if trees[i], err = made.Tree(racing); err == nil {
 			copies[i], err = hashes(trees[i])
 		}
 		if err != nil {

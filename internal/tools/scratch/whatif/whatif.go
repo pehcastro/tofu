@@ -37,9 +37,9 @@ func (Whatif) Definition() core.Tool {
 	return core.Tool{
 		Name: "whatif",
 		Description: "applies edits to copies of the files and runs a check on them, and the working tree never changes, so a crash leaves nothing half changed and two agents can try rival fixes on one file. " +
-			"edits take the shape of edit's edits, and an edit to a path that does not exist yet, with old_string empty, creates that file, so a new package can be tried. check build runs go build and go vet on the go package at path, or cargo build on the rust crate at or above it; " +
-			"check test runs go test on that package or cargo test on that crate, name filtering the tests; check command runs command, a program and its arguments, in a copy of the project at path. " +
-			"go runs on the real tree through go's -overlay, a go package the edits create and the rest on a copy under the scratchpad. " +
+			"edits take the shape of edit's edits, and an edit to a path that does not exist yet, with old_string empty, creates that file, so a new package can be tried. check build runs go build and go vet on the go package at path, or cargo build on the rust crate at or above it, or zig build where a build.zig is at or above it; " +
+			"check test runs go test on that package, cargo test on that crate or zig build test, name filtering the go and rust tests; check command runs command, a program and its arguments, in a copy of the project at path. " +
+			"go runs on the real tree through go's -overlay, a go package the edits create and the rest on a copy under the scratchpad that holds only the files git tracks or does not ignore. " +
 			"returns passed, the check's digest and the diff of the edits. a check that runs past its limit says it timed out",
 		Parameters: map[string]any{"type": "object", "required": []string{"edits", "check"}, "properties": map[string]any{
 			"edits":   map[string]any{"type": "array", "items": change},
