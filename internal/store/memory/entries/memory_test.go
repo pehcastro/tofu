@@ -266,13 +266,16 @@ func TestAHomeAnEarlierBuildMovedSaysSoOnceAndAFreshHomeSaysNothing(t *testing.T
 	home, _ := platformfs.HomeConfigDir()
 	state, _ := platformproject.ProjectStateDirAt(repo)
 	for _, dir := range []string{filepath.Join(home, "memory"), filepath.Join(state, "memory")} {
-		if err := os.Remove(filepath.Join(dir, copiedShelves)); err != nil {
-			t.Fatalf("no marker beside %s, so a home with nothing to copy would say it was moved earlier: %v", dir, err)
+		for _, name := range []string{copiedShelves, "migrate.lock"} {
+			if _, err := os.Stat(filepath.Join(dir, name)); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("a fresh home holds %s beside %s (%v), want nothing written when there is nothing to copy", name, dir, err)
+			}
 		}
 	}
+	writeShelf(t, filepath.Join(home, "memory", "m9.yaml"), "id: m9\nkind: person\ntext: left behind by 0.5.8\nat: 2026-09-01T10:00:00Z\nby: person\n")
 	said = stderrOf(t, func() { opened(t, repo) })
-	if strings.Count(said, "\n") != 2 || strings.Count(said, "only copy") != 2 {
-		t.Errorf("a home an earlier build moved said %q, want one line per scope saying the new store is the only copy", said)
+	if strings.Count(said, "\n") != 3 || strings.Count(said, "only copy") != 2 || !strings.Contains(said, "copied memory m9 ") {
+		t.Errorf("a home an earlier build moved, with one 0.5.8 shelf left, said %q, want one line per scope saying the new store is the only copy and one naming m9", said)
 	}
 	if again := stderrOf(t, func() { opened(t, repo) }); again != "" {
 		t.Errorf("the next open said %q again, want it said once", again)

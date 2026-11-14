@@ -21,6 +21,19 @@ const (
 )
 
 func (m *Memory) migrate(oldGlobal, oldProject string) (err error) {
+	shelves := map[string][]string{}
+	for _, dir := range []string{oldGlobal, oldProject} {
+		names, err := oldShelves(dir)
+		if err != nil {
+			return err
+		}
+		if len(names) > 0 {
+			shelves[dir] = names
+		}
+	}
+	if len(shelves) == 0 {
+		return nil
+	}
 	if err := os.MkdirAll(oldGlobal, 0o755); err != nil {
 		return err
 	}
@@ -55,11 +68,7 @@ func (m *Memory) migrate(oldGlobal, oldProject string) (err error) {
 		} else if err != nil {
 			return err
 		}
-		names, err := filepath.Glob(filepath.Join(dir, "*"+shelfSuffix))
-		if err != nil {
-			return err
-		}
-		for _, name := range names {
+		for _, name := range shelves[dir] {
 			if slices.Contains(listed, filepath.Base(name)) {
 				continue
 			}
@@ -97,6 +106,20 @@ func (m *Memory) migrate(oldGlobal, oldProject string) (err error) {
 		fmt.Fprintln(os.Stderr, line)
 	}
 	return nil
+}
+
+func oldShelves(dir string) ([]string, error) {
+	listed, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	var names []string
+	for _, e := range listed {
+		if strings.HasSuffix(e.Name(), shelfSuffix) {
+			names = append(names, filepath.Join(dir, e.Name()))
+		}
+	}
+	return names, err
 }
 
 func readShelfEntry(file string) (Entry, error) {
