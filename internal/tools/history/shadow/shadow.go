@@ -68,6 +68,7 @@ type Started struct {
 
 type begun struct {
 	done   chan struct{}
+	tree   string
 	commit string
 	err    error
 }
@@ -110,7 +111,7 @@ func (s Store) Begin(ctx context.Context, turn Turn, calls func() []Call) Starte
 		if err == nil {
 			_, err = s.git(timed, "", "update-ref", TurnRefs+"/"+turn.ID, commit)
 		}
-		started.begun.commit, started.begun.err = commit, err
+		started.begun.tree, started.begun.commit, started.begun.err = tree, commit, err
 	}()
 	return started
 }
@@ -118,6 +119,11 @@ func (s Store) Begin(ctx context.Context, turn Turn, calls func() []Call) Starte
 func (s Started) Begun() error {
 	<-s.begun.done
 	return s.begun.err
+}
+
+func (s Started) StartTree() (string, error) {
+	err := s.Begun()
+	return s.begun.tree, err
 }
 
 func (s Started) End(ctx context.Context) ([]string, error) {

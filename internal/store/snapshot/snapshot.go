@@ -206,8 +206,12 @@ type entry struct {
 }
 
 func (r Repo) Begin(ctx context.Context, turn string) error {
+	return r.BeginFrom(ctx, turn, func() (string, error) { return r.files().Snapshot(ctx) })
+}
+
+func (r Repo) BeginFrom(ctx context.Context, turn string, start func() (string, error)) error {
 	return r.locked(ctx, func() error {
-		tree, err := r.files().Snapshot(ctx)
+		tree, err := start()
 		if err != nil {
 			return err
 		}

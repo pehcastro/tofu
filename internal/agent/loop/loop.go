@@ -256,28 +256,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		return Row{}, err
 	}
 	row.Session = recorded.session()
-	if config.Sessions != nil {
-		artifacts.keep.session = recorded.session
-		artifacts.keep.events = func(id string) ([]session.Event, error) {
-			read, err := config.Sessions.Events(id)
-			if err != nil {
-				recorded.notice("the re-read matcher could not read session " + id + " for earlier drops, so the next miss reads it again: " + err.Error())
-				return nil, err
-			}
-			recorded.notice(fmt.Sprintf("the re-read matcher read %d events of session %s for earlier drops", len(read), id))
-			return read, nil
-		}
-		if len(config.History) == 0 {
-			artifacts.keep.index.carriesNothing(row.Session)
-		}
-		defer func() { artifacts.keep.index.remember(recorded.session(), artifacts.keep.dropped) }()
-	}
-	taskOrigin := config.taskOrigin(start)
-	recorded.begin(row, taskOrigin)
-	estimated, endedRows := recorded.estimate(config, start), []Row(nil)
-	if len(config.History) > 0 {
-		recorded.listChange("carried", "the turn starts on the conversation the last turn or the resume left", nil, config.History)
-	}
+	recorded.holdUndo()
 	var turnFiles *shadow.Started
 	if config.Project != "" {
 		turn := shadow.Turn{ID: row.ID, Session: row.Session, Agent: who, SpawnedBy: config.SpawnedBy}
@@ -295,6 +274,28 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		}
 		begun := shadow.At(config.Places.State, config.Project).Begin(ctx, turn, calls)
 		turnFiles, ctx = &begun, begun.Into(ctx)
+	}
+	if config.Sessions != nil {
+		artifacts.keep.session = recorded.session
+		artifacts.keep.events = func(id string) ([]session.Event, error) {
+			read, err := config.Sessions.Events(id)
+			if err != nil {
+				recorded.notice("the re-read matcher could not read session " + id + " for earlier drops, so the next miss reads it again: " + err.Error())
+				return nil, err
+			}
+			recorded.notice(fmt.Sprintf("the re-read matcher read %d events of session %s for earlier drops", len(read), id))
+			return read, nil
+		}
+		if len(config.History) == 0 {
+			artifacts.keep.index.carriesNothing(row.Session)
+		}
+		defer func() { artifacts.keep.index.remember(recorded.session(), artifacts.keep.dropped) }()
+	}
+	taskOrigin := config.taskOrigin(start)
+	recorded.begin(row, taskOrigin, turnFiles)
+	estimated, endedRows := recorded.estimate(config, start), []Row(nil)
+	if len(config.History) > 0 {
+		recorded.listChange("carried", "the turn starts on the conversation the last turn or the resume left", nil, config.History)
 	}
 
 	hooks, untrustedHooks := hookEngine(ctx, config, origin)

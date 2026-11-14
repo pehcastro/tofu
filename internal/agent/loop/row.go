@@ -24,6 +24,7 @@ import (
 	"tofu/internal/store/snapshot"
 	"tofu/internal/store/walls"
 	"tofu/internal/tools/code/search"
+	"tofu/internal/tools/history/shadow"
 )
 
 const SchemaVersion = 1
@@ -530,6 +531,7 @@ type record struct {
 	undo             *snapshot.Repo
 	undoBegun        chan struct{}
 	undoErr          error
+	undoShared       chan *shadow.Started
 	lastTools        toolsKept
 	task             core.Origin
 	instructionFiles string
@@ -610,7 +612,7 @@ func (r *record) add(event session.Event, body any) session.Event {
 	return appended
 }
 
-func (r *record) begin(row Row, task core.Origin) {
+func (r *record) begin(row Row, task core.Origin, files *shadow.Started) {
 	if r == nil {
 		return
 	}
@@ -641,22 +643,42 @@ func (r *record) begin(row Row, task core.Origin) {
 		header.Wire, header.Account = row.Wire, row.Account
 		header.ContextCeiling, header.ContextTarget, header.AutoCompaction = start.ContextCeiling, start.ContextTarget, start.AutoCompaction
 	}))
-	if project := r.store.Project(); r.undoBegun == nil && project != "" {
-		header := r.log.Header()
-		r.undo = &snapshot.Repo{State: r.store.State(), Session: r.store.Dir(cmp.Or(header.Root, header.ID)), Tree: project}
-		r.undoBegun = make(chan struct{})
-		repo, turn, report := *r.undo, r.turn, platformproject.Crashes(project)
-		safe.Go(report, "undo snapshot", func() {
-			r.undoErr = safe.Call(report, "undo snapshot", func() error {
-				timed, cancel := context.WithTimeout(context.Background(), konst.UndoSnapshotTimeoutMillis*time.Millisecond)
-				defer cancel()
-				return repo.Begin(timed, turn)
+	if r.undoShared != nil {
+		r.undoShared <- files
+		r.undoShared = nil
+	}
+}
+
+func (r *record) holdUndo() {
+	if r == nil || !r.own || r.undoBegun != nil || r.store.Project() == "" {
+		return
+	}
+	header, project := r.log.Header(), r.store.Project()
+	repo := snapshot.Repo{State: r.store.State(), Session: r.store.Dir(cmp.Or(header.Root, header.ID)), Tree: project}
+	r.undo, r.undoBegun, r.undoShared = &repo, make(chan struct{}), make(chan *shadow.Started, 1)
+	held, shared, turn, report := make(chan struct{}), r.undoShared, r.turn, platformproject.Crashes(project)
+	safe.Go(report, "undo snapshot", func() {
+		r.undoErr = safe.Call(report, "undo snapshot", func() error {
+			timed, cancel := context.WithTimeout(context.Background(), konst.UndoSnapshotTimeoutMillis*time.Millisecond)
+			defer cancel()
+			return repo.BeginFrom(timed, turn, func() (string, error) {
+				close(held)
+				if files := <-shared; files != nil && files.Store.State == repo.State && files.Store.Tree == repo.Tree {
+					if tree, err := files.StartTree(); err == nil {
+						return tree, nil
+					}
+				}
+				return snapshot.Files{State: repo.State, Tree: repo.Tree}.Snapshot(timed)
 			})
-			close(r.undoBegun)
-			if r.undoErr == nil {
-				_ = repo.Prune(context.Background())
-			}
 		})
+		close(r.undoBegun)
+		if r.undoErr == nil {
+			_ = repo.Prune(context.Background())
+		}
+	})
+	select {
+	case <-held:
+	case <-r.undoBegun:
 	}
 }
 
@@ -919,5 +941,5 @@ func (r *record) fork(ended, next Row, fork *Fork, at time.Time) {
 	}
 	r.log, r.turn = log, next.ID
 	r.observe()
-	r.begin(next, r.task)
+	r.begin(next, r.task, nil)
 }
