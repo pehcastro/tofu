@@ -202,6 +202,10 @@ func resolveWindows() (Choice, error) {
 			continue
 		}
 		choice := gitBashChoice(bash)
+		if choice.bash != "" {
+			choice.Label = "git bash on Msys"
+			return choice, nil
+		}
 		if named, err := choice.family(); err == nil {
 			choice.Label = "git bash on " + named
 			return choice, nil
