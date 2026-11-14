@@ -2,16 +2,19 @@ package harness
 
 import (
 	"bytes"
+	"cmp"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/dummy"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 )
 
 const recordedSessionID = "turn-18d6a5df2caeac68"
@@ -23,9 +26,13 @@ func recordedSingleFileSession(t *testing.T, dir string) loop.Row {
 		t.Fatalf("read the session recorded under .boji/sessions before the writer changed, kept once in the labelled turns: %v", err)
 	}
 	var row loop.Row
-	if err := json.Unmarshal(body, &row); err != nil {
+	var recordedClock struct {
+		WallClockMS int64 `json:"wall_clock_ms"`
+	}
+	if err := cmp.Or(json.Unmarshal(body, &row), json.Unmarshal(body, &recordedClock)); err != nil {
 		t.Fatalf("the recorded session is not a turn row: %v", err)
 	}
+	row.WallClockMS = recordedClock.WallClockMS
 	if err := os.WriteFile(filepath.Join(dir, recordedSessionID+".json"), body, 0o600); err != nil {
 		t.Fatalf("place the recorded session: %v", err)
 	}
@@ -66,6 +73,11 @@ func sessionTheLoopWrites(t *testing.T, dir string, at time.Time) loop.Row {
 	if err != nil {
 		t.Fatalf("record the row the way the loop records one: %v", err)
 	}
+	turnWall, err := json.Marshal(walls.Wall{Op: walls.OpTurn, Name: "lead", MS: row.WallClockMS, OK: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	events = slices.Insert(events, len(events)-1, session.Event{ID: session.NewEventID(), Kind: session.EventWall, Body: turnWall})
 	if err = session.NewStore(dir).Write(header, events); err != nil {
 		t.Fatalf("write a session the way the loop writes one: %v", err)
 	}

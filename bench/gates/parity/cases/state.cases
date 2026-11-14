@@ -124,7 +124,7 @@ tofu models
 case models/list json
 tofu models --json
 
-unreachable models/reload
+unreachable models/update
 why the providers it fetches fail in the order they finish, so two runs of one build print them in a different order
 
 case models/bind every role

@@ -8,10 +8,15 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"time"
+
+	"tofu/internal/platform/fs"
+	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 )
 
 type wallRow struct {
@@ -72,6 +77,7 @@ type tracedAgent struct {
 }
 
 type traced struct {
+	Session  string        `json:"session"`
 	Agents   []tracedAgent `json:"agents"`
 	Requests []struct {
 		Request    string  `json:"request"`
@@ -110,13 +116,14 @@ func (d requestDetail) end() time.Time {
 }
 
 type sessionTimes struct {
-	trace   traced
-	details map[string]requestDetail
+	trace      traced
+	details    map[string]requestDetail
+	spawnWalls map[string]map[string]float64
 }
 
 type tofuCLI struct {
-	binary, project string
-	env             []string
+	binary, project, home string
+	env                   []string
 }
 
 func (t tofuCLI) data(into any, args ...string) error {
@@ -180,7 +187,40 @@ func (t tofuCLI) times(session string) (sessionTimes, error) {
 		}
 		got.details[id] = detail
 	}
-	return got, nil
+	var err error
+	got.spawnWalls, err = t.spawnWalls(got.trace.Session)
+	return got, err
+}
+
+func (t tofuCLI) spawnWalls(id string) (map[string]map[string]float64, error) {
+	home := t.home
+	if home == "" {
+		var err error
+		if home, err = os.UserHomeDir(); err != nil {
+			return nil, err
+		}
+	}
+	found, err := filepath.Glob(filepath.Join(fs.StateDir(home), "projects", "*", "sessions", id))
+	if len(found) != 1 {
+		return nil, err
+	}
+	events, err := session.NewStore(filepath.Dir(found[0])).EventsOf(id, session.EventWall)
+	byCall := map[string]map[string]float64{}
+	for _, event := range events {
+		wall, decodeErr := session.DecodeWall(event)
+		if decodeErr != nil || (wall.Op != string(walls.OpSpawn) && wall.Op != string(walls.OpSpawnStep)) {
+			continue
+		}
+		if byCall[event.Call] == nil {
+			byCall[event.Call] = map[string]float64{}
+		}
+		name := wall.Name
+		if wall.Op == string(walls.OpSpawn) {
+			name = "total"
+		}
+		byCall[event.Call][name] = float64(wall.MS)
+	}
+	return byCall, err
 }
 
 var noticeWords = regexp.MustCompile(`spawn of (\S+) took (\S+) before it ran: (.*)`)
@@ -194,8 +234,13 @@ func later(a, b time.Time) time.Time {
 	return b
 }
 
-func (s sessionTimes) noticeSteps() map[string]map[string]float64 {
+func (s sessionTimes) spawnSteps() map[string]map[string]float64 {
 	steps := map[string]map[string]float64{}
+	for _, agent := range s.trace.Agents {
+		if parts, walled := s.spawnWalls[agent.SpawnCall]; walled {
+			steps[agent.Agent] = parts
+		}
+	}
 	for _, notice := range s.trace.Notices {
 		match := noticeWords.FindStringSubmatch(notice.Text)
 		if match == nil {
@@ -261,7 +306,7 @@ func (s sessionTimes) rows(began, ended time.Time, base wallRow) []wallRow {
 		}
 	}
 	base.Model, base.LeadTurns, base.StartupMS, base.TailMS = strings.Join(models, "+"), len(turnEnd), ms(leadBegan.Sub(began)), ms(ended.Sub(final))
-	steps := s.noticeSteps()
+	steps := s.spawnSteps()
 	var rows []wallRow
 	for _, agent := range s.trace.Agents {
 		measured := base
@@ -339,7 +384,7 @@ func wall(args []string) error {
 	if *binary == "" || *project == "" || *out == "" || *transcript == "" || flags.NArg() == 0 {
 		return errors.New("wall needs -tofu, -project, -out, -transcript and the tofu run arguments after --")
 	}
-	cli := tofuCLI{binary: *binary, project: *project, env: os.Environ()}
+	cli := tofuCLI{binary: *binary, project: *project, home: *home, env: os.Environ()}
 	if *home != "" {
 		cli.env = append(cli.env, "HOME="+*home, "USERPROFILE="+*home)
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 
 	"tofu/internal/librarian/rules"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 )
 
 const (
@@ -76,6 +78,17 @@ func timeline(events []session.Event) timing {
 	turnStarts, agentStarts := map[string]time.Time{}, map[string]time.Time{}
 	calls, readUnchanged, firstSeen := map[string]session.CallBody{}, map[string]bool{}, map[string]bool{}
 	var turnOrder []string
+	requestMS, firstTokenMS := map[string]int64{}, map[string]int64{}
+	for _, event := range events {
+		wall, err := session.DecodeWall(event)
+		switch {
+		case err != nil:
+		case wall.Op == string(walls.OpRequest):
+			requestMS[event.Request] = wall.MS
+		case wall.Op == string(walls.OpFirstToken):
+			firstTokenMS[event.Request] = wall.MS
+		}
+	}
 	for _, event := range events {
 		if _, seen := gaps[event.Request]; event.Request != "" && !seen {
 			gaps[event.Request] = event.At.Sub(last[event.Agent])
@@ -103,8 +116,9 @@ func timeline(events []session.Event) timing {
 				who = fmt.Sprintf("orchestrator turn %d", slices.Index(turnOrder, event.Turn)+1)
 			}
 			made := request{who: who, index: body.Index, took: gaps[event.Request], tokens: body.CompletionTokens, attempt: event.Attempt}
-			if body.DurationMS > 0 {
-				made.took, made.firstToken, made.timed = time.Duration(body.DurationMS)*time.Millisecond, time.Duration(body.FirstTokenMS)*time.Millisecond, true
+			if took := cmp.Or(requestMS[event.Request], body.DurationMS); took > 0 {
+				first := cmp.Or(firstTokenMS[event.Request], body.FirstTokenMS)
+				made.took, made.firstToken, made.timed = time.Duration(took)*time.Millisecond, time.Duration(first)*time.Millisecond, true
 			}
 			if made.took > measured.longest.took {
 				measured.longest = made

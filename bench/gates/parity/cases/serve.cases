@@ -100,8 +100,8 @@ serve learn-scan
 case serve/reload
 serve reload
 
-case serve/models-reload
-serve models-reload
+case serve/models-update
+serve models-update
 
 case serve/login
 serve login

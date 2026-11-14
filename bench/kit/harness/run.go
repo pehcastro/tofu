@@ -2,6 +2,7 @@ package harness
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"tofu/bench/kit/corpus"
 	"tofu/internal/agent/loop"
 	"tofu/internal/judge/ledger"
 	"tofu/internal/store/session"
@@ -164,15 +166,26 @@ func continuationOf(dir string, row loop.Row) loop.Row {
 }
 
 func sessionRow(dir, id string) (loop.Row, error) {
-	reading, err := session.NewStore(dir).Reading(id)
+	store := session.NewStore(dir)
+	reading, err := store.Reading(id)
 	if err != nil {
 		return loop.Row{}, err
 	}
 	if len(reading.Outcome) == 0 {
 		return loop.Row{}, fmt.Errorf("the body of session %s carries no outcome event, so there is no turn row in it", id)
 	}
-	var row loop.Row
-	if err := json.Unmarshal(reading.Outcome, &row); err != nil {
+	ends, err := store.EventsOf(id, session.EventWall, session.EventTurnEnd, session.EventOutcome)
+	if err != nil {
+		return loop.Row{}, err
+	}
+	turnMS, leadMS := corpus.TurnWalls(ends), int64(0)
+	for _, end := range ends {
+		if end.Agent == "" && end.Kind != session.EventWall {
+			leadMS = turnMS[end.ID]
+		}
+	}
+	row, err := turnRow(reading.Outcome, leadMS)
+	if err != nil {
 		return loop.Row{}, fmt.Errorf("the outcome event of session %s does not read as a turn row: %w", id, err)
 	}
 	var steps []loop.StepRow
@@ -192,10 +205,20 @@ func LoadSession(path string) (loop.Row, error) {
 	if err != nil {
 		return loop.Row{}, err
 	}
-	var row loop.Row
-	if err := json.Unmarshal(body, &row); err != nil {
+	row, err := turnRow(body, 0)
+	if err != nil {
 		return loop.Row{}, fmt.Errorf("%s is not a turn row: %w", path, err)
 	}
+	return row, nil
+}
+
+func turnRow(body []byte, turnMS int64) (loop.Row, error) {
+	var row loop.Row
+	var recorded corpus.RecordedTurn
+	if err := cmp.Or(json.Unmarshal(body, &row), json.Unmarshal(body, &recorded)); err != nil {
+		return loop.Row{}, err
+	}
+	row.WallClockMS = cmp.Or(turnMS, recorded.WallClockMS)
 	return row, nil
 }
 

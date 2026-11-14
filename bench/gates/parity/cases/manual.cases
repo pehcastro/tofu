@@ -41,10 +41,10 @@ why tofu-desktop renders pixels
 step run tofu serve --stdio --cassette with the desk core cassettes on both builds and diff the transcripts; the serve catalog already covers every method
 step render the desk on both builds and compare screenshots by eye
 
-manual update install, models reload and query.update
+manual update install, models update and query.update
 why the release and model registries are on the network
 step serve a copy of the release json on a local port, set TOFU_UPDATE_API and TOFU_UPDATE_TARGET to a scratch copy of the exe, run tofu update on both builds, diff
-step set TOFU_MODELS_REGISTRY_URL to a local copy of the registry, run tofu models reload --json on both builds, diff after sorting the provider rows
+step set TOFU_MODELS_REGISTRY_URL to a local copy of the registry, run tofu models update --json on both builds, diff after sorting the provider rows
 
 manual ctrl+g editor and the clipboard
 why ctrl+g opens EDITOR and /copy writes the person's clipboard

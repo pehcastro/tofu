@@ -250,10 +250,10 @@ func runArm(args []string) error {
 		}
 		r.Notes = append(r.Notes, "setting: the classifier binding copied from the owner's home reads "+binding)
 		env = append(env, profile...)
-		reload := exec.Command("tofu", "models", "reload")
-		reload.Dir, reload.Env = dirs.repo, env
-		if said, err := reload.CombinedOutput(); err != nil {
-			return fmt.Errorf("tofu models reload in the fresh home: %v: %s", err, said)
+		update := exec.Command("tofu", "models", "update")
+		update.Dir, update.Env = dirs.repo, env
+		if said, err := update.CombinedOutput(); err != nil {
+			return fmt.Errorf("tofu models update in the fresh home: %v: %s", err, said)
 		}
 		if *board {
 			if err := manageWithBoard(dirs.repo, env); err != nil {

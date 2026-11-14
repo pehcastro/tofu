@@ -255,7 +255,7 @@ func (m machine) login(project, home string, env []string) error {
 		return fmt.Errorf("the owner's home binds no classifier, and the gate needs one: %w", err)
 	}
 	_, bound, _ := strings.Cut(strings.TrimSpace(string(classifier)), "model:")
-	for _, args := range [][]string{{"models", "reload"}, {"models", "bind", "orchestrator", m.model}, {"models", "bind", "sub-agent", m.model}, {"models", "bind", "classifier", strings.TrimSpace(bound)}} {
+	for _, args := range [][]string{{"models", "update"}, {"models", "bind", "orchestrator", m.model}, {"models", "bind", "sub-agent", m.model}, {"models", "bind", "classifier", strings.TrimSpace(bound)}} {
 		if _, output, err := run(project, env, checkTimeout, m.exe, args...); err != nil {
 			return fmt.Errorf("tofu %s in the fresh home: %s", strings.Join(args, " "), lastLine(output, err))
 		}

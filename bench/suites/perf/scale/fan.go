@@ -49,7 +49,7 @@ func (s sessionTimes) fanSplit() fanSplit {
 	for _, request := range s.trace.Memory {
 		memory = append(memory, s.details[request.Request])
 	}
-	notice := s.noticeSteps()[slowest.Agent]["total"]
+	notice := s.spawnSteps()[slowest.Agent]["total"]
 	split.stagger = ms(slowest.StartedAt.Sub(asked)) - notice
 	split.own = notice + ms(slowest.EndedAt.Sub(slowest.StartedAt)) - split.model
 	for at := slowest.EndedAt; at.Before(last.TakenAt); at = at.Add(time.Millisecond) {

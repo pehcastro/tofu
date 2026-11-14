@@ -1,6 +1,7 @@
 package corpus
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/platform/credential"
 	"tofu/internal/store/session"
+	"tofu/internal/store/walls"
 )
 
 var ErrNoWallClock = errors.New("bench/kit/corpus:the recorded turn carries no wall clock")
@@ -332,15 +334,36 @@ func ReadTurnDirSegments(dir string) ([]RecordedTurn, error) {
 	}
 	header := RecordedTurn{ID: id, Task: recorded.Task, At: recorded.At, ContextCeiling: recorded.ContextCeiling,
 		ContextTarget: recorded.ContextTarget, AutoCompaction: recorded.AutoCompaction, Account: recorded.Account, Wire: recorded.Wire}
-	segments, err := segmentsOf(store, id, header)
+	ends, err := store.EventsOf(id, session.EventWall, session.EventTurnEnd, session.EventOutcome)
+	if err != nil {
+		return nil, err
+	}
+	turnMS := TurnWalls(ends)
+	segments, err := segmentsOf(store, id, header, turnMS)
 	for _, run := range recorded.Agents {
-		ran, runErr := segmentsOf(store, id+session.TurnMark+run.Agent, RecordedTurn{ID: run.Agent, At: run.StartedAt, Wire: recorded.Wire})
+		ran, runErr := segmentsOf(store, id+session.TurnMark+run.Agent, RecordedTurn{ID: run.Agent, At: run.StartedAt, Wire: recorded.Wire}, turnMS)
 		segments, err = append(segments, ran...), errors.Join(err, runErr)
 	}
 	return segments, err
 }
 
-func segmentsOf(store *session.Store, dir string, header RecordedTurn) ([]RecordedTurn, error) {
+func TurnWalls(events []session.Event) map[string]int64 {
+	type runner struct{ agent, turn string }
+	walled, ended := map[runner]int64{}, map[string]int64{}
+	for _, event := range events {
+		switch event.Kind {
+		case session.EventWall:
+			if wall, err := session.DecodeWall(event); err == nil && wall.Op == string(walls.OpTurn) {
+				walled[runner{event.Agent, event.Turn}] = wall.MS
+			}
+		case session.EventTurnEnd, session.EventOutcome:
+			ended[event.ID] = walled[runner{event.Agent, event.Turn}]
+		}
+	}
+	return ended
+}
+
+func segmentsOf(store *session.Store, dir string, header RecordedTurn, turnMS map[string]int64) ([]RecordedTurn, error) {
 	events, err := store.Body(dir)
 	if err != nil {
 		return nil, err
@@ -366,6 +389,7 @@ func segmentsOf(store *session.Store, dir string, header RecordedTurn) ([]Record
 			if err := json.Unmarshal(event.Body, &current); err != nil {
 				return nil, fmt.Errorf("bench/kit/corpus:the recorded outcome of %s is not the expected shape: %w", dir, err)
 			}
+			current.WallClockMS = cmp.Or(turnMS[event.ID], current.WallClockMS)
 			segments = append(segments, current)
 			current = header
 		}
