@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"sync"
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/host"
@@ -82,7 +83,12 @@ func (o LayerOverride) Listing() *host.OverrideListing {
 }
 
 func StackRules(library, project string) (RuleStack, error) {
+	var verifying, managed bool
+	var reading sync.WaitGroup
+	reading.Go(func() { verifying = settingspkg.IntSaying(project, settingspkg.VerifySubAgents, nil) != 0 })
+	reading.Go(func() { managed = BoardManaged(project) })
 	rules, origin, err := BaseRules(library)
+	reading.Wait()
 	if err != nil {
 		return RuleStack{}, err
 	}
@@ -103,13 +109,16 @@ func StackRules(library, project string) (RuleStack, error) {
 		rules = rule.Layer(rules, over)
 	}
 	for i, one := range rules {
-		key := RuleSetting(one.ID)
-		if key == "" {
+		var on bool
+		switch key := RuleSetting(one.ID); key {
+		case "":
 			continue
-		}
-		on := settingspkg.IntSaying(project, key, nil) != 0
-		if key == boardy.ManagementSetting {
-			on = BoardManaged(project)
+		case settingspkg.VerifySubAgents:
+			on = verifying
+		case boardy.ManagementSetting:
+			on = managed
+		default:
+			return RuleStack{}, fmt.Errorf("rule %s is switched by the setting %s, and StackRules reads no such setting", one.ID, key)
 		}
 		mode := rule.ModeOff
 		if on {

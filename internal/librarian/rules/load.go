@@ -7,41 +7,80 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"tofu/internal/agent/subagents"
 )
 
+type loadedFile struct {
+	rule   Rule
+	isRule bool
+	err    error
+}
+
 func LoadFS(shipped fs.FS, root string) ([]Rule, error) {
-	var loaded []Rule
+	var names []string
+	var contents [][]byte
 	err := fs.WalkDir(shipped, ".", func(name string, entry fs.DirEntry, err error) error {
 		dir := path.Dir(name)
 		if err != nil || entry.IsDir() || (dir != "." && path.Base(dir) != "rules") || !strings.HasSuffix(name, ".yaml") {
 			return err
 		}
 		data, err := fs.ReadFile(shipped, name)
-		if err != nil {
-			return err
-		}
-		if declared(data, "kind") == ThresholdKind || declared(data, "when") != "" {
-			return nil
-		}
-		one, err := parseFile(data, path.Join(root, name))
-		if err != nil {
-			if dir != "." {
-				return fmt.Errorf("%w (%s was read as a rule because its directory is named %q)", err, path.Join(root, dir), "rules")
-			}
-			return err
-		}
-		loaded = append(loaded, one)
-		return nil
+		names, contents = append(names, name), append(contents, data)
+		return err
 	})
 	if err != nil {
 		return nil, err
 	}
+	files := make([]loadedFile, len(names))
+	var parsing sync.WaitGroup
+	workers := min(runtime.GOMAXPROCS(0), len(names))
+	for first := range workers {
+		parsing.Go(func() {
+			for i := first; i < len(names); i += workers {
+				files[i] = loadFile(contents[i], root, names[i])
+			}
+		})
+	}
+	parsing.Wait()
+	var loaded []Rule
+	for _, file := range files {
+		if file.err != nil {
+			return nil, file.err
+		}
+		if file.isRule {
+			loaded = append(loaded, file.rule)
+		}
+	}
 	return loaded, nil
+}
+
+func loadFile(data []byte, root, name string) loadedFile {
+	var kind, when, overrides string
+	_ = scanKV(data, "", func(key, value string, _ int) error {
+		switch {
+		case key == "kind" && kind == "":
+			kind = value
+		case key == "when" && when == "":
+			when = value
+		case key == "overrides" && overrides == "":
+			overrides = value
+		}
+		return nil
+	})
+	if kind == ThresholdKind || when != "" {
+		return loadedFile{}
+	}
+	one, err := parseOverriding(data, path.Join(root, name), overrides)
+	if dir := path.Dir(name); err != nil && dir != "." {
+		err = fmt.Errorf("%w (%s was read as a rule because its directory is named %q)", err, path.Join(root, dir), "rules")
+	}
+	return loadedFile{one, true, err}
 }
 
 func declared(data []byte, want string) string {
@@ -56,8 +95,12 @@ func declared(data []byte, want string) string {
 }
 
 func parseFile(data []byte, file string) (Rule, error) {
+	return parseOverriding(data, file, declared(data, "overrides"))
+}
+
+func parseOverriding(data []byte, file, overrides string) (Rule, error) {
 	parse := parseRule
-	if declared(data, "overrides") != "" {
+	if overrides != "" {
 		parse = parseOverride
 	}
 	r, err := parse(data, file)
