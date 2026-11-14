@@ -58,6 +58,8 @@ func (d delivery) rearmedTimer() bool {
 	return kind == reflect.TypeOf(d.cause) && kind.Comparable()
 }
 
+func (d delivery) tick() bool { return reflect.TypeOf(d.message).Size() == 0 }
+
 func (d delivery) repeatedWelcomePulse() bool {
 	kind := reflect.TypeOf(d.message)
 	return d.rearmedTimer() && kind.PkgPath() == reflect.TypeFor[welcome.Identity]().PkgPath() && kind.Name() == "pulseMsg"
@@ -129,6 +131,9 @@ func (d *Driver) settle(within time.Duration) error {
 			case got.rearmedTimer():
 				timers = append(timers, got)
 			default:
+				if got.tick() {
+					outside.Waited(d.ctx, outside.Person, time.Since(lastFed))
+				}
 				d.feed(got.message, got.cause)
 				d.app.View()
 				quiet.Reset(settleQuiet)
