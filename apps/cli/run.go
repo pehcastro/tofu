@@ -261,14 +261,14 @@ func (r runtime) subAgentOpener(opts wiring.RunOpts) func(subagents.Definition, 
 		case wanted != "" && !slices.Contains(offered, wanted):
 			return loop.SubAgentModel{}, fmt.Errorf("effort %s for %s: it takes %s, so the level would be changed without a word", wanted, asked, llm.EffortList(offered))
 		}
-		subAgent.Effort = cmp.Or(wanted, definition.Effort, opts.Effort)
-		if wanted == "" && definition.Effort != "" && !slices.Contains(offered, definition.Effort) {
+		subAgent.Effort = cmp.Or(wanted, held.Effort, opts.Effort)
+		if wanted == "" && held.Effort != "" && !slices.Contains(offered, held.Effort) {
 			subAgent.Effort = ""
 			if len(offered) > 0 {
 				subAgent.Effort = wiring.DefaultEffort(offered)
 			}
 			if _, said := told.LoadOrStore(definition.Name, true); !said && r.notify != nil {
-				r.notify(fmt.Sprintf("%s asks for effort %s, which %s does not take, so it runs at %s", definition.Name, definition.Effort, asked, cmp.Or(string(subAgent.Effort), "no effort")))
+				r.notify(fmt.Sprintf("%s asks for effort %s, which %s does not take, so it runs at %s", definition.Name, held.Effort, asked, cmp.Or(string(subAgent.Effort), "no effort")))
 			}
 		}
 		if named == "" && subAgent.Effort == opts.Effort {
