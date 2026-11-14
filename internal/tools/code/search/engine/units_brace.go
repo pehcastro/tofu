@@ -17,7 +17,7 @@ type declPattern struct {
 }
 
 type braceSyntax struct {
-	rust    bool
+	dialect dialect
 	decls   []declPattern
 	members []declPattern
 	calls   []declPattern
@@ -53,7 +53,7 @@ var (
 	})
 	rustSyntax = sync.OnceValue(func() braceSyntax {
 		return braceSyntax{
-			rust: true,
+			dialect: dialectRust,
 			decls: []declPattern{
 				{shape: regexp.MustCompile(`(?s)` + rustVisible + `(?:default\s+)?(?:const\s+)?(?:async\s+)?(?:unsafe\s+)?(?:extern\s+(?:"[^"]*"\s+)?)?fn\s+(\w+)`), kind: KindFunc},
 				{shape: regexp.MustCompile(`(?s)` + rustVisible + `(?:struct|enum|union)\s+(\w+)`), kind: KindType},
@@ -61,6 +61,17 @@ var (
 				{shape: regexp.MustCompile(`(?s)^(?:unsafe\s+)?impl\b(.*)$`), kind: KindType, container: true, named: implTarget},
 			},
 			stops: regexp.MustCompile(`^(?:async|const|else|enum|extern|fn|for|if|impl|let|loop|match|mod|pub|return|static|struct|trait|type|union|unsafe|use|while)\b`),
+		}
+	})
+	zigSyntax = sync.OnceValue(func() braceSyntax {
+		return braceSyntax{
+			dialect: dialectZig,
+			decls: []declPattern{
+				{shape: regexp.MustCompile(`(?s)^(?:pub\s+)?(?:export\s+|extern\s+(?:"[^"]*"\s+)?)?(?:inline\s+|noinline\s+)?fn\s+(\w+)`), kind: KindFunc},
+				{shape: regexp.MustCompile(`(?s)^(?:pub\s+)?const\s+(\w+)\s*(?::[^=]*)?=\s*(?:extern\s+|packed\s+)?(?:struct|enum|union|opaque|error)\b`), kind: KindType, container: true},
+				{shape: regexp.MustCompile(`(?s)^test\s+"?([^"]+?)"?$`), kind: KindFunc},
+			},
+			stops: regexp.MustCompile(`^(?:break|comptime|const|continue|defer|else|errdefer|export|extern|fn|for|if|inline|pub|return|switch|test|threadlocal|try|usingnamespace|var|while)\b`),
 		}
 	})
 	implType     = fs.LazyRegexp(`^&?\s*(?:'\w+\s+)?(?:(?:mut|dyn)\s+)*(?:\w+::)*(\w+)`)
@@ -85,6 +96,7 @@ func braceOutline(body string, syntax braceSyntax) (outline, bool) {
 		}
 		return end
 	}
+	script := syntax.dialect == dialectScript
 	previous := -1
 	for at := 0; at < len(body); {
 		c, next := body[at], byteAt(body, at+1)
@@ -93,21 +105,23 @@ func braceOutline(body string, syntax braceSyntax) (outline, bool) {
 		case c == '/' && next == '/':
 			end, as = lineEnd(body, at), regionComment
 		case c == '/' && next == '*':
-			end, as = blockCommentEnd(body, at, syntax.rust), regionComment
-		case c == '"' || (c == '\'' && !syntax.rust && !wordInside(body, at)):
-			end, as = quotedEnd(body, at, !syntax.rust), regionString
-		case c == '\'' && syntax.rust:
+			end, as = blockCommentEnd(body, at, !script), regionComment
+		case c == '\\' && next == '\\' && syntax.dialect == dialectZig:
+			end, as = lineEnd(body, at), regionString
+		case c == '"' || (c == '\'' && script && !wordInside(body, at)):
+			end, as = quotedEnd(body, at, script), regionString
+		case c == '\'' && !script:
 			end = charLiteralEnd(body, at)
 			if end > at+1 {
 				as = regionString
 			}
-		case syntax.rust && (c == 'r' || c == 'b') && !identByte(byteAt(body, at-1)):
+		case syntax.dialect == dialectRust && (c == 'r' || c == 'b') && !identByte(byteAt(body, at-1)):
 			if raw := rawStringEnd(body, at); raw > 0 {
 				end, as = raw, regionString
 			}
-		case c == '`' && !syntax.rust:
+		case c == '`' && script:
 			end, as = resumeTemplate(at+1), regionString
-		case c == '/' && !syntax.rust && regexAllowed(body, previous):
+		case c == '/' && script && regexAllowed(body, previous):
 			if closed := regexEnd(body, at); closed > 0 {
 				end, as = closed, regionString
 			}

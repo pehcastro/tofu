@@ -44,6 +44,8 @@ func declaredUnits(rel, body string, lines []string, hits []hit) ([]Unit, bool) 
 		found, parsed = braceOutline(body, rustSyntax())
 	case ".py":
 		found, parsed = pythonOutline(body)
+	case ".zig":
+		found, parsed = braceOutline(body, zigSyntax())
 	}
 	if !parsed {
 		return nil, false

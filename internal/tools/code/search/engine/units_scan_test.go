@@ -143,7 +143,26 @@ impl<T> fmt::Display for Cart<T> {
     }
 }
 `
-	rsBroken = "fn f() {\n    needle();\n"
+	rsBroken  = "fn f() {\n    needle();\n"
+	zigStruct = `const std = @import("std");
+
+pub const Cart = struct {
+    items: []const u32,
+
+    pub fn total(self: Cart) u32 {
+        const banner =
+            \\a } brace {
+        ;
+        _ = banner;
+        return needle(self.items);
+    }
+};
+
+test "cart totals" {
+    try std.testing.expect(needle(&.{}) == 0);
+}
+`
+	zigBroken = "fn f() void {\n    needle();\n"
 )
 
 func TestAMatchOutsideGoComesBackAsTheUnitAroundIt(t *testing.T) {
@@ -177,6 +196,11 @@ func TestAMatchOutsideGoComesBackAsTheUnitAroundIt(t *testing.T) {
 		{file: "a.rs", source: rsModule, pattern: "needle", want: "func works 4-8 fallback=false code x1"},
 		{file: "a.rs", source: rsModule, pattern: "super", want: "lines  1-5 fallback=false code x1"},
 		{file: "a.rs", source: rsBroken, pattern: "needle", want: "lines  1-2 fallback=true unparsed x1"},
+		{file: "a.zig", source: zigStruct, pattern: "needle", want: "method Cart.total 6-12 fallback=false code x1"},
+		{file: "a.zig", source: zigStruct, pattern: "brace", want: "method Cart.total 6-12 fallback=false string x1"},
+		{file: "a.zig", source: zigStruct, pattern: "items: ", want: "type Cart 3-13 fallback=false code x1"},
+		{file: "a.zig", source: zigStruct, pattern: "expect", want: "func cart totals 15-17 fallback=false code x1"},
+		{file: "a.zig", source: zigBroken, pattern: "needle", want: "lines  1-2 fallback=true unparsed x1"},
 	} {
 		root := t.TempDir()
 		if err := os.WriteFile(filepath.Join(root, row.file), []byte(commentMarkers.Replace(row.source)), 0o600); err != nil {

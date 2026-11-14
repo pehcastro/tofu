@@ -61,7 +61,7 @@ func (t *ReadTool) Definition() core.Tool {
 	return core.Tool{
 		Name: Name,
 		Description: "reads a file inside the turn's working directory, whole, or only the lines from start_line to end_line, counted from 1 and both included, " +
-			fmt.Sprintf("or about %d lines around at, which is a line number or a name the file declares, such as Total or Order.Total in a .go, .rs, .ts, .tsx or .py file. ", konst.ReadWindowLines) +
+			fmt.Sprintf("or about %d lines around at, which is a line number or a name the file declares, such as Total or Order.Total in a .go, .rs, .ts, .tsx, .py or .zig file. ", konst.ReadWindowLines) +
 			"a read of the same lines of a file that has not changed since your last read of them in this turn comes back as one line naming the step of that read, whose result is still above. " +
 			"a path that does not exist is repaired when exactly one file under the working directory carries that name and refused when two do, and a repair is named at the top of the result. " +
 			"a png, jpeg, gif or webp comes back as a picture you can see, shrunk to fit when it is large, with its format and size as text",
@@ -183,7 +183,7 @@ func aroundLine(at float64, lines int) (int, int, string, error) {
 func aroundSymbol(resolved, name string, lines int) (int, int, string, error) {
 	graph := engine.Index("", []string{filepath.ToSlash(resolved)}, func(string) bool { return true })
 	if graph.Parsed == 0 {
-		return 0, 0, "", errors.New("holds no declaration tofu can name, since it is not a .go, .rs, .ts, .tsx or .py file or it does not parse: give at a line number")
+		return 0, 0, "", errors.New("holds no declaration tofu can name, since it is not a .go, .rs, .ts, .tsx, .py or .zig file or it does not parse: give at a line number")
 	}
 	found := slices.DeleteFunc(slices.Clone(graph.Definitions), func(declared engine.Definition) bool {
 		return declared.Symbol != name && !strings.HasSuffix(declared.Symbol, "."+name)

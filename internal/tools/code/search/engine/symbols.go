@@ -119,7 +119,7 @@ func symbolGraph(files []string, wanted func(string) bool, read func(rel string)
 
 func fileGraph(rel string, wanted func(string) bool, read func(rel string) ([]byte, error)) Graph {
 	extension := filepath.Ext(rel)
-	if !slices.Contains([]string{".go", ".rs", ".ts", ".tsx", ".py"}, extension) {
+	if !slices.Contains([]string{".go", ".rs", ".ts", ".tsx", ".py", ".zig"}, extension) {
 		return Graph{}
 	}
 	body, err := read(rel)
@@ -135,6 +135,8 @@ func fileGraph(rel string, wanted func(string) bool, read func(rel string) ([]by
 		parsed = graph.readOutline(rel, string(body), dialectRust, wanted)
 	case ".py":
 		parsed = graph.readOutline(rel, string(body), dialectPython, wanted)
+	case ".zig":
+		parsed = graph.readOutline(rel, string(body), dialectZig, wanted)
 	default:
 		parsed = graph.readOutline(rel, string(body), dialectScript, wanted)
 	}
@@ -206,6 +208,7 @@ const (
 	dialectScript dialect = iota
 	dialectRust
 	dialectPython
+	dialectZig
 )
 
 func (g *Graph) readOutline(rel, body string, language dialect, wanted func(string) bool) bool {
@@ -218,6 +221,8 @@ func (g *Graph) readOutline(rel, body string, language dialect, wanted func(stri
 		found, parsed = braceOutline(body, rustSyntax())
 	case dialectPython:
 		found, parsed = pythonOutline(body)
+	case dialectZig:
+		found, parsed = braceOutline(body, zigSyntax())
 	}
 	if !parsed {
 		return false
@@ -369,7 +374,7 @@ func calledNames(function *ast.FuncDecl) []string {
 
 func (g *Graph) render() string {
 	var out strings.Builder
-	fmt.Fprintf(&out, "%s: %d definitions and %d call sites in %d parsed go, rust, typescript and python files\n", g.Name, len(g.Definitions), len(g.Callers), g.Parsed)
+	fmt.Fprintf(&out, "%s: %d definitions and %d call sites in %d parsed go, rust, typescript, python and zig files\n", g.Name, len(g.Definitions), len(g.Callers), g.Parsed)
 	if g.Unparsed > 0 {
 		fmt.Fprintf(&out, "%s\n", Note(Fallback, fmt.Sprintf("%s did not parse and hold no definition and no call site here", plural(g.Unparsed, "file"))))
 	}
@@ -382,7 +387,7 @@ func (g *Graph) render() string {
 		if g.Unreadable > 0 {
 			parsed = "every readable source file was parsed, and the unreadable ones may declare or call " + g.Name
 		}
-		fmt.Fprintf(&out, "no go, rust, typescript or python source under this path declares or calls %s. %s: this is an answer, not a failure\n", g.Name, parsed)
+		fmt.Fprintf(&out, "no go, rust, typescript, python or zig source under this path declares or calls %s. %s: this is an answer, not a failure\n", g.Name, parsed)
 		return out.String()
 	}
 	for _, definition := range g.Definitions {

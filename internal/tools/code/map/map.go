@@ -39,7 +39,7 @@ func (Map) Name() string { return Name }
 func (Map) Definition() core.Tool {
 	return core.Tool{
 		Name: Name,
-		Description: "answers what matters in this repo for a task, in a token budget, before reading files one by one: the files ranked by a personalized pagerank over the go, rust and typescript reference graph, each with its top declarations as one-line signatures and their line numbers, cut to fit the budget. " +
+		Description: "answers what matters in this repo for a task, in a token budget, before reading files one by one: the files ranked by a personalized pagerank over the go, rust, typescript, python and zig reference graph, each with its top declarations as one-line signatures and their line numbers, cut to fit the budget. " +
 			"task is the work in plain words; a word of it that is a declared identifier or a file or folder name seeds the rank, as fix Discounted returning 650, and files seeds it with paths. " +
 			"budget is in tokens, " + strconv.Itoa(konst.MapBudgetTokens) + " when absent, and the answer says how many it used and how many files and declarations did not fit. " +
 			"a reference is matched on the identifier, within one language and, for go, within the package or a package the file imports, so a name declared in several such files splits its weight between them. " +
@@ -97,7 +97,7 @@ type Ranking struct {
 type undeclared int
 
 func (files undeclared) Error() string {
-	return fmt.Sprintf("no go, rust or typescript declarations in the %d files", int(files))
+	return fmt.Sprintf("no go, rust, typescript, python or zig declarations in the %d files", int(files))
 }
 
 func (m Map) Rank(files []string, task string, named []string) (Ranking, error) {
@@ -216,7 +216,7 @@ func (m Map) seed(g *graph, named []string) ([]float64, error) {
 		rel, _ := filepath.Rel(string(m.root), resolved)
 		file, known := g.at[filepath.ToSlash(rel)]
 		if !known {
-			return nil, errors.New(one + " is not a go, rust or typescript file that declares or calls anything under this path")
+			return nil, errors.New(one + " is not a go, rust, typescript, python or zig file that declares or calls anything under this path")
 		}
 		teleport[file] = 1
 		listed = append(listed, g.files[file])

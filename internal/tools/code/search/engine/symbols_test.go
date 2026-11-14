@@ -24,7 +24,7 @@ func TestFindsSymbolPassParsesTheBodiesTheScanHeldWithoutReadingAgain(t *testing
 	}
 }
 
-func TestSymbolsAnswersRustAndTypeScriptFromCodeAlone(t *testing.T) {
+func TestSymbolsAnswersRustTypeScriptAndZigFromCodeAlone(t *testing.T) {
 	root := t.TempDir()
 	comments := strings.NewReplacer("LINE", "/"+"/", "OPEN", "/"+"*", "CLOSE", "*"+"/")
 	for rel, body := range map[string]string{
@@ -48,6 +48,28 @@ fn plain() {
     let d = Holder::default();
 }
 `,
+		"lib.zig": `const std = @import("std");
+pub fn target(x: u8) u8 {
+    return x;
+}
+const Holder = struct {
+    id: u8,
+    pub fn target(self: Holder) u8 {
+        return self.id;
+    }
+    fn uses(self: Holder) u8 {
+        return target(2) + self.target();
+    }
+};
+test "target adds" {
+    LINE target(1)
+    const s = "target(2)";
+    const m =
+        \\target(3) {
+    ;
+    try std.testing.expect(target(4) == 4);
+}
+`,
 		"broken.rs": "fn broken( {\n    target(1);\n",
 		"app.ts": "export function target(a: number): number { return a }\n" +
 			"class Box {\n" +
@@ -64,7 +86,7 @@ fn plain() {
 			t.Fatal(err)
 		}
 	}
-	files := []string{"app.ts", "broken.rs", "lib.rs"}
+	files := []string{"app.ts", "broken.rs", "lib.rs", "lib.zig"}
 	for _, row := range []struct {
 		name        string
 		definitions []string
@@ -72,14 +94,15 @@ fn plain() {
 	}{
 		{
 			name:        "target",
-			definitions: []string{"app.ts:1 func target", "app.ts:3 method Box.target", "lib.rs:1 func target", "lib.rs:4 method Holder.target"},
+			definitions: []string{"app.ts:1 func target", "app.ts:3 method Box.target", "lib.rs:1 func target", "lib.rs:4 method Holder.target", "lib.zig:2 func target", "lib.zig:7 method Holder.target"},
 			callers: []string{
 				"app.ts:4 in Box.run", "app.ts:4 in Box.run", "app.ts:7 in the file scope", "app.ts:9 in the file scope", "app.ts:10 in g",
 				"lib.rs:5 in Holder.uses", "lib.rs:5 in Holder.uses", "lib.rs:13 in plain", "lib.rs:14 in plain", "lib.rs:15 in plain", "lib.rs:16 in plain",
+				"lib.zig:11 in Holder.uses", "lib.zig:11 in Holder.uses", "lib.zig:20 in target adds",
 			},
 		},
 		{name: "default", callers: []string{"lib.rs:18 in plain"}},
-		{name: "Holder", definitions: []string{"lib.rs:2 type Holder"}},
+		{name: "Holder", definitions: []string{"lib.rs:2 type Holder", "lib.zig:5 type Holder"}},
 	} {
 		graph, err := Symbols(root, files, row.name)
 		if err != nil {
@@ -95,8 +118,8 @@ fn plain() {
 		if !slices.Equal(definitions, row.definitions) || !slices.Equal(callers, row.callers) {
 			t.Errorf("%s:\ndefinitions %q\nwant        %q\ncallers %q\nwant    %q\n%s", row.name, definitions, row.definitions, callers, row.callers, graph.Text)
 		}
-		if graph.Parsed != 2 || graph.Unparsed != 1 || strings.Contains(graph.Text, "go file") {
-			t.Errorf("%s: %d parsed and %d unparsed, want 2 and 1, and no line about go files over a rust and typescript tree:\n%s", row.name, graph.Parsed, graph.Unparsed, graph.Text)
+		if graph.Parsed != 3 || graph.Unparsed != 1 || strings.Contains(graph.Text, "go file") {
+			t.Errorf("%s: %d parsed and %d unparsed, want 3 and 1, and no line about go files over a rust, typescript and zig tree:\n%s", row.name, graph.Parsed, graph.Unparsed, graph.Text)
 		}
 	}
 }
