@@ -10,12 +10,15 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/platform/project"
+	"tofu/internal/platform/safe"
 	"tofu/internal/store/session"
 	"tofu/internal/tools/contract"
 )
@@ -204,11 +207,39 @@ type openEstimate struct {
 	state string
 }
 
-func (r *record) estimate(config Config, at time.Time) *openEstimate {
-	if r == nil || config.SpawnedFrom != "" {
+type estimateRead func() (session.EstimateBody, []string, error)
+
+func (c Config) estimateAhead() estimateRead {
+	if c.SpawnedFrom != "" {
 		return nil
 	}
-	body, err := config.estimate(estimateFor{scope: session.EstimateTurn, model: config.Slug, task: config.Task})
+	var body session.EstimateBody
+	var notes []string
+	var err error
+	var reading sync.WaitGroup
+	c.Notify = func(note string) { notes = append(notes, note) }
+	reading.Go(func() {
+		err = safe.Call(project.Crashes(c.Project), "turn estimate", func() (estimateErr error) {
+			body, estimateErr = c.estimate(estimateFor{scope: session.EstimateTurn, model: c.Slug, task: c.Task})
+			return estimateErr
+		})
+	})
+	return func() (session.EstimateBody, []string, error) {
+		reading.Wait()
+		return body, notes, err
+	}
+}
+
+func (r *record) estimate(ahead estimateRead, config Config, at time.Time) *openEstimate {
+	if r == nil || ahead == nil {
+		return nil
+	}
+	body, notes, err := ahead()
+	for _, note := range notes {
+		if config.Notify != nil {
+			config.Notify(note)
+		}
+	}
 	if err != nil {
 		r.note(errors.New("the estimate for this turn: " + err.Error()))
 		return nil

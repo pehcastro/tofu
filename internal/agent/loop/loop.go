@@ -168,6 +168,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	if config.Places, err = config.ResolvedPlaces(); err != nil {
 		return Row{}, err
 	}
+	estimating := config.estimateAhead()
 	dir := cmp.Or(config.ArtifactDir, filepath.Join(config.Places.State, "artifacts"))
 	artifacts, err := NewArtifacts(dir, !config.TruncateResults)
 	if err != nil {
@@ -293,7 +294,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	taskOrigin := config.taskOrigin(start)
 	recorded.begin(row, taskOrigin, turnFiles)
-	estimated, endedRows := recorded.estimate(config, start), []Row(nil)
+	estimated, endedRows := recorded.estimate(estimating, config, start), []Row(nil)
 	if len(config.History) > 0 {
 		recorded.listChange("carried", "the turn starts on the conversation the last turn or the resume left", nil, config.History)
 	}

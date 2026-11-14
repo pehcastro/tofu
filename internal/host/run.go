@@ -608,10 +608,7 @@ func (h *Host) label(store *session.Store, id string) (Event, bool) {
 }
 
 func (h *Host) recordHeader(store *session.Store, id string) error {
-	if _, err := store.Header(id); err == nil {
-		return nil
-	}
-	return store.Write(session.Header{ID: id, Root: id, At: h.now()}, nil)
+	return store.WriteUnlessHeld(session.Header{ID: id, Root: id, At: h.now()})
 }
 
 func labelledAs(store *session.Store, labelled Event) Event {

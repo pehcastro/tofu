@@ -444,6 +444,13 @@ func (s *Store) Header(handle string) (Header, error) {
 	return s.read(id)
 }
 
+func (s *Store) WriteUnlessHeld(header Header) error {
+	if _, err := s.read(header.ID); err == nil {
+		return nil
+	}
+	return s.Write(header, nil)
+}
+
 func (s *Store) Ancestors(id string) ([]Header, error) {
 	var chain []Header
 	header, err := s.read(id)

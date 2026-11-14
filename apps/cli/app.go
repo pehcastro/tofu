@@ -558,6 +558,7 @@ func (e *appEngine) Prepare(start host.Turn, hooks host.Hooks) (host.Prepared, e
 
 func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.Hooks, clock *startupClock) (startedTurn, error) {
 	say, dir := hooks.Say, cmp.Or(opts.Dir, ".")
+	stacked := readRuleStack(wiring.CrashTold(dir, say), dir)
 	started := startedTurn{Prepared: host.Prepared{MaxSteps: opts.MaxSteps}}
 	prepared := &started.Prepared
 	probing, probe := outside.Open(context.Background(), time.Now)
@@ -587,7 +588,7 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 			images = nil
 		}
 	}
-	built, plan, builtErr := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, hooks.Reads), e.warm, shell)
+	built, plan, builtErr := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, hooks.Reads), e.warm, shell, stacked)
 	unstarted, builtErr := unstartedIn(builtErr)
 	sayUnstarted(unstarted, say)
 	sessions, sessionsErr := sessionstore.OpenIn(dir)
@@ -657,7 +658,7 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 		turnAccounts, account = stand.ForTurn(), stand.Spent
 	}
 	config, spawner, err := runConfig(opts, built, runtime{accounts: clock.picking(turnAccounts, opened.Held.Store), spend: opened.Spend, budget: budget, gate: gate, sift: sifter, scorer: scorer, sessions: sessions, notify: say, roster: hooks.Roster, inbox: hooks.Inbox, now: hooks.Now,
-		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.Selected, tabs: e.tabs, leadAsks: person, cron: hooks.Cron, plan: plan, places: places, startup: clock, keys: &e.warm.keys, memory: &e.warm.memory, drops: e.warm.drops})
+		open: e.open, wrapSubAgent: wrapSubAgent, orchestrator: opened.Selected, tabs: e.tabs, leadAsks: person, cron: hooks.Cron, plan: plan, places: places, startup: clock, keys: &e.warm.keys, memory: &e.warm.memory, drops: e.warm.drops, ruleStack: stacked})
 	if err != nil {
 		return started, err
 	}

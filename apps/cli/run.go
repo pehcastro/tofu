@@ -117,6 +117,7 @@ type runtime struct {
 	current      func(subagents.Definition) subagents.Definition
 	composed     *composedRun
 	foreseen     *leadForeseen
+	ruleStack    ruleStackRead
 
 	omitThinkingSummary bool
 }
@@ -410,7 +411,8 @@ func dryRun(opts wiring.RunOpts, selected models.Model, dir string, say func(str
 	home, _ := os.UserHomeDir()
 	warm := newWarmProcesses(browser.NewBrowserTabs(home))
 	defer warm.Close()
-	built, plan, err := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, contract.NewReadLedger()), warm, shell)
+	stacked := readRuleStack(wiring.CrashTold(dir, say), opts.Dir)
+	built, plan, err := buildRunToolsForRun(opts.Dir, opts.ToolSet, readsWhen(opts.ReadBeforeEdit, contract.NewReadLedger()), warm, shell, stacked)
 	unstarted, err := unstartedIn(err)
 	if err != nil {
 		return runFail(errOut, err)
@@ -422,7 +424,7 @@ func dryRun(opts wiring.RunOpts, selected models.Model, dir string, say func(str
 		return runFail(errOut, err)
 	}
 	opts.Effort = selected.EffortTaken(opts.Effort)
-	config, _, err := runConfig(opts, built, runtime{spend: loop.SpendSubscription, budget: budget, notify: writeNotice(errOut), open: wiring.OpenWire, orchestrator: selected})
+	config, _, err := runConfig(opts, built, runtime{spend: loop.SpendSubscription, budget: budget, notify: writeNotice(errOut), open: wiring.OpenWire, orchestrator: selected, ruleStack: stacked})
 	if err != nil {
 		return runFail(errOut, err)
 	}
@@ -571,22 +573,38 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 			run.notify(notice)
 		}
 	}
+	dir := cmp.Or(opts.Dir, ".")
 	found := make(chan subagents.Found, 1)
 	if !opts.NoSubAgents && opts.ToolSet != toolSetThree && run.open != nil {
-		scanned := wiring.CrashTold(cmp.Or(opts.Dir, "."), func(said string) {
+		scanned := wiring.CrashTold(dir, func(said string) {
 			say(said)
 			found <- subagents.Found{}
 		})
-		safe.Go(scanned, "sub-agent scan", func() { found <- offeredToSpawn(cmp.Or(opts.Dir, "."), scanSubAgents(opts.Dir, built)) })
+		safe.Go(scanned, "sub-agent scan", func() { found <- offeredToSpawn(dir, scanSubAgents(opts.Dir, built)) })
 	} else {
 		found <- subagents.Found{}
 	}
+	crashes := wiring.CrashTold(dir, say)
+	stacked := run.ruleStack
+	if stacked == nil {
+		stacked = readRuleStack(crashes, dir)
+	}
+	var kinds *loop.KindJudge
+	var applies *loop.RuleJudge
+	var reading sync.WaitGroup
+	var judgesErr error
+	reading.Go(func() {
+		judgesErr = safe.Call(crashes, "kind and rule judges", func() error {
+			kinds, applies = loop.NewKindJudge(dir), loop.NewRuleJudge(dir)
+			return nil
+		})
+	})
 	environment, files, instructions, notice := runEnvironment(opts, run.now)
 	say(notice)
 	run.startup.step("instructions and environment", 0)
 	remembered := ""
-	if opts.Agent == "" && memoryOn(cmp.Or(opts.Dir, ".")) {
-		block, unread := entries.Block(cmp.Or(opts.Dir, "."))
+	if opts.Agent == "" && memoryOn(dir) {
+		block, unread := entries.Block(dir)
 		if unread != nil {
 			say("your memory is not sent this turn: " + unread.Error())
 		}
@@ -595,7 +613,7 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 	run.startup.step("memory", 0)
 	discovered := <-found
 	opts.LeadAlone = opts.LeadMayWorkAlone && opts.Agent == "" && !opts.NoSubAgents && opts.ToolSet != toolSetThree &&
-		loop.LeadWorksAlone(cmp.Or(opts.Dir, "."), opts.Task, discovered.Definitions)
+		loop.LeadWorksAlone(dir, opts.Task, discovered.Definitions)
 	if opts.LeadAlone {
 		say(fmt.Sprintf("the lead works alone: the task names %d or fewer files in one folder and asks for no sub-agent, so the spawn text and the spawn rules are not sent", loop.LeadAloneMostNamedFiles))
 	} else {
@@ -607,7 +625,9 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 		brokenAgents = append(brokenAgents, loop.PromptPart{Concern: rule.ConcernIdentity, File: filepath.ToSlash(broken.Path), Why: broken.Reason, State: session.PartDropped})
 	}
 	run.startup.step("sub-agent definitions", 0)
-	stack, err := wiring.StackRules("", cmp.Or(opts.Dir, "."))
+	reading.Wait()
+	stack, stackErr := stacked()
+	err := cmp.Or(stackErr, judgesErr)
 	if err != nil {
 		return composedRun{}, err
 	}
@@ -620,14 +640,14 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 		}
 	}
 	if opts.ToolSet == toolSetThree {
-		rules = slices.DeleteFunc(rules, func(loaded rule.Rule) bool { return loaded.ID == toolPickRule })
+		rules = slices.DeleteFunc(slices.Clone(rules), func(loaded rule.Rule) bool { return loaded.ID == toolPickRule })
 	}
 	var skills []skill.Skill
 	var unloaded []loop.PromptPart
-	skillsOff := settingspkg.TextSaying(cmp.Or(opts.Dir, "."), settingspkg.Skills, run.notify) == settingspkg.SkillsOff
+	skillsOff := settingspkg.TextSaying(dir, settingspkg.Skills, run.notify) == settingspkg.SkillsOff
 	if opts.ToolSet != toolSetThree && !skillsOff {
 		home, _ := os.UserHomeDir()
-		offered := skill.Discover(cmp.Or(opts.Dir, "."), home)
+		offered := skill.Discover(dir, home)
 		for _, warning := range offered.Warnings {
 			say(warning)
 		}
@@ -644,9 +664,9 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 		slices.SortFunc(skills, func(a, b skill.Skill) int { return strings.Compare(a.Name, b.Name) })
 	}
 	run.startup.step("skills", 0)
-	subAgents := loop.SubAgents{Defined: discovered.Definitions, Root: cmp.Or(opts.Dir, "."), Prompt: loop.ComposeSpec{Environment: strings.TrimSpace(environment + "\n\n" + files),
+	subAgents := loop.SubAgents{Defined: discovered.Definitions, Root: dir, Prompt: loop.ComposeSpec{Environment: strings.TrimSpace(environment + "\n\n" + files),
 		ToolGuidance: loop.EveryToolIsRelativeToTheWorkingDirectory + loop.ContractAddendum, Rules: rules, SwitchedOff: switchedOff, Skills: skills, SkillsOff: skillsOff, WindowTokens: run.budget.WindowTokens,
-		Kinds: loop.NewKindJudge(cmp.Or(opts.Dir, ".")), Applies: loop.NewRuleJudge(cmp.Or(opts.Dir, "."))}}
+		Kinds: kinds, Applies: applies}}
 	spec := subAgents.Prompt
 	spec.ToolGuidance = runSystem(opts)
 	if opts.Agent != "" {
@@ -666,10 +686,10 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 	subAgents.Prompt.Dropped = slices.Concat(brokenAgents, unloaded, droppedRules(stack, rules, switchedOff, opts))
 	spec.Dropped = slices.Concat(brokenAgents, unloaded, droppedRules(stack, spec.Rules, switchedOff, opts))
 	composeTask := func(task string) (loop.Composed, error) {
-		return loop.Compose(taskSpec(spec, cmp.Or(opts.Dir, "."), task, say))
+		return loop.Compose(taskSpec(spec, dir, task, say))
 	}
-	first := taskSpec(spec, cmp.Or(opts.Dir, "."), opts.Task, say)
-	if subAgents.Prompt.Frameworks, err = rule.Frameworks(cmp.Or(opts.Dir, "."), nil); err != nil {
+	first := taskSpec(spec, dir, opts.Task, say)
+	if subAgents.Prompt.Frameworks, err = rule.Frameworks(dir, nil); err != nil {
 		say("no framework rule fires for a sub-agent from the project's own manifests: " + err.Error())
 	}
 	composed, err := loop.Compose(first)
@@ -1111,7 +1131,25 @@ func (w *warmProcesses) Close() {
 	}
 }
 
-func buildRunToolsForRun(dir, set string, ledger *contract.ReadLedger, warm *warmProcesses, shell loop.RunShell) ([]contract.Tool, *plantool.Plan, error) {
+type ruleStackRead func() (wiring.RuleStack, error)
+
+func readRuleStack(report safe.Report, dir string) ruleStackRead {
+	var stack wiring.RuleStack
+	var err error
+	var reading sync.WaitGroup
+	reading.Go(func() {
+		err = safe.Call(report, "rule stack", func() (stackErr error) {
+			stack, stackErr = wiring.StackRules("", cmp.Or(dir, "."))
+			return stackErr
+		})
+	})
+	return func() (wiring.RuleStack, error) {
+		reading.Wait()
+		return stack, err
+	}
+}
+
+func buildRunToolsForRun(dir, set string, ledger *contract.ReadLedger, warm *warmProcesses, shell loop.RunShell, stacked ...ruleStackRead) ([]contract.Tool, *plantool.Plan, error) {
 	bashTool, bashErr := loop.NewBashToolFromShell(dir, shell)
 	if bashErr != nil {
 		return nil, nil, bashErr
@@ -1119,12 +1157,15 @@ func buildRunToolsForRun(dir, set string, ledger *contract.ReadLedger, warm *war
 	if warm != nil {
 		warm.checkers.Warm(dir)
 	}
-	return assembleRunTools(dir, set, ledger, warm, bashTool)
+	return assembleRunTools(dir, set, ledger, warm, bashTool, stacked...)
 }
 
-func assembleRunTools(dir, set string, ledger *contract.ReadLedger, warm *warmProcesses, bashTool *loop.BashTool) ([]contract.Tool, *plantool.Plan, error) {
+func assembleRunTools(dir, set string, ledger *contract.ReadLedger, warm *warmProcesses, bashTool *loop.BashTool, stacked ...ruleStackRead) ([]contract.Tool, *plantool.Plan, error) {
 	if warm == nil {
 		warm = &warmProcesses{seen: &jobs.Seen{}}
+	}
+	if len(stacked) == 0 {
+		stacked = append(stacked, readRuleStack(platformproject.Crashes(dir), dir))
 	}
 	typecheckers := warm.checkers
 	reader, readErr := read.NewReadTool(dir)
@@ -1132,19 +1173,13 @@ func assembleRunTools(dir, set string, ledger *contract.ReadLedger, warm *warmPr
 	if err := cmp.Or(readErr, writeErr); err != nil {
 		return nil, nil, err
 	}
-	rules, _, rulesErr := wiring.LoadRules("", dir)
-	if rulesErr != nil {
-		return nil, nil, rulesErr
-	}
-	readTool := reader.Reading(ledger)
-	writeTool := writer.Reading(ledger).Checking(typecheckers).Ruling(rules)
 	checked, checkErr := tools.Checked(dir, []contract.Tool{bashTool})
-	if checkErr != nil {
-		return nil, nil, checkErr
-	}
-	shell := checked[0]
 	if set == toolSetThree {
-		return tools.NewMemo().Wrap([]contract.Tool{readTool, writeTool, shell}), nil, nil
+		stack, rulesErr := stacked[0]()
+		if err := cmp.Or(rulesErr, checkErr); err != nil {
+			return nil, nil, err
+		}
+		return tools.NewMemo().Wrap([]contract.Tool{reader.Reading(ledger), writer.Reading(ledger).Checking(typecheckers).Ruling(stack.Rules), checked[0]}), nil, nil
 	}
 	globTool, globErr := glob.NewGlob(dir)
 	searchTool, searchErr := search.NewSearch(dir)
@@ -1155,9 +1190,6 @@ func assembleRunTools(dir, set string, ledger *contract.ReadLedger, warm *warmPr
 	githubTool, githubErr := github.NewGitHubPRDiff(dir)
 	typecheckTool, typecheckErr := typecheck.NewTypecheck(dir, typecheckers)
 	testTool, testErr := test.NewTest(dir, warm.tests)
-	if err := cmp.Or(globErr, searchErr, symbolsErr, editErr, projectErr, verbErr, githubErr, typecheckErr, testErr); err != nil {
-		return nil, nil, err
-	}
 	webTools, webErr := buildWebTools(dir, warm.keys.keyring())
 	home, _ := os.UserHomeDir()
 	settingsDir := cmp.Or(dir, ".")
@@ -1172,11 +1204,7 @@ func assembleRunTools(dir, set string, ledger *contract.ReadLedger, warm *warmPr
 		Model:    func() (loop.Model, string, error) { return browserModel(settingsDir) },
 		Tabs:     warm.tabs,
 	})
-	if err := cmp.Or(webErr, browserErr); err != nil {
-		return nil, nil, err
-	}
-	plan := plantool.NewPlan()
-	full := append([]contract.Tool{readTool, writeTool, shell, plan, jobs.Shells{Seen: warm.seen}, projectTool, globTool, searchTool, symbolsTool.Serving(warm.servers), editTool.Reading(ledger).Checking(typecheckers).Ruling(rules), typecheckTool, testTool.Serving(warm.servers), githubTool}, verbTools...)
+	var led []contract.Tool
 	var unstarted unstartedTools
 	for _, lead := range leadToolConstructors() {
 		tool, err := lead.construct(dir)
@@ -1184,9 +1212,15 @@ func assembleRunTools(dir, set string, ledger *contract.ReadLedger, warm *warmPr
 			unstarted = append(unstarted, unstartedTool{name: lead.name, err: err})
 			continue
 		}
-		full = append(full, tool)
+		led = append(led, tool)
 	}
-	wrapped := tools.NewMemo().Wrap(append(append(full, webTools...), browserTools...))
+	stack, rulesErr := stacked[0]()
+	if err := cmp.Or(rulesErr, checkErr, globErr, searchErr, symbolsErr, editErr, projectErr, verbErr, githubErr, typecheckErr, testErr, webErr, browserErr); err != nil {
+		return nil, nil, err
+	}
+	plan := plantool.NewPlan()
+	full := append([]contract.Tool{reader.Reading(ledger), writer.Reading(ledger).Checking(typecheckers).Ruling(stack.Rules), checked[0], plan, jobs.Shells{Seen: warm.seen}, projectTool, globTool, searchTool, symbolsTool.Serving(warm.servers), editTool.Reading(ledger).Checking(typecheckers).Ruling(stack.Rules), typecheckTool, testTool.Serving(warm.servers), githubTool}, verbTools...)
+	wrapped := tools.NewMemo().Wrap(slices.Concat(full, led, webTools, browserTools))
 	if len(unstarted) > 0 {
 		return wrapped, plan, unstarted
 	}
