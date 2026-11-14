@@ -50,7 +50,9 @@ type saved struct {
 
 func New(dir string, limits Limits) (contract.Tool, error) {
 	root, err := contract.NewRoot(dir)
-	return Deps{root: root, limits: limits, http: outside.Client(outside.Network, &http.Client{Timeout: limits.Request})}, err
+	client := outside.Client(outside.Network, nil)
+	client.Timeout = limits.Request
+	return Deps{root: root, limits: limits, http: client}, err
 }
 
 func (Deps) Name() string { return Name }

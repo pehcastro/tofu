@@ -18,20 +18,20 @@ type retrying struct {
 }
 
 func StreamingClient(given *http.Client, plan transport.Config, headersWithin time.Duration) *http.Client {
-	var client http.Client
+	var base http.RoundTripper
 	if given != nil {
-		client = *given
+		base = given.Transport
 	}
-	if client.Transport == nil {
+	if base == nil {
 		bounded := http.DefaultTransport.(*http.Transport).Clone()
 		bounded.ResponseHeaderTimeout = headersWithin
-		client.Transport = bounded
+		base = bounded
 	}
-	client.Transport = tapping{base: client.Transport}
+	base = tapping{base: base}
 	if plan.Retries > 0 {
-		client.Transport = retrying{base: client.Transport, plan: plan}
+		base = retrying{base: base, plan: plan}
 	}
-	return outside.Client(outside.Model, &client)
+	return outside.Over(outside.Model, given, base)
 }
 
 func (r retrying) RoundTrip(request *http.Request) (*http.Response, error) {

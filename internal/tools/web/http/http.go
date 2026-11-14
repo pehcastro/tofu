@@ -107,10 +107,8 @@ func (h HTTP) Run(ctx context.Context, raw json.RawMessage) (contract.Result, er
 	if args.Body != "" && req.Header.Get("Content-Type") == "" && json.Valid([]byte(args.Body)) {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	client := outside.Client(outside.Network, &http.Client{
-		Transport:     &http.Transport{DialContext: (&net.Dialer{Control: loopbackOnly}).DialContext},
-		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-	})
+	client := outside.Over(outside.Network, nil, &http.Transport{DialContext: (&net.Dialer{Control: loopbackOnly}).DialContext})
+	client.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
 	began := time.Now()
 	resp, err := client.Do(req)
 	if dial := (*net.OpError)(nil); errors.As(err, &dial) && dial.Op == "dial" {

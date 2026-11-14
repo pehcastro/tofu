@@ -73,8 +73,10 @@ type flight struct {
 }
 
 func NewClient(config Config) *Client {
+	client := outside.Client(outside.Network, nil)
+	client.Timeout = time.Duration(config.TimeoutMS) * time.Millisecond
 	return &Client{
-		http:     outside.Client(outside.Network, &http.Client{Timeout: time.Duration(config.TimeoutMS) * time.Millisecond}),
+		http:     client,
 		maxBytes: config.MaxPageBytes,
 		pages:    map[string]Page{},
 		flights:  map[string]*flight{},

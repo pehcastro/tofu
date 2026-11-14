@@ -17,11 +17,15 @@ type clockedBody struct {
 }
 
 func Client(kind Kind, given *http.Client) *http.Client {
+	return Over(kind, given, nil)
+}
+
+func Over(kind Kind, given *http.Client, base http.RoundTripper) *http.Client {
 	var client http.Client
 	if given != nil {
 		client = *given
 	}
-	client.Transport = clockedTrip{base: cmp.Or(client.Transport, http.DefaultTransport), kind: kind}
+	client.Transport = clockedTrip{base: cmp.Or(base, client.Transport, http.DefaultTransport), kind: kind}
 	return &client
 }
 

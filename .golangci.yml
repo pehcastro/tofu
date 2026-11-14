@@ -13,6 +13,13 @@ linters:
     - gocritic
     - forbidigo
   settings:
+    gocritic:
+      enabled-checks:
+        - ruleguard
+      settings:
+        ruleguard:
+          rules: ${base-path}/internal/platform/outside/rules.go
+          failOn: all
     forbidigo:
       analyze-types: true
       forbid:

@@ -21,6 +21,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/odvcencio/gotreesitter v0.56.0
 	github.com/pelletier/go-toml/v2 v2.3.0
+	github.com/quasilyte/go-ruleguard/dsl v0.3.23
 	golang.org/x/crypto v0.55.0
 	golang.org/x/net v0.58.0
 	golang.org/x/sys v0.47.0
@@ -177,7 +178,6 @@ require (
 	github.com/prometheus/common v0.32.1 // indirect
 	github.com/prometheus/procfs v0.7.3 // indirect
 	github.com/quasilyte/go-ruleguard v0.4.5 // indirect
-	github.com/quasilyte/go-ruleguard/dsl v0.3.23 // indirect
 	github.com/quasilyte/gogrep v0.5.0 // indirect
 	github.com/quasilyte/regex/syntax v0.0.0-20210819130434-b3f0c404a727 // indirect
 	github.com/quasilyte/stdinfo v0.0.0-20220114132959-f7386bf02567 // indirect
