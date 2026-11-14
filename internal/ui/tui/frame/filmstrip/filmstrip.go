@@ -133,7 +133,7 @@ func (r *reel) open() {
 		r.driver.Close()
 	}
 	r.app = app.New(r.options)
-	r.driver = Drive(r.app, r.width, r.height, filepath.Join(r.options.Root, fs.StateDirName))
+	r.driver = DriveIn(context.Background(), r.app, r.width, r.height, filepath.Join(r.options.Root, fs.StateDirName))
 	r.app.Update(app.Event{Kind: app.EventSession, Text: fixture.SessionName, ID: fixture.SessionID})
 	r.app.Update(fixture.Quotas(r.at))
 	r.app.Update(app.Event{Kind: app.EventContext, Context: fixture.Context()})

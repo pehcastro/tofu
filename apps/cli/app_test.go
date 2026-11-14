@@ -786,7 +786,7 @@ func screenAfterTwoInterrupts(t *testing.T, name, command string) string {
 	steps = append(steps, "key ctrl+c", "key ctrl+c", "wait "+cancelledAt, "screen")
 	script := written(t, dir, name+".drive", strings.Join(steps, "\n"))
 	var out bytes.Buffer
-	if code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "60s"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
+	if code := driveIn(t.Context(), []string{script, "--cassette", deck, "--plain", "--timeout", "60s"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
 	return out.String()

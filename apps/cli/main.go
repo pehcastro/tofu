@@ -393,11 +393,11 @@ func verbNamed(name string) verb {
 	case "frame":
 		return verb{run: withoutIn(frameVerb), usage: frameUsage}
 	case "drive":
-		return verb{run: func(args []string, in io.Reader, out, errOut io.Writer) int {
+		return verb{clocked: func(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) int {
 			if len(args) > 0 && args[0] == "desk" {
 				return driveDeskVerb(args[1:], out, errOut)
 			}
-			return driveVerb(args, in, out, errOut)
+			return driveIn(ctx, args, in, out, errOut)
 		}, usage: driveUsage + "\n" + driveDeskUsage}
 	case "serve":
 		return verb{run: serveVerb, usage: serveUsage}

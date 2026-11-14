@@ -1,6 +1,7 @@
 package filmstrip
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/internal/konst"
+	"tofu/internal/platform/outside"
 	"tofu/internal/platform/safe"
 	tui "tofu/internal/ui/tui/app"
 	"tofu/internal/ui/tui/pickers/welcome"
@@ -62,14 +64,15 @@ func (d delivery) repeatedWelcomePulse() bool {
 }
 
 type Driver struct {
+	ctx        context.Context
 	app        *tui.App
 	crashes    string
 	deliveries chan delivery
 	stopped    chan struct{}
 }
 
-func Drive(app *tui.App, width, height int, crashes string) *Driver {
-	d := &Driver{app: app, crashes: crashes, deliveries: make(chan delivery, konst.DriveMessageBuffer), stopped: make(chan struct{})}
+func DriveIn(ctx context.Context, app *tui.App, width, height int, crashes string) *Driver {
+	d := &Driver{ctx: ctx, app: app, crashes: crashes, deliveries: make(chan delivery, konst.DriveMessageBuffer), stopped: make(chan struct{})}
 	d.command(app.Init(), nil)
 	d.feed(tea.WindowSizeMsg{Width: width, Height: height}, nil)
 	return d
@@ -114,6 +117,7 @@ func (d *Driver) settle(within time.Duration) error {
 	defer deadline.Stop()
 	quiet := time.NewTimer(settleQuiet)
 	defer quiet.Stop()
+	lastFed := time.Now()
 	var timers []delivery
 	for {
 		select {
@@ -126,9 +130,12 @@ func (d *Driver) settle(within time.Duration) error {
 				timers = append(timers, got)
 			default:
 				d.feed(got.message, got.cause)
+				d.app.View()
 				quiet.Reset(settleQuiet)
+				lastFed = time.Now()
 			}
 		case <-quiet.C:
+			outside.Waited(d.ctx, outside.Person, time.Since(lastFed))
 			for _, timer := range timers {
 				d.feed(timer.message, timer.cause)
 			}
@@ -229,20 +236,28 @@ func (d *Driver) Await(text string, within time.Duration) error {
 	defer deadline.Stop()
 	poll := time.NewTicker(konst.DrivePollMillis * time.Millisecond)
 	defer poll.Stop()
+	var idle time.Duration
 	for {
 		if strings.Contains(d.Plain(), text) {
+			outside.Waited(d.ctx, outside.Person, idle)
 			return nil
 		}
+		blocked := time.Now()
 		select {
 		case got := <-d.deliveries:
 			switch {
 			case got.failed != nil:
 				return got.failed
-			case !got.repeatedWelcomePulse():
+			case got.repeatedWelcomePulse():
+				idle += time.Since(blocked)
+			default:
 				d.feed(got.message, got.cause)
+				idle = 0
 			}
 		case <-poll.C:
+			idle += time.Since(blocked)
 		case <-deadline.C:
+			outside.Waited(d.ctx, outside.Person, idle+time.Since(blocked))
 			return errors.New("waited " + within.String() + " for " + text + " and it never appeared")
 		}
 	}

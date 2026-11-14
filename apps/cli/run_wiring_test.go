@@ -996,7 +996,7 @@ func TestTheLeadAsksWhereToOverrideARuleAndOnlyAYesWritesTheFile(t *testing.T) {
 			}, "\n"))
 			deck := written(t, dir, "override.cassette", ruleOverrideCassette)
 			var out, errOut bytes.Buffer
-			if code := driveVerb([]string{script, "--cassette", deck, "--home", home, "--plain", "--timeout", "30s", "--gate", "off"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
+			if code := driveIn(t.Context(), []string{script, "--cassette", deck, "--home", home, "--plain", "--timeout", "30s", "--gate", "off"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
 				t.Fatalf("tofu drive exited %d: %s\n%s", code, errOut.String(), out.String())
 			}
 			for _, want := range []string{overrideAsked, "ordering", "[1] this project"} {

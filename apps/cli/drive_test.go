@@ -83,7 +83,7 @@ func TestTwoInterruptsEndADrivenTurnAndTheCassetteIsNeverAskedAgain(t *testing.T
 		"screen",
 	}, "\n"))
 	var out, errOut bytes.Buffer
-	code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "30s"}, strings.NewReader(""), &out, &errOut)
+	code := driveIn(t.Context(), []string{script, "--cassette", deck, "--plain", "--timeout", "30s"}, strings.NewReader(""), &out, &errOut)
 	if code != output.ExitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
@@ -112,7 +112,7 @@ func TestADrivenAnswerArrivesInDeltasSoAnInterruptKeepsTheHalfThatWasWritten(t *
 		"screen",
 	}, "\n"))
 	var out, errOut bytes.Buffer
-	code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "30s"}, strings.NewReader(""), &out, &errOut)
+	code := driveIn(t.Context(), []string{script, "--cassette", deck, "--plain", "--timeout", "30s"}, strings.NewReader(""), &out, &errOut)
 	if code != output.ExitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
@@ -133,7 +133,7 @@ func TestAWaitForAStateThatNeverArrivesFailsSayingWhatItWaitedFor(t *testing.T) 
 		"wait the build is green",
 	}, "\n"))
 	var out, errOut bytes.Buffer
-	code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "2s"}, strings.NewReader(""), &out, &errOut)
+	code := driveIn(t.Context(), []string{script, "--cassette", deck, "--plain", "--timeout", "2s"}, strings.NewReader(""), &out, &errOut)
 	if code != output.ExitVerdict {
 		t.Fatalf("a wait that never arrives exited %d, wanted %d: %s", code, output.ExitVerdict, errOut.String())
 	}
@@ -152,7 +152,7 @@ func TestADrivenTurnWithNoCassetteOpensNoWireAndSaysSo(t *testing.T) {
 		"screen",
 	}, "\n"))
 	var out, errOut bytes.Buffer
-	code := driveVerb([]string{script, "--plain", "--timeout", "30s"}, strings.NewReader(""), &out, &errOut)
+	code := driveIn(t.Context(), []string{script, "--plain", "--timeout", "30s"}, strings.NewReader(""), &out, &errOut)
 	if code != output.ExitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
@@ -172,7 +172,7 @@ func TestTheCassetteCarriesTheEnvironmentBlockTheTurnSent(t *testing.T) {
 		"environment",
 	}, "\n"))
 	var out, errOut bytes.Buffer
-	code := driveVerb([]string{script, "--cassette", deck, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut)
+	code := driveIn(t.Context(), []string{script, "--cassette", deck, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut)
 	if code != output.ExitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
@@ -186,7 +186,7 @@ func TestTheCassetteCarriesTheEnvironmentBlockTheTurnSent(t *testing.T) {
 func TestDriveReadsItsScriptFromStandardInput(t *testing.T) {
 	drivenProject(t)
 	var out, errOut bytes.Buffer
-	code := driveVerb([]string{"-", "--plain", "--timeout", "30s"}, strings.NewReader("wait "+session.Placeholder+"\nscreen\n"), &out, &errOut)
+	code := driveIn(t.Context(), []string{"-", "--plain", "--timeout", "30s"}, strings.NewReader("wait "+session.Placeholder+"\nscreen\n"), &out, &errOut)
 	if code != output.ExitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
@@ -207,7 +207,7 @@ func TestANamedScriptNeverReadsStandardInput(t *testing.T) {
 	script := written(t, dir, "look.drive", "wait "+session.Placeholder+"\n")
 	var out, errOut bytes.Buffer
 	watched := &watchedInput{}
-	if code := driveVerb([]string{script, "--timeout", "30s"}, watched, &out, &errOut); code != output.ExitOK {
+	if code := driveIn(t.Context(), []string{script, "--timeout", "30s"}, watched, &out, &errOut); code != output.ExitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
 	if watched.read {
@@ -219,14 +219,14 @@ func TestAnUnknownStepAndAnUnknownFlagAreRefusedByName(t *testing.T) {
 	dir := drivenProject(t)
 	script := written(t, dir, "bad.drive", "dance a jig\n")
 	var out, errOut bytes.Buffer
-	if code := driveVerb([]string{script}, strings.NewReader(""), &out, &errOut); code != output.ExitUsage {
+	if code := driveIn(t.Context(), []string{script}, strings.NewReader(""), &out, &errOut); code != output.ExitUsage {
 		t.Fatalf("an unknown step exited %d, wanted %d", code, output.ExitUsage)
 	}
 	if !strings.Contains(errOut.String(), `no step is named "dance"`) {
 		t.Errorf("the refusal never names the step:\n%s", errOut.String())
 	}
 	errOut.Reset()
-	if code := driveVerb([]string{"--nonsense", "1"}, strings.NewReader(""), &out, &errOut); code != output.ExitUsage {
+	if code := driveIn(t.Context(), []string{"--nonsense", "1"}, strings.NewReader(""), &out, &errOut); code != output.ExitUsage {
 		t.Fatalf("an unknown flag exited %d, wanted %d", code, output.ExitUsage)
 	}
 	if !strings.Contains(errOut.String(), "no such flag") {
@@ -251,7 +251,7 @@ func TestADrivenMouseStepThatCannotBePlayedFailsNamingItsLine(t *testing.T) {
 	} {
 		script := written(t, dir, "mouse.drive", "# the step below is line 3\nscreen\n"+step+"\n")
 		var out, errOut bytes.Buffer
-		if code := driveVerb([]string{script}, strings.NewReader(""), &out, &errOut); code != output.ExitUsage {
+		if code := driveIn(t.Context(), []string{script}, strings.NewReader(""), &out, &errOut); code != output.ExitUsage {
 			t.Errorf("%q exited %d, wanted %d:\n%s", step, code, output.ExitUsage, errOut.String())
 		}
 		if !strings.Contains(errOut.String(), "line 3:") || !strings.Contains(errOut.String(), named) {
@@ -264,7 +264,7 @@ func TestADrivenClickAsTheFirstStepLandsOnTheFrameAPersonWouldSee(t *testing.T) 
 	dir := drivenProject(t)
 	run := func(script string) string {
 		var out, errOut bytes.Buffer
-		if code := driveVerb([]string{written(t, dir, "tab.drive", script), "--plain", "--width", "120", "--height", "30"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
+		if code := driveIn(t.Context(), []string{written(t, dir, "tab.drive", script), "--plain", "--width", "120", "--height", "30"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
 			t.Fatalf("%q exited %d:\n%s", script, code, errOut.String())
 		}
 		return out.String()
@@ -389,7 +389,7 @@ func TestAnAgentThatIsNotASubAgentNumberIsRefusedByLine(t *testing.T) {
 func drivenConversation(t *testing.T, deck, script string) string {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	if code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "60s"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
+	if code := driveIn(t.Context(), []string{script, "--cassette", deck, "--plain", "--timeout", "60s"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
 	var spoken []string
@@ -456,7 +456,7 @@ func drivenTask(t *testing.T, dir, name, deck, task string, args ...string) stri
 		"screen",
 	}, "\n"))
 	var out, errOut bytes.Buffer
-	code := driveVerb(append([]string{script, "--cassette", deck, "--plain", "--timeout", "60s"}, args...), strings.NewReader(""), &out, &errOut)
+	code := driveIn(t.Context(), append([]string{script, "--cassette", deck, "--plain", "--timeout", "60s"}, args...), strings.NewReader(""), &out, &errOut)
 	if code != output.ExitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
@@ -511,7 +511,7 @@ func TestADrivenRunReadsTheSettingsOfAHomeTheScriptNamesAndSaysWhere(t *testing.
 
 func TestDriveHelpPrintsItsOwnUsage(t *testing.T) {
 	var out, errOut bytes.Buffer
-	if code := driveVerb([]string{"--help"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
+	if code := driveIn(t.Context(), []string{"--help"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
 		t.Fatal("tofu drive --help did not exit 0")
 	}
 	for _, want := range []string{"usage: tofu drive", "wait TEXT", "environment", cassetteVariable, "click X Y", "drag X1 Y1 X2 Y2", "wheel X Y up|down", "resize W H", "zero-based"} {
@@ -604,7 +604,7 @@ func TestADrivenFooterShowsASubAgentsSubscriptionOnlyWhileTheSubAgentRuns(t *tes
 	}, "\n"))
 	var out, errOut bytes.Buffer
 	args := []string{script, "--cassette", deck, "--plain", "--timeout", "60s", "--width", "140", "--height", "36", "--source", "claude-sub", "--quota", written(t, dir, "q.json", bothQuotas)}
-	if code := driveVerb(args, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
+	if code := driveIn(t.Context(), args, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
 }
@@ -638,7 +638,7 @@ func TestDrivenRequestsPrintEachMessageAndItsTextWithTheKeyMasked(t *testing.T) 
 		"requests text 2",
 	}, "\n"))
 	var out, errOut bytes.Buffer
-	if code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "60s", "--width", "72"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
+	if code := driveIn(t.Context(), []string{script, "--cassette", deck, "--plain", "--timeout", "60s", "--width", "72"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
 	printed := out.String()
@@ -669,7 +669,7 @@ func TestDrivenRequestsPrintEachMessageAndItsTextWithTheKeyMasked(t *testing.T) 
 		t.Errorf("requests text 2 printed request 1 as well:\n%s", printed)
 	}
 	errOut.Reset()
-	if code := driveVerb([]string{written(t, dir, "bad.drive", "requests everything\n")}, strings.NewReader(""), &out, &errOut); code != output.ExitUsage || !strings.Contains(errOut.String(), "line 1:") {
+	if code := driveIn(t.Context(), []string{written(t, dir, "bad.drive", "requests everything\n")}, strings.NewReader(""), &out, &errOut); code != output.ExitUsage || !strings.Contains(errOut.String(), "line 1:") {
 		t.Errorf("requests everything exited %d: %s", code, errOut.String())
 	}
 }
@@ -690,7 +690,7 @@ func TestDrivenRequestsCarryTheSameToolsEachStepAndNoToolChoiceOnlyAtTheCap(t *t
 		"requests",
 	}, "\n"))
 	var out, errOut bytes.Buffer
-	if code := driveVerb([]string{script, "--cassette", deck, "--plain", "--timeout", "60s", "--max-steps", "5"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
+	if code := driveIn(t.Context(), []string{script, "--cassette", deck, "--plain", "--timeout", "60s", "--max-steps", "5"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
 		t.Fatalf("tofu drive exited %d: %s", code, errOut.String())
 	}
 	var found [][]string
@@ -738,7 +738,7 @@ func TestADriveRefusesTheRealHomeAndEveryPathUnderItBeforeTouchingIt(t *testing.
 	}
 	for _, home := range named {
 		var out, errOut bytes.Buffer
-		if code := driveVerb([]string{script, "--home", home, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != output.ExitUsage {
+		if code := driveIn(t.Context(), []string{script, "--home", home, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != output.ExitUsage {
 			t.Errorf("--home %s exited %d, wanted %d: %s", home, code, output.ExitUsage, errOut.String())
 		}
 		if !strings.Contains(errOut.String(), real) {
@@ -753,7 +753,7 @@ func TestADriveRefusesTheRealHomeAndEveryPathUnderItBeforeTouchingIt(t *testing.
 		t.Fatal(err)
 	}
 	var out, errOut bytes.Buffer
-	if code := driveVerb([]string{script, "--home", sibling, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
+	if code := driveIn(t.Context(), []string{script, "--home", sibling, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
 		t.Errorf("a home beside the real one, its name sharing the real one as a prefix, exited %d: %s", code, errOut.String())
 	}
 }
@@ -772,7 +772,7 @@ func TestAFreshTempHomeDrivesWhenTheTempFolderLivesInsideTheRealHome(t *testing.
 	}
 	script := written(t, dir, "look.drive", "wait "+session.Placeholder+"\n")
 	var out, errOut bytes.Buffer
-	if code := driveVerb([]string{script, "--home", fresh, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
+	if code := driveIn(t.Context(), []string{script, "--home", fresh, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
 		t.Errorf("a home made by mktemp under %s exited %d, so every scratch home on Windows is refused: %s", temp, code, errOut.String())
 	}
 	if _, err := os.Stat(filepath.Join(fresh, fs.StateDirName)); err != nil {
@@ -792,7 +792,7 @@ func TestAHomeInsideTheTempFolderDrivesEvenWhenItIsTheAmbientHome(t *testing.T) 
 	home := realHomeIs(t, t.TempDir())
 	script := written(t, dir, "look.drive", "wait "+session.Placeholder+"\n")
 	var out, errOut bytes.Buffer
-	if code := driveVerb([]string{script, "--home", home, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
+	if code := driveIn(t.Context(), []string{script, "--home", home, "--timeout", "30s"}, strings.NewReader(""), &out, &errOut); code != output.ExitOK {
 		t.Errorf("a home inside %s that is also HOME, as bench/gates/flows sets it, exited %d: %s", os.TempDir(), code, errOut.String())
 	}
 }

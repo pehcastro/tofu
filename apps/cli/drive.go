@@ -1009,7 +1009,7 @@ func driveFail(errOut io.Writer, err error) int {
 	return output.ExitUsage
 }
 
-func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
+func driveIn(ctx context.Context, args []string, in io.Reader, out, errOut io.Writer) int {
 	if slices.Contains(args, "--help") || slices.Contains(args, "-h") {
 		_, _ = fmt.Fprint(out, driveUsage)
 		return output.ExitOK
@@ -1069,7 +1069,7 @@ func driveVerb(args []string, in io.Reader, out, errOut io.Writer) int {
 	launch := launchOf(dir, resumed, plan.fresh)
 	defer leaveShells(launch.registry)
 	app := drivenApp(dir, deck, clock, plan, launch, held, quotas)
-	driver := filmstrip.Drive(app, plan.width, plan.height, platformproject.CrashDir(dir))
+	driver := filmstrip.DriveIn(ctx, app, plan.width, plan.height, platformproject.CrashDir(dir))
 	defer driver.Close()
 	defer (*launch.release)()
 	defer func() {

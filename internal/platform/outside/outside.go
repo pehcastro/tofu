@@ -67,6 +67,19 @@ func Wait(ctx context.Context, kind Kind) func() {
 	}
 }
 
+func Waited(ctx context.Context, kind Kind, took time.Duration) {
+	clock, _ := ctx.Value(clockKey{}).(*Clock)
+	if clock == nil {
+		return
+	}
+	to := clock.now()
+	for open := clock; open != nil; open = open.parent {
+		open.mu.Lock()
+		open.waits = append(open.waits, wait{kind: kind, from: to.Add(-took), to: to})
+		open.mu.Unlock()
+	}
+}
+
 func (c *Clock) Outside() time.Duration {
 	return c.merged(func(Kind) bool { return true })
 }
