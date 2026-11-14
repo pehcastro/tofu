@@ -185,6 +185,7 @@ const (
 	allowedInAutoMode   = "gatePrompt auto"
 	allowedByThePerson  = "the person"
 	allowedByOwnScratch = "the sub-agent's own scratch"
+	allowedByFallback   = "the policy's regex arm, because jev could not answer"
 )
 
 const (
@@ -211,6 +212,12 @@ func gateRefusal(ctx context.Context, asked gateAsked, request GateRequest, deci
 }
 
 func refusedWhy(ctx context.Context, person Person, request GateRequest, decision GateDecision, gateErr string) string {
+	if gateErr == "" && decision.Failure != "" && !decision.PersonOnly && fallbackArmAllows(request) {
+		if decision.Reason != nil {
+			decision.Reason.AllowedBy = allowedByFallback
+		}
+		return ""
+	}
 	switch {
 	case gateErr != "":
 		decision = GateDecision{Verdict: ledger.VerdictAsk, Failure: gateErr}
@@ -236,6 +243,15 @@ func refusedWhy(ctx context.Context, person Person, request GateRequest, decisio
 		}
 	}
 	return refused
+}
+
+func fallbackArmAllows(request GateRequest) bool {
+	var input map[string]any
+	if json.Unmarshal(request.Args, &input) != nil {
+		return false
+	}
+	state, _, err := toolgate.BuildToolGateV3(toolgate.ToolGateInput{Tool: request.Tool, Input: input, Context: toolgate.ToolGateContext{UserRecentMessages: []string{request.Task}}})
+	return err == nil && gate.RegexArm(state) == gate.VerdictAllow
 }
 
 func personRefusal(ctx context.Context, person Person, request GateRequest, decision GateDecision, asked string) (PersonAnswer, string) {

@@ -53,7 +53,7 @@ func verdictStyle(v Verdict) lipgloss.Style {
 }
 
 func (e *Entry) verdictShown() string {
-	if e.Decision == nil || e.Decision.Verdict == Allow || !e.asked && !e.Decision.Enforced {
+	if e.Decision == nil || e.Decision.Verdict == Allow || !e.asked && (!e.Decision.Enforced || e.Decision.Failure != "") {
 		return ""
 	}
 	return e.Decision.Verdict.String()

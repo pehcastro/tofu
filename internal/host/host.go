@@ -148,6 +148,7 @@ type Host struct {
 	spent   *tokenTally
 	shown   *shownResults
 	asks    *asks
+	jevTold toldOnce
 
 	questions   *replies[answeredQuestion]
 	memoryPicks *replies[entries.Scope]

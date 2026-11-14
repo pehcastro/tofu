@@ -72,39 +72,64 @@ func sessionAsking(asks bool) context.Context {
 	return WithQuestionsBlock(context.Background(), func() (bool, bool) { return asks, true })
 }
 
+func TestAnUnavailableJevRunsWhatTheRegexArmAllowsWithoutAskingAnyone(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		auto     bool
+		noPerson bool
+	}{
+		{"ask mode", false, false},
+		{"auto mode", true, false},
+		{"no person", false, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var asked atomic.Int32
+			person := countingPerson(&asked, PersonDenied)
+			switch {
+			case c.noPerson:
+				person = nil
+			case c.auto:
+				person = person.RunsWhatJevAsks()
+			}
+			call, said, wrote := writeRun{gate: unavailableGate{}, mode: GateEnforce, person: person, path: "note.txt"}.do(t)
+			if asked.Load() != 0 || !wrote || call.Refused {
+				t.Fatalf("asked %d, wrote %v, refused %v; want it run unasked; the model read %q", asked.Load(), wrote, call.Refused, said)
+			}
+		})
+	}
+}
+
 func TestAGateErrorAsksInAskModeAndRefusesUnaskedInAuto(t *testing.T) {
-	for _, gate := range []Gate{failingGate{}, unavailableGate{}} {
-		for _, c := range []struct {
-			name      string
-			auto      bool
-			answer    PersonAnswer
-			wantAsked int32
-			wantRan   bool
-			wantSaid  string
-		}{
-			{"ask mode, allowed", false, PersonAllowedOnce, 1, true, ""},
-			{"ask mode, denied", false, PersonDenied, 1, false, "the person did not allow it"},
-			{"auto mode", true, PersonAllowedOnce, 0, false, "jev answered 503"},
-		} {
-			t.Run(c.name, func(t *testing.T) {
-				var asked atomic.Int32
-				person := countingPerson(&asked, c.answer)
-				if c.auto {
-					person = person.RunsWhatJevAsks()
-				}
-				call, said, wrote := writeRun{gate: gate, mode: GateEnforce, person: person, path: "note.txt"}.do(t)
-				if asked.Load() != c.wantAsked || wrote != c.wantRan || call.Refused == c.wantRan {
-					t.Fatalf("%T: asked %d, wrote %v, refused %v; want asked %d, ran %v; the model read %q", gate, asked.Load(), wrote, call.Refused, c.wantAsked, c.wantRan, said)
-				}
-				if !strings.Contains(said, c.wantSaid) {
-					t.Errorf("%T: the model read %q, want it to carry %q", gate, said, c.wantSaid)
-				}
-			})
-		}
-		call, said, wrote := writeRun{gate: gate, mode: GateEnforce, path: "note.txt"}.do(t)
-		if wrote || !call.Refused || !strings.Contains(said, "no person was available") {
-			t.Errorf("%T: with no person a failed gate wrote %v, refused %v, said %q", gate, wrote, call.Refused, said)
-		}
+	for _, c := range []struct {
+		name      string
+		auto      bool
+		answer    PersonAnswer
+		wantAsked int32
+		wantRan   bool
+		wantSaid  string
+	}{
+		{"ask mode, allowed", false, PersonAllowedOnce, 1, true, ""},
+		{"ask mode, denied", false, PersonDenied, 1, false, "the person did not allow it"},
+		{"auto mode", true, PersonAllowedOnce, 0, false, "jev answered 503"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var asked atomic.Int32
+			person := countingPerson(&asked, c.answer)
+			if c.auto {
+				person = person.RunsWhatJevAsks()
+			}
+			call, said, wrote := writeRun{gate: failingGate{}, mode: GateEnforce, person: person, path: "note.txt"}.do(t)
+			if asked.Load() != c.wantAsked || wrote != c.wantRan || call.Refused == c.wantRan {
+				t.Fatalf("asked %d, wrote %v, refused %v; want asked %d, ran %v; the model read %q", asked.Load(), wrote, call.Refused, c.wantAsked, c.wantRan, said)
+			}
+			if !strings.Contains(said, c.wantSaid) {
+				t.Errorf("the model read %q, want it to carry %q", said, c.wantSaid)
+			}
+		})
+	}
+	call, said, wrote := writeRun{gate: failingGate{}, mode: GateEnforce, path: "note.txt"}.do(t)
+	if wrote || !call.Refused || !strings.Contains(said, "no person was available") {
+		t.Errorf("with no person a failed gate wrote %v, refused %v, said %q", wrote, call.Refused, said)
 	}
 }
 
