@@ -273,7 +273,9 @@ func shellCommands(command string, known map[string]string) []simpleCommand {
 			case tokenReadsFrom:
 				current.reads = append(current.reads, word)
 			case tokenWord:
-				current.words = append(current.words, word)
+				if len(current.words) > 0 || word.text != "do" && word.text != "done" {
+					current.words = append(current.words, word)
+				}
 			}
 			awaiting = tokenWord
 		}

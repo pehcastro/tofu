@@ -259,21 +259,28 @@ func (c simpleCommand) script() []shellWord {
 
 func (c simpleCommand) formats() []shellWord {
 	tool, args := c.unwrapped()
-	emits := slices.ContainsFunc(args, func(arg shellWord) bool { return strings.HasPrefix(arg.text, "--emit") })
-	rewrites := tool == "gofmt" && given(args, "-w") || tool == "rustfmt" && !given(args, "--check") && !emits
-	if !rewrites {
+	if !rewrites(tool, args) {
 		return nil
+	}
+	if tool == "zig" {
+		args = args[1:]
 	}
 	var files []shellWord
 	for i := 0; i < len(args); i++ {
 		switch text := args[i].text; {
-		case slices.Contains([]string{"-r", "--edition", "--style-edition", "--config-path", "--config", "--color"}, text):
+		case slices.Contains([]string{"-r", "--edition", "--style-edition", "--config-path", "--config", "--color", "--exclude"}, text):
 			i++
 		case !strings.HasPrefix(text, "-"):
 			files = append(files, args[i])
 		}
 	}
 	return files
+}
+
+func rewrites(tool string, args []shellWord) bool {
+	emits := slices.ContainsFunc(args, func(arg shellWord) bool { return strings.HasPrefix(arg.text, "--emit") })
+	return tool == "gofmt" && given(args, "-w") || tool == "rustfmt" && !given(args, "--check") && !emits ||
+		tool == "zig" && first(args) == "fmt" && !given(args, "--check")
 }
 
 const sharedTargetWhy = "builds into the project's one shared target, which $CARGO_TARGET_DIR names, so a target folder of your own is refused: private targets filled the drive"
@@ -344,19 +351,26 @@ func packageName(manifest string) (string, bool) {
 	return parsed.Package.Name, parsed.Package.Name != ""
 }
 
-func crateOf(manifest string) (string, error) {
-	for dir := path.Dir(path.Clean(manifest)); ; dir = path.Dir(dir) {
-		nearest := path.Join(dir, "Cargo.toml")
-		if _, err := os.Stat(nearest); err == nil {
-			if _, crate := packageName(nearest); !crate {
-				return "", ReadListError{Program: nearest, Why: "is a workspace with no crate of its own, so cargo builds every crate in it: name one with -p"}
-			}
-			return dir, nil
+func nearest(named, file string) (string, bool) {
+	for dir := path.Dir(path.Clean(named)); ; dir = path.Dir(dir) {
+		if _, err := os.Stat(path.Join(dir, file)); err == nil {
+			return dir, true
 		}
 		if dir == path.Dir(dir) {
-			return "", ReadListError{Program: manifest, Why: "names no crate: no Cargo.toml is in or above it"}
+			return "", false
 		}
 	}
+}
+
+func crateOf(manifest string) (string, error) {
+	dir, found := nearest(manifest, "Cargo.toml")
+	if !found {
+		return "", ReadListError{Program: manifest, Why: "names no crate: no Cargo.toml is in or above it"}
+	}
+	if _, crate := packageName(path.Join(dir, "Cargo.toml")); !crate {
+		return "", ReadListError{Program: path.Join(dir, "Cargo.toml"), Why: "is a workspace with no crate of its own, so cargo builds every crate in it: name one with -p"}
+	}
+	return dir, nil
 }
 
 func crates(match func(dir, name string) bool) []string {
@@ -384,7 +398,7 @@ func (b *Boundary) holdsEvery(what string, homes []string) error {
 	}
 	for _, home := range homes {
 		if !slices.ContainsFunc(b.Owns(), func(glob string) bool { return Overlap(glob, home) }) {
-			return ReadListError{Program: what, Why: "builds or runs the crate in " + home + ", which this agent holds nothing in: name it in your report to ask for a path in it"}
+			return ReadListError{Program: what, Why: "builds or runs the code in " + home + ", which this agent holds nothing in: name it in your report to ask for a path in it"}
 		}
 	}
 	return nil
@@ -423,7 +437,7 @@ func (b *Boundary) builds(commands []simpleCommand) error {
 			return err
 		}
 	}
-	return nil
+	return b.zigRoots(commands)
 }
 
 func (b *Boundary) built(program shellWord) (bool, error) {
@@ -563,13 +577,14 @@ func (b *Boundary) reads(g Grammar, c simpleCommand, left bool) error {
 	if built, err := b.built(words[0]); built {
 		return err
 	}
-	if err := bare(words[0]); err != nil {
-		return err
-	}
 	tool := toolName(words[0].text)
-	runs, err := g.readOnly(tool, words[1:])
-	if err != nil || !runs {
-		return err
+	if !projectBuilt(words[0]) {
+		if err := bare(words[0]); err != nil {
+			return err
+		}
+		if runs, err := g.readOnly(tool, words[1:]); err != nil || !runs {
+			return err
+		}
 	}
 	if left {
 		return ReadListError{Program: tool, Why: "runs after a cd out of the project, where it could run code this check never read"}
@@ -577,7 +592,7 @@ func (b *Boundary) reads(g Grammar, c simpleCommand, left bool) error {
 	if _, cargoArgs, builds := c.cargoBuilds(); builds {
 		words = append([]shellWord{words[0]}, cargoArgs...)
 	}
-	for _, arg := range words[1:] {
+	for _, arg := range withoutGrepPattern(tool, words[1:]) {
 		if leavesTheProject(arg.text) {
 			return ReadListError{Program: tool, Why: "names " + arg.text + ", outside the project or in a scratch folder, where it could run code this check never read"}
 		}
@@ -616,7 +631,7 @@ func FindActs(args []string) bool {
 func (g Grammar) readOnly(tool string, args []shellWord) (bool, error) {
 	switch tool {
 	case "ls", "cat", "head", "tail", "wc", "grep", "egrep", "fgrep", "diff", "cmp", "stat", "du", "df", "pwd",
-		"echo", "printf", "true", "false", "test", "[", "which", "basename", "dirname", "realpath", "readlink",
+		"echo", "printf", "true", "false", "test", "[", "which", "basename", "dirname", "realpath", "readlink", "paste", "bc", "for",
 		"cut", "tr", "nl", "od", "hexdump", "sha256sum", "sha1sum", "md5sum", "uname", "whoami", "jq", "sleep", "cd",
 		"tee", "rm", "rmdir", "unlink", "mkdir", "touch", "mv",
 		"get-childitem", "gci", "dir", "get-content", "gc", "type", "select-string", "sls", "get-item", "gi", "test-path",
@@ -626,7 +641,13 @@ func (g Grammar) readOnly(tool string, args []shellWord) (bool, error) {
 	case "cp":
 		return false, g.refuses(tool, args, "-s", "-l", "--link", "--symbolic-link")
 	case "find":
-		return false, g.refuses(tool, args, findActions()...)
+		return false, g.findReads(args)
+	case "xargs":
+		return false, g.handed(tool, xargsCommand(args))
+	case "awk", "gawk", "mawk", "nawk":
+		return false, awkReads(args)
+	case "zig":
+		return true, zigChecks(args)
 	case "rg":
 		return false, g.refuses(tool, args, "--pre")
 	case "sort":
@@ -741,8 +762,54 @@ func (g Grammar) wrapped(wrapper string, args []shellWord) (bool, error) {
 	if err := bare(args[0]); err != nil {
 		return true, err
 	}
-	_, err := g.readOnly(toolName(args[0].text), args[1:])
-	return true, err
+	return g.readOnly(toolName(args[0].text), args[1:])
+}
+
+func projectBuilt(program shellWord) bool {
+	segments := strings.Split(path.Clean(normalizePath(program.text)), "/")
+	if program.expands || len(segments) < 3 || leavesTheProject(program.text) {
+		return false
+	}
+	folder := strings.Join(segments[len(segments)-3:len(segments)-1], "/")
+	return folder == "zig-out/bin" || folder == "target/debug" || folder == "target/release"
+}
+
+func gitCommand(args []shellWord) []shellWord {
+	for slices.Contains([]string{"-C", "--no-pager", "-P", "--no-optional-locks"}, first(args)) {
+		if args[0].text == "-C" && len(args) > 1 {
+			args = args[1:]
+		}
+		args = args[1:]
+	}
+	return args
+}
+
+func withoutGrepPattern(tool string, args []shellWord) []shellWord {
+	if tool != "git" {
+		return args
+	}
+	command := gitCommand(args)
+	if first(command) != "grep" {
+		return args
+	}
+	kept := slices.Clone(args[:len(args)-len(command)+1])
+	patterned := given(command, "-e")
+	for i := 1; i < len(command); i++ {
+		switch text := command[i].text; {
+		case text == "-e":
+			i++
+		case slices.Contains([]string{"-A", "-B", "-C", "-m", "-f", "--max-count", "--max-depth", "--threads", "--context", "--after-context", "--before-context"}, text):
+			kept = append(kept, command[i:min(i+2, len(command))]...)
+			i++
+		case text == "--":
+			return append(kept, command[i:]...)
+		case !strings.HasPrefix(text, "-") && !patterned:
+			patterned = true
+		default:
+			kept = append(kept, command[i])
+		}
+	}
+	return kept
 }
 
 func tofuReads(args []shellWord) error {
@@ -773,12 +840,7 @@ func (g Grammar) refuses(tool string, args []shellWord, flags ...string) error {
 }
 
 func (g Grammar) gitReads(args []shellWord) error {
-	for slices.Contains([]string{"-C", "--no-pager", "-P", "--no-optional-locks"}, first(args)) {
-		if args[0].text == "-C" && len(args) > 1 {
-			args = args[1:]
-		}
-		args = args[1:]
-	}
+	args = gitCommand(args)
 	sub, rest := first(args), args[min(1, len(args)):]
 	switch {
 	case slices.Contains([]string{"", "status", "log", "diff", "show", "blame", "ls-files", "ls-tree", "rev-parse", "rev-list", "describe", "shortlog", "cat-file", "merge-base", "grep"}, sub):

@@ -149,6 +149,8 @@ func ScratchEnv(ctx context.Context) []string {
 		"PYTHONPYCACHEPREFIX=" + filepath.Join(cache, "pycache"),
 		"RUFF_CACHE_DIR=" + filepath.Join(cache, "ruff"),
 		"MYPY_CACHE_DIR=" + filepath.Join(cache, "mypy"),
+		"ZIG_LOCAL_CACHE_DIR=" + filepath.Join(cache, "zig", "local"),
+		"ZIG_GLOBAL_CACHE_DIR=" + filepath.Join(cache, "zig", "global"),
 		"PYTEST_ADDOPTS=" + strings.TrimSpace(os.Getenv("PYTEST_ADDOPTS")+` -o "cache_dir=`+pytestCache+`"`),
 	}
 	if runtime.GOOS == "windows" {

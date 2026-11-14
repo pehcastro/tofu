@@ -86,10 +86,13 @@ func (t ownedShell) Definition() core.Tool {
 		return definition
 	}
 	definition.Description += ", and you hold only part of this project or none of it, so a command runs only when every step reads, lists, searches or inspects " +
-		"(ls, cat, head, grep, rg, find without -exec or -delete, sed without w or e, git status, log, diff, show or blame) " +
+		"(ls, cat, head, grep, rg, paste, bc, sed without w or e, git status, log, diff, show, blame or grep, awk without system(), pipes or print >, " +
+		"for loops over these, and xargs or find -exec handing paths to one of these pure reads, never to rm, cp, mv, sed -i or a check; find -delete is refused) " +
 		"or runs the project's own checks (go vet and go test, gofmt -l, cargo test, check and clippy, npm, pnpm, yarn or bun test or a test, check, lint, typecheck or vet script, " +
-		"make targets named the same way, pytest, mypy, ruff check, rustfmt --check, and rtk or uv run around any of these). " +
-		"gofmt -w and rustfmt run on files you hold. cargo build and cargo run (with --example, or -- and the program's arguments) run on a crate you hold a path in, named with -p, --manifest-path or the folder you cd into, " +
+		"make targets named the same way, pytest, mypy, ruff check, rustfmt --check, zig version, zig fmt --check, zig build of steps named test, check, lint, typecheck or vet, and rtk or uv run around any of these). " +
+		"zig build of any other step runs in a build root you hold a path in, and --prefix, --cache-dir and --build-file are refused. " +
+		"The project's own built binaries run by their relative path under zig-out/bin, target/debug or target/release, with arguments inside the project. " +
+		"gofmt -w, rustfmt and zig fmt run on files you hold. cargo build and cargo run (with --example, or -- and the program's arguments) run on a crate you hold a path in, named with -p, --manifest-path or the folder you cd into, " +
 		"and so does a binary or example cargo built, run by its path under $CARGO_TARGET_DIR: every cargo command builds into that one shared target of the project, so --target-dir and a CARGO_TARGET_DIR of your own are refused. " +
 		"A program you run sends its input to its own window only, never to the real cursor or keyboard, which the person is using. " +
 		"Of .tofu you read only .tofu/rules, the project rules you follow, and every other .tofu path is refused. tofu runs only as serve --schema, which prints the schema tofu serve writes, version, models, session find, trace or info, boardy show, list or triage list, and drive desk: " +
@@ -99,7 +102,7 @@ func (t ownedShell) Definition() core.Tool {
 		"A redirect, tee, cp, mv, rm, mkdir, touch or sed -i lands only inside the paths your first message says you hold or your scratch folder, which $TMPDIR names; the system temp folder is refused, and a source file changes with edit or write. " +
 		"Inline code asks the person: one python or node call with -c or -e in single quotes, a heredoc (python - <<'EOF'), or a script in your scratch folder ($TMPDIR/x.py), with nothing piped or chained. " +
 		"The orchestrator may refuse it, only the person may allow it, and it runs with cwd in your scratch folder and no secret names in its environment. " +
-		"Any other interpreter call (bash -c, powershell -Command, eval), a variable set before a command, $(...) or backticks, a program named by a path outside $CARGO_TARGET_DIR, and anything not listed are refused before they run, with the reason: put that work in your report."
+		"Any other interpreter call (bash -c, powershell -Command, eval), a variable set before a command, $(...) or backticks, a program named by any other path, and anything not listed are refused before they run, with the reason: put that work in your report."
 	return definition
 }
 
