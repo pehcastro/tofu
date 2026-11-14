@@ -259,7 +259,10 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	}
 	row := Row{ID: origin, Schema: SchemaVersion, At: start, Task: config.Task, Wire: config.Wire, Spend: config.Spend, Root: origin, Account: account.ID, SpawnedFrom: config.SpawnedFrom, SpawnedBy: config.SpawnedBy, Budget: budget, System: held.head, Tools: usedTools, ToolSchemas: string(sentSchemas), Parts: held.parts}
 
-	upgraded := config.upgradeNote()
+	var upgraded string
+	var upgrading sync.WaitGroup
+	noteUpgrade := config.upgradeNote
+	upgrading.Go(func() { upgraded = noteUpgrade() })
 	judging.Wait()
 	artifacts.standing, artifacts.keep = standing.orders, keeping
 	artifacts.keep.index = cmp.Or(config.Drops, artifacts.keep.index)
@@ -304,6 +307,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		defer func() { artifacts.keep.index.remember(recorded.session(), artifacts.keep.dropped) }()
 	}
 	taskOrigin := config.taskOrigin(start)
+	upgrading.Wait()
 	recorded.begin(row, taskOrigin, turnFiles)
 	estimated, endedRows := recorded.estimate(estimating, config, start), []Row(nil)
 	if len(config.History) > 0 {

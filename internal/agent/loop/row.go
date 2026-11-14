@@ -538,6 +538,7 @@ type record struct {
 	announce         CalledAsEachRequestIsSent
 	lastSent         *messagesKept
 	appendTookBefore time.Duration
+	askedLast        askedRead
 }
 
 type toolsKept struct {
@@ -638,6 +639,7 @@ func (r *record) begin(row Row, task core.Origin, files *shadow.Started) {
 	if !r.own {
 		return
 	}
+	r.askedLast = r.readAskedLastTurn()
 	r.note(r.log.Edit(func(header *session.Header) {
 		header.Turns++
 		header.Task = cmp.Or(header.Task, row.Task)

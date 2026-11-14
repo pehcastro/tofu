@@ -110,6 +110,21 @@ func leadUserMessage(logged session.Event) (session.MessageBody, bool) {
 	return said, logged.Agent == "" && logged.Kind == session.EventMessage && json.Unmarshal(logged.Body, &said) == nil && said.Role == session.RoleUser
 }
 
+type toldOnce struct {
+	mu      sync.Mutex
+	session string
+}
+
+func (t *toldOnce) first(session string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.session == session {
+		return false
+	}
+	t.session = session
+	return true
+}
+
 type takenTask struct {
 	at   time.Time
 	text string
@@ -179,6 +194,9 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 				decided.Enforced = prepared.Config.GateMode == loop.GateEnforce
 			default:
 				return
+			}
+			if gated.Failure != "" && h.jevTold.first(id) {
+				emit(Event{Kind: EventNote, Text: "jev could not judge a call, so for the rest of this session the gate decides from the policy's regex arm: " + gated.Failure})
 			}
 			if call, judging := ctx.Value(judgingCallKey{}).(string); judging {
 				decided.Call = watch.eventID(asker, call)
@@ -391,13 +409,19 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		}
 		h.mu.Unlock()
 		if row.Session != "" {
-			if headErr := sessions.SetHead(row.Session); headErr != nil {
+			var headErr, keepErr error
+			var writing sync.WaitGroup
+			writing.Go(func() { headErr = sessions.SetHead(row.Session) })
+			writing.Go(func() { keepErr = h.cron.Keep(cronFile(sessions, row.Session)) })
+			labelled, named := h.label(sessions, h.ID())
+			writing.Wait()
+			if headErr != nil {
 				fail(headErr)
 			}
-			if keepErr := h.cron.Keep(cronFile(sessions, row.Session)); keepErr != nil && forked {
+			if keepErr != nil && forked {
 				say("cron jobs were not written: " + keepErr.Error())
 			}
-			if labelled, named := h.label(sessions, h.ID()); named {
+			if named {
 				emit(labelled)
 			}
 		}

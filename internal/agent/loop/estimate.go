@@ -264,14 +264,28 @@ func (r *record) settle(estimate *openEstimate, outcome Outcome, took time.Durat
 	}
 }
 
-func (r *record) settleAskedLastTurn(outcome session.EstimateOutcome, took time.Duration, split session.EstimateSplit) error {
-	events, err := r.store.EventsOf(r.session(), session.EventTurnEnd, session.EventEstimate, session.EventEstimateSettled)
+type askedRead func() (session string, unsettled []string, err error)
+
+func (r *record) readAskedLastTurn() askedRead {
+	read := r.session()
+	var unsettled []string
+	var err error
+	var reading sync.WaitGroup
+	reading.Go(func() { unsettled, err = r.askedLastTurn(read) })
+	return func() (string, []string, error) {
+		reading.Wait()
+		return read, unsettled, err
+	}
+}
+
+func (r *record) askedLastTurn(id string) ([]string, error) {
+	events, err := r.store.EventsOf(id, session.EventTurnEnd, session.EventEstimate, session.EventEstimateSettled)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	estimated, err := session.Estimates(events)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	lastTurn := ""
 	for _, event := range events {
@@ -279,11 +293,26 @@ func (r *record) settleAskedLastTurn(outcome session.EstimateOutcome, took time.
 			lastTurn = event.Turn
 		}
 	}
-	var failed []error
+	var unsettled []string
 	for _, one := range estimated {
 		if one.Scope == session.EstimateCall && one.Settled == nil && one.Event.Turn == lastTurn {
-			failed = append(failed, (&openEstimate{id: one.Event.ID}).settle(r.log, session.Event{Turn: r.turn}, outcome, took, split))
+			unsettled = append(unsettled, one.Event.ID)
 		}
+	}
+	return unsettled, nil
+}
+
+func (r *record) settleAskedLastTurn(outcome session.EstimateOutcome, took time.Duration, split session.EstimateSplit) error {
+	read, unsettled, err := r.askedLast()
+	if read != r.session() {
+		unsettled, err = r.askedLastTurn(r.session())
+	}
+	if err != nil {
+		return err
+	}
+	var failed []error
+	for _, id := range unsettled {
+		failed = append(failed, (&openEstimate{id: id}).settle(r.log, session.Event{Turn: r.turn}, outcome, took, split))
 	}
 	return errors.Join(failed...)
 }
