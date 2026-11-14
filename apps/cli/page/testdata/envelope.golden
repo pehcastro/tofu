@@ -1,6 +1,6 @@
 {
   "tofu": "VERSION",
-  "verb": "models reload",
+  "verb": "models update",
   "ok": true,
   "at": "2026-09-29T15:00:00Z",
   "data": {

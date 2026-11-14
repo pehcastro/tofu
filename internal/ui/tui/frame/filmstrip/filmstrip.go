@@ -104,7 +104,7 @@ func newReel(width, height int, home string, tune func(*app.Options)) *reel {
 		},
 		Turn:         func(context.Context, app.Pick, string, app.CalledFromInsideTheTurnAndNeverAfterItReturns) {},
 		Copy:         func(string) error { return nil },
-		ReloadModels: servedInCatalog,
+		UpdateModels: servedInCatalog,
 	}
 	if tune != nil {
 		tune(&r.options)
@@ -125,7 +125,7 @@ func servedInCatalog() string {
 	if err != nil {
 		return err.Error()
 	}
-	return "models reload found claude-sub/claude-sonnet-5-5"
+	return "models update found claude-sub/claude-sonnet-5-5"
 }
 
 func (r *reel) open() {

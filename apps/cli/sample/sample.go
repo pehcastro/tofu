@@ -10,12 +10,12 @@ import (
 	"tofu/internal/cli/render"
 )
 
-type reload struct {
+type update struct {
 	ContextWindows int            `json:"context_windows"`
-	Sources        []reloadSource `json:"sources"`
+	Sources        []updateSource `json:"sources"`
 }
 
-type reloadSource struct {
+type updateSource struct {
 	Source  string        `json:"source"`
 	Served  int           `json:"served"`
 	Changes []modelChange `json:"changes"`
@@ -90,8 +90,8 @@ const (
 	stateSetAside = "set aside"
 )
 
-func reloadData() reload {
-	return reload{ContextWindows: 812, Sources: []reloadSource{
+func updateData() update {
+	return update{ContextWindows: 812, Sources: []updateSource{
 		{Source: "claude-sub", Served: 23, Changes: []modelChange{
 			{"claude-sonnet-5-5", "added", "allowed"},
 			{"claude-opus-5-5", "added", "allowed"},
@@ -144,23 +144,23 @@ func extensionData(home string) extension {
 
 func Envelopes(home string, now time.Time) []cli.Envelope {
 	var problems []cli.Problem
-	for _, source := range reloadData().Sources {
+	for _, source := range updateData().Sources {
 		if source.Failure != "" {
 			problems = append(problems, cli.Problem{What: source.Source + ": " + source.Failure, Hint: source.Hint})
 		}
 	}
 	return []cli.Envelope{
-		{Verb: "models reload", OK: len(problems) == 0, At: now, Data: reloadData(), Problems: problems},
+		{Verb: "models update", OK: len(problems) == 0, At: now, Data: updateData(), Problems: problems},
 		{Verb: "login --status", OK: true, At: now, Data: accountsData(now)},
 		{Verb: "browser install", OK: true, At: now, Data: extensionData(home)},
 	}
 }
 
 func Pages(page cli.Page, now time.Time) [][]string {
-	return [][]string{reloadPage(page, reloadData()), accountsPage(page, accountsData(now), now), extensionPage(page, extensionData(page.Home))}
+	return [][]string{updatePage(page, updateData()), accountsPage(page, accountsData(now), now), extensionPage(page, extensionData(page.Home))}
 }
 
-func reloadPage(page cli.Page, data reload) []string {
+func updatePage(page cli.Page, data update) []string {
 	counts := map[cli.Mark]int{}
 	for _, source := range data.Sources {
 		for _, change := range source.Changes {
@@ -186,7 +186,7 @@ func reloadPage(page cli.Page, data reload) []string {
 	if len(parts) > 0 {
 		verdict.Text = strings.Join(parts, " · ")
 	}
-	lines := append(page.Title("Model reload", nil, verdict), "", page.Status("models.dev", cli.Verdict{Mark: cli.Done, Text: strconv.Itoa(data.ContextWindows) + " context windows"}))
+	lines := append(page.Title("Model update", nil, verdict), "", page.Status("models.dev", cli.Verdict{Mark: cli.Done, Text: strconv.Itoa(data.ContextWindows) + " context windows"}))
 	for _, source := range data.Sources {
 		lines = append(lines, "")
 		if source.Failure != "" {

@@ -3874,57 +3874,6 @@
       "required": [],
       "type": "object"
     },
-    "ModelReload": {
-      "additionalProperties": false,
-      "properties": {
-        "context_windows": {
-          "type": "integer"
-        },
-        "removed_from_catalog": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "sources": {
-          "items": {
-            "$ref": "#/$defs/ReloadSource"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "table": {
-          "type": "string"
-        },
-        "table_error": {
-          "type": "string"
-        },
-        "unresolved_tiers": {
-          "items": {
-            "type": "string"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "versions": {
-          "$ref": "#/$defs/VersionCheck"
-        }
-      },
-      "required": [
-        "context_windows",
-        "table",
-        "sources",
-        "versions"
-      ],
-      "type": "object"
-    },
     "ModelReport": {
       "additionalProperties": false,
       "properties": {
@@ -4000,6 +3949,96 @@
         "windows",
         "layer",
         "file"
+      ],
+      "type": "object"
+    },
+    "ModelUpdate": {
+      "additionalProperties": false,
+      "properties": {
+        "context_windows": {
+          "type": "integer"
+        },
+        "removed_from_catalog": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "sources": {
+          "items": {
+            "$ref": "#/$defs/ModelUpdateSource"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "table": {
+          "type": "string"
+        },
+        "table_error": {
+          "type": "string"
+        },
+        "unresolved_tiers": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "versions": {
+          "$ref": "#/$defs/VersionCheck"
+        }
+      },
+      "required": [
+        "context_windows",
+        "table",
+        "sources",
+        "versions"
+      ],
+      "type": "object"
+    },
+    "ModelUpdateSource": {
+      "additionalProperties": false,
+      "properties": {
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/ModelChange"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "error": {
+          "type": "string"
+        },
+        "failure": {
+          "type": "string"
+        },
+        "hint": {
+          "type": "string"
+        },
+        "served": {
+          "type": "integer"
+        },
+        "source": {
+          "type": "string"
+        },
+        "state": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "state",
+        "served",
+        "changes"
       ],
       "type": "object"
     },
@@ -4789,45 +4828,6 @@
         "project",
         "first",
         "parts"
-      ],
-      "type": "object"
-    },
-    "ReloadSource": {
-      "additionalProperties": false,
-      "properties": {
-        "changes": {
-          "items": {
-            "$ref": "#/$defs/ModelChange"
-          },
-          "type": [
-            "array",
-            "null"
-          ]
-        },
-        "error": {
-          "type": "string"
-        },
-        "failure": {
-          "type": "string"
-        },
-        "hint": {
-          "type": "string"
-        },
-        "served": {
-          "type": "integer"
-        },
-        "source": {
-          "type": "string"
-        },
-        "state": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "source",
-        "state",
-        "served",
-        "changes"
       ],
       "type": "object"
     },
@@ -13159,7 +13159,7 @@
               "const": "2.0"
             },
             "method": {
-              "const": "models.reload"
+              "const": "models.update"
             },
             "params": {
               "$ref": "#/$defs/NoParams"
@@ -18946,7 +18946,7 @@
               "$ref": "#/$defs/ReloadDiff"
             },
             {
-              "$ref": "#/$defs/ModelReload"
+              "$ref": "#/$defs/ModelUpdate"
             },
             {
               "$ref": "#/$defs/HooksTrusted"
@@ -19703,12 +19703,12 @@
         "$ref": "#/$defs/MentionResolved"
       }
     },
-    "models.reload": {
+    "models.update": {
       "params": {
         "$ref": "#/$defs/NoParams"
       },
       "result": {
-        "$ref": "#/$defs/ModelReload"
+        "$ref": "#/$defs/ModelUpdate"
       }
     },
     "query.accounts": {

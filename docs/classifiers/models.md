@@ -44,7 +44,7 @@ does not stall a turn.
 
 `jev-latest` is an alias. Each answer names the versioned build that served
 it, such as `jev-1.13.0`, and a live point's calibration lock names the
-build it was fitted on. `tofu models reload` asks the bound provider which build answers
+build it was fitted on. `tofu models update` asks the bound provider which build answers
 `jev-latest` and pins it. When the build changes, the point drops to shadow
 until it is fitted again, so a new build never changes a live verdict
 unmeasured.

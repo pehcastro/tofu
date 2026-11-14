@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                          103 matches
+Docs · "change the colours"                                          104 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -208,4 +208,6 @@ Docs · "change the colours"                                          103 matche
     → tofu docs sessions
   Skills
     → tofu docs skills
+  Walls: how long each operation took
+    → tofu docs walls
 --- stderr

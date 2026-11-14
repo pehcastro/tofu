@@ -288,10 +288,10 @@ func TestLayersPutTheCatalogBetweenTheShippedFilesAndTheHome(t *testing.T) {
 	}
 }
 
-func TestAnUnknownSlugSaysHowToReload(t *testing.T) {
+func TestAnUnknownSlugSaysHowToUpdate(t *testing.T) {
 	_, err := shippedLibrary(t).Select("claude-sub/claude-sonnet-5-5")
 	var refusal *Refusal
-	if !errors.As(err, &refusal) || !strings.Contains(refusal.Error(), ReloadVerb) {
-		t.Fatalf("the refusal does not say to run %s: %v", ReloadVerb, err)
+	if !errors.As(err, &refusal) || !strings.Contains(refusal.Error(), UpdateVerb) {
+		t.Fatalf("the refusal does not say to run %s: %v", UpdateVerb, err)
 	}
 }

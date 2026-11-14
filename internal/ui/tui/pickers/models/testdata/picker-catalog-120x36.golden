@@ -15,7 +15,7 @@
              claude-sub            › claude-sonnet-5                               pays    subscription       
              codex-sub               claude-sub                                    window  5h and weekly      
                                      claude-haiku-4-5                              layer   catalog            
-           f5 reloads models         claude-sub                                                               
+           f5 updates models         claude-sub                                                               
                                      claude-opus-4-8                               FROM                       
                                      claude-sub                                    listed by the claude-sub   
                                      claude-opus-4-7                               account under claude-cli   

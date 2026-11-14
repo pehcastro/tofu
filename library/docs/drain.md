@@ -67,7 +67,7 @@ Over `tofu serve`, `query.drain` takes `session` and answers what
 ## Change it
 
 There is no setting. The weights follow the prices in the model catalog:
-`tofu models reload` brings new ones, and the `--json` report names the
+`tofu models update` brings new ones, and the `--json` report names the
 default weights and where they came from under `default_weights`, each model's pricing source under
 `priced_by`, and `cost_recorded`.
 

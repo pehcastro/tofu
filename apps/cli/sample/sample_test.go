@@ -16,7 +16,7 @@ import (
 
 var (
 	moment = time.Date(2026, 9, 29, 12, 0, 0, 0, time.UTC)
-	names  = []string{"models-reload", "login-status", "browser-install"}
+	names  = []string{"models-update", "login-status", "browser-install"}
 )
 
 func printed(t *testing.T, page cli.Page, lines []string) string {

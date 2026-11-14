@@ -106,7 +106,7 @@ tofu logout <llm|classifier|search> <provider> [number] [--json]
 tofu login --status [--json] [--redact]
 tofu login --disable|--enable <number from tofu login --status>
 tofu usage [--history] [--json]
-tofu models [reload] [--json]
+tofu models [update] [--json]
 tofu agents [--json] | add | set | remove
 tofu agents add [--global] [--dir project] <name> --description d --model source/model [--tools a,b]
 tofu agents set [--global] [--dir project] <name> <source/model>

@@ -14,7 +14,7 @@
      claude-sub              claude-sonnet-4-5-20250929                pays    subscription       
      Meta · no key           claude-sub · excluded                     window  5h and 7d          
                              claude-sonnet-4-6                         layer   library            
-   f5 reloads models         claude-sub · excluded                                                
+   f5 updates models         claude-sub · excluded                                                
                              claude-sonnet-5                           EFFORT                     
                              claude-sub                                medium  shift+←→           
                              muse-spark-1.1                                                       

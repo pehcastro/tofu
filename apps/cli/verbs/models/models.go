@@ -35,13 +35,13 @@ import (
 )
 
 const (
-	Usage           = "tofu models [reload] [--json], or tofu models bind <orchestrator|classifier|sub-agent> <provider/model> [--json]"
+	Usage           = "tofu models [update] [--json], or tofu models bind <orchestrator|classifier|sub-agent> <provider/model> [--json]"
 	registryDirMode = 0o755
 	shippedLayer    = "library"
 )
 
 const (
-	SourceReloaded    = "reloaded"
+	SourceUpdated     = "updated"
 	SourceRefused     = "refused"
 	SourceFailed      = "failed"
 	SourceNotSignedIn = "not signed in"
@@ -112,25 +112,25 @@ func Verb(args []string, out, errOut io.Writer) int {
 	if len(args) > 0 && args[0] == "bind" {
 		return bindVerb(args[1:], out, errOut)
 	}
-	reload, asJSON := false, output.JSONAsked(args)
+	update, asJSON := false, output.JSONAsked(args)
 	for _, arg := range args {
 		switch arg {
-		case "reload":
-			reload = true
+		case "update":
+			update = true
 		case "--discover", "--refresh":
-			_, _ = fmt.Fprintf(errOut, "tofu models %s is now %s\n", arg, models.ReloadVerb)
-			reload = true
+			_, _ = fmt.Fprintf(errOut, "tofu models %s is now %s\n", arg, models.UpdateVerb)
+			update = true
 		case output.JSONFlag:
 		default:
 			return output.Verb{Name: "models", UsageLine: Usage, AsJSON: asJSON, Out: out, ErrOut: errOut}.Usage(errors.New("unknown flag " + strconv.Quote(arg)))
 		}
 	}
-	if reload {
+	if update {
 		held := wiring.HoldStore()
 		defer held.Close()
-		report, err := reloadSignedIn(context.Background(), held, jevPinRaised)
-		code := showReload(out, errOut, asJSON, report, err)
-		wiring.StampReload(code)
+		report, err := updateSignedIn(context.Background(), held, jevPinRaised)
+		code := showUpdate(out, errOut, asJSON, report, err)
+		wiring.StampUpdate(code)
 		return code
 	}
 	library, err := wiring.ModelLibrary("")
@@ -251,7 +251,7 @@ func modelsLines(page cli.Page, report host.ModelsReport) []string {
 		{Label: "listed", Text: output.NonZero(report.Windowed)},
 		{Label: "published", Text: output.NonZero(report.Published)},
 	})...)...)
-	return append(lines, cli.Indent(page.Hint(models.ReloadVerb))...)
+	return append(lines, cli.Indent(page.Hint(models.UpdateVerb))...)
 }
 
 func modelRow(model host.ModelReport) cli.Row {
@@ -288,8 +288,8 @@ func windowShort(tokens int) string {
 	return render.Count(tokens)
 }
 
-type ModelReload struct {
-	host.ModelReload
+type ModelUpdate struct {
+	host.ModelUpdate
 	Jev jevcatalog.PinCheck `json:"jev,omitzero"`
 }
 
@@ -305,7 +305,7 @@ func modelChangeMark(c host.ModelChange) cli.Mark {
 	panic("tofu: unknown model change " + c.Change)
 }
 
-func failedSource(s host.ReloadSource, what string, err error) host.ReloadSource {
+func failedSource(s host.ModelUpdateSource, what string, err error) host.ModelUpdateSource {
 	s.State, s.Failure, s.Error = SourceFailed, what, err.Error()
 	var refused *transport.Error
 	if errors.As(err, &refused) && refused.Status != 0 {
@@ -318,9 +318,9 @@ func failedSource(s host.ReloadSource, what string, err error) host.ReloadSource
 	return s
 }
 
-func Reload(ctx context.Context, h wiring.HeldStore, out io.Writer) int {
-	report, err := reloadSignedIn(ctx, h, jevPinChecked)
-	return showReload(out, out, false, report, err)
+func Update(ctx context.Context, h wiring.HeldStore, out io.Writer) int {
+	report, err := updateSignedIn(ctx, h, jevPinChecked)
+	return showUpdate(out, out, false, report, err)
 }
 
 type jevPinning int
@@ -370,21 +370,21 @@ func checkJevPin(ctx context.Context, keys core.Keyring, listing *transport.Clie
 	return check
 }
 
-func reloadSignedIn(ctx context.Context, held wiring.HeldStore, pinning jevPinning) (ModelReload, error) {
+func updateSignedIn(ctx context.Context, held wiring.HeldStore, pinning jevPinning) (ModelUpdate, error) {
 	if held.Err != nil {
-		return ModelReload{}, held.Err
+		return ModelUpdate{}, held.Err
 	}
 	store := held.Store
-	client, err := ReloadClient()
+	client, err := UpdateClient()
 	if err != nil {
-		return ModelReload{}, err
+		return ModelUpdate{}, err
 	}
 	checked, pinned := raiseVersions(ctx, client), checkJevPin(ctx, held.Keys(), client, pinning)
 	var accounts []models.Account
-	var settled []host.ReloadSource
+	var settled []host.ModelUpdateSource
 	versions, _ := wiring.SubFingerprint(".")
 	for _, provider := range cred.AllProviders() {
-		source := host.ReloadSource{Source: string(provider), State: SourceNotSignedIn, Hint: wiring.LoginHint(string(provider))}
+		source := host.ModelUpdateSource{Source: string(provider), State: SourceNotSignedIn, Hint: wiring.LoginHint(string(provider))}
 		credential, err := wiring.Specs().Lookup(string(provider))
 		if err != nil {
 			settled = append(settled, failedSource(source, "sign-in unreadable", err))
@@ -405,7 +405,7 @@ func reloadSignedIn(ctx context.Context, held wiring.HeldStore, pinning jevPinni
 			})
 		}
 	}
-	report, err := ReloadModels(ctx, client, accounts, settled)
+	report, err := UpdateModels(ctx, client, accounts, settled)
 	report.Versions, report.Jev = checked, pinned
 	return report, err
 }
@@ -426,7 +426,7 @@ func raiseVersions(ctx context.Context, client *transport.Client) host.VersionCh
 	return host.VersionCheck{Raised: raised}
 }
 
-type reloadRun struct {
+type updateRun struct {
 	client   *transport.Client
 	catalog  string
 	registry models.Registry
@@ -434,19 +434,19 @@ type reloadRun struct {
 	found    string
 }
 
-func ReloadClient() (*transport.Client, error) {
+func UpdateClient() (*transport.Client, error) {
 	return transport.New(transport.Config{
 		AttemptTimeout: time.Duration(konst.TurnAttemptTimeoutMillis) * time.Millisecond,
 		Concurrency:    1,
 	})
 }
 
-func ReloadModels(ctx context.Context, client *transport.Client, accounts []models.Account, settled []host.ReloadSource) (ModelReload, error) {
+func UpdateModels(ctx context.Context, client *transport.Client, accounts []models.Account, settled []host.ModelUpdateSource) (ModelUpdate, error) {
 	catalog, err := models.CatalogDir()
 	if err != nil {
-		return ModelReload{}, err
+		return ModelUpdate{}, err
 	}
-	report := ModelReload{ModelReload: host.ModelReload{Unshadowed: dropShipped(catalog), Sources: settled}}
+	report := ModelUpdate{ModelUpdate: host.ModelUpdate{Unshadowed: dropShipped(catalog), Sources: settled}}
 	registry, err := refreshRegistry(ctx, client)
 	if err != nil {
 		report.TableError = err.Error()
@@ -459,11 +459,11 @@ func ReloadModels(ctx context.Context, client *transport.Client, accounts []mode
 	if err != nil {
 		return report, err
 	}
-	run := reloadRun{client: client, catalog: catalog, registry: registry, library: library, found: time.Now().Format(time.DateOnly)}
+	run := updateRun{client: client, catalog: catalog, registry: registry, library: library, found: time.Now().Format(time.DateOnly)}
 	for _, account := range accounts {
 		report.Sources = append(report.Sources, run.account(ctx, account))
 	}
-	slices.SortStableFunc(report.Sources, func(a, b host.ReloadSource) int { return strings.Compare(a.Source, b.Source) })
+	slices.SortStableFunc(report.Sources, func(a, b host.ModelUpdateSource) int { return strings.Compare(a.Source, b.Source) })
 	report.Unresolved, err = unresolvedTiers()
 	return report, err
 }
@@ -480,8 +480,8 @@ func dropShipped(catalog string) []string {
 	return dropped
 }
 
-func (r reloadRun) account(ctx context.Context, account models.Account) host.ReloadSource {
-	source := host.ReloadSource{Source: string(account.Subscription), State: SourceReloaded}
+func (r updateRun) account(ctx context.Context, account models.Account) host.ModelUpdateSource {
+	source := host.ModelUpdateSource{Source: string(account.Subscription), State: SourceUpdated}
 	served, err := models.Discover(ctx, r.client, account)
 	if err != nil {
 		return failedSource(source, "model list failed", err)
@@ -525,7 +525,7 @@ func unresolvedTiers() ([]string, error) {
 	return unresolved, nil
 }
 
-func (r ModelReload) Envelope() cli.Envelope {
+func (r ModelUpdate) Envelope() cli.Envelope {
 	var problems []cli.Problem
 	for _, source := range r.Sources {
 		if source.Failure != "" {
@@ -535,17 +535,17 @@ func (r ModelReload) Envelope() cli.Envelope {
 	for _, tier := range r.Unresolved {
 		problems = append(problems, cli.Problem{What: tier})
 	}
-	return cli.Envelope{Verb: "models reload", OK: len(problems) == 0, At: time.Now(), Data: r, Problems: problems}
+	return cli.Envelope{Verb: "models update", OK: len(problems) == 0, At: time.Now(), Data: r, Problems: problems}
 }
 
-func showReload(out, errOut io.Writer, asJSON bool, report ModelReload, err error) int {
+func showUpdate(out, errOut io.Writer, asJSON bool, report ModelUpdate, err error) int {
 	if err != nil {
-		return verbFailed(out, errOut, "models reload", asJSON, err)
+		return verbFailed(out, errOut, "models update", asJSON, err)
 	}
-	return output.Show(out, asJSON, report.Envelope(), func(page cli.Page) []string { return ReloadLines(page, report) })
+	return output.Show(out, asJSON, report.Envelope(), func(page cli.Page) []string { return UpdateLines(page, report) })
 }
 
-func ReloadLines(page cli.Page, report ModelReload) []string {
+func UpdateLines(page cli.Page, report ModelUpdate) []string {
 	counts := map[cli.Mark]int{cli.Fail: len(report.Unresolved)}
 	for _, source := range report.Sources {
 		for _, change := range source.Changes {
@@ -574,7 +574,7 @@ func ReloadLines(page cli.Page, report ModelReload) []string {
 	if report.TableError != "" {
 		table = cli.Verdict{Mark: cli.Warn, Text: "unreachable, the stored table stands"}
 	}
-	lines := append(page.Title("Model reload", nil, verdict), "", page.Status("models.dev", table))
+	lines := append(page.Title("Model update", nil, verdict), "", page.Status("models.dev", table))
 	for _, raised := range report.Versions.Raised {
 		lines = append(lines, page.Status("npm", cli.Verdict{Mark: cli.Done, Text: raised.Key + " raised from " + raised.From + " to " + raised.To}))
 	}
@@ -587,7 +587,7 @@ func ReloadLines(page cli.Page, report ModelReload) []string {
 	case pin.To != "":
 		lines = append(lines, page.Status("jev", cli.Verdict{Mark: cli.Done, Text: "found " + pin.Found + ", pin raised from " + pin.From + " to " + pin.To}))
 	case pin.Newer != "":
-		lines = append(lines, page.Status("jev", cli.Verdict{Mark: cli.Warn, Text: "found " + pin.Found + ", newer than " + pin.From + ", " + models.ReloadVerb + " raises the pin"}))
+		lines = append(lines, page.Status("jev", cli.Verdict{Mark: cli.Warn, Text: "found " + pin.Found + ", newer than " + pin.From + ", " + models.UpdateVerb + " raises the pin"}))
 	case pin.Found != "":
 		lines = append(lines, page.Status("jev", cli.Verdict{Mark: cli.Done, Text: "found " + pin.Found + ", already pinned"}))
 	}
@@ -604,7 +604,7 @@ func ReloadLines(page cli.Page, report ModelReload) []string {
 	for _, source := range report.Sources {
 		lines = append(lines, "")
 		switch source.State {
-		case SourceReloaded:
+		case SourceUpdated:
 			rows := make([]cli.Row, len(source.Changes))
 			for i, change := range source.Changes {
 				rows[i] = cli.Row{Mark: modelChangeMark(change), Cells: []string{change.Model}, Detail: change.Use}
@@ -620,7 +620,7 @@ func ReloadLines(page cli.Page, report ModelReload) []string {
 				lines = append(lines, cli.Indent(page.Hint(source.Hint))...)
 			}
 		default:
-			panic("tofu: unknown reload state " + source.State)
+			panic("tofu: unknown update state " + source.State)
 		}
 	}
 	if len(report.Unresolved) > 0 {

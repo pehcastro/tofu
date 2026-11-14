@@ -35,7 +35,7 @@ you bind, and a role with nothing bound says so in one sentence with the
 command that binds it, rather than running a model you never chose.
 
 The catalog comes in layers, each over the last: what tofu ships, then
-models `tofu models reload` found on your accounts, then `~/.tofu/models/`,
+models `tofu models update` found on your accounts, then `~/.tofu/models/`,
 then a project's `.tofu/models/`.
 
 ![The model picker filtered to opus-5, showing the source claude-sub and that a subscription pays](./media/tui-models.png)
@@ -72,7 +72,7 @@ without copying the list.
 - **Exclude a model**: write `~/.tofu/models/<provider>/<model>.yaml` with
   `use: excluded` and a `reason:`. Delete the file to undo.
 
-`tofu models reload` also finds the newest build of Jev, the model that judges each tool call, and pins it; when the gate was calibrated on an older build, reload says the gate runs in shadow until it is calibrated on the new one. The app's start-up reload only reports a newer build.
+`tofu models update` also finds the newest build of Jev, the model that judges each tool call, and pins it; when the gate was calibrated on an older build, the update says the gate runs in shadow until it is calibrated on the new one. The app's start-up update only reports a newer build.
 
 ## Custom models
 
@@ -105,7 +105,7 @@ Delete the file to remove the model.
 ## Commands
 
 ```
-tofu models [reload] [--json]
+tofu models [update] [--json]
 tofu models bind <orchestrator|classifier|sub-agent> <source/model> [--json]
 tofu agents set [--global] <name> <source/model>
 tofu run --dir . --model <source/model> --effort <level> "<task>"

@@ -1405,7 +1405,7 @@ func requests() []method {
 		{name: "memory.edit", params: MemoryEditParams{}, result: entries.Entry{}},
 		{name: "memory.remove", params: MemoryRemoveParams{}, result: entries.Entry{}},
 		{name: "reload", params: NoParams{}, result: ReloadDiff{}},
-		{name: "models.reload", params: NoParams{}, result: ModelReload{}},
+		{name: "models.update", params: NoParams{}, result: ModelUpdate{}},
 		{name: "hooks.trust", params: NoParams{}, result: HooksTrusted{}},
 		{name: "learn.scan", params: NoParams{}, result: learn.Run{}},
 		{name: "learn.show", params: LearnParams{}, result: learn.Finding{}},

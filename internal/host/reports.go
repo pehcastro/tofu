@@ -43,14 +43,14 @@ type ModelsQuery struct {
 	Stale bool     `json:"stale"`
 }
 
-type ModelReload struct {
-	ContextWindows int            `json:"context_windows"`
-	Table          string         `json:"table"`
-	TableError     string         `json:"table_error,omitempty"`
-	Unshadowed     []string       `json:"removed_from_catalog,omitempty"`
-	Sources        []ReloadSource `json:"sources"`
-	Unresolved     []string       `json:"unresolved_tiers,omitempty"`
-	Versions       VersionCheck   `json:"versions"`
+type ModelUpdate struct {
+	ContextWindows int                 `json:"context_windows"`
+	Table          string              `json:"table"`
+	TableError     string              `json:"table_error,omitempty"`
+	Unshadowed     []string            `json:"removed_from_catalog,omitempty"`
+	Sources        []ModelUpdateSource `json:"sources"`
+	Unresolved     []string            `json:"unresolved_tiers,omitempty"`
+	Versions       VersionCheck        `json:"versions"`
 }
 
 type VersionCheck struct {
@@ -59,7 +59,7 @@ type VersionCheck struct {
 	Error   string                      `json:"error,omitempty"`
 }
 
-type ReloadSource struct {
+type ModelUpdateSource struct {
 	Source  string        `json:"source"`
 	State   string        `json:"state"`
 	Served  int           `json:"served"`

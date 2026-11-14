@@ -44,7 +44,7 @@
      OpenRouter · no key   › jev-latest                                pays    key                
      TypeSafe · no key       typesafe                                  window                     
                                                                        layer   library            
-   f5 reloads models                                                   key     not set            
+   f5 updates models                                                   key     not set            
                                                                                                   
                                                                        ASSIGN TO                  
                                                                        Classifier model           
@@ -74,7 +74,7 @@
      OpenRouter · no key     │ › ts-m…9a7c  19 chars  prefix no…█ │    pays    key                
      TypeSafe · no key       ╰────────────────────────────────────╯    window                     
                                                                        layer   library            
-   f5 reloads models         stored in the credential store, never     key     not set            
+   f5 updates models         stored in the credential store, never     key     not set            
                              shown                                                                
                                                                        ASSIGN TO                  
                              enter save · esc cancel                   Classifier model           

@@ -91,7 +91,7 @@ Reads, reloads, the `session.*` and `memory.*` reads, `mention.resolve`, `shell.
   `tools`, `global`; `agents.set` `name`, `model`, `global`; `agents.remove` `name`, `global`. Each, and
   `learn.apply`, answers `changes` `{change, what, file}` (`added`, `changed`, `removed`) and `undo`
 - `learn.scan` answers the run; `learn.show` takes `id`, `learn.reject` `id`, `reason`, each the finding; `learn.apply` takes `id`, `project`
-- `reload` answers `project`, `first`, `parts` (`added`, `removed`, `changed`); `models.reload` `sources`, `versions`; `hooks.trust` `trusted`
+- `reload` answers `project`, `first`, `parts` (`added`, `removed`, `changed`); `models.update` `sources`, `versions`; `hooks.trust` `trusted`
 - `setup.check` answers `steps`, each `{step, what, fix, done, choices}`; one with no `done` blocks a turn. `login.key` takes `provider`, `key` (checked),
   `login.logout` `role`, `provider`, `number`; both answer `note`. `login.start` takes `role` (`llm`,
   `classifier`, `search`), `provider`; answers the account signed in, `id`, `source`, `account`, `change`. `settings.set` takes `key`,

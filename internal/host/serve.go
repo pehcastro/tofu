@@ -253,7 +253,7 @@ func (s *server) receive(line []byte) {
 			s.respond(in.ID, nil, err)
 		}
 	case in.ID == nil:
-	case strings.HasPrefix(in.Method, queryPrefix) || slices.Contains([]string{"login.start", "login.key", "login.logout", "session.info", "session.find", "session.trace", "session.turns", "session.turn", "mention.resolve", "shell.run", "session.list", "session.history", "memory.view", "memory.zoom", "memory.recall", "reload", "models.reload", "hooks.trust", "learn.scan", "setup.check"}, in.Method):
+	case strings.HasPrefix(in.Method, queryPrefix) || slices.Contains([]string{"login.start", "login.key", "login.logout", "session.info", "session.find", "session.trace", "session.turns", "session.turn", "mention.resolve", "shell.run", "session.list", "session.history", "memory.view", "memory.zoom", "memory.recall", "reload", "models.update", "hooks.trust", "learn.scan", "setup.check"}, in.Method):
 		safe.Go(s.report, in.Method, func() { s.answer(in.ID, in.Method, in.Params) })
 	case in.Method == "session.open":
 		s.opening.Lock()

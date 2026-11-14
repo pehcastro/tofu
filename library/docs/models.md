@@ -50,7 +50,7 @@ While text streams, the footer shows the output rate, such as `128.4 tok/s`, wei
   `codex-sub/gpt-5.6-sol` ships with `plan: no`, `verbosity: low` and
   `reasoning_context: all_turns`
 - `~/.tofu/catalog/models/<provider>/<model>.yaml`: models `tofu models
-  reload` found on your accounts, with `from` and `found`
+  update` found on your accounts, with `from` and `found`
 - `models/windows/<provider>.yaml`, shipped, and `~/.tofu/model-windows.json`
   from models.dev: context windows, tool calls, efforts and image input
 - the `modelTier.*` settings: the model each tier names
@@ -99,7 +99,7 @@ line per custom file tofu could not use. `--json` carries every field,
 `layer` (`library`, `catalog`, `global` or `project`) and the reason a model
 is excluded.
 
-`tofu models reload` asks each signed-in account which models it serves,
+`tofu models update` asks each signed-in account which models it serves,
 writes each new one into the catalog, allowed and never the default, pins
 the newest Jev build, and prints `+` new, `~` changed and `-` dropped, and
 a `✗` line per tier that no longer resolves.
@@ -114,7 +114,7 @@ room, least recently used first. `tofu usage` prints the quota windows.
 
 Delete the role file, the custom model or the model file you wrote; the next
 layer down wins, and a role with no file is unbound. Exclude a catalog
-model in `~/.tofu/models` to keep a reload from bringing it back. Delete a
+model in `~/.tofu/models` to keep an update from bringing it back. Delete a
 `modelTier` line from `settings.json` to empty the tier.
 `tofu login --disable <number>` sets a credential aside and `--enable`
 brings it back; `tofu logout llm claude-sub 2` deletes account 2.

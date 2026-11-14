@@ -127,7 +127,7 @@ access
 |---|---|
 | `the credential is broken` | Run the `tofu login` it names again |
 | `every window is spent, back at <time>` | Wait, or use the other subscription; `/status` shows each window |
-| a model you expect is missing | **F5** in the model picker, or `tofu models reload` |
+| a model you expect is missing | **F5** in the model picker, or `tofu models update` |
 | `tofu browser` prints `✗` | `tofu browser install`, then load the folder it prints in `chrome://extensions` |
 
 `tofu settings` lists every setting with where it came from;

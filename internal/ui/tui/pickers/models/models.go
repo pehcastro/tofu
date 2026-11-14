@@ -124,7 +124,7 @@ const (
 	Assign
 	Login
 	Close
-	Reload
+	UpdateModels
 	CheckKey
 	CancelCheck
 	Set
@@ -144,7 +144,7 @@ type Model struct {
 	classifiers []Group
 	sources     []Source
 	keys        Keys
-	reloading   bool
+	updating    bool
 	entry       keyEntry
 	checks      int
 	drawn       *drawn
@@ -337,11 +337,11 @@ func (m *Model) Key(key string) Intent {
 	case "enter":
 		return m.choose()
 	case "f5":
-		if m.reloading {
+		if m.updating {
 			return Intent{}
 		}
-		m.reloading = true
-		return Intent{Action: Reload}
+		m.updating = true
+		return Intent{Action: UpdateModels}
 	case "tab":
 		m.tab = (m.tab + 1) % tabCount
 		m.home()

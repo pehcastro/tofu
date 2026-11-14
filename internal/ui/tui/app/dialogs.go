@@ -36,8 +36,8 @@ const (
 	callDialogWidest  = 120
 	callDialogMargin  = 8
 	callDialogPadding = 4
-	noNewModel        = "the models reload found no new model"
-	noModelsReload    = "this session has no models reload"
+	noNewModel        = "the models update found no new model"
+	noModelsUpdate    = "this session has no models update"
 )
 
 type dialog interface {
@@ -368,19 +368,19 @@ func (a *App) choseModel(intent models.Intent) tea.Cmd {
 			return nil
 		}
 		return tea.ExecProcess(a.options.SignIn(source), nil)
-	case models.Reload:
-		reload := a.options.ReloadModels
-		if reload == nil {
-			return func() tea.Msg { return pickerReloadedMsg(noModelsReload) }
+	case models.UpdateModels:
+		update := a.options.UpdateModels
+		if update == nil {
+			return func() tea.Msg { return pickerUpdatedMsg(noModelsUpdate) }
 		}
-		return func() tea.Msg { return pickerReloadedMsg(cmp.Or(reload(), noNewModel)) }
+		return func() tea.Msg { return pickerUpdatedMsg(cmp.Or(update(), noNewModel)) }
 	}
 	panic("tui: unknown model intent")
 }
 
-type pickerReloadedMsg string
+type pickerUpdatedMsg string
 
-func (a *App) pickerReloaded(note string) tea.Cmd {
+func (a *App) pickerUpdated(note string) tea.Cmd {
 	a.notify(note)
 	open, isPicker := a.top().(*modelsDialog)
 	if !isPicker {

@@ -18,7 +18,7 @@ func TestServeDataQueriesAreTypedAndMemoryReachesTheLead(t *testing.T) {
 		"rules list":     {OK: true, Data: json.RawMessage(`{"origin":"shipped","rules":[{"id":"r1","kind":"check","origin":"shipped"}]}`)},
 		"settings":       {OK: true, Data: json.RawMessage(`{"global_file":"g","project_file":"p","settings":[],"surprise":1}`)},
 		"update --check": {Data: json.RawMessage(`null`), Problems: []Problem{{What: "no release published yet"}}},
-		"models reload": {Data: json.RawMessage(`{"context_windows":0,"table":"t","sources":[{"source":"claude-sub","state":"failed","served":0,"changes":[],"failure":"list refused"}],"versions":{}}`),
+		"models update": {Data: json.RawMessage(`{"context_windows":0,"table":"t","sources":[{"source":"claude-sub","state":"failed","served":0,"changes":[],"failure":"list refused"}],"versions":{}}`),
 			Problems: []Problem{{What: "claude-sub: list refused"}}},
 		"models": {OK: true, Data: json.RawMessage(`{"subscriptions":[],"defaults":[],"usable":0,"table":"","windowed":0,"published_windows":0,"models":[]}`)},
 	}
@@ -54,11 +54,11 @@ func TestServeDataQueriesAreTypedAndMemoryReachesTheLead(t *testing.T) {
 		t.Errorf("a verb that failed with no report answered %s, want its problem as the error", failed.Result)
 	}
 
-	c.ask("5", "models.reload", `{}`)
-	var reloaded ModelReload
-	c.answer("5", &reloaded)
-	if len(reloaded.Sources) != 1 || reloaded.Sources[0].Failure != "list refused" {
-		t.Errorf("models.reload with a failing source answered %+v, want the report naming the failure", reloaded)
+	c.ask("5", "models.update", `{}`)
+	var updated ModelUpdate
+	c.answer("5", &updated)
+	if len(updated.Sources) != 1 || updated.Sources[0].Failure != "list refused" {
+		t.Errorf("models.update with a failing source answered %+v, want the report naming the failure", updated)
 	}
 
 	c.ask("6", "query.models", `{}`)

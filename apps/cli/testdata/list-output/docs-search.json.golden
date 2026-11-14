@@ -419,6 +419,10 @@ exit 0
       {
         "text": "Skills",
         "do": "tofu docs skills"
+      },
+      {
+        "text": "Walls: how long each operation took",
+        "do": "tofu docs walls"
       }
     ]
   },

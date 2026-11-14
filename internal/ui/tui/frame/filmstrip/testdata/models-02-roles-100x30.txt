@@ -14,7 +14,7 @@
      claude-sub                                                        nothing is bound, so setup 
      Meta · no key                                                     asks for it before the     
                                                                        first turn                 
-   f5 reloads models                                                                              
+   f5 updates models                                                                              
                                                                        enter chooses a new model  
                                                                                                   
                                                                                                   

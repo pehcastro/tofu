@@ -14,7 +14,7 @@
      claude-sub              muse-spark-1.3-contributor                kind    llm                
      Meta · no key           meta                                      pays    key                
                                                                        window                     
-   f5 reloads models                                                   layer   library            
+   f5 updates models                                                   layer   library            
                                                                        key     not set            
                                                                                                   
                                                                        NOTICE                     
@@ -44,7 +44,7 @@
      claude-sub              │ checking with Meta                 │    kind    llm                
      Meta · no key           ╰────────────────────────────────────╯    pays    key                
                                                                        window                     
-   f5 reloads models         stored in the credential store, never     layer   library            
+   f5 updates models         stored in the credential store, never     layer   library            
                              shown                                     key     not set            
                                                                                                   
                              esc cancel                                NOTICE                     
@@ -74,7 +74,7 @@
      claude-sub              │ › meta…7c1d  25 chars  prefix no…█ │    kind    llm                
      Meta · no key           ╰────────────────────────────────────╯    pays    key                
                              Meta refused the key (401)                window                     
-   f5 reloads models                                                   layer   library            
+   f5 updates models                                                   layer   library            
                              stored in the credential store, never     key     not set            
                              shown                                                                
                                                                        NOTICE                     

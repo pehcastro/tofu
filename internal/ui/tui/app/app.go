@@ -156,7 +156,7 @@ type Options struct {
 	Settings      *isettings.Store
 	Promotions    isession.PromotionLog
 	Reload        func() string
-	ReloadModels  func() string
+	UpdateModels  func() string
 	ModelsStale   bool
 	Host          *host.Host
 	Turn          Turn
@@ -524,7 +524,7 @@ func Run(options Options) error {
 }
 
 func (a *App) Init() tea.Cmd {
-	return caught(tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.reloadStaleModels(), a.listen(), a.watchUpdates(0), a.loadEarlier()))
+	return caught(tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.updateStaleModels(), a.listen(), a.watchUpdates(0), a.loadEarlier()))
 }
 
 func (a *App) watchUpdates(after time.Duration) tea.Cmd {
@@ -535,12 +535,12 @@ func (a *App) watchUpdates(after time.Duration) tea.Cmd {
 	return tea.Tick(after, func(time.Time) tea.Msg { return updateMsg(updates()) })
 }
 
-func (a *App) reloadStaleModels() tea.Cmd {
-	reload := a.options.ReloadModels
-	if !a.options.ModelsStale || reload == nil {
+func (a *App) updateStaleModels() tea.Cmd {
+	update := a.options.UpdateModels
+	if !a.options.ModelsStale || update == nil {
 		return nil
 	}
-	return func() tea.Msg { return noticeMsg(reload()) }
+	return func() tea.Msg { return noticeMsg(update()) }
 }
 
 func (a *App) pollShells() tea.Cmd {
@@ -745,8 +745,8 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 	case shellsDueMsg:
 		a.shellsTicking = false
 		return a.pollShells()
-	case pickerReloadedMsg:
-		return a.pickerReloaded(string(msg))
+	case pickerUpdatedMsg:
+		return a.pickerUpdated(string(msg))
 	case pickPollMsg:
 		a.pickWatching = false
 		a.followConfig()

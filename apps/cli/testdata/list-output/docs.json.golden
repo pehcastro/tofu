@@ -231,6 +231,11 @@ exit 0
         "topic": "usage",
         "title": "Subscription quota",
         "summary": "how tofu reads each subscription's 5 hour and 7 day windows, shares one reading between every tofu process, and keeps the last one when the vendor says no, and where work continues when a subscription runs out"
+      },
+      {
+        "topic": "walls",
+        "title": "Walls: how long each operation took",
+        "summary": "one record of milliseconds per operation, and tofu walls printing n, p50, p90 and max for each over a window"
       }
     ],
     "entries": [
@@ -482,7 +487,7 @@ exit 0
       },
       {
         "ask": "use a model my subscription just started serving",
-        "do": "tofu models reload",
+        "do": "tofu models update",
         "check": "tofu models --json",
         "topic": "models"
       },

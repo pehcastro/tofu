@@ -14,7 +14,7 @@
      claude-sub              muse-spark-1.3-contributor                pays    key                
      Meta · no key           meta                                      window                     
                                                                        layer   library            
-   f5 reloads models                                                   key     not set            
+   f5 updates models                                                   key     not set            
                                                                                                   
                                                                        ASSIGN TO                  
                                                                        Browser model              
@@ -44,7 +44,7 @@
      claude-sub              │ checking with Meta                 │    pays    key                
      Meta · no key           ╰────────────────────────────────────╯    window                     
                                                                        layer   library            
-   f5 reloads models         stored in the credential store, never     key     not set            
+   f5 updates models         stored in the credential store, never     key     not set            
                              shown                                                                
                                                                        ASSIGN TO                  
                              esc cancel                                Browser model              

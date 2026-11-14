@@ -14,7 +14,7 @@
                        claude-sub              claude-sonnet-4-5-20250929                    pays    subscription       
                        Meta · no key           claude-sub · excluded                         window  5h and 7d          
                                                claude-sonnet-4-6                             layer   library            
-                     f5 reloads models         claude-sub · excluded                                                    
+                     f5 updates models         claude-sub · excluded                                                    
                                                claude-sonnet-5                               EFFORT                     
                                                claude-sub                                    medium  shift+←→           
                                                muse-spark-1.1                                                           
@@ -44,7 +44,7 @@
                        claude-sub              claude-sonnet-4-5-20250929                    pays    subscription       
                        Meta · no key           claude-sub · excluded                         window  5h and 7d          
                                                claude-sonnet-4-6                             layer   library            
-                     f5 reloads models         claude-sub · excluded                                                    
+                     f5 updates models         claude-sub · excluded                                                    
                                                claude-sonnet-5                               EFFORT                     
                                                claude-sub                                    medium  shift+←→           
                                                claude-sonnet-5-5                                                        
@@ -57,7 +57,7 @@
                                                                                                                                             
   ▯ Ask tofu to build, inspect, or delegate                                                                                                 
                                                                                                                                             
- models reload found claude-sub/claude-sonnet-5-5                         [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ models update found claude-sub/claude-sonnet-5-5                         [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
  tofu   |  ./tofu/                chat   sub-agents   file edits   shells (1)   orders   amber-cedar-otter [session#3c5f71] | 0s [settings] 
 
 
@@ -74,7 +74,7 @@
                        claude-sub                                                            kind    llm                
                        Meta · no key                                                         pays    subscription       
                                                                                              window  5h and 7d          
-                     f5 reloads models                                                       layer   catalog            
+                     f5 updates models                                                       layer   catalog            
                                                                                                                         
                                                                                              FROM                       
                                                                                              listed by the claude-sub   
@@ -87,4 +87,4 @@
                                                                                                                                             
   ▯ Ask tofu to build, inspect, or delegate                                                                                                 
                                                                                                                                             
- models reload found claude-sub/claude-sonnet-5-5                         [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
+ models update found claude-sub/claude-sonnet-5-5                         [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

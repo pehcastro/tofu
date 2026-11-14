@@ -158,7 +158,7 @@ func RegistryAt(path string) (Registry, error) {
 	written, err := os.Stat(path)
 	var stored Registry
 	if err != nil || json.Unmarshal(body, &stored) != nil || len(stored.Windows) == 0 {
-		return Registry{}, fmt.Errorf("models: %s is not a registry tofu wrote, delete it and run %s", path, ReloadVerb)
+		return Registry{}, fmt.Errorf("models: %s is not a registry tofu wrote, delete it and run %s", path, UpdateVerb)
 	}
 	return withPriceOverrides(stored.takenOn(written.ModTime().Format(time.DateOnly)), library.Files())
 }

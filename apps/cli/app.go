@@ -79,7 +79,7 @@ type appWiring struct {
 	clipboard func() (platformclipboard.Clipboard, error)
 	copy      func(text string) error
 	quota     func() []frame.Quota
-	reload    func(ctx context.Context, out io.Writer) int
+	update    func(ctx context.Context, out io.Writer) int
 	now       func() time.Time
 	joins     bool
 }
@@ -182,7 +182,7 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 		Quota:        wired.quota,
 		Settings:     settingsStore,
 		Reload:       appReload(dir),
-		ReloadModels: modelsReload(dir, wired.reload),
+		UpdateModels: modelsUpdate(dir, wired.update),
 		ModelsStale:  wiring.CatalogStale(time.Now()),
 		Host:         live,
 		Paste:        paste.Board{Read: wired.clipboard, Dir: live.AttachmentDir, Recorded: live.Attached},
@@ -219,17 +219,17 @@ func appOptions(dir string, arms wiring.RunOpts, wired appWiring, launch appLaun
 	}
 }
 
-func modelsReload(dir string, reload func(context.Context, io.Writer) int) func() string {
-	if reload == nil {
+func modelsUpdate(dir string, update func(context.Context, io.Writer) int) func() string {
+	if update == nil {
 		return nil
 	}
 	return func() string {
 		before, unreadBefore := wiring.ModelLibrary(dir)
-		wiring.StampReload(reload(context.Background(), io.Discard))
+		wiring.StampUpdate(update(context.Background(), io.Discard))
 		debug.FreeOSMemory()
 		after, err := wiring.ModelLibrary(dir)
 		if err != nil {
-			return catalog.ReloadVerb + ": " + err.Error()
+			return catalog.UpdateVerb + ": " + err.Error()
 		}
 		var found []string
 		for _, model := range after.Models {
@@ -241,7 +241,7 @@ func modelsReload(dir string, reload func(context.Context, io.Writer) int) func(
 		if len(found) == 0 || unreadBefore != nil {
 			return ""
 		}
-		return wiring.ReloadFound + strings.Join(found, ", ")
+		return wiring.UpdateFound + strings.Join(found, ", ")
 	}
 }
 
@@ -273,8 +273,8 @@ func appVerb(in io.Reader, out, errOut io.Writer, resumed sessionResume) int {
 	stopRestoring := restoring(out, resumed)
 	held := wiring.HoldStore()
 	defer held.Close()
-	reload := func(ctx context.Context, out io.Writer) int { return modelsverb.Reload(ctx, held, out) }
-	live := appWiring{open: wiring.OpenWire, wires: held.Wires, blockers: held.Requirements, quota: held.Quota, reload: reload, joins: true}
+	update := func(ctx context.Context, out io.Writer) int { return modelsverb.Update(ctx, held, out) }
+	live := appWiring{open: wiring.OpenWire, wires: held.Wires, blockers: held.Requirements, quota: held.Quota, update: update, joins: true}
 	launch := launchOf(dir, resumed, resumed.Session == "")
 	launch.stopRestoring = stopRestoring
 	var identity sync.WaitGroup

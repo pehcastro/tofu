@@ -19,7 +19,7 @@ const sampleHome = "/home/sample"
 func pieces(page Page) map[string][]string {
 	return map[string][]string{
 		"title": append(append(
-			page.Title("Model reload", nil, Verdict{Warn, "2 new · 1 changed · 1 failed"}),
+			page.Title("Model update", nil, Verdict{Warn, "2 new · 1 changed · 1 failed"}),
 			page.Title("Accounts", []string{"3 signed in"}, Verdict{Warn, "1 needs attention"})...),
 			append(page.Title("A subject long enough that the verdict cannot share its line at eighty columns wide", nil, Verdict{Done, "installed"}),
 				page.Title("Reload", []string{page.Path(sampleHome + "/projects/a-made-up-harness-name/sessions/0f3a9c21-5d7e-4b88-a1c6-2e94d07b5f13/scratchpad/drive-sample-project-2593-10")}, Verdict{Done, "first reload"})...)...),
@@ -50,7 +50,7 @@ func pieces(page Page) map[string][]string {
 
 func TestTheEnvelopeCarriesTheVersionAnRFC3339TimeAndAnEmptyProblemList(t *testing.T) {
 	moment := time.Date(2026, 9, 29, 12, 0, 0, 123, time.FixedZone("BRT", -3*60*60))
-	document, err := json.MarshalIndent(Envelope{Verb: "models reload", OK: true, At: moment, Data: map[string]int{"served": 23}}, "", "  ")
+	document, err := json.MarshalIndent(Envelope{Verb: "models update", OK: true, At: moment, Data: map[string]int{"served": 23}}, "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -13,7 +13,7 @@ import (
 
 const (
 	catalogLayer = "catalog"
-	ReloadVerb   = "tofu models reload"
+	UpdateVerb   = "tofu models update"
 )
 
 type CatalogPlan []Model

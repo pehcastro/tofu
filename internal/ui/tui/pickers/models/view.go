@@ -43,8 +43,8 @@ const (
 	excludedHead    = "Excluded"
 	fromHead        = "From"
 	noticeHead      = "Notice"
-	reloadHint      = "f5 reloads models"
-	reloadingHint   = "reloading models"
+	updateHint      = "f5 updates models"
+	updatingHint    = "updating models"
 	effortHead      = "Effort"
 	effortHint      = "  shift+←→"
 	assignHead      = "Assign to"
@@ -79,7 +79,7 @@ type renderKey struct {
 	assign           *Target
 	effort           core.Effort
 	entry            keyEntry
-	reloading        bool
+	updating         bool
 }
 
 type drawn struct {
@@ -135,7 +135,7 @@ func (m Model) cached(width, height int) string {
 		bound = append(bound, target.Assigned)
 	}
 	key := renderKey{width: width, height: height, tab: m.tab, provider: m.provider, cursor: m.cursor,
-		filter: m.filter.Value(), bound: strings.Join(bound, "\n"), assign: m.assign, effort: m.effort, entry: m.entry, reloading: m.reloading}
+		filter: m.filter.Value(), bound: strings.Join(bound, "\n"), assign: m.assign, effort: m.effort, entry: m.entry, updating: m.updating}
 	if m.drawn.modal == "" || m.drawn.key != key {
 		*m.drawn = drawn{key: key, modal: m.modal(width, height)}
 	}
@@ -192,9 +192,9 @@ func (m Model) sidePane(width int) string {
 	for i, source := range m.providers() {
 		view += look.CatalogRow(width-sideInset, i == m.provider && m.tab == tabModels, source) + "\n"
 	}
-	hint := reloadHint
-	if m.reloading {
-		hint = reloadingHint
+	hint := updateHint
+	if m.updating {
+		hint = updatingHint
 	}
 	return view + "\n" + look.Faint(hint)
 }

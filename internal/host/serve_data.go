@@ -106,8 +106,8 @@ func (s *server) data(method string, raw json.RawMessage) (any, error) {
 		return handle(raw, s.docs)
 	case "reload":
 		return typedVerb[ReloadDiff](s, raw, "reload")
-	case "models.reload":
-		return typedVerb[ModelReload](s, raw, "models", "reload")
+	case "models.update":
+		return typedVerb[ModelUpdate](s, raw, "models", "update")
 	case "hooks.trust":
 		return typedVerb[HooksTrusted](s, raw, "hooks", "trust")
 	case "learn.scan":

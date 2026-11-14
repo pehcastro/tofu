@@ -172,7 +172,7 @@ func TestWithNoOwnsBashRefusesEveryCommandThatWroteInRoundOne(t *testing.T) {
 		{"tofu boardy new --board TOFU x", notRead},
 		{"tofu boardy log TOFU-1 x --board TOFU", notRead},
 		{"tofu boardy triage accept T1 --board DESK", notRead},
-		{"tofu models reload", notRead},
+		{"tofu models update", notRead},
 		{"tofu models bind classifier a/b", notRead},
 		{"tofu session resume x", notRead},
 		{"tofu session rename x y", notRead},
