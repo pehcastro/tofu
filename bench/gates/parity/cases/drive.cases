@@ -19,12 +19,6 @@ drive tab-shells --cassette $DATA/serve/kept.jsonl
 case drive/tab-shells-command
 drive tab-shells-command
 
-case drive/tab-orders
-drive tab-orders --cassette $DATA/serve/hello.jsonl
-
-case drive/tab-orders-command
-drive tab-orders-command --cassette $DATA/serve/hello.jsonl
-
 case drive/settings
 drive settings
 
@@ -111,9 +105,6 @@ drive slash-settings --cassette $DATA/serve/hello.jsonl
 
 case drive/slash-models
 drive slash-models --cassette $DATA/serve/hello.jsonl
-
-case drive/slash-orders
-drive slash-orders --cassette $DATA/serve/hello.jsonl
 
 case drive/slash-nope
 drive slash-nope --cassette $DATA/serve/hello.jsonl

@@ -1,5 +1,5 @@
 clipboard: [tool#9d4f10] is the loop I read.
- tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                     
     You                                                                                    14:32    
@@ -34,7 +34,7 @@ internal/agent/loop/loop.go
 complete  |  0ms
   412 lines, 11.8 KB
 clipboard: complete  |  0ms
- tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    │
   Sub-agents               All activity                                     6-8/8 · wheel ↑ older  │

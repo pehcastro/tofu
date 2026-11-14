@@ -920,9 +920,9 @@ func TestReloadAppearsInTheCommandMenuAndCallsTheVerb(t *testing.T) {
 	}
 }
 
-func TestTabCyclesTheFiveScreens(t *testing.T) {
+func TestTabCyclesTheFourScreens(t *testing.T) {
 	app := sessionApp(t, 80, 24)
-	for _, want := range []screen{screenAgents, screenEdits, screenShells, screenOrders, screenChat} {
+	for _, want := range []screen{screenAgents, screenEdits, screenShells, screenChat} {
 		app.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 		if app.current != want {
 			t.Fatalf("tab reached screen %d, want %d", app.current, want)

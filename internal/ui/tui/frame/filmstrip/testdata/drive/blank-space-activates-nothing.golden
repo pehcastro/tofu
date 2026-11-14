@@ -1,4 +1,4 @@
- tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    │
   Sub-agents               All activity                                     6-8/8 · wheel ↑ older  │
@@ -28,7 +28,7 @@
                            │                                                                  │    ┃
                            ╰──────────────────────────────────────────────────────────────────╯     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
- tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
 
                                                                                                   
     You                                                                                    14:32  
@@ -50,8 +50,8 @@
                     shells                                                 /shells  
                     the persistent processes an agent left running                  
                                                                                     
-                    orders                                                 /orders  
-                    every order the lead gave a sub-agent, one line each            
+                    models                                                 /models  
+                    every model the signed subscriptions serve, and which one the…  
   cooked for 0s                                                                     
 
                                                                                                     

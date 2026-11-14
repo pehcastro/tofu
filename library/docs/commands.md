@@ -14,7 +14,7 @@ Typing `/` at the start of the composer opens the command list. Typing more filt
 - `/simplify`: the first message carries the simplify skill and the last diff, or the last commit on a clean tree; cuts wait for your approval
 - `/debug <symptom>`: reproduce, narrow, fix the cause, show it go green
 - `/hunt [where]`: spawns `hunter`, then `skeptic`, then `referee` after both report; only what can be shown now is kept, nothing is fixed
-- `/chat`, `/sub-agents`, `/file-edits`, `/shells`, `/orders`, `/settings`: open that screen
+- `/chat`, `/sub-agents`, `/file-edits`, `/shells`, `/settings`: open that screen
 - `/models`: choose the model the next turn runs
 - `/status`: each subscription's quota windows and when they reset
 - `/attach`: reference a file in this workspace

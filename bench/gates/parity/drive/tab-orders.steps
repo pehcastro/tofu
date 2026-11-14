@@ -1,8 +1,0 @@
-type say hello
-key enter
-wait PARITYHELLO
-idle
-key alt+5
-screen
-key esc
-screen

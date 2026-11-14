@@ -1,4 +1,4 @@
- tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
     You                                                                                    14:32    
     agents                                                                                          
@@ -28,7 +28,7 @@
   # Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
  ctx 118k/250k  |  claude 62%     [&orchestrator]  .  claude-sub/claude-opus-5  .  reasoning medium 
- tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    |
   Sub-agents               All activity                                   8-10/10 . wheel ^ older  |
@@ -58,7 +58,7 @@
                            |                                                                  |    |
                            +------------------------------------------------------------------+     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
- tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    |
   File edits                       internal/judge/ledger/floor_rows.go              [edit#e5a102]  |
@@ -88,7 +88,7 @@
                                    + 1200  var lastRow = floorRow{Question: "risk", Line: 1200}    |
                                                                                                     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
- tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    |
   Shells                   dev-server                                                    running   |
@@ -118,7 +118,7 @@
                            k request kill . confirmation required                                  |
                                                                                                     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
- tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
 
                                                                                                    |
   Shells                   dev-server                                                    running   |
@@ -148,7 +148,7 @@
                            k request kill . confirmation required                                  |
                          
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
- tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
 
     You                                                                                    14:32
     agents
@@ -170,8 +170,8 @@
     [&orchestrat    shells                                                 /shells  sage#e5a103]
     the resolver    the persistent processes an agent left running                  
                                                                                     
-                    orders                                                 /orders  
-                    every order the lead gave a sub-agent, one line each            
+                    models                                                 /models  
+                    every model the signed subscriptions serve, and which one the.  
   cooked for 0s                                                                     
 
                                                                                                     

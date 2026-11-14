@@ -1,4 +1,4 @@
- tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                     
     You                                                                                    14:32    
@@ -28,7 +28,7 @@
   █ Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
  ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
- tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                    │
   Sub-agents               [&orchestrator]                                         1-3/3 · newest  │
@@ -58,7 +58,7 @@
                            │                                                                  │    ┃
                            ╰──────────────────────────────────────────────────────────────────╯     
  ctx 118k/250k  |  claude-sub 5h 62%                                                                
- tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
+ tofu  ./tofu/                   chat   agents   edits   shells (1)                   0s [settings] 
                                                                                                     
                                                                                                     
   Sub-agents               [&ts-dev-2]                                             1-3/3 · newest   

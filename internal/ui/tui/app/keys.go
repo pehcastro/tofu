@@ -318,8 +318,6 @@ func (a *App) screenKey(key string) (tea.Cmd, bool) {
 		case shells.IntentNone:
 		}
 		return nil, key != "esc"
-	case screenOrders:
-		return nil, a.orders.Key(key)
 	case screenSettings:
 		if key == "shift+tab" {
 			key = "tab"

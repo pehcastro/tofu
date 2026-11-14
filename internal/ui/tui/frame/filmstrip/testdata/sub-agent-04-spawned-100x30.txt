@@ -1,4 +1,4 @@
- tofu  ./tofu/              chat   agents (1)   edits   shells   orders              30s [settings] 
+ tofu  ./tofu/                   chat   agents (1)   edits   shells                  30s [settings] 
                                                                                                     
                                                                                                     
     You                                                                                    14:32    

@@ -1,4 +1,4 @@
- tofu        chat  agents  edits shells orders   [settings] 
+ tofu        chat   agents   edits   shells   0s [settings] 
                                                             
                                                            │
   All activity                      7-8/8 · wheel ↑ older  │

@@ -228,7 +228,6 @@ Not in git: `.local/`, `.tofu/`, `.claude/`, `.agents/`, `.playground/`, `.zed/`
 | `internal/ui/tui/panels/trace/` | the trace panel |
 | `internal/ui/tui/panels/quota/` | the quota panel |
 | `internal/ui/tui/panels/progress/` | the progress panel |
-| `internal/ui/tui/panels/orders/` | the standing orders panel |
 | `internal/ui/tui/frame/frame/` | the frame: top and footer |
 | `internal/ui/tui/frame/frametime/` | frame timing |
 | `internal/ui/tui/frame/filmstrip/` | scripted screens recorded as a filmstrip |

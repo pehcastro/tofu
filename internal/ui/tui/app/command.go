@@ -100,8 +100,6 @@ func (a *App) runCommand(name string) tea.Cmd {
 		return a.show(screenEdits)
 	case "shells":
 		return a.show(screenShells)
-	case "orders":
-		return a.show(screenOrders)
 	case "models":
 		a.openPicker("")
 	case "status":

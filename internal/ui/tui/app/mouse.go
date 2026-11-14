@@ -30,8 +30,6 @@ func (a *App) track() (pointer.Track, bool) {
 		track = a.edits.Track()
 	case screenShells:
 		track = a.shells.Track()
-	case screenOrders:
-		track = a.orders.Track()
 	case screenSettings:
 		return track, false
 	}
@@ -51,7 +49,7 @@ func (a *App) pane() pointer.Pane {
 		split = a.edits.Split()
 	case screenShells:
 		split = a.shells.Split()
-	case screenChat, screenOrders, screenSettings:
+	case screenChat, screenSettings:
 	}
 	return pointer.Pane{Split: split, Width: a.width, Top: bodyTop, Bottom: a.height - 2}
 }
@@ -326,8 +324,6 @@ func (a *App) wheel(msg tea.MouseWheelMsg) tea.Cmd {
 		a.edits.Wheel(delta < 0)
 	case screenShells:
 		a.shells.Wheel(delta * wheelRows)
-	case screenOrders:
-		a.orders.Wheel(delta * wheelRows)
 	case screenSettings:
 		return a.applyIntent(a.settings.Wheel(msg.X, delta))
 	}
@@ -345,8 +341,6 @@ func (a *App) scrollTo(behindNewest int) {
 	case screenShells:
 		track := a.shells.Track()
 		a.shells.Wheel(track.Total - track.Visible - track.FromTop - behindNewest)
-	case screenOrders:
-		a.orders.SetScroll(behindNewest)
 	case screenSettings:
 	}
 }

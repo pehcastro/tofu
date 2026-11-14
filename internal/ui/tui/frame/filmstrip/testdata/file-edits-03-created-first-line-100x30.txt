@@ -1,4 +1,4 @@
- tofu  ./tofu/                chat   agents   edits   shells   orders                 0s [settings] 
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
                                                                                                    ┃
   File edits                       internal/judge/ledger/floor_rows.go              [edit#e5a102]  │

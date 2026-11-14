@@ -1,4 +1,4 @@
- tofu  ./tofu/              chat   agents (1)   edits   shells   orders               0s [settings] 
+ tofu  ./tofu/                   chat   agents (1)   edits   shells                   0s [settings] 
 
     ⠁ working · [&c1]
     finished · (1) steps · 3 agents · 0s
@@ -14,12 +14,12 @@
                     sub-agents                                                      
                     file edits                                                      
                     shells                                                          
-                    orders                                                          
                     settings                                                        
                     &c1  read the policy loader                                     
                     &c2  write the ledger floor test                                
+                    &c3  run the shell suite                                        
                                                                                     
-                  1 of 9 results                                                    
+                  1 of 8 results                                                    
                                                                                     
 
   ⠋ waiting  |  1 sub-agent  |  0s  

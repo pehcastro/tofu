@@ -1,4 +1,4 @@
- tofu  ./tofu/                chat   agents   edits   shells   orders                 0s [settings] 
+ tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
 
 
 
@@ -20,8 +20,8 @@
                     shells                                                 /shells  
                     the persistent processes an agent left running                  
                                                                                     
-                    orders                                                 /orders  
-                    every order the lead gave a sub-agent, one line each            
+                    models                                                 /models  
+                    every model the signed subscriptions serve, and which one the…  
                                                                                     
 
                                                                                                     

@@ -23,7 +23,6 @@ import (
 	"tofu/internal/ui/tui/chat/session"
 	"tofu/internal/ui/tui/composer/question"
 	"tofu/internal/ui/tui/panels/edits"
-	orderpane "tofu/internal/ui/tui/panels/orders"
 	"tofu/internal/ui/tui/panels/shells"
 	"tofu/internal/ui/tui/panels/subagent"
 	"tofu/internal/ui/tui/panels/trace"
@@ -54,7 +53,6 @@ const (
 	readClock          = "15:04"
 	foldKey            = "f"
 	readBackFailed     = "the folded sub-agents were not all read back from the session: "
-	messageTool        = "message"
 )
 
 func gateOffNote(why core.Why, said string) string {
@@ -646,7 +644,7 @@ func (a *App) absorb(event Event) {
 	case EventDone:
 		a.leadTurnEnds(event.Text)
 		if event.SubAgents != nil {
-			a.showSubAgents(event.SubAgents, at)
+			a.showSubAgents(event.SubAgents)
 		}
 	case EventFailure:
 		event.ID = cmp.Or(event.ID, a.mintID())
@@ -680,7 +678,7 @@ func (a *App) absorb(event Event) {
 	case EventContext:
 		a.status.Context = event.Context
 	case EventSubAgent:
-		a.showSubAgents(event.SubAgents, at)
+		a.showSubAgents(event.SubAgents)
 	case EventPlan:
 		a.feed.SetPlan(planLine(event.Plan))
 	case EventAwaitPerson:
@@ -788,9 +786,6 @@ func (a *App) called(event Event, at time.Time) {
 	if event.Agent != "" {
 		return
 	}
-	if order, sent := orderpane.Message(event.Args); sent && event.Tool == messageTool {
-		a.orderCalls[event.ID] = order
-	}
 	a.running++
 	drawChat(&a.view, event, "")
 }
@@ -816,13 +811,6 @@ func (a *App) answered(event Event, at time.Time) {
 	a.record(done)
 	if event.Agent != "" {
 		return
-	}
-	if order, sent := a.orderCalls[event.ID]; sent {
-		delete(a.orderCalls, event.ID)
-		if !event.Outcome.Failed() {
-			order.At = at
-			a.orders.Add(order)
-		}
 	}
 	if done.Kind != feed.KindSpawn {
 		drawChat(&a.view, event, status)
@@ -1220,7 +1208,7 @@ func (a *App) judged(decision session.Decision, actor string) {
 	}
 }
 
-func (a *App) showSubAgents(subAgents []subagent.Row, at time.Time) {
+func (a *App) showSubAgents(subAgents []subagent.Row) {
 	callsBefore := map[string][]subagent.Call{}
 	for _, held := range a.allSubAgents {
 		callsBefore[held.Name] = held.Calls
@@ -1237,27 +1225,9 @@ func (a *App) showSubAgents(subAgents []subagent.Row, at time.Time) {
 		for _, call := range subAgent.Calls[settledPrefix(callsBefore[subAgent.Name], subAgent.Calls):] {
 			a.rosterCall(subAgent.Name, call)
 		}
-		a.ordered(subAgent, at)
 	}
 	if a.busy && !a.leading {
 		a.view.WaitOn(a.status.Agents)
-	}
-}
-
-func (a *App) ordered(row subagent.Row, at time.Time) {
-	seen, known := a.ordersSeen[row.Name]
-	a.ordersSeen[row.Name] = len(row.Moves)
-	if !known && len(row.Moves) == 0 {
-		a.orders.Add(orderpane.Order{At: row.Started, Agent: row.Name, Kind: orderpane.Spawned, Round: 1, Text: cmp.Or(row.Ticket, row.Doing)})
-		a.orders.Unreplayed(row.Name)
-		return
-	}
-	for _, move := range row.Moves[min(seen, len(row.Moves)):] {
-		text := move.Reason
-		if move.Move == roster.Spawned {
-			text = cmp.Or(row.Ticket, row.Doing)
-		}
-		a.orders.Add(orderpane.Order{At: at, Agent: row.Name, Kind: orderpane.Kind(move.Move), Round: move.Round, Text: text})
 	}
 }
 
@@ -1403,7 +1373,7 @@ func (a *App) parkSubAgentsTheTurnLeftBehind() {
 			parked[i].State = roster.Parked
 		}
 	}
-	a.showSubAgents(parked, a.options.Now())
+	a.showSubAgents(parked)
 }
 
 func (a *App) shellActivity() []session.Activity {
