@@ -172,12 +172,6 @@ func composerRows() []keyRow {
 		{composerGroup, []string{"enter"}, "send, queued mid-turn", func(a *App) (tea.Cmd, bool) { return a.submit(), true }},
 		{composerGroup, []string{"shift+tab"}, "cycle the effort", done((*App).cycleEffort)},
 		{composerGroup, []string{"ctrl+v", "alt+v"}, "paste text or an image", func(a *App) (tea.Cmd, bool) { return a.view.Paste(a.board), true }},
-		{composerGroup, []string{"@"}, "attach a file", func(a *App) (tea.Cmd, bool) {
-			if !a.view.AtWordStart() {
-				return nil, false
-			}
-			return a.push(a.filesDialog()), true
-		}},
 		{composerGroup, []string{"up"}, "previous prompt", func(a *App) (tea.Cmd, bool) { return nil, a.view.HistoryUp() }},
 		{composerGroup, []string{"down"}, "next prompt", func(a *App) (tea.Cmd, bool) { return nil, a.view.HistoryDown() }},
 		{composerGroup, []string{"ctrl+o"}, "open the last tool call or cron fire", func(a *App) (tea.Cmd, bool) { return a.open(a.view.LastExpandable()), true }},

@@ -25,6 +25,6 @@
                                                                                  
                                                                                  
                                                                                                     
-  read                                                                                              
+  ▯ Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
  ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 

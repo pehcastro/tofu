@@ -143,7 +143,7 @@ the key each rebindable action is bound to now. Type to filter it.
 | `Ctrl+L` | Pick the model |
 | `Shift+Tab` | Cycle the effort level |
 | `Shift+Enter`, `Alt+Enter`, `Ctrl+J` | New line; the composer grows to 8 rows, then scrolls |
-| `@` | Attach a file |
+| `@` | At a word start, list matching files under the input; enter writes `@path` |
 | `Ctrl+G` | Edit the prompt in your editor |
 | `Ctrl+P` | Search the prompts you sent, in every session |
 | `Ctrl+O` | Open the lead's last row, or the last tool call |

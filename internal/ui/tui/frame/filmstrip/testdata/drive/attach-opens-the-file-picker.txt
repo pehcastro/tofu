@@ -1,7 +1,6 @@
-# @ opens the file picker, which stays in the workspace
-type read
-key space
-key @
+# /attach opens the file picker, which stays in the workspace
+type /attach
+key enter
 wait Reference a file
 screen
 key left

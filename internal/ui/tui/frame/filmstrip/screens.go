@@ -196,7 +196,7 @@ func screens() []scenario {
 			{"typed", func(r *reel) { r.driver.Type("ledger") }},
 		}},
 		{name: "file-picker", beats: []beat{
-			{"open", func(r *reel) { r.driver.Type("read "); r.press("@"); r.settle() }},
+			{"open", func(r *reel) { r.driver.Type("/attach"); r.press("enter"); r.settle() }},
 			{"moved", keys("down")},
 		}},
 		{name: "hostkeys", beats: []beat{

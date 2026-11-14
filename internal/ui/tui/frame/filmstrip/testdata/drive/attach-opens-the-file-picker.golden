@@ -25,7 +25,7 @@
                                                                                  
                                                                                  
                                                                                                     
-  read                                                                                              
+  ▯ Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
  ctx 118k/250k  |  claude 62%     [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
  tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
@@ -55,7 +55,7 @@
                                                                                  
                                                                                  
                                                                                                     
-  read                                                                                              
+  ▯ Ask tofu to build, inspect, or delegate                                                         
                                                                                                     
  File picker stays inside this …  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
  tofu  ./tofu/              chat   agents   edits   shells (1)   orders               0s [settings] 
@@ -85,6 +85,6 @@
                                                                                                     
                                                                                                     
                                                                                                     
-  read [File @README.md]                                                                            
+  [File @README.md]                                                                                 
                                                                                                     
  File picker stays inside this …  [&orchestrator]  ·  claude-sub/claude-opus-5  ·  reasoning medium 
