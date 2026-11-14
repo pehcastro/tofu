@@ -23,6 +23,7 @@ import (
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
 	skill "tofu/internal/librarian/skills"
+	"tofu/internal/models/classifiers"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/transport"
 	"tofu/internal/platform/credential"
@@ -179,8 +180,12 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	defer judging.Wait()
 	var standing *standingJudge
 	var keeping *keepJudge
-	judging.Go(func() { standing = newStandingJudge(judgedBy) })
-	judging.Go(func() { keeping = newKeepJudge(judgedBy.Project, judgedBy.Places.Log, judgedBy.Task, judgedBy.Notify) })
+	var route classifiers.Opener
+	judging.Go(func() {
+		route = judgedBy.Inbox.takeRoute(judgedBy.Project)
+		judging.Go(func() { standing = newStandingJudge(judgedBy, route) })
+		keeping = newKeepJudge(route, judgedBy.Project, judgedBy.Places.Log, judgedBy.Task, judgedBy.Notify)
+	})
 	sifter := siftOrNothing(config.Sift)
 	if config.Redactor == nil {
 		live := new(credential.HeldKeys).Live()
@@ -970,7 +975,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			if err != nil {
 				return false, err
 			}
-			if steer, err = newSteerJudge(config.Project, places.Log); err != nil {
+			if steer, err = newSteerJudge(route, config.Project, places.Log); err != nil {
 				return false, err
 			}
 		}

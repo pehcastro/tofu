@@ -77,7 +77,7 @@ type Judge struct {
 	ledger     *ledger.Writer
 }
 
-func New(project, log string) (*Judge, error) {
+func New(route classifiers.Opener, project, log string) (*Judge, error) {
 	layers, err := question.Layers(questions.Files(), project)
 	if err != nil {
 		return nil, err
@@ -102,7 +102,7 @@ func New(project, log string) (*Judge, error) {
 	if thresholds.Kept, err = thresholdIn(questions.Files(), keptName+"_at:"); err != nil {
 		return nil, err
 	}
-	client, err := classifiers.Open(project, core.ReadKeyring(), 1)
+	client, err := route(1)
 	if err != nil {
 		return nil, err
 	}

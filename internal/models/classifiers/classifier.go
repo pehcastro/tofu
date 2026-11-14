@@ -6,6 +6,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"tofu/internal/konst"
@@ -60,6 +61,10 @@ func KeyName(of catalog.Provider) string {
 }
 
 func Bound(dir string, keys core.Keyring) (catalog.Model, error) {
+	return bound(dir, func() core.Keyring { return keys })
+}
+
+func bound(dir string, keys func() core.Keyring) (catalog.Model, error) {
 	layers, err := catalog.Layers(shipped.Files(), dir)
 	if err != nil {
 		return catalog.Model{}, err
@@ -78,7 +83,7 @@ func Bound(dir string, keys core.Keyring) (catalog.Model, error) {
 			continue
 		}
 		name := KeyName(model.Provider)
-		if key, _ := keys.KeyFor(credential.CredentialFileName, name); key != "" && !slices.Contains(stored, name) {
+		if key, _ := keys().KeyFor(credential.CredentialFileName, name); key != "" && !slices.Contains(stored, name) {
 			stored = append(stored, name)
 		}
 	}
@@ -94,7 +99,11 @@ func Bound(dir string, keys core.Keyring) (catalog.Model, error) {
 }
 
 func Resolve(dir string, keys core.Keyring) (Route, error) {
-	model, err := Bound(dir, keys)
+	return resolve(dir, func() core.Keyring { return keys })
+}
+
+func resolve(dir string, keys func() core.Keyring) (Route, error) {
+	model, err := bound(dir, keys)
 	if err != nil {
 		return Route{}, err
 	}
@@ -103,8 +112,24 @@ func Resolve(dir string, keys core.Keyring) (Route, error) {
 	if err != nil {
 		return Route{}, err
 	}
-	route.Key, err = keys.KeyFor(credential.CredentialFileName, served.key)
+	route.Key, err = keys().KeyFor(credential.CredentialFileName, served.key)
 	return route, err
+}
+
+type Opener func(concurrency int) (*core.Client, error)
+
+func Resolved(dir string) Opener {
+	var keys core.Keyring
+	var reading sync.WaitGroup
+	reading.Go(func() { keys = core.ReadKeyring() })
+	defer reading.Wait()
+	route, err := resolve(dir, func() core.Keyring { reading.Wait(); return keys })
+	return func(concurrency int) (*core.Client, error) {
+		if err != nil {
+			return nil, err
+		}
+		return route.Client(concurrency)
+	}
 }
 
 func Open(dir string, keys core.Keyring, concurrency int) (*core.Client, error) {

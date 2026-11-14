@@ -93,13 +93,13 @@ type dropCandidate struct {
 	decision string
 }
 
-func newKeepJudge(project, log, task string, notify func(string)) *keepJudge {
+func newKeepJudge(route classifiers.Opener, project, log, task string, notify func(string)) *keepJudge {
 	judge := &keepJudge{project: project, ledger: ledger.NewWriter(log), notify: notify, task: task, decided: map[string]keepDecision{}, dropped: map[dropKey]*recall.Drop{}, index: NewDropIndex()}
-	judge.unasked = judge.open(project)
+	judge.unasked = judge.open(project, route)
 	return judge
 }
 
-func (j *keepJudge) open(project string) error {
+func (j *keepJudge) open(project string, route classifiers.Opener) error {
 	layers, err := question.Layers(questions.Files(), project)
 	if err != nil {
 		return err
@@ -117,7 +117,7 @@ func (j *keepJudge) open(project string) error {
 		return err
 	}
 	j.set, j.asked = set, asked.ToJev()
-	j.client, err = classifiers.Open(project, core.ReadKeyring(), konst.CarryStandingJudged)
+	j.client, err = route(konst.CarryStandingJudged)
 	return err
 }
 

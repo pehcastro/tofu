@@ -36,13 +36,13 @@ type standingJudge struct {
 	decided   map[string]bool
 }
 
-func newStandingJudge(config Config) *standingJudge {
+func newStandingJudge(config Config, route classifiers.Opener) *standingJudge {
 	judge := &standingJudge{ledger: ledger.NewWriter(config.Places.Log), notify: config.Notify, decided: map[string]bool{}}
-	judge.unasked = judge.open(config.Project)
+	judge.unasked = judge.open(config.Project, route)
 	return judge
 }
 
-func (j *standingJudge) open(project string) error {
+func (j *standingJudge) open(project string, route classifiers.Opener) error {
 	layers, err := question.Layers(questions.Files(), project)
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func (j *standingJudge) open(project string) error {
 		return err
 	}
 	j.set, j.asked = set, asked.ToJev()
-	j.client, err = classifiers.Open(project, core.ReadKeyring(), konst.CarryStandingJudged)
+	j.client, err = route(konst.CarryStandingJudged)
 	return err
 }
 

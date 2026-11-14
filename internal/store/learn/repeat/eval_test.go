@@ -12,6 +12,7 @@ import (
 
 	"tofu/internal/judge/ledger"
 	"tofu/internal/konst"
+	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/classifiers/providers/typesafe"
 	"tofu/internal/models/transport"
@@ -89,7 +90,8 @@ func TestEvalCorpus(t *testing.T) {
 	table := []string{"n\tlabel\truns\tnoted\tscore\tkept scores\tkept noted\tkept label"}
 	for _, item := range eval.Items {
 		log := t.TempDir()
-		judge, err := New(t.TempDir(), log)
+		project := t.TempDir()
+		judge, err := New(classifiers.Resolved(project), project, log)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -21,14 +21,14 @@ type questionAt struct {
 	unanswered         string
 }
 
-func newSteerJudge(project, log string) (*oneQuestion, error) {
+func newSteerJudge(route classifiers.Opener, project, log string) (*oneQuestion, error) {
 	return newOneQuestion(questionAt{ref: "steer_answered@1", name: "answered", builder: "steer_answered_state@1", onReach: ledger.VerdictAllow,
-		unanswered: "jev could not answer, so a reply with text counts as the answer: "}, project, log)
+		unanswered: "jev could not answer, so a reply with text counts as the answer: "}, route, project, log)
 }
 
-func newOpenJudge(project, log string) (*oneQuestion, error) {
+func newOpenJudge(route classifiers.Opener, project, log string) (*oneQuestion, error) {
 	return newOneQuestion(questionAt{ref: "request_open@3", name: "open", builder: "request_open_state@2", onReach: ledger.VerdictAsk,
-		unanswered: "jev could not answer, so the request is not restated and the lead starts on it: "}, project, log)
+		unanswered: "jev could not answer, so the request is not restated and the lead starts on it: "}, route, project, log)
 }
 
 type oneQuestion struct {
@@ -40,7 +40,7 @@ type oneQuestion struct {
 	ledger    *ledger.Writer
 }
 
-func newOneQuestion(at questionAt, project, log string) (*oneQuestion, error) {
+func newOneQuestion(at questionAt, route classifiers.Opener, project, log string) (*oneQuestion, error) {
 	layers, err := question.Layers(questions.Files(), project)
 	if err != nil {
 		return nil, err
@@ -58,7 +58,7 @@ func newOneQuestion(at questionAt, project, log string) (*oneQuestion, error) {
 	if err != nil {
 		return nil, err
 	}
-	client, err := classifiers.Open(project, core.ReadKeyring(), 1)
+	client, err := route(1)
 	if err != nil {
 		return nil, err
 	}

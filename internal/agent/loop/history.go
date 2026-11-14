@@ -15,6 +15,7 @@ import (
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
+	"tofu/internal/models/classifiers"
 	"tofu/internal/models/llm/core"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/store/session"
@@ -312,7 +313,7 @@ func CompactCarried(ctx context.Context, project string, places platformproject.
 	if err != nil {
 		return Compacted{}, err
 	}
-	artifacts.preview, artifacts.keep = artifacts.preview.OnWire(wire), newKeepJudge(project, places.Log, task, nil)
+	artifacts.preview, artifacts.keep = artifacts.preview.OnWire(wire), newKeepJudge(classifiers.Resolved(project), project, places.Log, task, nil)
 	if NewestTask(carried) == "" {
 		artifacts.keep.unfound = "no task was found in a message from the person, so the task is the one the session opened with"
 		if task == "" {

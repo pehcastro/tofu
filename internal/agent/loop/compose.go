@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 
 	"tofu/internal/agent/prompt"
@@ -627,6 +628,10 @@ func NewRuleJudge(project string) *RuleJudge {
 }
 
 func (j *pointJudge) open(project, ref, name string, kind question.Kind) error {
+	var route classifiers.Opener
+	var routing sync.WaitGroup
+	routing.Go(func() { route = classifiers.Resolved(project) })
+	defer routing.Wait()
 	var err error
 	if j.methods, err = points.Load(shipped.Files()); err != nil {
 		return err
@@ -652,7 +657,8 @@ func (j *pointJudge) open(project, ref, name string, kind question.Kind) error {
 		return err
 	}
 	j.asked, j.version, j.ledger = asked, set.QuestionsVersion, ledger.NewWriter(places.Log)
-	j.client, err = classifiers.Open(project, core.ReadKeyring(), 1)
+	routing.Wait()
+	j.client, err = route(1)
 	return err
 }
 

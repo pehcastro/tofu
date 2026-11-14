@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/konst"
+	"tofu/internal/models/classifiers"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/platform/outside"
 	platformproject "tofu/internal/platform/project"
@@ -57,6 +58,7 @@ type Inbox struct {
 	said     map[string][]PersonSaid
 	repeats  *repeat.Judge
 	opens    *oneQuestion
+	route    classifiers.Opener
 	project  string
 	watched  map[string]bool
 	typed    <-chan string
@@ -501,12 +503,32 @@ func (b *Inbox) openJudges(config Config) {
 		config.notifyNoJev("a repeated instruction goes unnoticed and an open request goes unrestated", err)
 		return
 	}
-	if b.repeats, err = repeat.New(config.Project, places.Log); err != nil {
-		config.notifyNoJev("a repeated instruction goes unnoticed", err)
+	b.route = classifiers.Resolved(config.Project)
+	var repeating sync.WaitGroup
+	var unrepeated error
+	repeating.Go(func() { b.repeats, unrepeated = repeat.New(b.route, config.Project, places.Log) })
+	b.opens, err = newOpenJudge(b.route, config.Project, places.Log)
+	repeating.Wait()
+	if unrepeated != nil {
+		config.notifyNoJev("a repeated instruction goes unnoticed", unrepeated)
 	}
-	if b.opens, err = newOpenJudge(config.Project, places.Log); err != nil {
+	if err != nil {
 		config.notifyNoJev("an open request goes unrestated", err)
 	}
+}
+
+func (b *Inbox) takeRoute(project string) classifiers.Opener {
+	if b == nil {
+		return classifiers.Resolved(project)
+	}
+	b.mu.Lock()
+	route, opened := b.route, b.project
+	b.route = nil
+	b.mu.Unlock()
+	if route == nil || opened != project {
+		return classifiers.Resolved(project)
+	}
+	return route
 }
 
 func (c Config) notifyNoJev(unseen string, err error) {
