@@ -112,6 +112,13 @@ func (d *Driver) feed(message, cause tea.Msg) {
 	d.command(cmd, message)
 }
 
+func (d *Driver) feedAfterIdle(got delivery, idle time.Duration) {
+	if got.tick() {
+		outside.Waited(d.ctx, outside.Person, idle)
+	}
+	d.feed(got.message, got.cause)
+}
+
 func (d *Driver) Settle() error { return d.settle(settleCeiling) }
 
 func (d *Driver) settle(within time.Duration) error {
@@ -131,10 +138,7 @@ func (d *Driver) settle(within time.Duration) error {
 			case got.rearmedTimer():
 				timers = append(timers, got)
 			default:
-				if got.tick() {
-					outside.Waited(d.ctx, outside.Person, time.Since(lastFed))
-				}
-				d.feed(got.message, got.cause)
+				d.feedAfterIdle(got, time.Since(lastFed))
 				d.app.View()
 				quiet.Reset(settleQuiet)
 				lastFed = time.Now()
@@ -256,7 +260,7 @@ func (d *Driver) Await(text string, within time.Duration) error {
 			case got.repeatedWelcomePulse():
 				idle += time.Since(blocked)
 			default:
-				d.feed(got.message, got.cause)
+				d.feedAfterIdle(got, idle+time.Since(blocked))
 				idle = 0
 			}
 		case <-poll.C:
