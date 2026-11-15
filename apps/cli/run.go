@@ -20,6 +20,7 @@ import (
 	judgeverb "tofu/apps/cli/verbs/judge"
 	shellsverb "tofu/apps/cli/verbs/shells"
 	"tofu/apps/cli/wiring"
+	"tofu/internal/agent/commands"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/cron"
 	"tofu/internal/agent/hooks"
@@ -289,7 +290,7 @@ func (r runtime) subAgentOpener(opts wiring.RunOpts) func(subagents.Definition, 
 }
 
 func runUsage() string {
-	return fmt.Sprintf(runUsageText,
+	return fmt.Sprintf(runUsageText, strings.Join(turnCommands(), ", "),
 		llm.EffortList(llm.Efforts()), llm.EffortDefault,
 		llm.EffortList(anthropic.ReasoningEfforts()), strings.Join(thinkingSummaries(), " or "), wiring.ShellSiftCost(), loop.LeadAloneMostNamedFiles, loop.InstructionsOff, konst.TemporaryProjectIdleHours)
 }
@@ -297,10 +298,13 @@ func runUsage() string {
 const runUsageText = `tofu run works a task in a directory until it is done.
 
 Usage:
-  tofu run --dir <path> [arguments] <task>
+  tofu run --dir <path> [arguments] [--command <names>] [<task>]
 
 Arguments:
   --dir <path>          the directory the task is worked in, required
+  --command <names>     run a command as the interface's /name does, each as its own turn of one
+                        session in the order given, the task last; repeat the flag or join the
+                        names with commas, as in --command generate-map,hunt. the names: %s
   --session <handle>    a name, an id or head: the task is the next turn of that session in
                         the project, with its conversation and the prefix it first sent
   --model <id>          the orchestrator's model, otherwise the one the orchestrator role is bound to;
@@ -356,16 +360,71 @@ func runVerb(ctx context.Context, args []string, out, errOut io.Writer) int {
 		_, _ = fmt.Fprint(out, runUsage())
 		return output.ExitOK
 	}
-	clock := clockFromProcessStart()
 	opts, err := parseRunArgs(args)
 	if err != nil {
 		return runFail(errOut, err)
 	}
+	tasks, err := commandTurns(args, cmp.Or(opts.Dir, "."))
+	if err != nil {
+		return runFail(errOut, err)
+	}
+	if opts.Task != "" {
+		tasks = append(tasks, opts.Task)
+	}
+	if len(tasks) > 1 && (opts.DryRun || opts.ShowPrompt) {
+		return runFail(errOut, fmt.Errorf("--dry-run and --show-prompt send nothing, so they take one turn, and this run asks for %d", len(tasks)))
+	}
+	clock, open := clockFromProcessStart(), wireOpener()
+	for _, task := range tasks {
+		opts.Task = task
+		code, head := runOne(ctx, opts, open, clock, out, errOut)
+		if code != output.ExitOK {
+			return code
+		}
+		opts.Resume, clock = head, clockFromNow()
+	}
+	return output.ExitOK
+}
+
+func commandTurns(args []string, root string) ([]string, error) {
+	var turns []string
+	names := turnCommands()
+	for at, arg := range args[:max(len(args)-1, 0)] {
+		if arg != "--command" {
+			continue
+		}
+		for typed := range strings.SplitSeq(args[at+1], ",") {
+			typed = strings.TrimSpace(typed)
+			name, _, _ := strings.Cut(typed, " ")
+			if !slices.Contains(names, name) {
+				return nil, fmt.Errorf("--command %s is none of %s", cmp.Or(name, `""`), strings.Join(names, ", "))
+			}
+			turn, err := commands.Expand("/"+typed, root)
+			if err != nil {
+				return nil, err
+			}
+			turns = append(turns, turn)
+		}
+	}
+	return turns, nil
+}
+
+func turnCommands() []string {
+	var names []string
+	for _, one := range commands.Table() {
+		if one.Starts() {
+			names = append(names, one.Name)
+		}
+	}
+	return names
+}
+
+func runOne(ctx context.Context, opts wiring.RunOpts, open wiring.Opener, clock *startupClock, out, errOut io.Writer) (int, string) {
 	resumed, err := resumeRun(opts.Dir, opts.Resume, writeNotice(errOut))
 	if err != nil {
 		hinted := output.ProblemError{What: err.Error()}
 		errors.As(err, &hinted)
-		return output.Verb{Name: "run", ErrOut: errOut}.Refuse(output.ExitUsage, page.Problem(hinted))
+		return output.Verb{Name: "run", ErrOut: errOut}.Refuse(output.ExitUsage, page.Problem(hinted)), ""
 	}
 	defer resumed.letGo()
 	opts, modelFrom := resumed.onItsModel(opts)
@@ -382,26 +441,26 @@ func runVerb(ctx context.Context, args []string, out, errOut io.Writer) int {
 	if opts.NoSubAgents && opts.DoneArm != settingspkg.DoneReviewOff {
 		return runFail(errOut, fmt.Errorf(
 			"--done-review %s with the %s setting off: that arm has no spawn tool, so no sub-agent is ever reviewed and the flag would say a check is running that is not",
-			opts.DoneArm, settingspkg.TurnMaySpawn))
+			opts.DoneArm, settingspkg.TurnMaySpawn)), ""
 	}
 	opts.LeadMayWorkAlone = true
 	if opts.ShowPrompt {
-		return showPrompt(ctx, opts, out, errOut)
+		return showPrompt(ctx, opts, out, errOut), ""
 	}
 	clock.step("settings", 0)
 
 	selected, err := wiring.ChooseModel(opts)
 	if err != nil {
-		return runFail(errOut, err)
+		return runFail(errOut, err), ""
 	}
 	if modelFrom != "" {
 		_, _ = fmt.Fprintf(out, "session %s runs on %s, from %s\n", resumed.carry.Handle, selected.Slug(), modelFrom)
 	}
 	clock.step("model choice", 0)
 	if opts.DryRun {
-		return dryRun(ctx, opts, selected, dir, say, out, errOut)
+		return dryRun(ctx, opts, selected, dir, say, out, errOut), ""
 	}
-	return runTurn(ctx, opts, resumed, selected, clock, out, errOut)
+	return runTurn(ctx, opts, resumed, selected, open, clock, out, errOut)
 }
 
 func dryRun(ctx context.Context, opts wiring.RunOpts, selected models.Model, dir string, say func(string), out, errOut io.Writer) int {
@@ -439,10 +498,10 @@ func dryRun(ctx context.Context, opts wiring.RunOpts, selected models.Model, dir
 	return output.ExitOK
 }
 
-func runTurn(ctx context.Context, opts wiring.RunOpts, resumed runResumed, selected models.Model, clock *startupClock, out, errOut io.Writer) int {
+func runTurn(ctx context.Context, opts wiring.RunOpts, resumed runResumed, selected models.Model, open wiring.Opener, clock *startupClock, out, errOut io.Writer) (int, string) {
 	places, err := platformproject.ResolvePlaces(cmp.Or(opts.Dir, "."))
 	if err != nil {
-		return runFail(errOut, err)
+		return runFail(errOut, err), ""
 	}
 	home, _ := os.UserHomeDir()
 	warm := newWarmProcesses(browser.NewBrowserTabs(home))
@@ -451,14 +510,14 @@ func runTurn(ctx context.Context, opts wiring.RunOpts, resumed runResumed, selec
 	if opts.GateArm == gateOff {
 		missing = missingJudgeRunsWithout
 	}
-	engine := &appEngine{dir: opts.Dir, open: wireOpener(), tabs: warm.tabs, warm: warm, places: places, missingJudge: missing}
+	engine := &appEngine{dir: opts.Dir, open: open, tabs: warm.tabs, warm: warm, places: places, missingJudge: missing}
 	same := func(model loop.Model) loop.Model { return model }
 	started, err := engine.startTurn(opts, host.Turn{}, host.Hooks{Lead: same, SubAgent: same, Say: writeNotice(errOut), Reads: contract.NewReadLedger()}, clock)
 	if started.Close != nil {
 		defer started.Close()
 	}
 	if err != nil {
-		return runFail(errOut, err)
+		return runFail(errOut, err), ""
 	}
 	config, spawner, sessions, gate, scorer := started.Config, started.Spawner, started.Sessions, started.gate, started.scorer
 	resumed.into(&config)
@@ -473,7 +532,7 @@ func runTurn(ctx context.Context, opts wiring.RunOpts, resumed runResumed, selec
 	context.AfterFunc(interrupted, stop)
 	leading, err := shellsverb.LeadScratch(interrupted, config, errOut)
 	if err != nil {
-		return runFail(errOut, err)
+		return runFail(errOut, err), ""
 	}
 	clock.step("shell registry and scratch", 0)
 	runErr := loop.Lead(loop.WithShellRegistry(leading, registry), config, nil, nil, func(row loop.Row, _ error) {
@@ -507,9 +566,9 @@ func runTurn(ctx context.Context, opts wiring.RunOpts, resumed runResumed, selec
 		_, _ = fmt.Fprintf(out, "sift decisions %d cost $%.6f\n", calls, cost)
 	}
 	if runErr != nil {
-		return runFail(errOut, runErr)
+		return runFail(errOut, runErr), head
 	}
-	return output.ExitOK
+	return output.ExitOK, head
 }
 
 func runEnvironment(opts wiring.RunOpts, now func() time.Time) (environment, written, instructions, notice string) {
@@ -1598,6 +1657,8 @@ func parseRunArgs(args []string) (wiring.RunOpts, error) {
 			opts.Dir, err = output.NextArg(args, &i, arg)
 		case "--session":
 			opts.Resume, err = output.NextArg(args, &i, arg)
+		case "--command":
+			_, err = output.NextArg(args, &i, arg)
 		case "--dry-run":
 			opts.DryRun = true
 		case "--show-prompt":
@@ -1662,8 +1723,8 @@ func parseRunArgs(args []string) (wiring.RunOpts, error) {
 	if opts.Dir == "" {
 		return wiring.RunOpts{}, errors.New("--dir is required: tofu run never defaults to the current directory, because its bash tool is not sandboxed")
 	}
-	if strings.TrimSpace(opts.Task) == "" {
-		return wiring.RunOpts{}, errors.New("tofu run needs a task")
+	if strings.TrimSpace(opts.Task) == "" && !slices.Contains(args, "--command") {
+		return wiring.RunOpts{}, errors.New("tofu run needs a task or a --command")
 	}
 	if opts.Resume != "" && (opts.DryRun || opts.ShowPrompt) {
 		return wiring.RunOpts{}, errors.New("--session sends the next turn of a session, and --dry-run and --show-prompt send nothing")

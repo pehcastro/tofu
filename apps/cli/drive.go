@@ -42,10 +42,17 @@ import (
 	"tofu/internal/ui/tui/frame/frame"
 )
 
-const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--clipboard PATH] [--source NAME] [--quota PATH] [--width N] [--height N] [--timeout 60s] [--plain] [--fresh | --continue] [--host] [--setup] [ARM]
+const driveUsage = `usage: tofu drive [SCRIPT] [--dir PATH] [--home PATH] [--cassette PATH] [--clipboard PATH] [--source NAME] [--quota PATH] [--width N] [--height N] [--timeout 60s] [--plain] [--fresh | --continue] [--host] [--setup] [--live [--model SLUG]] [ARM]
 
-drives the app the way a person does, with no terminal and no model call.
+drives the app the way a person does, with no terminal and, unless --live, no model call.
 SCRIPT is a file of steps, or - for standard input.
+
+--live answers from the real model instead of a cassette: a subscription the
+home signed in to, never a key. With no --home it reads your own home, its
+sign-ins and settings, and records the session there, as tofu does. --model
+SLUG picks the model, such as claude-sub/claude-opus-5-5, otherwise the
+default of the first subscription signed in. It takes no --cassette and no
+--source, and a home with no sign-in fails saying what to run to sign in.
 
 --source claude-sub|codex-sub names the subscription the orchestrator's model
 reports, while the cassette still answers. Without it the source is cassette.
@@ -728,7 +735,42 @@ func readQuotas(path string, held wiring.HeldStore) (func() []frame.Quota, error
 	}, nil
 }
 
-func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePlan, launch appLaunch, held wiring.HeldStore, quotas func() []frame.Quota) *tui.App {
+func liveWires(held wiring.HeldStore, model string) ([]tui.Wire, error) {
+	library, err := wiring.ModelLibrary("")
+	if err != nil {
+		return nil, err
+	}
+	signed := slices.DeleteFunc(held.Wires(), func(one tui.Wire) bool { return one.Name == wiring.WireKey || one.Name == wiring.WireMeta })
+	if len(signed) == 0 {
+		var hints []string
+		for _, spec := range library.Subscriptions {
+			hints = append(hints, wiring.LoginHint(string(spec.ID)))
+		}
+		return nil, errors.New("--live answers from a subscription this home signed in to, and it has none: sign in with " + strings.Join(hints, " or "))
+	}
+	if model == "" {
+		return signed, nil
+	}
+	chosen, err := library.Select(model)
+	if err != nil {
+		return nil, err
+	}
+	at := slices.IndexFunc(signed, func(one tui.Wire) bool { return one.Provider == string(chosen.Subscription) })
+	if at < 0 {
+		return nil, fmt.Errorf("--model %s is served by %s, which this home has not signed in to: sign in with %s", model, chosen.Subscription, wiring.LoginHint(string(chosen.Subscription)))
+	}
+	signed[at].Model = chosen.ID
+	return signed[at : at+1], nil
+}
+
+func liveOpener(opts wiring.RunOpts) (wiring.Wire, error) {
+	if opts.Wire == wiring.WireKey || opts.Wire == wiring.WireMeta {
+		return wiring.Wire{}, fmt.Errorf("tofu drive --live answers only from a subscription the home signed in to, and the %s wire is paid by a key", opts.Wire)
+	}
+	return wiring.OpenWire(opts)
+}
+
+func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePlan, launch appLaunch, held wiring.HeldStore, quotas func() []frame.Quota, live []tui.Wire) *tui.App {
 	shown := wiring.CassetteBuild
 	if deck != nil {
 		shown = deck.name
@@ -738,6 +780,9 @@ func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePla
 		wires: func() []tui.Wire {
 			if plan.setup {
 				return held.Wires()
+			}
+			if plan.live {
+				return live
 			}
 			library, _ := wiring.ModelLibrary(dir)
 			listed := []tui.Wire{{Name: library.WireFor(catalog.Subscription(plan.source)), Model: shown, Provider: cmp.Or(plan.source, wiring.CassetteBuild)}}
@@ -775,6 +820,9 @@ func drivenApp(dir string, deck *cassette, clock func() time.Time, plan drivePla
 		now:   clock,
 		joins: plan.host,
 	}
+	if plan.live {
+		recorded.open = liveOpener
+	}
 	return tui.New(appOptions(dir, plan.arms, recorded, launch, held))
 }
 
@@ -807,6 +855,8 @@ type drivePlan struct {
 	resume    bool
 	host      bool
 	setup     bool
+	live      bool
+	model     string
 	arms      wiring.RunOpts
 }
 
@@ -847,6 +897,9 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 		case "--setup":
 			plan.setup = true
 			continue
+		case "--live":
+			plan.live = true
+			continue
 		case "--no-gate":
 			plan.arms.GateArm = gateOff
 			continue
@@ -881,6 +934,8 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 			plan.clipboard = taken
 		case "--source":
 			plan.source = taken
+		case "--model":
+			plan.model = taken
 		case "--quota":
 			plan.quota = taken
 		case "--width":
@@ -916,6 +971,14 @@ func driveArgs(args []string, errOut io.Writer) (drivePlan, bool) {
 		armIsKnown("--source", plan.source, []string{string(accounts.ClaudeSub), string(accounts.CodexSub)}),
 	); err != nil {
 		return refuse("", err)
+	}
+	switch {
+	case plan.live && (slices.Contains(args, "--cassette") || plan.source != ""):
+		return refuse("", errors.New("--live answers from the real model the home signed in to, so it takes no --cassette and no --source"))
+	case plan.model != "" && !plan.live:
+		return refuse("", errors.New("--model names the real model --live answers from, and without --live a cassette answers"))
+	case plan.live:
+		plan.cassette = ""
 	}
 	for _, path := range []*string{&plan.script, &plan.home, &plan.cassette, &plan.quota, &plan.clipboard} {
 		if *path == "" || *path == stdinScript {
@@ -990,10 +1053,13 @@ func refuseTheRealHome(named string) error {
 	return nil
 }
 
-func printDriveSettings(out io.Writer, dir, named string) {
+func printDriveSettings(out io.Writer, dir string, plan drivePlan) {
 	where := "settings: no --home was named, so this run made an empty one and read no settings file of yours"
-	if named != "" {
-		where = "settings: read from the home named by --home " + named
+	switch {
+	case plan.home != "":
+		where = "settings: read from the home named by --home " + plan.home
+	case plan.live:
+		where = "settings: --live with no --home reads your own home, its sign-ins and its settings, as tofu does"
 	}
 	_, _ = fmt.Fprintln(out, where)
 	store, err := settingspkg.OpenFor(dir)
@@ -1027,12 +1093,14 @@ func driveIn(ctx context.Context, args []string, in io.Reader, out, errOut io.Wr
 	if err != nil {
 		return driveFail(errOut, err)
 	}
-	release, err := driveHome(plan.home)
-	if err != nil {
-		return driveFail(errOut, err)
+	release := func() {}
+	if !plan.live || plan.home != "" {
+		if release, err = driveHome(plan.home); err != nil {
+			return driveFail(errOut, err)
+		}
 	}
 	defer release()
-	printDriveSettings(out, dir, plan.home)
+	printDriveSettings(out, dir, plan)
 	steps, err := readScript(plan.script, in)
 	if err != nil {
 		return driveFail(errOut, err)
@@ -1043,6 +1111,9 @@ func driveIn(ctx context.Context, args []string, in io.Reader, out, errOut io.Wr
 	}
 	if plan.host && deck != nil {
 		_ = os.Setenv(cassetteVariable, plan.cassette)
+	}
+	if plan.live {
+		_ = os.Unsetenv(cassetteVariable)
 	}
 	if plan.host {
 		_ = os.Setenv(doneReviewVariable, plan.arms.DoneArm)
@@ -1057,6 +1128,12 @@ func driveIn(ctx context.Context, args []string, in io.Reader, out, errOut io.Wr
 	if err != nil {
 		return driveFail(errOut, err)
 	}
+	var live []tui.Wire
+	if plan.live {
+		if live, err = liveWires(held, plan.model); err != nil {
+			return driveFail(errOut, err)
+		}
+	}
 	resumed := sessionResume{}
 	store, err := sessionstore.Open()
 	if err != nil {
@@ -1065,10 +1142,14 @@ func driveIn(ctx context.Context, args []string, in io.Reader, out, errOut io.Wr
 	if plan.resume {
 		resumed = continueCarry(store)
 	}
-	defer printRecorded(out, store, eventSizes(store), dir, plan.home)
+	recordedIn := plan.home
+	if plan.live && recordedIn == "" {
+		recordedIn, _ = os.UserHomeDir()
+	}
+	defer printRecorded(out, store, eventSizes(store), dir, recordedIn)
 	launch := launchOf(dir, resumed, plan.fresh)
 	defer leaveShells(launch.registry)
-	app := drivenApp(dir, deck, clock, plan, launch, held, quotas)
+	app := drivenApp(dir, deck, clock, plan, launch, held, quotas, live)
 	driver := filmstrip.DriveIn(ctx, app, plan.width, plan.height, platformproject.CrashDir(dir))
 	defer driver.Close()
 	defer (*launch.release)()
