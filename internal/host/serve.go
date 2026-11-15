@@ -531,15 +531,19 @@ type Compacted struct {
 
 const nothingToFork = "nothing to fork: this session carries no history yet"
 
-var errForking = errors.New("this session is already compacting or forking: wait for it to end")
+var errForking = errors.New("this session is compacting or forking: wait for it to end")
 
 func (h *Host) Fork(ask HandFork) (_ Compacted, err error) {
 	if err := h.reachHost(); err != nil {
 		return Compacted{}, err
 	}
+	if err := h.holdForFork(); err != nil {
+		return Compacted{}, err
+	}
+	defer h.releaseFork()
 	if f := h.following.Load(); f != nil {
 		ask.By = "member process " + strconv.Itoa(os.Getpid()) + ", " + ask.By
-		reply := f.ask(followAsk{Op: followHandFork, Fork: ask})
+		reply := f.askWithin(followAsk{Op: followHandFork, Fork: ask}, nil)
 		switch {
 		case reply.ID == 0:
 			return Compacted{}, errHostSilent
@@ -548,10 +552,6 @@ func (h *Host) Fork(ask HandFork) (_ Compacted, err error) {
 		}
 		return reply.Compacted, nil
 	}
-	if err := h.holdForFork(); err != nil {
-		return Compacted{}, err
-	}
-	defer h.releaseFork()
 	id, carried, compacting := h.ID(), h.Carried(), time.Now()
 	ctx, clock := outside.Open(context.Background(), time.Now)
 	defer func() {
@@ -618,15 +618,28 @@ func (h *Host) Fork(ask HandFork) (_ Compacted, err error) {
 func (h *Host) holdForFork() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if err := h.moving(); err != nil {
+		return err
+	}
+	h.forking = true
+	h.dropCheckIn()
+	return nil
+}
+
+func (h *Host) moving() error {
 	switch {
 	case h.running:
 		return turnRunning(h.turn)
 	case h.forking:
 		return errForking
 	}
-	h.forking = true
-	h.dropCheckIn()
 	return nil
+}
+
+func (h *Host) movable() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.moving()
 }
 
 func (h *Host) releaseFork() {

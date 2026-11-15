@@ -64,6 +64,7 @@ const (
 	followBeat      followOp = "beat"
 	followHandFork  followOp = "handFork"
 	followRenew     followOp = "renew"
+	followMovable   followOp = "movable"
 )
 
 type followAsk struct {
@@ -434,12 +435,14 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		if reply.Compacted, err = h.Fork(ask.Fork); err != nil {
 			reply.OK, reply.Failed = false, err.Error()
 		}
-	case followRenew:
-		if turn, running := h.Turn(); running {
-			reply.OK, reply.Turn = false, turn
+	case followMovable, followRenew:
+		if err := h.movable(); err != nil {
+			reply.OK, reply.Failed = false, err.Error()
 			break
 		}
-		h.emitter().emit(Event{Kind: EventSession})
+		if ask.Op == followRenew {
+			h.emitter().emit(Event{Kind: EventSession})
+		}
 	default:
 		reply.OK = false
 	}
@@ -518,6 +521,10 @@ func heldRoster(store *session.Store, id string) []SubAgentRow {
 }
 
 func (f *following) ask(ask followAsk) followReply {
+	return f.askWithin(ask, time.After(followReplyWait))
+}
+
+func (f *following) askWithin(ask followAsk, wait <-chan time.Time) followReply {
 	reply := make(chan followReply, 1)
 	f.mu.Lock()
 	unsent := ""
@@ -549,7 +556,7 @@ func (f *following) ask(ask followAsk) followReply {
 	case got := <-reply:
 		return got
 	case <-f.gone:
-	case <-time.After(followReplyWait):
+	case <-wait:
 	}
 	return followReply{}
 }
@@ -587,7 +594,7 @@ func (f *following) send(pick Pick, task string, images []pendingImage) followRe
 	return reply
 }
 
-func (f *following) renew() string {
+func (f *following) renew() error {
 	f.mu.Lock()
 	f.renewed = true
 	f.mu.Unlock()
@@ -597,7 +604,14 @@ func (f *following) renew() string {
 		f.renewed = false
 		f.mu.Unlock()
 	}
-	return reply.Turn
+	return reply.refusal()
+}
+
+func (reply followReply) refusal() error {
+	if reply.Failed == "" {
+		return nil
+	}
+	return errors.New(reply.Failed)
 }
 
 func (reply followReply) delivered() bool { return reply.Refused == "" && reply.ID != 0 }

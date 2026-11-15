@@ -904,8 +904,11 @@ func (c Carry) reading(dir string) (*session.Store, error) {
 
 func (h *Host) Fresh() error {
 	if f := h.following.Load(); f != nil {
-		if refused := f.renew(); refused != "" {
-			return turnRunning(refused)
+		if err := h.movable(); err != nil {
+			return err
+		}
+		if err := f.renew(); err != nil {
+			return err
 		}
 	}
 	return h.freshAlone()
@@ -915,8 +918,8 @@ func (h *Host) freshAlone() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.dropCheckIn()
-	if h.running {
-		return turnRunning(h.turn)
+	if err := h.moving(); err != nil {
+		return err
 	}
 	h.letGo()
 	h.forget()
@@ -928,12 +931,14 @@ func (h *Host) freshAlone() error {
 func (h *Host) Resume(carry Carry) (_ Opened, err error) {
 	opening := time.Now()
 	defer func() { h.opened(walls.OpSessionResume, opening, err == nil) }()
-	h.mu.Lock()
-	h.dropCheckIn()
-	turn, running := h.turn, h.running
-	h.mu.Unlock()
-	if running {
-		return Opened{}, turnRunning(turn)
+	if err := h.holdForFork(); err != nil {
+		return Opened{}, err
+	}
+	defer h.releaseFork()
+	if f := h.following.Load(); f != nil {
+		if err := f.ask(followAsk{Op: followMovable}).refusal(); err != nil {
+			return Opened{}, err
+		}
 	}
 	h.forget()
 	h.mu.Lock()
