@@ -136,9 +136,11 @@ func (s *server) listed(l *lane) {
 	}
 	row := list.Sessions[at]
 	s.mu.Lock()
-	id := l.items.identity("", row.ID)
-	s.mu.Unlock()
-	s.box.push(merged("session.listed", row.ID, &SessionListed{Identity: id, SessionRow: row}))
+	defer s.mu.Unlock()
+	if row.Running != l.running() {
+		return
+	}
+	s.box.push(merged("session.listed", row.ID, &SessionListed{Identity: l.items.identity("", row.ID), SessionRow: row}))
 }
 
 func (s *server) keptListed(id string) {

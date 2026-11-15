@@ -70,6 +70,7 @@ type watcher struct {
 	costUSD   float64
 	marks     sync.Mutex
 	shows     sync.Mutex
+	drawing   sync.Mutex
 	turnAt    sync.Mutex
 	spent     *tokenTally
 	asked     map[string][]Call
@@ -521,6 +522,8 @@ func (a *watcher) sendSubAgents() {
 	if a.held == nil {
 		return
 	}
+	a.drawing.Lock()
+	defer a.drawing.Unlock()
 	agents := a.held.SubAgents()
 	a.readCallsOf(agents)
 	if subAgents := a.rowsOf(agents); len(subAgents) > 0 {
@@ -581,6 +584,8 @@ func (a *watcher) redrawWhenChanged() {
 	if a.held == nil {
 		return
 	}
+	a.drawing.Lock()
+	defer a.drawing.Unlock()
 	agents := a.held.SubAgents()
 	working := slices.ContainsFunc(agents, func(agent roster.SubAgent) bool { return agent.State == roster.Working })
 	if !working && reflect.DeepEqual(agents, a.ticked) {
