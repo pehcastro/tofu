@@ -45,13 +45,15 @@ const askedAndWorking = "asked; the answer comes as a message. keep working on w
 
 const nothingTyped = "nothing was typed, so this one is yours to decide"
 
-const takeTheRecommended = "on any outcome but submitted, take each recommended option, say which you took, and continue. " +
+const takeTheRecommended = "on any outcome but submitted, take what each answer chose, which is the recommended option unless it waits on the person's yes, say which you took, and continue. " +
 	"on submitted, follow what was chosen; a skipped question is yours to decide."
 
 const noAnswerYet = "no answer came in time, so nothing was chosen and the question stays open: the person can still answer it, and that answer arrives as a message. " +
 	"take no action that depends on it and pick no option for them. keep to work that does not depend on it, or end the turn saying it waits on this question."
 
 const noAnswerHead = "no answer yet; nothing was chosen and the question stays open"
+
+const waitsOnYes = "this question waits on the person's own yes, and none came: do nothing it asks, and say it waits on them"
 
 type askAnswer struct {
 	ID     string    `json:"id"`
@@ -103,6 +105,7 @@ func (AskPerson) Definition() core.Tool {
 			"options":     map[string]any{"type": "array", "items": option, "minItems": konst.AskPersonOptionsLeast, "maxItems": konst.AskPersonOptionsMost, "description": "for choice and multi; yesno is yes then no; text has none"},
 			"recommended": map[string]any{"type": "integer", "description": "the index of the option you would take; required for every type but text"},
 			"reversible":  map[string]any{"type": "boolean", "description": "true only when the recommended option can be undone later at little cost; leave it out otherwise"},
+			"needs_yes":   map[string]any{"type": "boolean", "description": "true when nothing it asks may happen without the person's own answer: never taken in auto, by the ask judge, by a timeout or by a dismissal"},
 		},
 		"required": []string{"id", "header", "question", "type"},
 	}
@@ -112,7 +115,7 @@ func (AskPerson) Definition() core.Tool {
 			"never for permission to run a tool; the gate asks that. one call at a time, 1 to " + strconv.Itoa(konst.AskPersonQuestionsMost) + " questions, each with options and the one you recommend. " +
 			"tofu adds a free-text other to every choice, so never write one. the answer says the outcome and, for each question, its status, what was chosen and any note the person typed with it. " +
 			"in auto the work never stops on it: with no answer in time you are told none came, nothing is chosen, and the question stays open until the person answers. " +
-			"a reversible recommendation the ask judge agrees with is taken without asking",
+			"a reversible recommendation the ask judge agrees with is taken without asking, unless it needs_yes",
 		Parameters: map[string]any{
 			"type":       "object",
 			"properties": map[string]any{"questions": map[string]any{"type": "array", "items": question, "minItems": 1, "maxItems": konst.AskPersonQuestionsMost}},
@@ -126,14 +129,18 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 		Questions []struct {
 			loop.PersonQuestion
 			Reversible bool `json:"reversible"`
+			NeedsYes   bool `json:"needs_yes"`
 		} `json:"questions"`
 	}
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("ask_person: arguments are not the expected shape: %w", err)
 	}
-	questions, reversible := make([]loop.PersonQuestion, len(args.Questions)), true
+	questions, reversible, held := make([]loop.PersonQuestion, len(args.Questions)), true, []string{}
 	for i, q := range args.Questions {
-		questions[i], reversible = q.PersonQuestion, reversible && q.Reversible && q.Recommended != nil
+		questions[i], reversible = q.PersonQuestion, reversible && q.Reversible && !q.NeedsYes && q.Recommended != nil
+		if q.NeedsYes {
+			held = append(held, q.ID)
+		}
 	}
 	if err := checkQuestions(questions); err != nil {
 		return contract.Result{}, fmt.Errorf("ask_person: %w", err)
@@ -152,7 +159,7 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 		a.Judge = &acting
 		ids := a.recordShadow(context.WithoutCancel(ctx), questions)
 		if proceeds(a.Log, ids, len(questions)) {
-			taken := resolved(askTakenInAuto, questions, "the ask judge said proceed and the recommended option can be undone, so gatePrompt auto took it without asking the person")
+			taken := resolved(askTakenInAuto, questions, held, "the ask judge said proceed and the recommended option can be undone, so gatePrompt auto took it without asking the person")
 			a.backfill(ids, taken.Outcome)
 			shown, err := json.Marshal(taken)
 			return contract.Result{Content: string(shown)}, err
@@ -177,13 +184,13 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 		replied <- reply
 	})
 	if !auto {
-		reply := answered(<-replied, questions)
+		reply := answered(<-replied, questions, held)
 		a.backfill(<-recorded, reply.Outcome)
 		shown, err := json.Marshal(reply)
 		return contract.Result{Content: string(shown)}, err
 	}
 	open := a.Inbox.Open(pollOf(questions))
-	safe.Go(report, "ask answer", func() { a.answerLater(open, replied, recorded, questions) })
+	safe.Go(report, "ask answer", func() { a.answerLater(open, replied, recorded, questions, held) })
 	return contract.Result{Content: askedAndWorking}, nil
 }
 
@@ -217,7 +224,7 @@ func (a AskPerson) reply(ctx context.Context, raw json.RawMessage, questions []l
 	return personReply{replies: replies}
 }
 
-func (a AskPerson) answerLater(open *loop.Asked, replied <-chan personReply, recorded <-chan []string, questions []loop.PersonQuestion) {
+func (a AskPerson) answerLater(open *loop.Asked, replied <-chan personReply, recorded <-chan []string, questions []loop.PersonQuestion, held []string) {
 	defer open.Close()
 	ids := make([]string, len(questions))
 	for i, q := range questions {
@@ -227,7 +234,7 @@ func (a AskPerson) answerLater(open *loop.Asked, replied <-chan personReply, rec
 	var reply personReply
 	select {
 	case reply = <-replied:
-		a.backfill(<-recorded, answered(reply, questions).Outcome)
+		a.backfill(<-recorded, answered(reply, questions, held).Outcome)
 	case <-time.After(a.Wait):
 		a.backfill(<-recorded, askTimedOut)
 		none := askResult{Outcome: askTimedOut, Next: noAnswerYet}
@@ -241,23 +248,27 @@ func (a AskPerson) answerLater(open *loop.Asked, replied <-chan personReply, rec
 	if errors.Is(reply.err, context.Canceled) {
 		return
 	}
-	result := answered(reply, questions)
+	result := answered(reply, questions, held)
 	said, _ := json.Marshal(result)
-	from, intro, head := postedAs(result.Outcome, late)
+	from, intro, head := postedAs(result.Outcome, late, held)
 	open.Answer(intro+string(said), core.Origin{Source: from, Name: asked, Shown: shownToPerson(head, result, questions)})
 }
 
-func postedAs(outcome askOutcome, late bool) (core.Source, string, string) {
+func postedAs(outcome askOutcome, late bool, held []string) (core.Source, string, string) {
 	yours := "your " + loop.AskPersonToolName + " question"
+	stands := "so the recommended option stands"
+	if len(held) > 0 {
+		stands = "so nothing was chosen and it waits on your answer"
+	}
 	switch {
 	case outcome == askSubmitted && late:
 		return core.SourceLateAnswer, "the answer to " + yours + ", which came after you were told none had: ", "you answered"
 	case outcome == askSubmitted:
 		return core.SourceAnswer, "the answer to " + yours + ": ", "you answered"
 	case outcome == askCancelled:
-		return core.SourceDismissed, "the person dismissed " + yours + ": ", "the question was dismissed, so the recommended option stands"
+		return core.SourceDismissed, "the person dismissed " + yours + ": ", "the question was dismissed, " + stands
 	case outcome == askUndelivered:
-		return core.SourceUnasked, yours + " could not be put to the person: ", "the question could not be asked, so the recommended option stands"
+		return core.SourceUnasked, yours + " could not be put to the person: ", "the question could not be asked, " + stands
 	}
 	panic("ask_person: no answer is posted for outcome " + string(outcome))
 }
@@ -295,14 +306,14 @@ func pollOf(questions []loop.PersonQuestion) string {
 	return strings.Join(polls, "\n")
 }
 
-func answered(reply personReply, questions []loop.PersonQuestion) askResult {
+func answered(reply personReply, questions []loop.PersonQuestion, held []string) askResult {
 	switch {
 	case errors.Is(reply.err, context.Canceled):
-		return resolved(askCancelled, questions, "the question was withdrawn when the turn stopped")
+		return resolved(askCancelled, questions, held, "the question was withdrawn when the turn stopped")
 	case errors.As(reply.err, &loop.QuestionDismissed{}):
-		return resolved(askCancelled, questions, "the person dismissed the question, so the recommended option stands")
+		return resolved(askCancelled, questions, held, "the person dismissed the question, so the recommended option stands")
 	case reply.err != nil:
-		return resolved(askUndelivered, questions, "the person could not be asked: "+reply.err.Error())
+		return resolved(askUndelivered, questions, held, "the person could not be asked: "+reply.err.Error())
 	}
 	result := askResult{Outcome: askSubmitted, Next: takeTheRecommended}
 	for _, q := range questions {
@@ -317,16 +328,22 @@ func answered(reply personReply, questions []loop.PersonQuestion) askResult {
 				answer.Status, answer.Note = askSkipped, "the person chose no option and typed nothing"
 			}
 		}
+		if answer.Status != askAnswered && slices.Contains(held, q.ID) {
+			answer.Note = waitsOnYes
+		}
 		result.Answers = append(result.Answers, answer)
 	}
 	return result
 }
 
-func resolved(outcome askOutcome, questions []loop.PersonQuestion, why string) askResult {
+func resolved(outcome askOutcome, questions []loop.PersonQuestion, held []string, why string) askResult {
 	result := askResult{Outcome: outcome, Next: takeTheRecommended}
 	for _, q := range questions {
 		answer := askAnswer{ID: q.ID, Status: askUnanswered, Chosen: recommendedOf(q), Note: why}
-		if q.Type == loop.QuestionText {
+		switch {
+		case slices.Contains(held, q.ID):
+			answer.Chosen, answer.Note = []string{}, waitsOnYes
+		case q.Type == loop.QuestionText:
 			answer.Note = nothingTyped
 		}
 		result.Answers = append(result.Answers, answer)

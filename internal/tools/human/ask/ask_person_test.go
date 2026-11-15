@@ -299,3 +299,42 @@ func TestAskPersonInAutoKeepsTheFormOpenPastTheWait(t *testing.T) {
 		t.Fatalf("the form was told to wait %s", waited)
 	}
 }
+
+const writeTheMap = `{"questions":[{"id":"write","header":"Write MAP.md","question":"Write this MAP.md?","type":"yesno","recommended":0,"reversible":true,"needs_yes":true}]}`
+
+func TestAskPersonNeverTakesAYesThePersonDidNotGive(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		replies []loop.PersonReply
+		err     error
+		chosen  string
+	}{
+		{"esc", nil, loop.QuestionDismissed{}, ""},
+		{"nobody to ask", nil, loop.QuestionUndelivered{Why: "no client"}, ""},
+		{"skipped", []loop.PersonReply{{ID: "write", Chosen: []string{}}}, nil, ""},
+		{"yes", []loop.PersonReply{{ID: "write", Chosen: []string{"yes"}}}, nil, "yes"},
+		{"no", []loop.PersonReply{{ID: "write", Chosen: []string{"no"}}}, nil, "no"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			form := func(context.Context, []loop.PersonQuestion, time.Duration) ([]loop.PersonReply, error) {
+				return c.replies, c.err
+			}
+			tool := ask.AskPerson{Auto: func() bool { return false }}
+			result, err := tool.Run(loop.WithPersonForm(t.Context(), form), json.RawMessage(writeTheMap))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got askedResult
+			if err := json.Unmarshal([]byte(result.Content), &got); err != nil {
+				t.Fatal(err)
+			}
+			answer := got.Answers[0]
+			if strings.Join(answer.Chosen, ",") != c.chosen {
+				t.Fatalf("chose %v, want %q: %s", answer.Chosen, c.chosen, result.Content)
+			}
+			if c.chosen == "" && (strings.Contains(answer.Note, "yours to decide") || !strings.Contains(answer.Note, "yes")) {
+				t.Fatalf("with no yes the lead reads %q, want it told the question waits on the person's yes", answer.Note)
+			}
+		})
+	}
+}

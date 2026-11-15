@@ -43,9 +43,9 @@ Do not draft from scratch. Show the changes against the file as a diff: a row fo
 
 ## 4. Ask, then write
 
-Show the draft or the diff, then ask in one line whether to write it. Write nothing, no `MAP.md` and no other file, until the person says yes. On yes, write `MAP.md` at the root.
+In every mode, auto included, print the whole draft or diff in your reply first, then ask with `ask_person`: one `yesno` question whether to write it, with no `options`, `recommended` 0, `needs_yes` true. Write nothing, no `MAP.md` and no other file, until that answer comes back answered with yes. No answer yet, a timeout, a dismissal or a no all mean write nothing: say it waits on the person, or on no that nothing was written, and end the turn. On yes, write `MAP.md` at the root.
 
-Then show the matching edit to the instruction file that exists, `AGENTS.md` or `CLAUDE.md`, or a short `AGENTS.md` when neither does: a line pointing to `MAP.md` and the docs folder, and any part that repeats them cut. Write it only on a yes.
+Then show the matching edit to the instruction file that exists, `AGENTS.md` or `CLAUDE.md`, or a short `AGENTS.md` when neither does: a line pointing to `MAP.md` and the docs folder, and any part that repeats them cut. Ask for it the same way, with `needs_yes` true, and write it only on that yes.
 
 ## Report
 
