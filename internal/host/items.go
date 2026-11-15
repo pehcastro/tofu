@@ -58,13 +58,6 @@ func newItems(session string) items {
 	return items{session: session, tools: map[string]openTool{}, agents: map[string]SubAgentRow{}, logged: map[string]string{}, usage: map[string]UsageUpdated{}}
 }
 
-func (s *items) blankRate(agent string) {
-	if usage, seen := s.usage[agent]; seen {
-		usage.TokensPerSecond = 0
-		s.usage[agent] = usage
-	}
-}
-
 func (s *items) awaitLog(item, role, text string) {
 	if text = strings.TrimSpace(text); text != "" {
 		s.unlogged = append(s.unlogged, awaiting{item: item, role: role, text: text})
@@ -182,7 +175,6 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 			Title string `json:"title"`
 		}
 		_ = json.Unmarshal(event.Args, &args)
-		s.blankRate(event.Agent)
 		s.tools[event.ID] = openTool{tool: event.Tool, path: args.Path}
 		return append(out, notify("tool.started", &ToolStarted{Identity: id, Instance: event.Agent, Tool: event.Tool, Title: args.Title, Args: wholeJSON(event.Args), StartedAt: now, Card: event.Card, Group: event.Group}))
 	case EventToolResult:
@@ -275,10 +267,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		return append(out, kept("turn.account", &spent))
 	case EventMembers:
 		return append(out, merged("session.member", "", &SessionMembers{Identity: s.identity("", session.EventIDFor(s.session, "members")), Members: append([]Member{}, event.Members...)}))
-	case EventRequesting:
-		s.blankRate("")
-		return out
-	case EventForkStart, EventResumed:
+	case EventRequesting, EventForkStart, EventResumed:
 		return out
 	}
 	panic("host: unknown event kind " + strconv.Itoa(int(event.Kind)))

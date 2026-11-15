@@ -22,6 +22,7 @@ import (
 	"tofu/internal/ui/tui/chat/feed"
 	"tofu/internal/ui/tui/chat/session"
 	"tofu/internal/ui/tui/composer/question"
+	"tofu/internal/ui/tui/frame/frame"
 	"tofu/internal/ui/tui/panels/edits"
 	"tofu/internal/ui/tui/panels/shells"
 	"tofu/internal/ui/tui/panels/subagent"
@@ -607,7 +608,7 @@ func (a *App) absorb(event Event) {
 		if !a.leading {
 			a.leadTurnBegins()
 		}
-		a.rates[""] = 0
+		a.rated("", 0)
 		a.view.Requesting()
 	case EventTask:
 		drawnWhenFired := slices.Index(a.firesDrawn, event.Text)
@@ -636,7 +637,7 @@ func (a *App) absorb(event Event) {
 		}
 		a.thought(event, at)
 	case EventToolCall:
-		a.rates[event.Agent] = 0
+		a.rated(event.Agent, 0)
 		a.called(event, at)
 	case EventToolResult:
 		a.answered(event, at)
@@ -649,6 +650,7 @@ func (a *App) absorb(event Event) {
 		}
 		a.countCrons()
 	case EventDone:
+		a.rated("", 0)
 		a.leadTurnEnds(event.Text)
 		if event.SubAgents != nil {
 			a.showSubAgents(event.SubAgents)
@@ -671,6 +673,8 @@ func (a *App) absorb(event Event) {
 	case EventSession:
 		if root := cmp.Or(event.Root, event.ID); root != a.sessionRoot {
 			a.started, a.sessionRoot = at, root
+			clear(a.rates)
+			a.status.Streaming, a.status.SubAgentRate = nil, 0
 			if event.Identity != nil {
 				a.started = event.Identity.Started
 			}
@@ -721,7 +725,8 @@ func (a *App) absorb(event Event) {
 		a.forking = false
 	case EventStats:
 		a.status.TokensIn, a.status.TokensOut, a.status.CacheRead = event.TokensIn, event.TokensOut, event.CacheRead
-		a.status.Decisions, a.rates[event.Agent] = event.Decisions, event.TokenRate
+		a.status.Decisions = event.Decisions
+		a.rated(event.Agent, event.TokenRate)
 	case host.EventAccount:
 		a.followSource(event.Account)
 		a.followAccount(event.Account)
@@ -1230,6 +1235,8 @@ func (a *App) showSubAgents(subAgents []subagent.Row) {
 	for _, subAgent := range subAgents {
 		if subAgent.State == roster.Working {
 			a.status.Agents++
+		} else {
+			a.rated(subAgent.Name, 0)
 		}
 		a.stepped(subAgent)
 		for _, call := range subAgent.Calls[settledPrefix(callsBefore[subAgent.Name], subAgent.Calls):] {
@@ -1238,6 +1245,20 @@ func (a *App) showSubAgents(subAgents []subagent.Row) {
 	}
 	if a.busy && !a.leading {
 		a.view.WaitOn(a.status.Agents)
+	}
+}
+
+func (a *App) rated(agent string, perSecond float64) {
+	a.status.Streaming = slices.DeleteFunc(a.status.Streaming, func(name string) bool { return name == agent })
+	if perSecond > 0 {
+		a.rates[agent] = perSecond
+		a.status.Streaming = append(a.status.Streaming, agent)
+	}
+	a.status.SubAgentRate = 0
+	for _, name := range a.status.Streaming {
+		if name != "" {
+			a.status.SubAgentRate += frame.TokenRate(a.rates[name])
+		}
 	}
 }
 

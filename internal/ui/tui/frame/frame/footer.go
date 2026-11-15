@@ -24,6 +24,10 @@ const (
 
 type TokenRate float64
 
+func (rate TokenRate) String() string {
+	return strconv.FormatFloat(float64(rate), 'f', 1, 64) + " tok/s"
+}
+
 func Footer(status Status, rate TokenRate, width int, right string) string {
 	switch status.Mode {
 	case StatusHidden:
@@ -50,7 +54,11 @@ func Footer(status Status, rate TokenRate, width int, right string) string {
 		}
 	}
 	head, tail := footerLeft(status, rate, width, noQuota)
-	return footerRow(slices.Concat(head, tail), width, right)
+	if left := slices.Concat(head, tail); status.SubAgentRate <= 0 || cells(left) <= roomBeside(width, right) {
+		return footerRow(left, width, right)
+	}
+	status.SubAgentRate = 0
+	return Footer(status, rate, width, right)
 }
 
 func roomBeside(width int, right string) int {
@@ -133,7 +141,14 @@ func contextAndQuota(status Status, rate TokenRate, width int, form quotaLabel) 
 	head = []span{panel(" ctx ", look.Blue)}
 	var rated []span
 	if rate > 0 {
-		rated = []span{panel(footerSeparator+strconv.FormatFloat(float64(rate), 'f', 1, 64)+" tok/s", look.Text)}
+		colour := look.FaintColor
+		if status.RateLive {
+			colour = look.Text
+		}
+		rated = append(rated, panel(footerSeparator+rate.String(), colour))
+	}
+	if status.SubAgentRate > 0 {
+		rated = append(rated, panel(footerSeparator+"sub-agents "+status.SubAgentRate.String(), look.Mint))
 	}
 	switch {
 	case status.Context.Budget <= 0:

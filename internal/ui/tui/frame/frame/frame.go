@@ -51,21 +51,24 @@ const (
 )
 
 type Status struct {
-	Context   Context
-	TokensIn  int
-	TokensOut int
-	CacheRead int
-	Decisions int
-	Quotas    []Quota
-	InUse     []string
-	Agents    int
-	Crons     int
-	Judge     *host.JudgeStatus
-	At        time.Time
-	Note      string
-	Release   string
-	Mode      StatusMode
-	Fresh     bool
+	Context      Context
+	TokensIn     int
+	TokensOut    int
+	CacheRead    int
+	Decisions    int
+	Streaming    []string
+	RateLive     bool
+	SubAgentRate TokenRate
+	Quotas       []Quota
+	InUse        []string
+	Agents       int
+	Crons        int
+	Judge        *host.JudgeStatus
+	At           time.Time
+	Note         string
+	Release      string
+	Mode         StatusMode
+	Fresh        bool
 }
 
 func Release(buildVersion, buildRevision string) string {

@@ -144,8 +144,9 @@ func (a *App) base() string {
 	}
 	top, hits := frame.Top(head, tabs, int(a.tab()), a.width)
 	a.hits = hits
-	status := a.status
+	focused, status := a.focusedAgent(), a.status
 	status.At, status.Mode, status.InUse = head.At, frame.StatusMode(a.text(isettings.StatusBar)), a.sourcesInUse()
+	status.RateLive = slices.Contains(status.Streaming, focused)
 	if a.settingUp() {
 		status.Mode = frame.StatusHidden
 	}
@@ -153,7 +154,7 @@ func (a *App) base() string {
 	if a.current == screenChat {
 		right = frame.ChatRight(a.slug(), string(a.shownEffort()))
 	}
-	framed := top + "\n" + strings.Repeat(" ", a.width) + "\n" + a.body() + "\n" + frame.Footer(status, frame.TokenRate(a.rates[a.focusedAgent()]), a.width, right)
+	framed := top + "\n" + strings.Repeat(" ", a.width) + "\n" + a.body() + "\n" + frame.Footer(status, frame.TokenRate(a.rates[focused]), a.width, right)
 	if track, scrolls := a.track(); scrolls && a.current != screenChat {
 		return pointer.Overlay(framed, a.width, track)
 	}
