@@ -160,6 +160,32 @@ func ResolveQuote(store *session.Store, recorded, ref string) (Quoted, error) {
 	return Quoted{Outcome: QuoteNotFound, Hash: hash}, nil
 }
 
+func Carried(store *session.Store, recorded, said string) string {
+	var carried []string
+	for _, after := range strings.Split(said, quoteOpenMark+"#")[1:] {
+		hash, _, closed := strings.Cut(after, quoteCloseMark)
+		ref := quoteOpenMark + "#" + hash + quoteCloseMark
+		if !closed || slices.ContainsFunc(carried, func(block string) bool { return strings.HasPrefix(block, ref+" ") }) {
+			continue
+		}
+		found, err := ResolveQuote(store, recorded, ref)
+		switch {
+		case err != nil:
+			carried = append(carried, ref+" could not be read, so its words are unknown: "+err.Error())
+		case found.Outcome == QuoteNotFound:
+			carried = append(carried, ref+" is unknown: no item of this session or any it was forked from ends with "+found.Hash+", so ask the person for the reference again rather than quoting the nearest item")
+		case found.Outcome == QuoteAmbiguous:
+			carried = append(carried, ref+" is ambiguous: two or more items in "+found.Session+" end with "+found.Hash+", so ask the person for the reference again rather than quoting the nearest item")
+		case found.Outcome == QuoteItem:
+			body, note := Cut(found.Noun, found.Words)
+			carried = append(carried, glob.WithNote(ref+" is "+found.Speaker+", recorded in "+found.Session+", and holds:\n"+body, note))
+		default:
+			panic("quote: unknown outcome " + string(found.Outcome))
+		}
+	}
+	return strings.Join(carried, "\n\n")
+}
+
 func Hash(ref string) (string, bool) {
 	trimmed := strings.TrimSuffix(strings.TrimSpace(ref), quoteCloseMark)
 	for _, open := range []string{quoteOpenMark, toolOpenMark} {
@@ -278,6 +304,9 @@ func quoteWords(said session.Utterance) string {
 		names = append(names, call.Name)
 	}
 	words := strings.TrimSpace(said.Text)
+	if task, framed := loop.TaskIn(said.Text); framed && said.Role == session.RoleUser {
+		words = strings.TrimSpace(task)
+	}
 	if len(names) > 0 {
 		words = strings.TrimSpace(words + "\nit called " + strings.Join(names, ", "))
 	}

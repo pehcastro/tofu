@@ -28,6 +28,7 @@ import (
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/history/quote"
 	"tofu/internal/tools/human/plan"
 	"tofu/internal/tools/human/remember"
 	humansettings "tofu/internal/tools/human/settings"
@@ -236,6 +237,12 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	}
 	started.Store(true)
 	sessions, config := prepared.Sessions, prepared.Config
+	carryQuotes := func(said string) {
+		if words := quote.Carried(sessions, h.ID(), said); words != "" {
+			h.inbox.Deliver(words, llm.Origin{Source: llm.SourceNotice, Name: quote.Quote{}.Name()})
+		}
+	}
+	carryQuotes(task)
 	if err := h.cron.Keep(cronFile(sessions, id)); err != nil {
 		say("cron jobs were not written: " + err.Error())
 	}
@@ -261,7 +268,13 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	h.mu.Unlock()
 	var steps atomic.Int64
 	readSteer := func(event Event) { emit(h.withImages(event)) }
-	config.Steering = func() []string { return h.steering.take(readSteer, int(steps.Load())+1) }
+	config.Steering = func() []string {
+		steered := h.steering.take(readSteer, int(steps.Load())+1)
+		for _, said := range steered {
+			carryQuotes(said)
+		}
+		return steered
+	}
 	config.ImagesOf = imagesOf
 	config.ToolResult = func(answered llm.Message) { watch.result(answered, "") }
 	movedTo, ceiling := "", prepared.Ceiling
@@ -392,7 +405,10 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	}
 	stopClocks := watch.clockRunningSubAgents(h.report)
 	stopListening := watch.stop.listen(h.report, live.LeadStop, h.sendNow)
-	heard := func(typed string) { h.heardTyped(emit, typed) }
+	heard := func(typed string) {
+		h.heardTyped(emit, typed)
+		carryQuotes(typed)
+	}
 	var reported []error
 	var reached limitReached
 	if scratched, err := loop.WithLeadScratch(asking, config); err == nil {

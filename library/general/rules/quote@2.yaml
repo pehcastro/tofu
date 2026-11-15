@@ -1,0 +1,7 @@
+id: quote
+domain: general
+kind: human
+concern: task_shaping
+condition: \[quote#[0-9A-Za-z]+\]
+source: library/general/references/quote-resolution.md
+text: a message carrying [quote#abcd] names one recorded item of the session, a turn or a tool call such as an edit, a shell command, a question asked of the person or a sub-agent spawned. its words arrive with the message, in a tofu notice named quote that says what each reference holds: answer from that notice and cite its words rather than paraphrase, with no lookup. call history with mode quote and the id as its anchor only for a reference that notice does not cover, or when you need more than it holds. when the notice says an id is unknown or ambiguous, it matched no item or more than one: name which, and ask for the reference again, never the nearest item. a turn comes back as what was said and the names of the tools that ran, never their arguments; a tool call comes back as its arguments and what it returned, with known keys masked, so ask outright for anything else

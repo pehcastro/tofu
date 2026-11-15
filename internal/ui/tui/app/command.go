@@ -291,7 +291,7 @@ func (a *App) quoteDialog() *recordedDialog {
 		})},
 		choose: func(a *App, result palette.Result) tea.Cmd {
 			cmd := a.show(screenChat)
-			a.view.Insert(result.Reference)
+			a.view.Insert(result.Reference + " ")
 			return cmd
 		},
 	}
