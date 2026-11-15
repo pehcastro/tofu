@@ -237,7 +237,9 @@ func (s *server) data(ctx context.Context, method string, raw json.RawMessage) (
 func (s *server) usageNow(ctx context.Context) (UsageAnswer, error) {
 	report, err := verbAs[UsageReport](ctx, s, "usage")
 	now := time.Now()
-	answer := UsageAnswer{UsageReport: report, ReadAt: now}
+	s.mu.Lock()
+	answer := UsageAnswer{UsageReport: report, ReadAt: now, Judge: s.focus().items.judge}
+	s.mu.Unlock()
 	for _, provider := range report.Providers {
 		if !provider.ReadAt.IsZero() && provider.ReadAt.Before(answer.ReadAt) {
 			answer.ReadAt = provider.ReadAt

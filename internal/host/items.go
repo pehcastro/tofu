@@ -51,6 +51,7 @@ type items struct {
 	unlogged []awaiting
 	logged   map[string]string
 	usage    map[string]UsageUpdated
+	judge    *JudgeStatus
 }
 
 func newItems(session string) items {
@@ -118,6 +119,9 @@ func (s *items) mint(kind string) string {
 func (s *items) translate(event Event, now time.Time) []outgoing {
 	var out []outgoing
 	s.turn = cmp.Or(event.Turn, s.turn)
+	if event.Judge != nil {
+		s.judge = event.Judge
+	}
 	if s.message != "" && event.Kind != EventStreamReset && endsTheLeadReply(event) {
 		out = append(out, kept("message.completed", &Text{Identity: s.identity("", s.message), Text: s.written, At: now}))
 		s.awaitLog(s.message, session.RoleAssistant, s.written)
@@ -193,7 +197,7 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 			point = pointRuleOverride
 		}
 		return append(out, kept("decision", &DecisionMade{Identity: id, Judgement: judgementOf(*event.Decision), Point: point, Tool: event.Decision.Tool, OverridesRule: event.Decision.OverridesRule, Call: event.Decision.Call,
-			Provider: event.Decision.Provider, Model: event.Decision.Model, DurationMS: event.Decision.DurationMS, At: now}))
+			Provider: event.Decision.Provider, Model: event.Decision.Model, DurationMS: event.Decision.DurationMS, Judge: event.Judge, At: now}))
 	case EventNote:
 		return append(out, notify("note", s.said(id, event, SaidNote)))
 	case EventGateOff:

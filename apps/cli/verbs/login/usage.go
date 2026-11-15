@@ -57,8 +57,8 @@ func UsageVerb(ctx context.Context, args []string, _ io.Reader, out, errOut io.W
 	if err != nil {
 		return o.Fail(err)
 	}
-	answer := usageAnswer{UsageReport: report, Classifier: classifier}
-	return o.Done(true, answer, func(page cli.Page) []string {
+	report.Classifier = classifier
+	return o.Done(true, report, func(page cli.Page) []string {
 		lines := append(usagePage(page, report, now), "", page.Section("classifier", cli.Verdict{}))
 		return append(lines, cli.Indent(page.Facts([]cli.Fact{
 			{Label: "calls", Text: strconv.Itoa(classifier.Calls) + " in the last " + classifier.Window},
@@ -67,25 +67,12 @@ func UsageVerb(ctx context.Context, args []string, _ io.Reader, out, errOut io.W
 	})
 }
 
-type classifierSpend struct {
-	Window     string  `json:"window"`
-	Calls      int     `json:"calls"`
-	ChargedUSD float64 `json:"charged_usd"`
-	ListUSD    float64 `json:"list_usd"`
-	Unpriced   int     `json:"unpriced_calls"`
-}
-
-type usageAnswer struct {
-	host.UsageReport
-	Classifier classifierSpend `json:"classifier"`
-}
-
-func readClassifierSpend(now time.Time) (classifierSpend, error) {
+func readClassifierSpend(now time.Time) (host.ClassifierSpend, error) {
 	dir, err := project.LogDir()
 	if err != nil {
-		return classifierSpend{}, err
+		return host.ClassifierSpend{}, err
 	}
-	spend := classifierSpend{Window: strconv.Itoa(int(usageDay.Hours())) + "h"}
+	spend := host.ClassifierSpend{Window: strconv.Itoa(int(usageDay.Hours())) + "h"}
 	_, err = ledger.NewReader(dir).Each(ledger.Filter{Since: now.Add(-usageDay), Until: now}, func(row ledger.Row) error {
 		if row.ReplayOf != "" {
 			return nil

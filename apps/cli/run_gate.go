@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
+	"time"
 
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
@@ -16,6 +18,8 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers"
 	"tofu/internal/models/classifiers/core"
+	"tofu/internal/models/llm/catalog"
+	"tofu/internal/models/transport"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/scratch"
 	"tofu/library/questions"
@@ -27,7 +31,7 @@ const (
 )
 
 type toolGate struct {
-	client    *core.Client
+	chain     []wiring.Classifier
 	set       wiring.Battery
 	cwd       string
 	rows      wiring.RowLedger
@@ -51,7 +55,7 @@ func toolGateOn(dir, log string, keys core.Keyring) (*toolGate, error) {
 	if err != nil {
 		return nil, unusableRule{err}
 	}
-	client, err := wiring.JevClientFrom(keys, konst.TurnParallelToolCalls)
+	chain, err := wiring.ClassifierChain(keys, konst.TurnParallelToolCalls)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +63,7 @@ func toolGateOn(dir, log string, keys core.Keyring) (*toolGate, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &toolGate{client: client, set: set, cwd: dir, rows: rows}, nil
+	return &toolGate{chain: chain, set: set, cwd: dir, rows: rows}, nil
 }
 
 func resolvePoint(point, dir string) (wiring.Battery, error) {
@@ -167,23 +171,73 @@ func (g *toolGate) ask(ctx context.Context, request loop.GateRequest) func() (le
 	if own := loop.OwnShellsCalled(ctx, request); len(own) > 0 {
 		return func() (ledger.Row, error) { return g.rows.AppendOwnShell(builtState, g.set, written, own) }
 	}
-	decision, err := g.client.Ask(ctx, core.Request{State: builtState, Questions: g.set.Questions})
-	if err != nil {
-		return func() (ledger.Row, error) {
-			g.decisions++
-			row, writeErr := g.rows.AppendFallback(builtState, g.set, written, err)
-			if writeErr != nil {
-				return row, writeErr
+	chain := host.JudgeChainOf(ctx)
+	var failed error
+	var failures []string
+	for _, classifier := range g.chain {
+		provider := string(classifier.Model.Provider)
+		err := chain.Skipped(provider)
+		if err == nil {
+			var decision core.Decision
+			decision, err = classifier.Client.Ask(ctx, core.Request{State: builtState, Questions: g.set.Questions})
+			chain.Tried(provider, err)
+			if err == nil {
+				written.Decision = &decision
+				written.Answers = wiring.ToLedgerAnswers(g.set.QuestionsVersion, decision.Answers)
+				return g.written(builtState, written, func() { chain.JudgedByClassifier(classifier.Model.Slug()) })
 			}
-			return row, jevUnavailable{err}
 		}
+		failed, failures = err, append(failures, provider+" "+failureOf(err))
 	}
-	written.Decision = &decision
-	written.Answers = wiring.ToLedgerAnswers(g.set.QuestionsVersion, decision.Answers)
+	cheap, err := wiring.CheapModelOf(g.cwd, chain.Source())
+	var judged wiring.ModelJudged
+	if err == nil {
+		judged, written.Answers, err = g.judgeOnModel(ctx, chain, cheap, builtState)
+	}
+	if err == nil {
+		judged.Why = "judged by " + judged.Slug + " because every classifier failed: " + strings.Join(failures, ", ")
+		written.Judged = &judged
+		return g.written(builtState, written, func() { chain.JudgedByModel(judged.Slug) })
+	}
 	return func() (ledger.Row, error) {
 		g.decisions++
-		row, err := g.rows.Append(builtState, g.set, written)
+		chain.JudgedByRegex(err)
+		row, writeErr := g.rows.AppendFallback(builtState, g.set, written, failed)
+		if writeErr != nil {
+			return row, writeErr
+		}
+		return row, jevUnavailable{failed}
+	}
+}
+
+func (g *toolGate) written(state json.RawMessage, in wiring.RowInput, judged func()) func() (ledger.Row, error) {
+	return func() (ledger.Row, error) {
+		g.decisions++
+		judged()
+		row, err := g.rows.Append(state, g.set, in)
 		g.costUSD += row.Charge.USD
 		return row, err
 	}
+}
+
+func (g *toolGate) judgeOnModel(ctx context.Context, chain *host.JudgeChain, cheap catalog.Model, state json.RawMessage) (wiring.ModelJudged, []ledger.Answer, error) {
+	model, err := chain.Open(ctx, cheap.Slug())
+	if err != nil {
+		return wiring.ModelJudged{}, nil, err
+	}
+	started := time.Now()
+	answers, decision, err := wiring.JudgeOnModel(ctx, model, state, g.set.Questions)
+	if err != nil {
+		return wiring.ModelJudged{}, nil, fmt.Errorf("%s could not judge: %w", cheap.Slug(), err)
+	}
+	judged := wiring.ModelJudged{Slug: cheap.Slug(), Source: chain.Source(), Build: decision.Build, Latency: time.Since(started), CostUSD: decision.Usage.Cost}
+	return judged, wiring.ToLedgerAnswers(g.set.QuestionsVersion, answers), nil
+}
+
+func failureOf(err error) string {
+	var refused *transport.Error
+	if errors.As(err, &refused) && refused.Status != 0 {
+		return refused.Kind.String() + " " + strconv.Itoa(refused.Status)
+	}
+	return transport.KindOf(err).String()
 }

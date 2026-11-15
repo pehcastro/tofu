@@ -60,6 +60,7 @@ type Status struct {
 	InUse     []string
 	Agents    int
 	Crons     int
+	Judge     *host.JudgeStatus
 	At        time.Time
 	Note      string
 	Release   string

@@ -106,6 +106,7 @@ type Event struct {
 	Card         *ToolCard
 	Group        string
 	GroupSummary *GroupSummary
+	Judge        *JudgeStatus `json:",omitempty"`
 	from         *Host
 }
 

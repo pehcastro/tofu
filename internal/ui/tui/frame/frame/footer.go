@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"tofu/internal/cli/render"
+	"tofu/internal/host"
 	"tofu/internal/ui/tui/look/look"
 )
 
@@ -106,7 +107,26 @@ func footerLeft(status Status, rate TokenRate, width int, form quotaLabel) (head
 	if status.Crons > 0 {
 		head = append(head, panel(footerSeparator+"cron "+strconv.Itoa(status.Crons), look.Mint))
 	}
+	if judge := judgeSays(status.Judge); judge != "" {
+		head = append(head, panel(footerSeparator+judge, look.Amber))
+	}
 	return head, tail
+}
+
+func judgeSays(judge *host.JudgeStatus) string {
+	if judge == nil {
+		return ""
+	}
+	var failing []string
+	for _, classifier := range judge.Classifiers {
+		if state := string(classifier.State); classifier.State != host.ClassifierOK && !slices.Contains(failing, state) {
+			failing = append(failing, state)
+		}
+	}
+	if len(failing) == 0 {
+		return ""
+	}
+	return "jev " + strings.Join(failing, "/") + " · judge " + judge.Judge
 }
 
 func contextAndQuota(status Status, rate TokenRate, width int, form quotaLabel) (head, tail []span) {

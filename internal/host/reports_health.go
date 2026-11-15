@@ -26,6 +26,40 @@ type UsageReport struct {
 	Missing    []DoctorBlocker    `json:"missing,omitempty"`
 	Spends     []WindowSpend      `json:"window_spend,omitempty"`
 	Unreadable int                `json:"unreadable_lines,omitempty"`
+	Classifier ClassifierSpend    `json:"classifier"`
+}
+
+type ClassifierSpend struct {
+	Window     string  `json:"window"`
+	Calls      int     `json:"calls"`
+	ChargedUSD float64 `json:"charged_usd"`
+	ListUSD    float64 `json:"list_usd"`
+	Unpriced   int     `json:"unpriced_calls"`
+}
+
+type ClassifierState string
+
+const (
+	ClassifierOK           ClassifierState = "ok"
+	ClassifierOutOfCredits ClassifierState = "out of credits"
+	ClassifierRefusing     ClassifierState = "refusing"
+	ClassifierUnreachable  ClassifierState = "unreachable"
+)
+
+func (ClassifierState) enum() []string {
+	return []string{string(ClassifierOK), string(ClassifierOutOfCredits), string(ClassifierRefusing), string(ClassifierUnreachable)}
+}
+
+type ClassifierHealth struct {
+	Provider string          `json:"provider"`
+	State    ClassifierState `json:"state"`
+	Status   int             `json:"status,omitempty"`
+}
+
+type JudgeStatus struct {
+	Classifiers []ClassifierHealth `json:"classifiers"`
+	Judge       string             `json:"judge"`
+	Line        string             `json:"line"`
 }
 
 type WindowSpend struct {
@@ -42,8 +76,9 @@ type WindowSpend struct {
 
 type UsageAnswer struct {
 	UsageReport
-	ReadAt time.Time `json:"read_at"`
-	AgeMs  int64     `json:"age_ms"`
+	ReadAt time.Time    `json:"read_at"`
+	AgeMs  int64        `json:"age_ms"`
+	Judge  *JudgeStatus `json:"judge,omitempty"`
 }
 
 type CredentialReport struct {

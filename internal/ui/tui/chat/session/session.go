@@ -53,6 +53,7 @@ type Entry struct {
 	ID        string
 	Head      string
 	Body      string
+	Accent    string
 	Detail    string
 	Status    string
 	Output    string

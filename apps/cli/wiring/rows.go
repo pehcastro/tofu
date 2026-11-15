@@ -14,6 +14,7 @@ import (
 
 type RowInput struct {
 	Decision     *core.Decision
+	Judged       *ModelJudged
 	ReplayOf     string
 	Build        string
 	RequestID    string
@@ -106,9 +107,16 @@ func (l RowLedger) Append(state any, set Battery, in RowInput) (ledger.Row, erro
 			row.Reason.ModeReason = &set.ModeReason
 		}
 	}
-	if in.Decision != nil {
+	switch judged := in.Judged; {
+	case in.Decision != nil:
 		in.Decision.Spent(&row)
-	} else {
+	case judged != nil:
+		charge := ledger.ChargeOf(judged.CostUSD, 0)
+		row.Model, row.Provider, row.Build, row.LatencyMS, row.Cost, row.Charge = judged.Slug, judged.Source, judged.Build, judged.Latency.Milliseconds(), judged.CostUSD, &charge
+		if row.Reason != nil {
+			row.Reason.ModeReason = &judged.Why
+		}
+	default:
 		row.Build = in.Build
 		row.RequestID = in.RequestID
 	}

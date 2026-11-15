@@ -199,7 +199,12 @@ func (m *Model) render(index int) []string {
 			if index > 0 {
 				marker = strings.Repeat(" ", render.Cells(noteMarker))
 			}
-			lines[index] = look.Faint(marker + line)
+			before, after, accented := strings.Cut(line, entry.Accent)
+			if entry.Accent == "" || !accented {
+				lines[index] = look.Faint(marker + line)
+				continue
+			}
+			lines[index] = look.Faint(marker+before) + look.Style(look.Blue).Render(entry.Accent) + look.Faint(after)
 		}
 		if reference != "" && len(lines) > 0 {
 			lines[0] += reference

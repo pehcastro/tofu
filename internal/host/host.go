@@ -24,6 +24,7 @@ import (
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
+	"tofu/internal/models/transport"
 	"tofu/internal/platform/credential"
 	"tofu/internal/platform/outside"
 	platformproject "tofu/internal/platform/project"
@@ -148,7 +149,7 @@ type Host struct {
 	spent   *tokenTally
 	shown   *shownResults
 	asks    *asks
-	jevTold toldOnce
+	judge   JudgeChain
 
 	questions   *replies[answeredQuestion]
 	memoryPicks *replies[entries.Scope]
@@ -1138,4 +1139,177 @@ func imageMediaType(name string) string {
 
 func imageMediaTypes() map[string]string {
 	return map[string]string{".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
+}
+
+const RegexJudge = "the regex arm"
+
+type judgeChainKey struct{}
+
+type JudgeChain struct {
+	mu           sync.Mutex
+	session      string
+	tried        []classifierTry
+	judge        string
+	byClassifier bool
+	noModel      error
+	told         string
+	source       string
+	open         func(ctx context.Context, slug string) (loop.Model, error)
+}
+
+type classifierTry struct {
+	ClassifierHealth
+	err  error
+	skip bool
+}
+
+func JudgeChainOf(ctx context.Context) *JudgeChain {
+	if chain, held := ctx.Value(judgeChainKey{}).(*JudgeChain); held {
+		return chain
+	}
+	return &JudgeChain{}
+}
+
+func (c *JudgeChain) during(ctx context.Context, session, source string, open func(context.Context, string) (loop.Model, error)) context.Context {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.session != session {
+		c.tried, c.judge, c.byClassifier, c.noModel, c.told = nil, "", false, nil, ""
+	}
+	c.session, c.source, c.open = session, source, open
+	return context.WithValue(ctx, judgeChainKey{}, c)
+}
+
+func (c *JudgeChain) Source() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.source
+}
+
+func (c *JudgeChain) Skipped(provider string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, try := range c.tried {
+		if try.Provider == provider && try.skip {
+			return try.err
+		}
+	}
+	return nil
+}
+
+func (c *JudgeChain) Tried(provider string, err error) {
+	try := classifierTry{ClassifierHealth: ClassifierHealth{Provider: provider, State: ClassifierOK}, err: err}
+	var refused *transport.Error
+	if errors.As(err, &refused) {
+		try.Status = refused.Status
+	}
+	if err != nil {
+		try.State, try.skip = classifierStateOf(transport.KindOf(err))
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if at := slices.IndexFunc(c.tried, func(held classifierTry) bool { return held.Provider == provider }); at >= 0 {
+		c.tried[at] = try
+		return
+	}
+	c.tried = append(c.tried, try)
+}
+
+func classifierStateOf(kind transport.Kind) (state ClassifierState, skipForTheSession bool) {
+	switch kind {
+	case transport.KindBilling, transport.KindBudget:
+		return ClassifierOutOfCredits, true
+	case transport.KindAuth, transport.KindMissingCredential:
+		return ClassifierRefusing, true
+	case transport.KindModelAccess, transport.KindRequestTooLarge, transport.KindBadRequest, transport.KindRateLimit, transport.KindInvalidAnswer:
+		return ClassifierRefusing, false
+	case transport.KindUnknown, transport.KindTimeout, transport.KindProvider:
+		return ClassifierUnreachable, false
+	}
+	panic("host: unknown transport kind " + kind.String())
+}
+
+func (c *JudgeChain) Open(ctx context.Context, slug string) (loop.Model, error) {
+	c.mu.Lock()
+	open := c.open
+	c.mu.Unlock()
+	if open == nil {
+		return nil, errors.New("no plan model is open in this session to judge for them")
+	}
+	return open(ctx, slug)
+}
+
+func (c *JudgeChain) JudgedByClassifier(slug string) { c.judged(slug, true, nil) }
+
+func (c *JudgeChain) JudgedByModel(slug string) { c.judged(slug, false, nil) }
+
+func (c *JudgeChain) JudgedByRegex(noModel error) { c.judged(RegexJudge, false, noModel) }
+
+func (c *JudgeChain) judged(by string, byClassifier bool, noModel error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.judge, c.byClassifier, c.noModel = by, byClassifier, noModel
+}
+
+func (c *JudgeChain) tell() (line, accent string, changed bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var failed []classifierTry
+	for _, try := range c.tried {
+		if try.State != ClassifierOK {
+			failed = append(failed, try)
+		}
+	}
+	accent = c.judge
+	switch {
+	case c.judge == "":
+	case c.byClassifier && len(failed) == 0 && c.told != "":
+		line = "judge is back on " + c.judge
+	case c.byClassifier && len(failed) == 0:
+	case c.noModel == nil:
+		line = "judge is running on " + c.judge + " because " + c.because(failed)
+	default:
+		accent, line = "", "judge is running on "+RegexJudge+" because "+c.because(failed)+", and "+c.noModel.Error()
+	}
+	if line == "" || line == c.told {
+		return "", "", false
+	}
+	c.told = line
+	return line, accent, true
+}
+
+func (c *JudgeChain) because(failed []classifierTry) string {
+	if len(failed) > 1 && len(failed) == len(c.tried) {
+		unreachable := 0
+		for _, try := range failed {
+			if try.State == ClassifierUnreachable {
+				unreachable++
+			}
+		}
+		switch unreachable {
+		case 0:
+			return "all classifiers configured are out of credit"
+		case len(failed):
+			return "all classifiers configured are unreachable"
+		}
+		return "all classifiers configured failed"
+	}
+	said := make([]string, len(failed))
+	for i, try := range failed {
+		said[i] = try.Provider + " is " + string(try.State)
+	}
+	return strings.Join(said, " and ")
+}
+
+func (c *JudgeChain) status() *JudgeStatus {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.judge == "" {
+		return nil
+	}
+	status := &JudgeStatus{Classifiers: make([]ClassifierHealth, len(c.tried)), Judge: c.judge, Line: c.told}
+	for i, try := range c.tried {
+		status.Classifiers[i] = try.ClassifierHealth
+	}
+	return status
 }

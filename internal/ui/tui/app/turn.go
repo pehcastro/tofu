@@ -341,7 +341,11 @@ func drawChat(view *session.Model, event Event, status string) {
 		}
 		view.Finish(event.ID, session.Result{Status: status, Output: event.Detail, Bytes: event.Bytes, Failed: event.Outcome == host.ToolFailed, At: event.At, Card: event.Card})
 	case EventNote:
-		view.Append(session.Entry{Kind: session.Note, Body: event.Text})
+		entry := session.Entry{Kind: session.Note, Body: event.Text}
+		if event.Judge != nil {
+			entry.Accent = event.Model
+		}
+		view.Append(entry)
 	case EventFailure:
 		view.Append(session.Entry{Kind: session.Failure, ID: event.ID, Body: event.Text})
 	case EventPersisted:
@@ -661,6 +665,9 @@ func (a *App) absorb(event Event) {
 			a.view.Decide(event.ID, *event.Decision)
 		}
 		a.judged(*event.Decision, cmp.Or(event.Agent, orchestrator))
+		if event.Judge != nil {
+			a.status.Judge = event.Judge
+		}
 	case EventSession:
 		if root := cmp.Or(event.Root, event.ID); root != a.sessionRoot {
 			a.started, a.sessionRoot = at, root

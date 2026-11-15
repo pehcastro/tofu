@@ -110,19 +110,36 @@ func leadUserMessage(logged session.Event) (session.MessageBody, bool) {
 	return said, logged.Agent == "" && logged.Kind == session.EventMessage && json.Unmarshal(logged.Body, &said) == nil && said.Role == session.RoleUser
 }
 
-type toldOnce struct {
+type plannedJudge struct {
 	mu      sync.Mutex
-	session string
+	spawner *loop.SpawnTool
+	opened  *loop.SubAgentModel
+	err     error
 }
 
-func (t *toldOnce) first(session string) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.session == session {
-		return false
+func (p *plannedJudge) open(ctx context.Context, slug string) (loop.Model, error) {
+	p.mu.Lock()
+	switch {
+	case p.opened != nil || p.err != nil:
+	case p.spawner == nil || p.spawner.SubAgents.Open == nil:
+		p.err = errors.New("this session opens no model besides its own, so no plan model can judge for them")
+	default:
+		opened, err := p.spawner.SubAgents.Open(roster.Definition{Model: slug}, "")
+		p.opened, p.err = &opened, err
 	}
-	t.session = session
-	return true
+	opened, err := p.opened, p.err
+	p.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
+	account, err := opened.Accounts.Pick(ctx)
+	return account.Model, err
+}
+
+func (p *plannedJudge) close() {
+	if p.opened != nil && p.opened.Close != nil {
+		p.opened.Close()
+	}
 }
 
 type takenTask struct {
@@ -195,13 +212,15 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 			default:
 				return
 			}
-			if gated.Failure != "" && h.jevTold.first(id) {
-				emit(Event{Kind: EventNote, Text: "jev could not judge a call, so for the rest of this session the gate decides from the policy's regex arm: " + gated.Failure})
+			line, accent, changed := h.judge.tell()
+			judge := h.judge.status()
+			if changed {
+				emit(Event{Kind: EventNote, Text: line, Model: accent, Judge: judge})
 			}
 			if call, judging := ctx.Value(judgingCallKey{}).(string); judging {
 				decided.Call = watch.eventID(asker, call)
 			}
-			emit(Event{Kind: EventDecision, ID: gated.ID, Decision: &decided, Agent: asker, Promote: watch.spawning(tool)})
+			emit(Event{Kind: EventDecision, ID: gated.ID, Decision: &decided, Agent: asker, Promote: watch.spawning(tool), Judge: judge})
 		},
 		Roster: h.roster,
 		Inbox:  h.inbox,
@@ -225,6 +244,10 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		emit(gateOffEvent(prepared.GateOff))
 	}
 	go loop.OpenJudges(config)
+	planned := &plannedJudge{spawner: prepared.Spawner}
+	defer planned.close()
+	source, _, _ := strings.Cut(config.Slug, "/")
+	asking = h.judge.during(asking, id, source, planned.open)
 	watch.spawner, watch.maxSteps, watch.decisions = prepared.Spawner, prepared.MaxSteps, prepared.Decisions
 	watch.runs = func() map[string]session.AgentRun { return recordedRuns(sessions, h.ID()) }
 	h.mu.Lock()

@@ -940,6 +940,59 @@
       ],
       "type": "object"
     },
+    "ClassifierHealth": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "ok",
+            "out of credits",
+            "refusing",
+            "unreachable"
+          ],
+          "type": "string"
+        },
+        "status": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "provider",
+        "state"
+      ],
+      "type": "object"
+    },
+    "ClassifierSpend": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "type": "integer"
+        },
+        "charged_usd": {
+          "type": "number"
+        },
+        "list_usd": {
+          "type": "number"
+        },
+        "unpriced_calls": {
+          "type": "integer"
+        },
+        "window": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "window",
+        "calls",
+        "charged_usd",
+        "list_usd",
+        "unpriced_calls"
+      ],
+      "type": "object"
+    },
     "ClientVisibleParams": {
       "additionalProperties": false,
       "properties": {
@@ -1443,6 +1496,9 @@
         },
         "item": {
           "type": "string"
+        },
+        "judge": {
+          "$ref": "#/$defs/JudgeStatus"
         },
         "model": {
           "type": "string"
@@ -2487,6 +2543,32 @@
       },
       "required": [
         "from"
+      ],
+      "type": "object"
+    },
+    "JudgeStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "classifiers": {
+          "items": {
+            "$ref": "#/$defs/ClassifierHealth"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
+        "judge": {
+          "type": "string"
+        },
+        "line": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "classifiers",
+        "judge",
+        "line"
       ],
       "type": "object"
     },
@@ -8991,8 +9073,14 @@
         "age_ms": {
           "type": "integer"
         },
+        "classifier": {
+          "$ref": "#/$defs/ClassifierSpend"
+        },
         "fullest_window": {
           "type": "string"
+        },
+        "judge": {
+          "$ref": "#/$defs/JudgeStatus"
         },
         "missing": {
           "items": {
@@ -9044,6 +9132,7 @@
         "state",
         "providers",
         "spend_limit",
+        "classifier",
         "read_at",
         "age_ms"
       ],

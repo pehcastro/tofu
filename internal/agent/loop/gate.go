@@ -281,6 +281,10 @@ func personOnlyRefusal(ctx context.Context, config Config, request GateRequest) 
 	return refused
 }
 
+func AskQuietly(ctx context.Context) context.Context {
+	return context.WithValue(ctx, quietAskKey{}, true)
+}
+
 func AsTheLead(ctx context.Context) context.Context {
 	return context.WithValue(ctx, contract.SubAgentKey{}, "")
 }
