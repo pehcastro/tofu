@@ -10,6 +10,20 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 
 ## Unreleased
 
+### Added
+
+- `/generate-map` drafts `MAP.md` from the real tree, one row per top-level folder with what it holds and never holds, or shows what changed against the one you have, and writes nothing until you say yes. Three library rules keep the lead to it: place a new file by `MAP.md`, plan a new top-level folder before making it, and keep the instruction file pointing at the map.
+- `tofu run --command <names>` runs one or more of the interface's slash commands headless, each as its own turn, as in `--command generate-map,hunt`.
+- `tofu drive --live [--model source/model]` drives the app on a real subscription the home signed in to, in place of a cassette; a wire paid by a key is refused.
+- The footer keeps the last output rate in grey once text stops, in place of going blank, and shows `sub-agents N tok/s` beside it while sub-agents stream.
+
+### Fixed
+
+- A drag over text in a long chat selects the rows under the pointer, also past the newest 500 entries.
+- Removing a queued message from another window takes that message out by id, so the lead reads only the ones still queued.
+- A new or resumed session waits for a fork or a compaction to end, and a second window joining a forking session waits for it too.
+- Pressing enter on a command no longer stops the screen from drawing while it runs.
+
 ## 0.5.23 - 2026-11-12
 
 Time estimates that say how long work takes and whether they held, and the model's output rate in the footer.
