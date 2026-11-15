@@ -112,7 +112,7 @@ func TestKeysShowsTheBindingInForceAndSaysUnbound(t *testing.T) {
 	}
 	app := newTestApp(Options{})
 	app.options.Keymap = path
-	app.runCommand("reload")
+	app.Update(app.runCommand("reload")())
 	var labels []string
 	for _, result := range app.keyResults("") {
 		labels = append(labels, strings.Join(strings.Fields(result.Label), " "))
