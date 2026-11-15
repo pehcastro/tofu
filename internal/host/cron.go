@@ -115,6 +115,10 @@ func (h *Host) fire(fires []cron.Fire) {
 			h.mu.Unlock()
 			return
 		}
+		if h.heldForFork(func() { h.fire([]cron.Fire{fired}) }) {
+			h.mu.Unlock()
+			continue
+		}
 		h.fired = append(h.fired, fired.ID)
 		h.cron.Hand(fired.ID, h.now())
 		if !h.running {

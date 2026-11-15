@@ -180,7 +180,7 @@ func (h *Host) DropSteering() {
 
 func (h *Host) carrySteers(out *emitter) []string {
 	h.mu.Lock()
-	if h.closed || h.running {
+	if h.closed || h.running || h.forking {
 		h.mu.Unlock()
 		return nil
 	}

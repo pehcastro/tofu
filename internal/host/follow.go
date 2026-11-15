@@ -123,9 +123,8 @@ type heldSettings struct {
 }
 
 type audience struct {
-	mu      sync.Mutex
-	sending sync.Mutex
-	seats   map[*seat]struct{}
+	mu    sync.Mutex
+	seats map[*seat]struct{}
 }
 
 type link struct {
@@ -371,17 +370,10 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		if ask.Pick != (Pick{}) {
 			pick = ask.Pick
 		}
-		a.sending.Lock()
-		if _, running := h.Turn(); running {
-			reply.OK = false
-			a.sending.Unlock()
-			break
-		}
-		h.emitter().emit(Event{Kind: EventTask, Text: ask.Text, Origin: wireOrigin(core.Origin{Source: core.SourceTask}), Images: shownPending(ask.Text, ask.Images)})
-		if reply.OK = h.Send(pick, ask.Text); reply.OK {
+		shown := Event{Kind: EventTask, Text: ask.Text, Origin: wireOrigin(core.Origin{Source: core.SourceTask}), Images: shownPending(ask.Text, ask.Images)}
+		if reply.OK = h.sendHere(pick, ask.Text, shown); reply.OK {
 			reply.Turn, _ = h.Turn()
 		}
-		a.sending.Unlock()
 	case followStop:
 		h.Stop(ask.Stop)
 	case followStopLead:

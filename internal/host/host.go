@@ -111,6 +111,8 @@ type Host struct {
 	mu        sync.Mutex
 	closed    bool
 	running   bool
+	forking   bool
+	afterFork []func()
 	stopped   bool
 	cancelled bool
 	stopBy    string
@@ -327,17 +329,28 @@ func (h *Host) Send(pick Pick, task string) bool {
 		}
 		return started
 	}
+	return h.sendHere(pick, task)
+}
+
+func (h *Host) sendHere(pick Pick, task string, shown ...Event) bool {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if h.running {
+	if h.running || h.forking {
 		return false
 	}
 	h.settle("", Pick{Wire: pick.Wire, Model: pick.Model, Effort: pick.Effort})
-	h.begin(pick, task, core.Origin{Source: core.SourceTask})
+	h.begin(pick, task, core.Origin{Source: core.SourceTask}, shown...)
 	return true
 }
 
-func (h *Host) begin(pick Pick, task string, origin core.Origin) {
+func (h *Host) heldForFork(again func()) bool {
+	if h.forking {
+		h.afterFork = append(h.afterFork, again)
+	}
+	return h.forking
+}
+
+func (h *Host) begin(pick Pick, task string, origin core.Origin, shown ...Event) {
 	h.dropCheckIn()
 	clocked, _ := outside.Open(context.Background(), time.Now)
 	ctx, cancel := context.WithCancelCause(loop.WithLeadCheckIn(clocked, h.keepCheckIn))
@@ -350,6 +363,9 @@ func (h *Host) begin(pick Pick, task string, origin core.Origin) {
 		defer close(turnOver)
 		out := h.emitter()
 		live.Emit = out.emit
+		for _, event := range shown {
+			out.emit(event)
+		}
 		out.emit(Event{Kind: EventTurnStarted, ID: live.Turn, Text: task, Origin: wireOrigin(origin), Images: images, At: h.now()})
 		crashed := ""
 		_ = safe.Call(func(p safe.Panic) {

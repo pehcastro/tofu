@@ -116,6 +116,7 @@ type hub struct {
 	say         func(string)
 	projectTurn sync.Mutex
 	mu          sync.Mutex
+	exiting     string
 	sessions    []*hosted
 
 	hearers hearers
@@ -498,15 +499,36 @@ func (h *hub) wait(ctx context.Context, linger time.Duration) string {
 		select {
 		case <-h.changed:
 		case <-alone:
-			if h.members.Load() == 0 {
-				return "no member for " + linger.String() + ", so the host exits"
+			if h.shut("no member was here for "+linger.String(), true) {
+				return h.exiting + ", so the host exits"
 			}
 		case <-h.stopped:
+			h.shut("it was asked to stop", false)
 			return "asked to stop, so the host exits"
 		case <-ctx.Done():
+			h.shut("it was interrupted", false)
 			return "interrupted, so the host exits"
 		}
 	}
+}
+
+func (h *hub) shut(why string, onlyAlone bool) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if onlyAlone && h.members.Load() > 0 {
+		return false
+	}
+	h.exiting = why
+	return true
+}
+
+func (h *hub) admit() string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.exiting == "" {
+		h.moved(1)
+	}
+	return h.exiting
 }
 
 func (h *hub) moved(by int64) {
@@ -664,7 +686,10 @@ func (h *hub) serve(conn net.Conn) {
 	case hubAskHear, hubAskWrite:
 		h.hearers.serve(conn, lines, asked, h.answer)
 	case hubAskJoin:
-		h.moved(1)
+		if exiting := h.admit(); exiting != "" {
+			_ = json.NewEncoder(conn).Encode(hubJoined{HubStatus: h.status, Refused: "the tofu host, process " + strconv.Itoa(h.status.PID) + ", takes no new member because it is exiting: " + exiting + ". Open tofu again and a new host starts"})
+			return
+		}
 		defer h.moved(-1)
 		h.join(conn, lines, asked)
 	}

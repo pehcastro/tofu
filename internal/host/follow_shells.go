@@ -131,6 +131,10 @@ func (h *Host) shellNotice(name, text string) {
 	}
 	origin := core.Origin{Source: core.SourceShellHolder, Name: name}
 	h.mu.Lock()
+	if h.heldForFork(func() { h.shellNotice(name, text) }) {
+		h.mu.Unlock()
+		return
+	}
 	if !h.running && !h.closed {
 		h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort}, text, origin)
 		h.mu.Unlock()

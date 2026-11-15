@@ -531,6 +531,8 @@ type Compacted struct {
 
 const nothingToFork = "nothing to fork: this session carries no history yet"
 
+var errForking = errors.New("this session is already compacting or forking: wait for it to end")
+
 func (h *Host) Fork(ask HandFork) (_ Compacted, err error) {
 	if err := h.reachHost(); err != nil {
 		return Compacted{}, err
@@ -546,9 +548,10 @@ func (h *Host) Fork(ask HandFork) (_ Compacted, err error) {
 		}
 		return reply.Compacted, nil
 	}
-	if turn, running := h.Turn(); running {
-		return Compacted{}, turnRunning(turn)
+	if err := h.holdForFork(); err != nil {
+		return Compacted{}, err
 	}
+	defer h.releaseFork()
 	id, carried, compacting := h.ID(), h.Carried(), time.Now()
 	ctx, clock := outside.Open(context.Background(), time.Now)
 	defer func() {
@@ -610,6 +613,31 @@ func (h *Host) Fork(ask HandFork) (_ Compacted, err error) {
 	h.mu.Unlock()
 	compacted.Into = into
 	return compacted, nil
+}
+
+func (h *Host) holdForFork() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	switch {
+	case h.running:
+		return turnRunning(h.turn)
+	case h.forking:
+		return errForking
+	}
+	h.forking = true
+	h.dropCheckIn()
+	return nil
+}
+
+func (h *Host) releaseFork() {
+	h.mu.Lock()
+	held := h.afterFork
+	h.forking, h.afterFork = false, nil
+	h.mu.Unlock()
+	h.carrySteers(h.emitter())
+	for _, again := range held {
+		again()
+	}
 }
 
 func ResumedPick(store *session.Store, dir, id string) (Pick, string, error) {
