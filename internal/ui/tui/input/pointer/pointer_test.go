@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 
+	"tofu/internal/ui/tui/chat/markdown"
+	"tofu/internal/ui/tui/chat/session"
 	"tofu/internal/ui/tui/input/pointer"
 	"tofu/internal/ui/tui/look/look"
 )
@@ -106,6 +109,30 @@ func TestReferencesOnlyOccupyTheirVisibleCells(t *testing.T) {
 		if got := pointer.ReferenceAt(view, probe.x, probe.y); got != probe.want {
 			t.Fatalf("ReferenceAt(%d, %d) = %q, want %q", probe.x, probe.y, got, probe.want)
 		}
+	}
+}
+
+func TestEveryPressedChatRowPaintsOnThatRowPastTheEntryWindow(t *testing.T) {
+	at := time.Unix(0, 0)
+	view := session.New(func() time.Time { return at }, new(markdown.Renderer).Lines)
+	reply := "## Heading\n\nA paragraph that runs long enough to wrap across more than one row at eighty columns wide.\n\n1. first `F:\\a\\b` item\n2. second F:\\work\\gobta-zed item\n\n```go\nfunc x() {}\n```\n\n- bullet\n- bullet two\n\nclosing words."
+	for n := range 400 {
+		view.Append(session.Entry{Kind: session.User, Body: fmt.Sprint("question ", n)})
+		view.Append(session.Entry{Kind: session.Assistant, Body: reply})
+	}
+	view.SetSize(80, 30)
+	_ = view.View()
+	view.Scroll("home")
+	_ = view.View()
+	for page := range 400 {
+		for row := range view.Track().Height {
+			point := view.PointAt(3, row)
+			if got := view.Shown(point, point).Start.Y; got != row {
+				t.Fatalf("page %d: a press on row %d paints row %d", page, row, got)
+			}
+		}
+		view.Scroll("pgdown")
+		_ = view.View()
 	}
 }
 

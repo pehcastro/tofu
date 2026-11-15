@@ -74,11 +74,16 @@ func (m *Model) transcript(rows int) []string {
 	return lines
 }
 
-func (m *Model) scrollMetrics(rows int) (int, int, anchor) {
-	from, scrollable := m.tailAnchor(rows)
+func (m *Model) shownTop(rows int) anchor {
+	tail, scrollable := m.tailAnchor(rows)
 	if scrollable && !m.following {
-		from = m.top
+		return m.top
 	}
+	return tail
+}
+
+func (m *Model) scrollMetrics(rows int) (int, int, anchor) {
+	from := m.shownTop(rows)
 	_, hi := m.window()
 	return m.offset(anchor{entry: hi}), m.offset(from), from
 }

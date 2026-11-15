@@ -189,8 +189,24 @@ type Point struct {
 
 func (m *Model) PointAt(x, row int) Point {
 	rows := m.transcriptRows()
-	_, _, top := m.scrollMetrics(rows)
-	return Point{at: m.move(top, max(0, min(row, rows-1))), x: x}
+	at := m.move(m.shownTop(rows), max(0, min(row, rows-1)))
+	if at.entry < len(m.entries) {
+		return Point{at: at, x: x}
+	}
+	return Point{at: m.move(at, -1), x: m.width}
+}
+
+func (m *Model) rowBelow(top, at anchor, rows int) int {
+	if at.before(top) {
+		return -1
+	}
+	row := at.line - top.line
+	for index := top.entry; index < at.entry && row < rows; {
+		start, end := m.blockAt(index)
+		row += len(m.blockLines(start))
+		index = end
+	}
+	return min(row, rows)
 }
 
 func ordered(from, to Point) (Point, Point) {
@@ -203,8 +219,8 @@ func ordered(from, to Point) (Point, Point) {
 func (m *Model) Shown(from, to Point) pointer.Selection {
 	from, to = ordered(from, to)
 	rows := m.transcriptRows()
-	_, fromTop, _ := m.scrollMetrics(rows)
-	start, end := pointer.Cell{X: from.x, Y: m.offset(from.at) - fromTop}, pointer.Cell{X: to.x, Y: m.offset(to.at) - fromTop}
+	top := m.shownTop(rows)
+	start, end := pointer.Cell{X: from.x, Y: m.rowBelow(top, from.at, rows)}, pointer.Cell{X: to.x, Y: m.rowBelow(top, to.at, rows)}
 	if end.Y < 0 || start.Y >= rows {
 		return pointer.Selection{}
 	}
