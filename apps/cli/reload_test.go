@@ -124,7 +124,8 @@ func TestReloadInTheAppPicksUpAKeymapEdit(t *testing.T) {
 	for _, letter := range "/reload" {
 		app.Update(tea.KeyPressMsg{Code: letter, Text: string(letter)})
 	}
-	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	_, reloaded := app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	app.Update(reloaded())
 	if !strings.Contains(app.View().Content, "reloaded, the first reload here") {
 		t.Errorf("the /reload note is not the one short line\n%s", app.View().Content)
 	}

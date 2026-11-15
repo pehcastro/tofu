@@ -17,7 +17,8 @@ const (
 	inUseMark  = "● "
 	otherMark  = "  "
 
-	resumeWithHandle = "/resume "
+	resumeWithHandle       = "/resume "
+	sessionsAlreadyReading = "already reading sessions, the picker opens when they are read"
 )
 
 type SessionRow struct {
@@ -26,32 +27,42 @@ type SessionRow struct {
 }
 
 func (a *App) resumePicker() tea.Cmd {
+	if a.readingSessions {
+		a.view.Append(session.Entry{Kind: session.Note, Body: sessionsAlreadyReading})
+		return nil
+	}
 	if a.refusedMidTurn() {
 		return nil
 	}
-	found, err := a.options.Sessions()
-	trouble := ""
-	if err != nil {
-		trouble = err.Error()
-	}
-	return a.push(&recordedDialog{
-		searchDialog: searchDialog{palette.NewSearch("Resume", troubleOr(trouble, resumeHint), func(query string) []palette.Result {
-			var results []palette.Result
-			for _, one := range found {
-				if !contains(one.Name+" "+one.Task, query) {
-					continue
-				}
-				mark := otherMark
-				if one.InUse {
-					mark = inUseMark
-				}
-				results = append(results, palette.Result{Label: mark + cmp.Or(one.Name, short(one.ID)) + "  " + one.Facts + "  " + one.Task, Reference: one.ID})
-			}
-			return results
-		})},
-		choose: func(a *App, result palette.Result) tea.Cmd {
-			return a.resumeTo(result.Reference)
-		},
+	a.readingSessions = true
+	return carrying(func() carried {
+		found, err := a.options.Sessions()
+		trouble := ""
+		if err != nil {
+			trouble = err.Error()
+		}
+		return func(a *App) tea.Cmd {
+			a.readingSessions = false
+			return a.push(&recordedDialog{
+				searchDialog: searchDialog{palette.NewSearch("Resume", troubleOr(trouble, resumeHint), func(query string) []palette.Result {
+					var results []palette.Result
+					for _, one := range found {
+						if !contains(one.Name+" "+one.Task, query) {
+							continue
+						}
+						mark := otherMark
+						if one.InUse {
+							mark = inUseMark
+						}
+						results = append(results, palette.Result{Label: mark + cmp.Or(one.Name, short(one.ID)) + "  " + one.Facts + "  " + one.Task, Reference: one.ID})
+					}
+					return results
+				})},
+				choose: func(a *App, result palette.Result) tea.Cmd {
+					return a.resumeTo(result.Reference)
+				},
+			})
+		}
 	})
 }
 

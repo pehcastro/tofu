@@ -271,6 +271,10 @@ type App struct {
 	leading        bool
 	afterTurn      []func() carried
 	forking        bool
+
+	readingSessions bool
+	openingSide     bool
+
 	gateOff        bool
 	running        int
 	pressedAt      time.Time

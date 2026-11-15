@@ -911,7 +911,7 @@ func TestReloadAppearsInTheCommandMenuAndCallsTheVerb(t *testing.T) {
 		t.Fatal("reload is not offered in the command menu")
 	}
 
-	app.runCommand("reload")
+	app.Update(app.runCommand("reload")())
 	if !called {
 		t.Fatal("/reload did not call the verb")
 	}

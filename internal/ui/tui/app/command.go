@@ -27,6 +27,7 @@ const (
 	branchAtMessage       = "/branch "
 	noSideHere            = "this interface cannot switch sessions, so it opens no side chat. tofu session branch <session> --side makes one"
 	noSideOpened          = "no side chat was opened: "
+	sideAlreadyOpening    = "a side chat is already opening"
 )
 
 func commandList(options Options) []session.Command {
@@ -126,7 +127,7 @@ func (a *App) runCommand(name string) tea.Cmd {
 	case "permissions":
 		a.listStanding()
 	case "reload":
-		a.reload()
+		return a.reload()
 	case "resume":
 		return a.resumePicker()
 	case "side":
@@ -200,40 +201,58 @@ func (a *App) openSide() tea.Cmd {
 		a.view.Append(session.Entry{Kind: session.Note, Body: noSideHere})
 		return nil
 	}
+	if a.openingSide {
+		a.view.Append(session.Entry{Kind: session.Note, Body: sideAlreadyOpening})
+		return nil
+	}
 	if a.refusedMidTurn() {
 		return nil
 	}
-	side, err := a.branchSide()
+	access := a.text(isettings.SideChatAccess)
+	branch, err := a.branchSide(access)
 	if err != nil {
 		a.view.Append(session.Entry{Kind: session.Note, Body: noSideOpened + err.Error()})
 		return nil
 	}
-	opened := "a side chat beside " + side.Header.BranchedFrom.Session + " opened, with " + a.text(isettings.SideChatAccess) + " access. the session it sits beside keeps running"
-	if side.NoTask {
-		opened += ". " + loop.SideNoTask
-	}
-	a.view.Append(session.Entry{Kind: session.Note, Body: opened})
-	return a.resumeTo(side.Header.ID)
+	a.openingSide = true
+	return carrying(func() carried {
+		side, err := branch()
+		return func(a *App) tea.Cmd {
+			a.openingSide = false
+			if err != nil {
+				return noted(noSideOpened + err.Error())(a)
+			}
+			opened := "a side chat beside " + side.Header.BranchedFrom.Session + " opened, with " + access + " access. the session it sits beside keeps running"
+			if side.NoTask {
+				opened += ". " + loop.SideNoTask
+			}
+			a.view.Append(session.Entry{Kind: session.Note, Body: opened})
+			return a.resumeTo(side.Header.ID)
+		}
+	})
 }
 
-func (a *App) branchSide() (loop.SideOpened, error) {
+func (a *App) branchSide(access string) (func() (loop.SideOpened, error), error) {
 	store, id, trouble := a.recordedSession()
 	if trouble != "" {
-		return loop.SideOpened{}, errors.New(trouble)
+		return nil, errors.New(trouble)
 	}
-	parent, err := store.Header(id)
+	granted, err := loop.AccessOf(access)
 	if err != nil {
-		return loop.SideOpened{}, err
+		return nil, err
 	}
-	access, err := loop.AccessOf(a.text(isettings.SideChatAccess))
-	if err != nil {
-		return loop.SideOpened{}, err
-	}
-	var chosen *isession.Chosen
+	branch := loop.SideBranch{Access: granted, Seed: loop.SeedSummary, Effort: a.effort}
 	if model, known := a.chosenModel(); known {
-		chosen = &isession.Chosen{Wire: a.wire, Model: model.Slug()}
+		branch.Chosen = &isession.Chosen{Wire: a.wire, Model: model.Slug()}
 	}
-	return loop.BranchSide(store, parent, loop.SideBranch{Access: access, Seed: loop.SeedSummary, Chosen: chosen, Effort: a.effort}, a.options.Now())
+	at := a.options.Now()
+	return func() (loop.SideOpened, error) {
+		parent, err := store.Header(id)
+		if err != nil {
+			return loop.SideOpened{}, err
+		}
+		return loop.BranchSide(store, parent, branch, at)
+	}, nil
 }
 
 type recordedDialog struct {
@@ -308,29 +327,35 @@ func troubleOr(trouble, hint string) string {
 	return hint
 }
 
-func (a *App) reload() {
-	var said []string
-	if a.options.Reload != nil {
-		said = append(said, a.options.Reload())
-	}
-	if a.store != nil {
-		if err := a.store.Reread(); err != nil {
-			said = append(said, settingsUnread+err.Error())
+func (a *App) reload() tea.Cmd {
+	return carrying(func() carried {
+		var said []string
+		if a.options.Reload != nil {
+			said = append(said, a.options.Reload())
 		}
-		a.refreshSettingsRows()
-	}
-	a.shortcuts = keymap.LoadShortcuts(a.options.Keymap)
-	a.settings.SetSearchKey(a.shortcuts[searchAction])
-	picked, bound := a.picked, a.bound
-	a.readWires()
-	a.picked, a.chosen = "", resolvedModel{}
-	if picked == bound {
-		picked = a.bound
-	}
-	if refused := a.repick(picked); refused != "" {
-		said = append(said, refused)
-	}
-	a.view.Append(session.Entry{Kind: session.Note, Body: strings.Join(said, "\n")})
+		shortcuts := keymap.LoadShortcuts(a.options.Keymap)
+		return func(a *App) tea.Cmd {
+			if a.store != nil {
+				if err := a.store.Reread(); err != nil {
+					said = append(said, settingsUnread+err.Error())
+				}
+				a.refreshSettingsRows()
+			}
+			a.shortcuts = shortcuts
+			a.settings.SetSearchKey(a.shortcuts[searchAction])
+			picked, bound := a.picked, a.bound
+			a.readWires()
+			a.picked, a.chosen = "", resolvedModel{}
+			if picked == bound {
+				picked = a.bound
+			}
+			if refused := a.repick(picked); refused != "" {
+				said = append(said, refused)
+			}
+			a.view.Append(session.Entry{Kind: session.Note, Body: strings.Join(said, "\n")})
+			return nil
+		}
+	})
 }
 
 func (a *App) repick(slug string) string {

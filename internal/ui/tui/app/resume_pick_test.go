@@ -38,7 +38,7 @@ func TestSlashResumeWithAHandleResumesItAndNeverReachesTheModel(t *testing.T) {
 	nothingEntered(t, entered)
 
 	typeText(app, "/resume ")
-	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	press(t, app, tea.KeyPressMsg{Code: tea.KeyEnter})
 	if _, picker := app.top().(*recordedDialog); !picker || len(asked) != 2 {
 		t.Errorf("/resume and a space opened %T and asked %q, want the picker", app.top(), asked)
 	}
@@ -65,7 +65,7 @@ func TestSlashResumePicksASessionByItsFirstLineAndTheChatShowsItsTurn(t *testing
 	}
 
 	typeText(app, "/resume")
-	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	press(t, app, tea.KeyPressMsg{Code: tea.KeyEnter})
 	listed := ansi.Strip(app.View().Content)
 	for _, want := range []string{"tidy the charlie notes", "parser", "plan the alpha migration"} {
 		if !strings.Contains(listed, want) {
