@@ -1,0 +1,7 @@
+id: instruction_file
+domain: general
+kind: human
+concern: process_discipline
+role: orchestrator
+text: the project's instruction file is the AGENTS.md or CLAUDE.md already at its root. edit that one and never create the other beside it; create AGENTS.md only when neither exists and the work needs one. keep it to what an agent gets wrong without it: how to build and check, and rules the code does not show. it points to MAP.md for the layout and to the docs folder rather than copying them, so add that pointer when MAP.md exists and the file lacks it. when a change makes a line in it false, fix the line in the same change.
+notes: a project that already has CLAUDE.md and gains an AGENTS.md beside it holds two files that drift apart, and an agent reading one misses what was written in the other. a file that copies the layout or the docs goes stale the first time either moves, and every line of it is sent with every task.

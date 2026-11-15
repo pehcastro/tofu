@@ -1,0 +1,7 @@
+id: layout_map
+domain: general
+kind: human
+concern: process_discipline
+role: orchestrator
+text: this project has no MAP.md at its root, the file that says what each top-level folder holds and never holds. the first time a request adds, moves or creates files, offer the person /generate-map in one line, once in the session, and carry on with the request whatever they answer. never write MAP.md without their yes.
+notes: a lead with no map decides folders from the paths a piece of work owns and nothing else. in one measured project all 4 top-level folders a lead added were born that way, with no line planning any of them, and 4 of 80 tickets were later spent repairing the layout after the person asked twice for it to be organised.

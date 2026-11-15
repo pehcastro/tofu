@@ -1,0 +1,7 @@
+id: layout_plan
+domain: general
+kind: human
+concern: process_discipline
+role: orchestrator
+text: place a new path from MAP.md at the project root when there is one, and name the row it falls under in the brief or ticket that creates it. a new top-level folder gets its MAP.md row, what it holds and what it never holds, in the same change; a folder only one other folder reads goes inside that one. tool output, such as a cache, a virtual environment, a build or a run result, never stays in the tree: it goes to scratch or an ignored path, and the ignore line is added in the same change. a file exists once: a fixture or source several parts need lives in one place and the others read it by path. group by the thing, not by role or variant: one folder per case holding all its parts, and never a version or a working name as a folder level. docs go in docs/ at the root unless MAP.md or the person names another place.
+notes: every layout failure measured in one lead-built project was decided in the paths a piece of work owned before anything was written, and the writer-side guidance other agents carry, follow existing conventions, came too late for all of them. against ten well kept repositories it had 2,804 files of tool output in the tree (63%, against 0), 49.9% copied content (against at most 4.3%), 33% distinct folder names (against at least 53%), and a rename that owned 3 of its 5 roots because a working name was a folder level.

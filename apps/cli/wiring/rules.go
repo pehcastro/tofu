@@ -35,6 +35,8 @@ const (
 	boardRulesRule    = "board_rules"
 	boardStartRule    = "board_start"
 	keepsSlotsRule    = "keeps_slots"
+	layoutMapRule     = "layout_map"
+	projectMapFile    = "MAP.md"
 )
 
 type LayerOverride struct {
@@ -87,9 +89,10 @@ func (o LayerOverride) Listing() *host.OverrideListing {
 
 func StackRules(library string, boards boardy.Store, opened error) (RuleStack, error) {
 	project := boards.Root
-	var verifying, hasBoard, led bool
+	var verifying, hasBoard, led, mapped bool
 	var reading sync.WaitGroup
 	reading.Go(func() { verifying = settingspkg.IntSaying(project, settingspkg.VerifySubAgents, nil) != 0 })
+	reading.Go(func() { mapped, _ = fs.Exists(filepath.Join(project, projectMapFile)) })
 	reading.Go(func() {
 		hasBoard = ProjectHasBoard(boards, opened)
 		led = BoardLed(boards, opened)
@@ -116,6 +119,9 @@ func StackRules(library string, boards boardy.Store, opened error) (RuleStack, e
 		rules = rule.Layer(rules, over)
 	}
 	for i, one := range rules {
+		if one.ID == layoutMapRule && mapped {
+			rules[i].Mode = rule.ModeOff
+		}
 		var on bool
 		switch key := RuleSetting(one.ID); key {
 		case "":
@@ -150,6 +156,8 @@ func (s RuleStack) SwitchOn(id string) string {
 		return "off by the setting " + key + ": tofu settings set " + key + " " + ruleSettingOnValue(key)
 	case id == boardStartRule:
 		return "off once the project has a board, where board_lead runs instead"
+	case id == layoutMapRule:
+		return "off while the project has " + projectMapFile + " at its root"
 	case key == boardy.ManagementSetting && !s.hasBoard:
 		return "off until the project has a board: tofu boardy init"
 	case key != "":

@@ -8,12 +8,13 @@ verbs: context, session, undo
 ## What it is
 
 Typing `/` at the start of the composer opens the command list. Typing more filters it, the arrow keys pick a row, tab completes, and enter runs it.
-`/simplify`, `/debug` and `/hunt` start a model turn: the model gets the command's skill, and the chat shows what you typed. Every other command runs in tofu and never reaches the model. `tofu serve` answers the list as `query.commands`; a command that starts a turn says `turn` or `diff-turn`.
+`/simplify`, `/debug`, `/hunt` and `/generate-map` start a model turn: the model gets the command's skill, and the chat shows what you typed. Every other command runs in tofu and never reaches the model. `tofu serve` answers the list as `query.commands`; a command that starts a turn says `turn` or `diff-turn`.
 
 - `/help`: every command and what it does, one line each
 - `/simplify`: the first message carries the simplify skill and the last diff, or the last commit on a clean tree; cuts wait for your approval
 - `/debug <symptom>`: reproduce, narrow, fix the cause, show it go green
 - `/hunt [where]`: spawns `hunter`, then `skeptic`, then `referee` after both report; only what can be shown now is kept, nothing is fixed
+- `/generate-map`: drafts `MAP.md` from the tree, one row per top-level folder, or shows the changes to the one there, and writes nothing until you say yes; see `tofu docs generate-map`
 - `/chat`, `/sub-agents`, `/file-edits`, `/shells`, `/settings`: open that screen
 - `/models`: choose the model the next turn runs
 - `/status`: each subscription's quota windows and when they reset

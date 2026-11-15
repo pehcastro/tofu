@@ -143,7 +143,7 @@ func (a *App) runCommand(name string) tea.Cmd {
 		a.carry(func() string { return a.options.Undo("") })
 	case "cron", "loop", "goal":
 		return a.cronLine("/" + name)
-	case "simplify", "debug", "hunt":
+	case "simplify", "debug", "hunt", "generate-map":
 		a.view.Insert("/" + name)
 		return a.send()
 	case "help":

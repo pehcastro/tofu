@@ -72,6 +72,7 @@ func Table() []Command {
 		{Name: "simplify", Summary: "review the last diff and keep only a change that shrinks the code", Scope: Tofu, Needs: DiffTurn},
 		{Name: "debug", Args: "<symptom>", Summary: "reproduce the symptom, then find and fix its cause: /debug <symptom>", Scope: Tofu, Needs: Turn},
 		{Name: "hunt", Args: "[where]", Summary: "a hunter and a skeptic look for bugs, a referee keeps what can be shown", Scope: Tofu, Needs: Turn},
+		{Name: "generate-map", Summary: "draft MAP.md from the tree, one row per top-level folder, or the changes to the one there; writes on your yes", Scope: Tofu, Needs: Turn},
 		{Name: "help", Summary: "every command and what it does, one line each", Scope: Interface, Needs: Always},
 		{Name: "quit", Summary: "leave tofu", Scope: Interface, Needs: Always},
 	}
