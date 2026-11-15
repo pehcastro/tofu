@@ -6,7 +6,7 @@ document: what changed in Zig from 0.13 to master, per version: the old form, th
 
 # Zig churn, 0.13 to master
 
-Write for the version the project names, and read every row from that version back. Stable is 0.17.1 (2026-11-02), master is 0.18.0-dev. A `0.N.0-dev` build leads up to 0.N.0: treat `0.16.0-dev.2905` as 0.16. A version newer than this page is unknown; read the std source at `.std_dir` from `zig env` instead of guessing. An error quoted here was printed by a 0.16-dev compiler or is a case in the compiler's test suite; a row with no error text has none verified. **Silent** means the old form compiles and does something else.
+Write for the version the project names, and read every row from that version back. Stable is 0.17.1, master is 0.18.0-dev. A `0.N.0-dev` build leads up to 0.N.0: treat `0.16.0-dev.2905` as 0.16. A version newer than this page is unknown; read the std source at `.std_dir` from `zig env` instead of guessing. An error quoted here was printed by a 0.16-dev compiler or is a case in the compiler's test suite; a row with no error text has none verified. **Silent** means the old form compiles and does something else.
 
 ## 0.13
 

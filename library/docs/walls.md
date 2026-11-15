@@ -59,7 +59,7 @@ Nothing to set. The 14 day window is the default of `--since`.
   p50, p90 and max in ms.
 
 ```text
-Walls · since 2026-10-30 09:12:40 · 3 rows
+Walls · since YYYY-MM-DD 09:12:40 · 3 rows
 
     op    name          n    p50 ms  p90 ms  max ms
     verb  doctor        5    8701    9104    9295

@@ -14,8 +14,9 @@ commands, and they share one list, one history and one set of limits.
 A fire during a turn reaches the model at its next step, like a line you
 type. A fire while tofu is idle starts a turn. The chat shows one row,
 `cron c1 fired [expand]`, never a message from you; `[expand]` or `ctrl+o`
-opens the prompt in the sub-agents tab. The model reads the prompt as the schedule's, never as
-yours, so it approves nothing and is never carried or learned as your words.
+opens the prompt in the sub-agents tab. The model reads the prompt as the
+schedule's, never as yours, so it approves nothing and is never carried or
+learned as your words.
 A job the model makes with its `cron` tool fires on time, and a job keeps
 firing while one long turn runs.
 
@@ -91,22 +92,16 @@ rest. A schedule is a 5-field line (minute hour day month weekday),
 `once at <15:04>` or `after each turn`. An expired job comes back with
 `--expires 24h`; a job that ended any other way does not.
 
-Pause and resume without losing the job:
-
-    /cron pause c1
-    /cron resume c1
+`/cron pause c1` stops a job without losing it, and `/cron resume c1`
+starts it again.
 
 ## Check it
 
-    /cron
+`/cron` opens the crons view: each job with its schedule, version, next
+fire, expiry, fires so far and last result. The status bar shows `cron 1`
+while any job is active.
 
-opens the crons view: each job with its schedule, version, next fire,
-expiry, fires so far and last result. The status bar shows `cron 1` while
-any job is active.
-
-    /cron history c1
-
-shows every version, oldest first:
+`/cron history c1` shows every version, oldest first:
 
     v1 · Oct 5 05:14:43 · by person · made by /loop
        every 1m · expires Oct 6 05:14:43 · check the build

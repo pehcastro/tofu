@@ -693,7 +693,7 @@ exit 0
       {
         "key": "projectManagement",
         "category": "Projects",
-        "value": "off",
+        "value": "boardy",
         "source": "default",
         "label": "Boardy",
         "description": "boardy runs the lead and its sub-agents from board tickets. off keeps owns a grant per spawn",
@@ -702,7 +702,7 @@ exit 0
           "off",
           "boardy"
         ],
-        "reason": "off until the project has a board: tofu boardy init"
+        "reason": "no board yet, so the lead makes one when it first spawns a sub-agent that edits"
       },
       {
         "key": "boardFlow",

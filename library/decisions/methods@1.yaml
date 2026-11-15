@@ -87,3 +87,7 @@ methods:
     method: judged
     why: not measured against labels. no labelled sample of done calls exists and no free arm, such as matching the cited command to a word in the line, has been run beside it; on the tree build a line whose cited call does not check it read not_checked at 0.02 and one whose call does read yes at 0.63, and checks_at 0.5 is an uncalibrated prior until a labelled sample moves it
     cost: one jev request a done call with a cited call that exited 0, one checks question a line; latency and cost are not measured
+  away_decision:
+    method: judged
+    why: not measured against labels. no labelled sample of away decisions exists and no free arm, such as a word list over push, delete, publish, deploy and send, has been run beside it, and irreversible_at 0.5 is an uncalibrated prior until a labelled sample moves it
+    cost: one jev request a sub-agent report of not possible in a turn an away cron job started; latency and cost are not measured

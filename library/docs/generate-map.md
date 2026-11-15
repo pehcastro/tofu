@@ -38,6 +38,15 @@ Three rules reach the lead, from `library/general/rules/`:
   creates a second one beside it, and creates `AGENTS.md` only when there is
   none.
 
+## Where it lives
+
+- The map is `MAP.md` at the project root. `/generate-map` writes it, and
+  the instruction file edit it offers, only after your yes.
+- The steps the turn follows are the `generate-map` skill, in
+  `library/dev/skills/generate-map.md`.
+- The three rules are `layout_map`, `layout_plan` and `instruction_file`.
+  `layout_map` turns off by itself once `MAP.md` exists at the root.
+
 ## Change it
 
 Type `/generate-map` in the composer, read the draft, and answer yes to

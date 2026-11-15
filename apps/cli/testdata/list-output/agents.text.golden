@@ -1,6 +1,6 @@
 exit 1
 --- stdout
-Sub-agents · 15 defined                                               ✗ 1 broken
+Sub-agents · 16 defined                                               ✗ 1 broken
 
   ○ idle      inherit                   project  runs on the orchestrator's
     model
@@ -95,6 +95,15 @@ Sub-agents · 15 defined                                               ✗ 1 bro
     reference  ts-boundaries  2.4 KB
     reference  verify-a-running-service  2.5 KB
     reference  interface-craft  3.7 KB
+  ○ zig-dev   inherit                   library  Writes and fixes Zig in the
+    project it is given. Reads the Zig version the project names before it
+    edits, writes for that version only, changes the least it can, and is done
+    only when zig fmt with ast-check, the build and zig build test pass the way
+    the project runs them.
+    tools      read, glob, search, symbols, edit, typecheck, test, write,
+      bash, skill, codemod, scaffold, format, deps
+    reference  zig-verify  3.7 KB
+    reference  zig-churn  6.6 KB
   ○ browser   inherit                   library  Does one browsing task in the
     person's Chrome, in a tab of tofu's own, step by step on the browser model,
     and reports what it did, what it found and the tab it left open. Give it the

@@ -17373,6 +17373,15 @@
         "language": {
           "type": "string"
         },
+        "matches": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "model": {
           "type": "string"
         },

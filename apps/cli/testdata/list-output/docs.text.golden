@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 140 asks                                                        46 topics
+Docs · 142 asks                                                        47 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -131,6 +131,14 @@ gate  what jev judges before a tool call runs, when tofu asks you first, and
     → tofu replay --point tool_gate --set risk_ask_at=1.5
   work one task with the gate off
     → tofu run --dir . --no-gate "<task>"
+
+generate-map  how /generate-map drafts MAP.md from the tree or shows what
+  changed in it, and the rules that keep the layout and the instruction file in
+  step
+  write a map of my project's folders
+    → /generate-map in the app, then answer yes to write MAP.md
+  stop offering a project map
+    → tofu rules off layout_map --reason "<why>"
 
 guard  the code rules a repository's Claude Code and git hooks enforce, run by
   tofu itself on Windows, Linux and macOS, with the same answers the old

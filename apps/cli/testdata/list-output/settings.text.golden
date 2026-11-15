@@ -75,8 +75,8 @@ Turn
     modelTier.dumb               empty               default
 
 Projects
-    projectManagement            off                 default, off until the
-      project has a board: tofu boardy init
+    projectManagement            boardy              default, no board yet, so
+      the lead makes one when it first spawns a sub-agent that edits
     boardFlow                    jira                default
     scratchCleanupDays           7                   default
     scratchMaxGB                 50                  default

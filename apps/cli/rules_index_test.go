@@ -12,6 +12,7 @@ import (
 
 	"tofu/apps/cli/output"
 	rulesverb "tofu/apps/cli/verbs/rules"
+	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/loop"
 	rule "tofu/internal/librarian/rules"
 )
@@ -144,11 +145,11 @@ func TestRulesIndexFiresWhatTheComposerSendsForEveryRole(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	library := filepath.Join("..", "..", "library")
-	rules, err := rule.LoadDir(library)
+	project := t.TempDir()
+	rules, _, err := wiring.LoadRules(library, project)
 	if err != nil {
 		t.Fatal(err)
 	}
-	project := t.TempDir()
 	found, err := agentsIn(project)
 	if err != nil {
 		t.Fatal(err)

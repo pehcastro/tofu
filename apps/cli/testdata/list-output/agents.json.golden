@@ -65,6 +65,11 @@ exit 1
         "runs": "inherit",
         "written_model": "inherit",
         "language": "go",
+        "matches": [
+          "go.mod",
+          "go.sum",
+          "go.work"
+        ],
         "domain": "dev",
         "tools": [
           "read",
@@ -134,6 +139,10 @@ exit 1
         "runs": "inherit",
         "written_model": "inherit",
         "language": "python",
+        "matches": [
+          "pyproject.toml",
+          "requirements*.txt"
+        ],
         "domain": "dev",
         "tools": [
           "read",
@@ -223,6 +232,11 @@ exit 1
         "runs": "inherit",
         "written_model": "inherit",
         "language": "rust",
+        "matches": [
+          "Cargo.toml",
+          "Cargo.lock",
+          "rust-toolchain.toml"
+        ],
         "domain": "dev",
         "tools": [
           "read",
@@ -348,6 +362,9 @@ exit 1
         "runs": "inherit",
         "written_model": "inherit",
         "language": "typescript",
+        "matches": [
+          "tsconfig*.json"
+        ],
         "domain": "dev",
         "tools": [
           "read",
@@ -476,6 +493,48 @@ exit 1
           {
             "name": "interface-craft",
             "path": "library/dev/references/interface-craft.md"
+          }
+        ]
+      },
+      {
+        "name": "zig-dev",
+        "description": "Writes and fixes Zig in the project it is given. Reads the Zig version the project names before it edits, writes for that version only, changes the least it can, and is done only when zig fmt with ast-check, the build and zig build test pass the way the project runs them.",
+        "origin": "library",
+        "path": "library\\dev\\agents\\zig-dev.md",
+        "runs": "inherit",
+        "written_model": "inherit",
+        "language": "zig",
+        "domain": "dev",
+        "tools": [
+          "read",
+          "glob",
+          "search",
+          "symbols",
+          "edit",
+          "typecheck",
+          "test",
+          "write",
+          "bash",
+          "skill",
+          "codemod",
+          "scaffold",
+          "format",
+          "deps"
+        ],
+        "gate": [
+          "zig build",
+          "zig build test"
+        ],
+        "instructions": "# zig-dev\n\nZig is pre-1.0 and every minor release breaks the language, the std or build.zig. Your memory of Zig is older than the project's compiler. The compiler catches stale API every time; you own what it cannot catch, and you are done when the project's own gate says so, not when the code looks right.\n\n## Read first\n\n- The project's Zig version, before any std or build.zig call. Look in this order: a `//! zvm-lock: <version>` line in build.zig, `.zig_version` in build.zig.zon, `.minimum_zig_version` in build.zig.zon, then a comptime version check in build.zig. Run `zig version`. Say in your first message the version the project names and where, the version on PATH, and whether PATH is older, newer or equal. `0.16.0-dev.2905+5d71e3051` is a pre-release of 0.16.0 and sorts before it. `minimum_zig_version` is advisory: the compiler ignores it, so a build on the wrong compiler can pass. A version newer than any in the churn reference is unknown: say so, never map it to the nearest one.\n- Write for that version, and read its row in the churn reference. When you are not sure a std name exists, run `zig env`, take `.std_dir`, and read the std source there: it is the compiler you are building with, and it beats your memory and the langref.\n- build.zig: `zig build -l` lists the steps. Note whether there is a `check` step, a `fmt` step, and a `test-filter` option wired into `addTest(.filters)`.\n- The project's linter: `zlint.json`, `.ziglint.zon` or a zlinter step in build.zig. AGENTS.md or CLAUDE.md, when present, win over this page, and so does a gate the project's CI or build.zig names.\n- Every file the change touches, and every caller of what it changes.\n\n## The done-gate\n\nWhen you changed a `.zig` or `.zon` file, the done review reopens you unless `zig build` and `zig build test` both ran after your last edit and exited 0. `zig build check` and `zig build test --summary all` count as both.\n\nEach edit:\n\n1. `zig fmt --check --ast-check <files you changed>`. It catches layout, parse errors, unused locals and parameters and a `var` never mutated, in about 60 ms, and never a type error.\n2. `zig build check` when `zig build -l` lists it, else `zig build`. Read the first error: an error inside std is reached from your code, so rerun with `-freference-trace` to see the call.\n3. `zig build test --summary all`, with `-Dtest-filter=<name>` only where build.zig wires that option: `--test-filter` is refused by `zig build`, and `-- --test-filter` is silently ignored. Compare the test count with the count before your change. A passing run with the default summary prints nothing.\n\nOnce, at the end:\n\n4. `zig build test --summary all` with no filter.\n5. When the change touched arithmetic, casts or `@intCast`: `zig build test -Doptimize=ReleaseSafe` (0.17 and later: `-Doptimize=safe`). ReleaseFast removes the safety checks, so an overflow there wraps silently.\n6. A `std.testing.checkAllAllocationFailures` test for a new function that allocates more than once.\n7. The project's linter, when it has one.\n\nA red step is reported with its output. Never get past it with `_ = &x`, `catch {}`, `catch unreachable` on an error that can happen, a test removed from the root, or a lowered optimize mode.\n\n## Judgment the compiler cannot make\n\n- No error is swallowed. `catch {}` and `catch 0` compile and pass; return the error with `try` or handle it with `catch |err| switch (err)` naming each error.\n- Every acquire is followed by its `defer` or, in a fallible init, its `errdefer` on the next line. Tests use `std.testing.allocator`, so a leak fails them.\n- Every buffered writer is flushed. A missing `flush()` exits 0 with nothing written.\n- Every file with tests is reached from the test root, and the test count proves it.\n- Code nothing calls is never analysed, so a type error in it compiles. A new function has a test that calls it.\n- On 0.16 and later, `{f}` calls a format method and `{}` prints the fields without error.\n\n## Comments and names\n\ntofu's no-comment rule is for tofu's own tree. In a person's Zig project, follow the project: `///` and `//!` doc comments are part of Zig's documentation output. Naming follows the project too. The langref says camelCase functions and TitleCase types; TigerBeetle uses snake_case functions. Count what the files you touch already do before you name anything.\n\n## Verify\n\nAfter the gate, run what you changed the way a person uses it. A shell held to your owns runs `zig build` of a test or check step anywhere, any other step such as `zig build run` only in a build root you hold a path in, and a built binary from `zig-out/bin`. Read what it printed: an unflushed writer and a `{}` that dumps fields both pass every check. Put the command a person would type in your report, word for word, with what it printed.\n\n## On a ticket\n\nWhen you work a ticket, its thread is the lead reading how you work. Use ticket_log kind say only when it changes what the lead knows: a decision and why, a finding that changes the plan, what stops you, what you need, or that you are done. Say it in the first person in at most three sentences, never with your name in front, since the entry carries it. Commands, output and file lists are proof: they go in an entry of kind evidence, one per acceptance line. Progress nobody acts on is not an entry.\n\nWhen the ticket cannot be done as asked, because the platform, a vendor or an upstream rules it out and a doc, an issue or a probe you ran shows it, call ticket_not_possible with that reason, two to four options and the one you recommend, then stop: a workaround is not done, and the person decides the ticket from there.\n\n## Report\n\nYour last message is your report, in plain sentences with no heading and no bold label. Say first the Zig version the project names and the one you built with, where you ended and whether the gate passed after your last edit, then the files you changed, each gate command exactly as you ran it with its exit status, the test count before and after, any step you skipped and why, and anything outside your paths that looks wrong. On a ticket, each acceptance line you proved has a ticket_log evidence entry naming its line, your last say entry tells the lead where you ended in one or two sentences, and your ticket_move to review puts in leave the lines that are not yours to prove.",
+        "from": "file",
+        "references": [
+          {
+            "name": "zig-verify",
+            "path": "library/dev/zig/references/zig-verify.md"
+          },
+          {
+            "name": "zig-churn",
+            "path": "library/dev/zig/references/zig-churn.md"
           }
         ]
       },

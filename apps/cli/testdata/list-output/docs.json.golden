@@ -88,6 +88,11 @@ exit 0
         "summary": "what jev judges before a tool call runs, when tofu asks you first, and which classifier key and binding it runs on"
       },
       {
+        "topic": "generate-map",
+        "title": "The project map",
+        "summary": "how /generate-map drafts MAP.md from the tree or shows what changed in it, and the rules that keep the layout and the instruction file in step"
+      },
+      {
         "topic": "guard",
         "title": "Guard rules",
         "summary": "the code rules a repository's Claude Code and git hooks enforce, run by tofu itself on Windows, Linux and macOS, with the same answers the old PowerShell scripts gave"
@@ -574,6 +579,18 @@ exit 0
         "do": "tofu run --dir . --no-instructions \"<task>\"",
         "check": "tofu run --dir . --no-instructions --show-prompt \"<task>\"",
         "topic": "instructions"
+      },
+      {
+        "ask": "write a map of my project's folders",
+        "do": "/generate-map in the app, then answer yes to write MAP.md",
+        "check": "cat MAP.md",
+        "topic": "generate-map"
+      },
+      {
+        "ask": "stop offering a project map",
+        "do": "tofu rules off layout_map --reason \"<why>\"",
+        "check": "tofu rules index \"add a folder\" --role orchestrator",
+        "topic": "generate-map"
       },
       {
         "ask": "store the typesafe key the gate needs",

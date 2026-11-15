@@ -89,6 +89,10 @@ exit 0
         "do": "tofu docs gate"
       },
       {
+        "text": "The project map",
+        "do": "tofu docs generate-map"
+      },
+      {
         "text": "Guard rules",
         "do": "tofu docs guard"
       },
@@ -235,6 +239,10 @@ exit 0
       {
         "text": "see which skills the model is offered",
         "do": "tofu run --dir . --show-prompt \"anything\""
+      },
+      {
+        "text": "write a map of my project's folders",
+        "do": "/generate-map in the app, then answer yes to write MAP.md"
       },
       {
         "text": "store the typesafe key the gate needs",
