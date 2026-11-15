@@ -50,6 +50,7 @@ const (
 	verdictLine        = "verdict "
 	noEngine           = "no engine is wired to this app"
 	sentNowNote        = "sent to the lead now"
+	alreadyReadNote    = "the lead already read that message, so nothing was taken back"
 	readHead           = "read by the lead at step "
 	readClock          = "15:04"
 	foldKey            = "f"
@@ -209,10 +210,27 @@ func (a *App) reachedAt(id string) int {
 	})
 }
 
+type queuedSteer struct {
+	id   string
+	text string
+}
+
 func (a *App) steer(task string) {
 	if a.options.Host != nil {
-		a.steered[task] = a.options.Host.Steer(task)
+		a.steered = append(a.steered, queuedSteer{id: a.options.Host.Steer(task), text: task})
 	}
+}
+
+func (a *App) steeredID(task string) string {
+	at := slices.IndexFunc(a.steered, func(row queuedSteer) bool { return row.text == task })
+	if at < 0 {
+		return ""
+	}
+	return a.steered[at].id
+}
+
+func (a *App) forgetSteer(id string) {
+	a.steered = slices.DeleteFunc(a.steered, func(row queuedSteer) bool { return row.id == id })
 }
 
 func (a *App) queueSteeredElsewhere(task string) {
@@ -222,7 +240,7 @@ func (a *App) queueSteeredElsewhere(task string) {
 }
 
 func (a *App) sendNow(task string) bool {
-	sent := a.options.Host != nil && a.options.Host.SendNow(a.steered[task])
+	sent := a.options.Host != nil && a.options.Host.SendNow(a.steeredID(task))
 	if sent {
 		a.notify(sentNowNote)
 	}
@@ -250,10 +268,13 @@ func (a *App) carrySteers() []string {
 
 func (a *App) unqueue() {
 	picked, queued := a.view.PickedQueued()
-	leadTookIt := queued && a.options.Host != nil && !a.options.Host.Unsteer(picked) && a.busy && !a.view.Stopping
-	if !leadTookIt {
+	id := a.steeredID(picked)
+	a.forgetSteer(id)
+	if !queued || a.options.Host == nil || a.options.Host.UnsteerID(id) || !a.busy || a.view.Stopping {
 		a.view.Unqueue()
+		return
 	}
+	a.notify(alreadyReadNote)
 }
 
 const answeredHere = "tui"
@@ -709,9 +730,12 @@ func (a *App) absorb(event Event) {
 	case EventPersisted:
 		drawChat(&a.view, event, "")
 	case host.EventSteerQueued:
-		a.queueSteeredElsewhere(event.Text)
-		a.steered[event.Text] = event.ID
+		if !slices.ContainsFunc(a.steered, func(row queuedSteer) bool { return row.id == event.ID }) {
+			a.view.Queue(event.Text, event.Text, nil)
+			a.steered = append(a.steered, queuedSteer{id: event.ID, text: event.Text})
+		}
 	case EventSteered:
+		a.forgetSteer(event.ID)
 		if at := slices.Index(a.steeredUnread, event.Text); at >= 0 {
 			a.steeredUnread = slices.Delete(a.steeredUnread, at, at+1)
 			break

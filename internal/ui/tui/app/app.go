@@ -274,7 +274,7 @@ type App struct {
 	gateOff        bool
 	running        int
 	pressedAt      time.Time
-	steered        map[string]string
+	steered        []queuedSteer
 	rates          map[string]float64
 	steeredUnread  []string
 	earlier        *host.Earlier
@@ -399,7 +399,6 @@ func New(options Options) *App {
 		started:       options.Now(),
 		moves:         map[string]movement{},
 		openedFolded:  map[string]bool{},
-		steered:       map[string]string{},
 		rates:         map[string]float64{},
 		happenedIndex: map[string]int{},
 		lengthenedIDs: map[string]string{},
@@ -842,7 +841,7 @@ func (a *App) clearDialogs() tea.Cmd {
 func (a *App) closed() tea.Cmd {
 	a.busy, a.leading, a.edits.Busy = false, false, false
 	a.running, a.pressedAt, a.sentNow = 0, time.Time{}, false
-	clear(a.steered)
+	a.steered = nil
 	a.parkSubAgentsTheTurnLeftBehind()
 	a.stopWhatStillRuns()
 	a.view.Stop()

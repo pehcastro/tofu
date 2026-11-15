@@ -204,10 +204,18 @@ func (h *Host) carrySteers(out *emitter) []string {
 }
 
 func (h *Host) Unsteer(text string) bool {
+	return h.unsteer(followAsk{Op: followUnsteer, Text: text}, func(entry steered) bool { return entry.text == text })
+}
+
+func (h *Host) UnsteerID(id string) bool {
+	return h.unsteer(followAsk{Op: followUnsteerID, Text: id}, func(entry steered) bool { return entry.id == id })
+}
+
+func (h *Host) unsteer(ask followAsk, match func(steered) bool) bool {
 	if f := h.following.Load(); f != nil {
-		return f.ask(followAsk{Op: followUnsteer, Text: text}).OK
+		return f.ask(ask).OK
 	}
-	id, found := h.unqueue(text)
+	id, found := h.unqueue(match)
 	if found {
 		h.bus.mu.Lock()
 		h.bus.now.Steers = slices.DeleteFunc(h.bus.now.Steers, withID(id))
@@ -216,17 +224,16 @@ func (h *Host) Unsteer(text string) bool {
 	return found
 }
 
-func (h *Host) unqueue(text string) (string, bool) {
+func (h *Host) unqueue(match func(steered) bool) (string, bool) {
 	h.steering.mu.Lock()
 	defer h.steering.mu.Unlock()
-	typed := func(entry steered) bool { return entry.text == text }
-	if at := slices.IndexFunc(h.steering.held, typed); at >= 0 {
+	if at := slices.IndexFunc(h.steering.held, match); at >= 0 {
 		id := h.steering.held[at].id
 		h.steering.held = slices.Delete(h.steering.held, at, at+1)
 		return id, true
 	}
 	entries := h.steering.drain()
-	at := slices.IndexFunc(entries, typed)
+	at := slices.IndexFunc(entries, match)
 	id := ""
 	if at >= 0 {
 		id = entries[at].id

@@ -48,6 +48,7 @@ const (
 	followSteer     followOp = "steer"
 	followSendNow   followOp = "sendNow"
 	followUnsteer   followOp = "unsteer"
+	followUnsteerID followOp = "unsteerID"
 	followUnqueue   followOp = "unqueue"
 	followAttach    followOp = "attach"
 	followRan       followOp = "ran"
@@ -405,6 +406,8 @@ func (h *Host) served(a *audience, s *seat, raw json.RawMessage) followReply {
 		reply.OK = h.SendNow(ask.Text)
 	case followUnsteer:
 		reply.OK = h.Unsteer(ask.Text)
+	case followUnsteerID:
+		reply.OK = h.UnsteerID(ask.Text)
 	case followUnqueue:
 		h.DropSteering()
 	case followAttach:
