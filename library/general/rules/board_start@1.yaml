@@ -1,0 +1,8 @@
+id: board_start
+domain: general
+kind: human
+concern: process_discipline
+role: orchestrator
+mode: off
+text: this project has no board yet. the first sub-agent you spawn to edit makes one, named from the project, and the spawn result says which: tell the person in one line, such as made the board LANG for this work, then put each next piece on it with ticket_create, with its owns and acceptance, and spawn for it with its id in ticket. board_create makes it sooner when you plan the work before any spawn. a question, a read, or a change you make yourself needs no board.
+notes: ships off and turns on in a project with no board, unless projectManagement is set to something other than boardy; once a board exists board_lead runs instead. on one session the lead ran 36 turns with no board call, because a project with no board gave it no board tool and no board rule, and in two sessions with this rule in prose alone the lead still made none, so the first editing spawn makes the board in code.

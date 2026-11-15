@@ -47,8 +47,8 @@ func ProjectHasBoard(boards boardy.Store, opened error) bool {
 	return len(found) > 0
 }
 
-func BoardManaged(boards boardy.Store, opened error) bool {
-	return ProjectHasBoard(boards, opened) && managementOn(boards.Root)
+func BoardLed(boards boardy.Store, opened error) bool {
+	return opened == nil && managementOn(boards.Root)
 }
 
 func managementOn(project string) bool {

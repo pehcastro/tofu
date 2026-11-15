@@ -33,6 +33,7 @@ const (
 	boardLeadRule     = "board_lead"
 	boardSubAgentRule = "board_sub_agent"
 	boardRulesRule    = "board_rules"
+	boardStartRule    = "board_start"
 	keepsSlotsRule    = "keeps_slots"
 )
 
@@ -49,6 +50,7 @@ type RuleStack struct {
 	Under      map[string][]rule.Rule
 	Overrides  []LayerOverride
 	hasBoard   bool
+	led        bool
 }
 
 type RuleLayer struct{ Name, Dir, Flag string }
@@ -57,7 +59,7 @@ func RuleSetting(id string) string {
 	switch id {
 	case VerifySubAgentsRule:
 		return settingspkg.VerifySubAgents
-	case boardLeadRule, boardSubAgentRule, boardRulesRule, keepsSlotsRule:
+	case boardLeadRule, boardSubAgentRule, boardRulesRule, boardStartRule, keepsSlotsRule:
 		return boardy.ManagementSetting
 	}
 	return ""
@@ -85,12 +87,12 @@ func (o LayerOverride) Listing() *host.OverrideListing {
 
 func StackRules(library string, boards boardy.Store, opened error) (RuleStack, error) {
 	project := boards.Root
-	var verifying, hasBoard, managed bool
+	var verifying, hasBoard, led bool
 	var reading sync.WaitGroup
 	reading.Go(func() { verifying = settingspkg.IntSaying(project, settingspkg.VerifySubAgents, nil) != 0 })
 	reading.Go(func() {
 		hasBoard = ProjectHasBoard(boards, opened)
-		managed = hasBoard && managementOn(project)
+		led = BoardLed(boards, opened)
 	})
 	rules, origin, err := BaseRules(library)
 	reading.Wait()
@@ -101,7 +103,7 @@ func StackRules(library string, boards boardy.Store, opened error) (RuleStack, e
 	if err != nil {
 		return RuleStack{}, err
 	}
-	stack := RuleStack{Origin: origin, Under: map[string][]rule.Rule{}, hasBoard: hasBoard}
+	stack := RuleStack{Origin: origin, Under: map[string][]rule.Rule{}, hasBoard: hasBoard, led: led}
 	for _, layer := range layers {
 		over, err := layer.Load()
 		if err != nil {
@@ -121,7 +123,10 @@ func StackRules(library string, boards boardy.Store, opened error) (RuleStack, e
 		case settingspkg.VerifySubAgents:
 			on = verifying
 		case boardy.ManagementSetting:
-			on = managed
+			on = led && hasBoard
+			if one.ID == boardStartRule {
+				on = led && !hasBoard
+			}
 		default:
 			return RuleStack{}, fmt.Errorf("rule %s is switched by the setting %s, and StackRules reads no such setting", one.ID, key)
 		}
@@ -141,8 +146,10 @@ func StackRules(library string, boards boardy.Store, opened error) (RuleStack, e
 func (s RuleStack) SwitchOn(id string) string {
 	key := RuleSetting(id)
 	switch {
-	case slices.Contains(s.BySetting, id):
+	case slices.Contains(s.BySetting, id) || key == boardy.ManagementSetting && !s.led:
 		return "off by the setting " + key + ": tofu settings set " + key + " " + ruleSettingOnValue(key)
+	case id == boardStartRule:
+		return "off once the project has a board, where board_lead runs instead"
 	case key == boardy.ManagementSetting && !s.hasBoard:
 		return "off until the project has a board: tofu boardy init"
 	case key != "":

@@ -16,7 +16,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/project/boardy"
-	"tofu/internal/store/session"
+	"tofu/internal/project/pm"
 	"tofu/internal/tools/contract"
 	"tofu/internal/tools/project/board"
 )
@@ -67,17 +67,18 @@ func sayable(text string) error {
 
 type ticketTool struct {
 	verb    ticketVerb
-	board   boardy.Managed
+	tracker pm.Tracker
 	actor   string
 	manager bool
 }
 
 func Tools(managed boardy.Managed, actor string) ([]contract.Tool, error) {
-	boards, err := managed.Store.Boards()
+	var tracker pm.Tracker = pm.Boardy{Managed: managed}
+	boards, err := tracker.Boards()
 	if err != nil {
 		return nil, err
 	}
-	manager := slices.ContainsFunc(boards, func(b boardy.Board) bool { return managed.Manages(b.Key, actor, "") == nil })
+	manager := len(boards) == 0 || slices.ContainsFunc(boards, func(b boardy.Board) bool { return tracker.Manages(b.Key, actor, "") == nil })
 	verbs := []ticketVerb{ticketRead, ticketLog, ticketAsk, ticketRequest, ticketMove}
 	if manager {
 		verbs = append(verbs, ticketCreate, ticketAssign, ticketList)
@@ -86,49 +87,35 @@ func Tools(managed boardy.Managed, actor string) ([]contract.Tool, error) {
 	}
 	list := make([]contract.Tool, len(verbs))
 	for i, verb := range verbs {
-		list[i] = ticketTool{verb: verb, board: managed, actor: actor, manager: manager}
+		list[i] = ticketTool{verb: verb, tracker: tracker, actor: actor, manager: manager}
 	}
 	if manager {
-		list = append(list, board.Tools(managed, actor)...)
+		list = append(list, board.Tools(tracker, actor)...)
+	}
+	if len(boards) == 0 {
+		list = append(list, board.Create(tracker, actor))
 	}
 	return list, nil
 }
 
 func Grant(managed boardy.Managed, id, lead, agent string) ([]string, error) {
-	ticket, err := managed.Get(id)
+	var tracker pm.Tracker = pm.Boardy{Managed: managed}
+	ticket, err := tracker.Get(id)
 	if err != nil {
 		return nil, err
 	}
 	if len(ticket.Owns) == 0 {
 		return nil, fmt.Errorf("%s owns no paths, so a sub-agent spawned for it could write nothing: widen it first with tofu boardy widen", id)
 	}
-	if _, err := managed.Assign(id, agent, lead); err != nil {
+	if _, err := tracker.Assign(id, agent, lead); err != nil {
 		return nil, err
 	}
 	if ticket.Status != boardy.Doing {
-		if _, err := managed.Move(id, boardy.Doing, "", lead); err != nil {
+		if _, err := tracker.Move(id, boardy.Doing, "", lead, nil, boardy.Bypassing{}); err != nil {
 			return nil, err
 		}
 	}
 	return ticket.Owns, nil
-}
-
-func (t ticketTool) spokenBoard() boardy.Managed {
-	seeded := t.board.Store.Speakers[t.actor]
-	if seeded.Handle != "" || t.board.Store.Root == "" {
-		return t.board
-	}
-	sessions, err := session.OpenIn(t.board.Store.Root)
-	if err != nil {
-		return t.board
-	}
-	lead, found := loop.PMAuthor(sessions, t.actor, seeded.Model)
-	if !found {
-		return t.board
-	}
-	spoken := t.board
-	spoken.Store.Speakers = map[string]boardy.Author{t.actor: *lead}
-	return spoken
 }
 
 func (t ticketTool) Name() string { return string(t.verb) }
@@ -221,51 +208,51 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (contract.Result
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("%s: arguments are not the expected shape: %w", t.verb, err)
 	}
-	t.board = t.spokenBoard()
-	return board.Nudged(t.board.Store, string(t.verb), func() (contract.Result, error) {
+	t.tracker = t.tracker.As(t.actor)
+	return board.Nudged(t.tracker, string(t.verb), func() (contract.Result, error) {
 		command := string(t.verb) + " " + args.ID
 		var ticket boardy.Ticket
 		var err error
 		var said string
 		switch t.verb {
 		case ticketRead:
-			if ticket, err = t.board.Get(args.ID); err == nil {
+			if ticket, err = t.tracker.Get(args.ID); err == nil {
 				said = string(ticket.Markdown())
 			}
 		case ticketLog:
 			switch args.Kind {
 			case logSay, "":
 				if err = sayable(args.Text); err == nil {
-					ticket, err = t.board.Comment(args.ID, args.Text, t.actor)
+					ticket, err = t.tracker.Comment(args.ID, args.Text, t.actor)
 				}
 			case logEvidence:
-				ticket, err = t.board.Evidence(args.ID, args.Text, t.actor, args.Line)
+				ticket, err = t.tracker.Evidence(args.ID, args.Text, t.actor, args.Line)
 			case logBefore:
 				if args.Late == nil {
-					ticket, err = t.board.CaptureBefore(args.ID, args.Text, t.actor)
+					ticket, err = t.tracker.CaptureBefore(args.ID, args.Text, t.actor)
 					break
 				}
-				ticket, err = t.board.CaptureLateBefore(args.ID, args.Text, *args.Late, t.actor)
+				ticket, err = t.tracker.CaptureLateBefore(args.ID, args.Text, *args.Late, t.actor)
 			default:
 				err = fmt.Errorf("kind is %s, %s or %s, not %q", logSay, logEvidence, logBefore, args.Kind)
 			}
 			said = "logged on " + ticket.ID
 		case ticketAsk:
 			if t.manager {
-				if ticket, err = t.board.Ask(args.ID, boardy.Question{TLDR: args.Question, ELI5: args.ELI5, Options: args.Options, Recommend: args.Recommend, Why: args.Why}, t.actor); err == nil {
+				if ticket, err = t.tracker.Ask(args.ID, boardy.Question{TLDR: args.Question, ELI5: args.ELI5, Options: args.Options, Recommend: args.Recommend, Why: args.Why}, t.actor); err == nil {
 					said = fmt.Sprintf("asked Q%d on %s; the person answers it in catch up", ticket.Questions[len(ticket.Questions)-1].ID, ticket.ID)
 				}
 				break
 			}
-			ticket, err = t.board.AskInLog(args.ID, args.Question, t.actor)
+			ticket, err = t.tracker.AskInLog(args.ID, args.Question, t.actor)
 			said = "asked in the Log of " + ticket.ID + "; a manager answers there"
 		case ticketRequest, ticketCreate:
 			command = string(t.verb) + " " + args.Board
 			draft := boardy.Ticket{Front: boardy.Front{Title: args.Title, Owns: args.Owns, Labels: args.Labels, Parent: args.Parent, Epic: args.Epic, Sprint: args.Sprint}, Problem: args.Problem, Scope: args.Scope,
 				Before: args.Before, Driven: args.Driven, StillWorks: args.StillWorks, ErrorCase: args.ErrorCase, Feasibility: args.Feasibility, Acceptance: []string{args.Acceptance}}
-			file := t.board.Create
+			file := t.tracker.Create
 			if t.verb == ticketRequest {
-				file = t.board.Request
+				file = t.tracker.Request
 			}
 			if ticket, err = file(args.Board, draft, t.actor); ticket.ID == "" {
 				said = ticket.Reason
@@ -274,7 +261,7 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (contract.Result
 			}
 		case ticketMove:
 			var to boardy.Status
-			before, _ := t.board.Get(args.ID)
+			before, _ := t.tracker.Get(args.ID)
 			reason := strings.TrimSpace(args.Reason)
 			switch to, err = boardy.ParseStatus(args.To); {
 			case err != nil:
@@ -283,20 +270,18 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (contract.Result
 			case args.Why != "" && args.Bypass == "":
 				err = errors.New("why goes with bypass, naming the hook it bypasses")
 			default:
-				moving := t.board
-				moving.Bypass = boardy.Bypassing{Hook: args.Bypass, Why: args.Why}
-				ticket, err = moving.MoveLeaving(args.ID, to, args.Reason, t.actor, args.Leave)
+				ticket, err = t.tracker.Move(args.ID, to, args.Reason, t.actor, args.Leave, boardy.Bypassing{Hook: args.Bypass, Why: args.Why})
 			}
 			said = ticket.ID + " is " + string(ticket.Status)
 			if before.Status != ticket.Status {
 				said += ", was " + string(before.Status)
 			}
 		case ticketNotPossible:
-			if ticket, err = t.board.ReportNotPossible(args.ID, boardy.Question{ELI5: args.Reason, Options: args.Options, Recommend: args.Recommend, Why: args.Why}, t.actor); err == nil {
+			if ticket, err = t.tracker.ReportNotPossible(args.ID, boardy.Question{ELI5: args.Reason, Options: args.Options, Recommend: args.Recommend, Why: args.Why}, t.actor); err == nil {
 				said = ticket.ID + " is " + string(ticket.Status) + ": the person decides it, so end your work here and say in your last message what cannot be done and why"
 			}
 		case ticketAssign:
-			ticket, err = t.board.Assign(args.ID, args.To, t.actor)
+			ticket, err = t.tracker.Assign(args.ID, args.To, t.actor)
 			said = ticket.ID + " is assigned to " + ticket.Assignee
 		case ticketList:
 			command = string(t.verb) + " " + args.Status
@@ -304,7 +289,7 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (contract.Result
 			if status, err = boardy.ParseStatus(args.Status); err != nil {
 				break
 			}
-			tickets := loop.BoardTickets(t.board.Store, status)
+			tickets := t.tracker.InStatus(status)
 			lines, more := loop.Waiting(tickets, time.Now())
 			for i := range lines {
 				lines[i] += " " + tickets[i].Title

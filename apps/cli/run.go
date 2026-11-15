@@ -40,6 +40,7 @@ import (
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 	"tofu/internal/project/boardy"
+	"tofu/internal/project/pm"
 	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/memory/tree"
 	"tofu/internal/store/session"
@@ -847,7 +848,7 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 		asking = append(asking, remember.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: judgeverb.MemoryScopeJudge(dir, run.places.Log, run.keys.keyring(), run.notify),
 			Auto: func() bool { on, _ := settingspkg.IntFor(dir, settingspkg.AutoMemory); return on != 0 }})
 	}
-	if store, opened := boardy.OpenStore(dir); wiring.BoardManaged(store, opened) {
+	if store, opened := boardy.OpenStore(dir); wiring.BoardLed(store, opened) {
 		store.Speakers = map[string]boardy.Author{sessionID: *boardy.LeadAuthor(sessionID, "", "", config.Slug)}
 		board := boardy.Managed{Local: boardy.Local{Store: store}, Person: string(boardy.RolePerson), Lead: sessionID}
 		config.Board, config.TicketGrant, config.TicketTools = &board, ticket.Grant, ticket.Tools
@@ -883,6 +884,9 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 	subAgentBase.Instructions, subAgentBase.Memory = "", ""
 	spawner := loop.NewSpawnTool(orchestratorID, subAgentBase, cmp.Or(run.roster, &subagents.Roster{}))
 	spawner.Inbox, spawner.SubAgents, spawner.Project, spawner.ChecksWork = config.Inbox, prompt.subAgents, dir, prompt.checksWork
+	if config.Board != nil {
+		spawner.StartBoard = startBoard(pm.Boardy{Managed: *config.Board}, dir)
+	}
 	run.current = func(held subagents.Definition) subagents.Definition {
 		return heldAsDefined(scanSubAgents(dir, built).Definitions, held)
 	}
@@ -933,6 +937,33 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 	return config, spawner, nil
 }
 
+func startBoard(tracker pm.Tracker, dir string) func() string {
+	var once sync.Once
+	return func() (said string) {
+		once.Do(func() { said = makeBoard(tracker, dir) })
+		return said
+	}
+}
+
+func makeBoard(tracker pm.Tracker, dir string) string {
+	boards, err := tracker.Boards()
+	if err != nil {
+		return "the project's board was not read: " + err.Error()
+	}
+	if len(boards) > 0 {
+		return ""
+	}
+	project, err := filepath.Abs(dir)
+	if err != nil {
+		return "the project's board was not made: " + err.Error()
+	}
+	key := boardy.KeyFrom(filepath.Base(project))
+	if err := tracker.Start(key, filepath.Base(project)); err != nil {
+		return "the project's board was not made: " + err.Error()
+	}
+	return "made the board " + key + " for this project's work, since it had none: tofu boardy list --board " + key
+}
+
 func leadAttached(board boardy.Managed, session string, run runtime) string {
 	if run.sessions != nil {
 		if begun, _ := fs.Exists(run.sessions.EventsPath(session)); begun {
@@ -943,7 +974,22 @@ func leadAttached(board boardy.Managed, session string, run runtime) string {
 	err := eachLedBoard(board, session, func(key string) error {
 		return board.Fire(rule.WhenAfter, rule.HookLeadAttach, key, "", session)
 	})
-	return loop.BoardNudges(board.Store, sizes) + attachFailed(err)
+	return boardRead(board) + loop.BoardNudges(board.Store, sizes) + attachFailed(err)
+}
+
+func boardRead(board boardy.Managed) string {
+	read, err := boardy.API{Board: board}.Boards()
+	if err != nil {
+		return "\n\nthe project's board was not read: " + err.Error()
+	}
+	var held []string
+	for _, one := range read.Boards {
+		held = append(held, fmt.Sprintf("%s, %d tickets, %d live", one.Key, one.Tickets, one.Live))
+	}
+	if len(held) == 0 {
+		return ""
+	}
+	return "\n\nthis project's board: " + strings.Join(held, "; ") + ". read it with ticket_list before you plan, and put each piece of work on it with ticket_create before you spawn for it"
 }
 
 type leadForeseen struct {
@@ -958,7 +1004,7 @@ func foreseeLead(board boardy.Managed, session string) leadForeseen {
 		all.Nudges, all.Notifies, all.Effects = append(all.Nudges, one.Nudges...), append(all.Notifies, one.Notifies...), append(all.Effects, one.Effects...)
 		return err
 	})
-	return leadForeseen{attached: loop.NudgesText(all.Nudges) + attachFailed(err), notified: loop.UnreadBoardNotifies(&board, all.Notifies...), effects: all.Effects}
+	return leadForeseen{attached: boardRead(board) + loop.NudgesText(all.Nudges) + attachFailed(err), notified: loop.UnreadBoardNotifies(&board, all.Notifies...), effects: all.Effects}
 }
 
 func eachLedBoard(board boardy.Managed, session string, do func(key string) error) error {

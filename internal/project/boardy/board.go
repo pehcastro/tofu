@@ -59,6 +59,21 @@ func StoreAt(places platformproject.Places, project string) Store {
 
 var boardKey = platformfs.LazyRegexp(`^[A-Z][A-Z0-9]{1,9}$`)
 
+const (
+	boardKeyMost    = 10
+	boardKeyNoWords = "WORK"
+)
+
+func KeyFrom(name string) string {
+	words := strings.FieldsFunc(strings.ToUpper(name), func(r rune) bool { return (r < 'A' || r > 'Z') && (r < '0' || r > '9') })
+	for _, word := range slices.Backward(words) {
+		if key := word[:min(len(word), boardKeyMost)]; boardKey().MatchString(key) {
+			return key
+		}
+	}
+	return boardKeyNoWords
+}
+
 func (s Store) BoardDir(key string) string { return filepath.Join(s.Dir, key) }
 
 func (s Store) TicketPath(id string) (string, error) {

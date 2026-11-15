@@ -179,6 +179,7 @@ type SpawnTool struct {
 	Project        string
 	Inbox          *Inbox
 	Remembered     func() (map[string]string, error)
+	StartBoard     func() string
 	orchestratorID string
 	depth          int
 	writesNothing  bool
@@ -501,6 +502,18 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	if err != nil {
 		return contract.Result{}, err
 	}
+	madeBoard := ""
+	if t.depth == 0 && args.Ticket == "" && t.StartBoard != nil && (len(definition.Tools) == 0 || slices.Contains(definition.Tools, "edit")) {
+		madeBoard = t.StartBoard()
+	}
+	if madeBoard != "" && site.log != nil {
+		if _, err := site.log.Append(session.Event{Turn: site.turn, Agent: site.agent, Kind: session.EventNotice}, session.NoticeBody{Text: madeBoard, From: RecordedOrigin(core.Origin{Source: core.SourceNotice})}); err != nil {
+			madeBoard += "; the line was not recorded: " + err.Error()
+		}
+	}
+	if madeBoard != "" && t.base.Notify != nil {
+		t.base.Notify(madeBoard)
+	}
 	narrowed := ""
 	if fire, firing := ctx.Value(hookFireKey{}).(func(context.Context, hooks.Input) hooks.Verdict); firing {
 		spawning := fire(ctx, hooks.Input{Event: hooks.SubagentSpawn, CallID: site.call, Spawn: &hooks.SpawnFacts{Definition: definition.Name, Mission: args.mission(), Task: args.Task, Owns: append([]string{}, args.Owns...), Ticket: args.Ticket}})
@@ -595,6 +608,9 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	}
 	timing.took("brief")
 	said := narrowed + clampedWords(effort, opened) + held.runningWords() + "\n\n"
+	if madeBoard != "" {
+		said = madeBoard + ". " + said
+	}
 	if estimated, err := t.estimateStart(site, subAgentID, opened.Slug, args.Task); err != nil {
 		said += "no estimate: " + err.Error()
 	} else {
