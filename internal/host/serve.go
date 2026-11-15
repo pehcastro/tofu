@@ -706,7 +706,7 @@ func (s *server) steer(p TurnSteerParams) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return SteerResult{Turn: turn, ID: l.host.Steer(p.Text + tokens)}, nil
+	return SteerResult{Turn: turn, ID: l.host.queueTyped(p.Text + tokens)}, nil
 }
 
 func (s *server) sendNow(p SendNowParams) (any, error) {

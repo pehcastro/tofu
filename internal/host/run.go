@@ -150,7 +150,7 @@ type takenTask struct {
 
 func enteredUnshown(said session.MessageBody, origin llm.Origin) (Event, bool) {
 	switch origin.Source {
-	case llm.SourceTyped, llm.SourceSteer, llm.SourceEnvironment, llm.SourceSpawnLine:
+	case llm.SourceTyped, llm.SourceSteer, llm.SourceEnvironment, llm.SourceSpawnLine, llm.SourceForkTask:
 		return Event{}, false
 	}
 	task, _ := loop.TaskIn(said.Content)

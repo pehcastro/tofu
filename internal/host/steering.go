@@ -12,8 +12,8 @@ import (
 type steerQueue struct {
 	mu       sync.Mutex
 	ready    chan string
-	overflow []string
-	ids      []string
+	sent     []steered
+	overflow []steered
 	now      []string
 	held     []steered
 }
@@ -24,19 +24,33 @@ type steered struct {
 }
 
 func (q *steerQueue) put(entry steered) {
-	q.ids = append(q.ids, entry.id)
 	if len(q.overflow) == 0 {
 		select {
 		case q.ready <- entry.text:
+			q.sent = append(q.sent, entry)
 			return
 		default:
 		}
 	}
-	q.overflow = append(q.overflow, entry.text)
+	q.overflow = append(q.overflow, entry)
 }
 
 func (q *steerQueue) queued() []string {
-	return q.ids[max(len(q.ids)-len(q.ready)-len(q.overflow), 0):]
+	var ids []string
+	for _, entry := range slices.Concat(q.sent[max(len(q.sent)-len(q.ready), 0):], q.overflow) {
+		ids = append(ids, entry.id)
+	}
+	return ids
+}
+
+func (q *steerQueue) claim(text string) steered {
+	at := slices.IndexFunc(q.sent, func(entry steered) bool { return entry.text == text })
+	if at < 0 {
+		return steered{text: text}
+	}
+	entry := q.sent[at]
+	q.sent = slices.Delete(q.sent, at, at+1)
+	return entry
 }
 
 func (q *steerQueue) drain() []steered {
@@ -44,19 +58,13 @@ func (q *steerQueue) drain() []steered {
 	for drained := false; !drained; {
 		select {
 		case text := <-q.ready:
-			entries = append(entries, steered{text: text})
+			entries = append(entries, q.claim(text))
 		default:
 			drained = true
 		}
 	}
-	for _, text := range q.overflow {
-		entries = append(entries, steered{text: text})
-	}
-	ids := q.ids[max(len(q.ids)-len(entries), 0):]
-	for index := range entries {
-		entries[index].id = ids[index]
-	}
-	q.overflow, q.ids = nil, nil
+	entries = append(entries, q.overflow...)
+	q.overflow = nil
 	return entries
 }
 
@@ -86,18 +94,24 @@ func (q *steerQueue) take(emit func(Event), step int) []string {
 func (q *steerQueue) heard() string {
 	q.mu.Lock()
 	defer q.mu.Unlock()
-	if len(q.ids) <= len(q.ready)+len(q.overflow) {
+	if len(q.sent) <= len(q.ready) {
 		return ""
 	}
-	id := q.ids[0]
-	q.ids = q.ids[1:]
+	id := q.sent[0].id
+	q.sent = q.sent[1:]
 	return id
 }
 
 func (h *Host) Steer(text string) string {
 	if f := h.following.Load(); f != nil {
 		images := h.takePending(text)
-		return h.keepUndelivered(f.ask(followAsk{Op: followSteer, Text: text, Images: images}), images).Steered
+		id := h.keepUndelivered(f.ask(followAsk{Op: followSteer, Text: text, Images: images}), images).Steered
+		h.bus.mu.Lock()
+		if id != "" && !slices.ContainsFunc(h.bus.now.Read, withID(id)) {
+			h.bus.now.apply(Event{Kind: EventSteerQueued, ID: id, Text: text})
+		}
+		h.bus.mu.Unlock()
+		return id
 	}
 	return h.queueSteer(session.NewEventID(), text)
 }
@@ -193,20 +207,33 @@ func (h *Host) Unsteer(text string) bool {
 	if f := h.following.Load(); f != nil {
 		return f.ask(followAsk{Op: followUnsteer, Text: text}).OK
 	}
+	id, found := h.unqueue(text)
+	if found {
+		h.bus.mu.Lock()
+		h.bus.now.Steers = slices.DeleteFunc(h.bus.now.Steers, withID(id))
+		h.bus.mu.Unlock()
+	}
+	return found
+}
+
+func (h *Host) unqueue(text string) (string, bool) {
 	h.steering.mu.Lock()
 	defer h.steering.mu.Unlock()
 	typed := func(entry steered) bool { return entry.text == text }
 	if at := slices.IndexFunc(h.steering.held, typed); at >= 0 {
+		id := h.steering.held[at].id
 		h.steering.held = slices.Delete(h.steering.held, at, at+1)
-		return true
+		return id, true
 	}
 	entries := h.steering.drain()
 	at := slices.IndexFunc(entries, typed)
+	id := ""
 	if at >= 0 {
+		id = entries[at].id
 		entries = slices.Delete(entries, at, at+1)
 	}
 	for _, kept := range entries {
 		h.steering.put(kept)
 	}
-	return at >= 0
+	return id, at >= 0
 }

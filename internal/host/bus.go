@@ -21,6 +21,7 @@ type picture struct {
 	Asks     []Event       `json:",omitempty"`
 	Settled  []Event       `json:",omitempty"`
 	Steers   []Event       `json:",omitempty"`
+	Read     []Event       `json:",omitempty"`
 	Members  []Member      `json:",omitempty"`
 }
 
@@ -71,9 +72,13 @@ func (p *picture) apply(event Event) Event {
 		p.Settled = append(p.Settled, event)
 		p.Settled = p.Settled[max(0, len(p.Settled)-konst.FollowSettledKept):]
 	case EventSteerQueued:
-		p.Steers = append(p.Steers, event)
+		if !slices.ContainsFunc(p.Steers, withID(event.ID)) {
+			p.Steers = append(p.Steers, event)
+		}
 	case EventSteered:
 		p.Steers = slices.DeleteFunc(p.Steers, withID(event.ID))
+		p.Read = append(p.Read, event)
+		p.Read = p.Read[max(0, len(p.Read)-konst.FollowSettledKept):]
 	case EventMembers:
 		p.Members = event.Members
 	}
@@ -93,6 +98,11 @@ func (seen picture) toward(now picture) []Event {
 			resumed = now.Settled[at]
 		}
 		moves = append(moves, resumed)
+	}
+	for _, steer := range seen.Steers {
+		if at := slices.IndexFunc(now.Read, withID(steer.ID)); at >= 0 && !slices.ContainsFunc(now.Steers, withID(steer.ID)) {
+			moves = append(moves, now.Read[at])
+		}
 	}
 	if now.Session != nil && (seen.Session == nil || seen.Session.ID != now.Session.ID) {
 		moves = append(moves, *now.Session)
@@ -165,10 +175,6 @@ func (h *Host) fanOut(said followLine) {
 }
 
 func (h *Host) snapshot() []byte {
-	h.steering.mu.Lock()
-	queued := h.steering.queued()
-	h.steering.mu.Unlock()
-	h.bus.now.Steers = slices.DeleteFunc(h.bus.now.Steers, func(steer Event) bool { return !slices.Contains(queued, steer.ID) })
 	line, _ := json.Marshal(followLine{Seq: h.bus.seq, Snapshot: &h.bus.now})
 	return line
 }

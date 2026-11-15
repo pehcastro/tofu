@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -199,6 +200,7 @@ type following struct {
 	seq     uint64
 	joined  chan struct{}
 	renewed bool
+	tasks   []string
 }
 
 func linked(conn net.Conn) link { return link{conn: conn, gone: make(chan struct{})} }
@@ -526,8 +528,11 @@ func heldRoster(store *session.Store, id string) []SubAgentRow {
 func (f *following) ask(ask followAsk) followReply {
 	reply := make(chan followReply, 1)
 	f.mu.Lock()
-	if ask.Op == followSteer && ask.Text == f.unsent {
-		f.unsent = ""
+	unsent := ""
+	if ask.Op == followSteer {
+		unsent, f.unsent = f.unsent, ""
+	}
+	if unsent != "" && ask.Text == unsent {
 		f.mu.Unlock()
 		return followReply{}
 	}
@@ -638,6 +643,15 @@ func (f *following) echoes(event Event) bool {
 	return echo
 }
 
+func (f *following) saw(event Event) {
+	switch {
+	case event.Kind == EventTask && event.Agent == "":
+		f.tasks = append(f.tasks, event.Text)
+	case event.Kind == EventTurnEnded:
+		f.tasks = nil
+	}
+}
+
 func (h *Host) heed(f *following) {
 	for {
 		var raw json.RawMessage
@@ -683,7 +697,9 @@ func (h *Host) heed(f *following) {
 		}
 		if event := line.Event; event != nil {
 			f.seq = line.Seq
-			if !f.echoes(*event) {
+			if f.echoes(*event) {
+				f.saw(*event)
+			} else {
 				h.mirror(f, *event)
 			}
 		}
@@ -696,6 +712,7 @@ func (h *Host) mirror(f *following, event Event) {
 	if string(event.Args) == "null" {
 		event.Args = nil
 	}
+	f.saw(event)
 	switch {
 	case event.Kind == EventTurnStarted || event.Kind == EventTurnEnded:
 		h.mu.Lock()
@@ -745,7 +762,7 @@ func (h *Host) rejoin(f *following, now picture, seq uint64) {
 	f.seq = seq
 	for _, event := range moves {
 		h.mirror(f, event)
-		if event.Kind == EventTurnStarted && !h.carries(event.Text) {
+		if event.Kind == EventTurnStarted && !slices.Contains(f.tasks, event.Text) && !h.carries(event.Text) {
 			h.mirror(f, Event{Kind: EventTask, Text: event.Text, Origin: event.Origin, Images: event.Images})
 		}
 	}
