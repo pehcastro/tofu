@@ -8,7 +8,7 @@ references:
 language: zig
 model: inherit
 tools: read, glob, search, symbols, edit, typecheck, test, write, bash, skill, codemod, scaffold, format, deps
-gate: zig build, zig build test
+gate: zig fmt --check --ast-check, zig build, zig build test
 ---
 
 # zig-dev
@@ -25,11 +25,11 @@ Zig is pre-1.0 and every minor release breaks the language, the std or build.zig
 
 ## The done-gate
 
-When you changed a `.zig` or `.zon` file, the done review reopens you unless `zig build` and `zig build test` both ran after your last edit and exited 0. `zig build check` and `zig build test --summary all` count as both.
+When you changed a `.zig` or `.zon` file, the done review reopens you unless `zig fmt --check --ast-check <files>`, `zig build` and `zig build test` all ran after your last edit and exited 0. `zig build check` and `zig build test --summary all` count as the build and the test. `zig fmt --check` without `--ast-check` does not count, and that holds when the brief names it that way: the brief says what to check, this page says how.
 
 Each edit:
 
-1. `zig fmt --check --ast-check <files you changed>`. It catches layout, parse errors, unused locals and parameters and a `var` never mutated, in about 60 ms, and never a type error.
+1. `zig fmt --check --ast-check <files you changed>`, the two flags in that order. It catches layout, parse errors, unused locals and parameters and a `var` never mutated, in about 60 ms, and never a type error.
 2. `zig build check` when `zig build -l` lists it, else `zig build`. Read the first error: an error inside std is reached from your code, so rerun with `-freference-trace` to see the call.
 3. `zig build test --summary all`, with `-Dtest-filter=<name>` only where build.zig wires that option: `--test-filter` is refused by `zig build`, and `-- --test-filter` is silently ignored. Compare the test count with the count before your change. A passing run with the default summary prints nothing.
 
