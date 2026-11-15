@@ -115,7 +115,8 @@ func (h *Host) fire(fires []cron.Fire) {
 			h.mu.Unlock()
 			return
 		}
-		h.fired, h.cronOut[fired.ID] = append(h.fired, fired.ID), h.cronOut[fired.ID]-h.turnOutside()
+		h.fired = append(h.fired, fired.ID)
+		h.cron.Hand(fired.ID, h.now())
 		if !h.running {
 			h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort, Fired: fired.ID}, fired.Prompt, origin)
 			h.mu.Unlock()
@@ -143,7 +144,7 @@ func (h *Host) dropRead() {
 	h.unread = slices.DeleteFunc(h.unread, func(fired cron.Fire) bool { return !h.inbox.Holds(fired.Prompt) })
 }
 
-func (h *Host) finishRead() {
+func (h *Host) finishRead(status Status) {
 	h.mu.Lock()
 	h.dropRead()
 	var read []string
@@ -156,17 +157,19 @@ func (h *Host) finishRead() {
 	})
 	answer := h.answer
 	h.mu.Unlock()
-	h.finish(read, answer)
+	h.finish(read, answer, status == StatusFinished)
 }
 
-func (h *Host) finish(fired []string, answer string) {
+func (h *Host) finish(fired []string, answer string, answered bool) {
 	for _, id := range fired {
 		h.mu.Lock()
-		outsideMS := (h.cronOut[id] + h.turnOutside()).Milliseconds()
+		checked := h.cronOut[id]
 		delete(h.cronOut, id)
 		h.mu.Unlock()
 		if job, err := h.cron.Job(id); err == nil {
-			h.wall(walls.Wall{Op: walls.OpCron, Name: id, MS: h.now().Sub(job.LastFired).Milliseconds(), At: job.LastFired.UnixMilli(), OK: true, OutsideMS: &outsideMS})
+			now := h.now()
+			outsideMS := (checked + now.Sub(job.Handed)).Milliseconds()
+			h.wall(walls.Wall{Op: walls.OpCron, Name: id, MS: now.Sub(job.LastFired).Milliseconds(), At: job.LastFired.UnixMilli(), OK: answered, OutsideMS: &outsideMS})
 		}
 		if note := h.cron.Finished(id, answer); note != "" {
 			h.note(note)
@@ -180,28 +183,18 @@ func (h *Host) finish(fired []string, answer string) {
 func (h *Host) ended(out *emitter) {
 	h.mu.Lock()
 	stopped, fired, unread, answer := h.stopped, h.fired, h.unread, h.answer
-	for _, id := range fired {
-		h.cronOut[id] += h.turnOutside()
-	}
-	h.running, h.cancel, h.fired, h.unread, h.turnClock = false, nil, nil, nil, nil
+	h.running, h.cancel, h.fired, h.unread = false, nil, nil, nil
 	h.mu.Unlock()
 	out.emit(Event{Kind: EventTurnEnded})
 	h.finish(slices.DeleteFunc(fired, func(id string) bool {
 		return slices.ContainsFunc(unread, func(again cron.Fire) bool { return again.ID == id })
-	}), answer)
+	}), answer, false)
 	h.carrySteers(out)
 	h.fire(unread)
 	if !stopped {
 		h.fireDue(cron.TurnEnded)
 	}
 	h.armCron()
-}
-
-func (h *Host) turnOutside() time.Duration {
-	if h.turnClock == nil {
-		return 0
-	}
-	return h.turnClock.Outside()
 }
 
 func (h *Host) fireDue(moment cron.Moment) {

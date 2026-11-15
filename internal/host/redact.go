@@ -116,7 +116,7 @@ func (h *Host) heard(event Event) {
 		return
 	}
 	if event.Kind == EventDone {
-		h.finishRead()
+		h.finishRead(event.Status)
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()

@@ -65,6 +65,7 @@ type Job struct {
 	LastResult string    `json:"last_result,omitempty"`
 	Unchanged  int       `json:"unchanged,omitempty"`
 	Ended      string    `json:"ended,omitempty"`
+	Handed     time.Time `json:"-"`
 	waiting    bool
 }
 
@@ -463,6 +464,14 @@ func firstLine(text string) string {
 	return line
 }
 
+func (b *Book) Hand(id string, at time.Time) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if job, err := b.find(id); err == nil && job.Handed.IsZero() {
+		job.Handed = at
+	}
+}
+
 func (b *Book) Finished(id, result string) string {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -471,7 +480,7 @@ func (b *Book) Finished(id, result string) string {
 		return ""
 	}
 	result = firstLine(result)
-	job.waiting = false
+	job.waiting, job.Handed = false, time.Time{}
 	if result == job.LastResult {
 		job.Unchanged++
 	} else {

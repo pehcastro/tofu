@@ -122,7 +122,6 @@ type Host struct {
 	pick      Pick
 	fired     []string
 	unread    []cron.Fire
-	turnClock *outside.Clock
 	cronOut   map[string]time.Duration
 	answer    string
 	previous  string
@@ -340,9 +339,8 @@ func (h *Host) Send(pick Pick, task string) bool {
 
 func (h *Host) begin(pick Pick, task string, origin core.Origin) {
 	h.dropCheckIn()
-	clocked, clock := outside.Open(context.Background(), time.Now)
+	clocked, _ := outside.Open(context.Background(), time.Now)
 	ctx, cancel := context.WithCancelCause(loop.WithLeadCheckIn(clocked, h.keepCheckIn))
-	h.turnClock = clock
 	turnOver := make(chan struct{})
 	h.running, h.stopped, h.cancelled, h.stopBy, h.cancel, h.turn, h.turnOver = true, false, false, "", cancel, loop.NewID(h.now()), turnOver
 	live := Live{Turn: h.turn, Steering: h.steering.ready, LeadStop: h.stopLead, Answers: h.answers, Origin: origin, Unattended: origin.Source == core.SourceCronFire}
