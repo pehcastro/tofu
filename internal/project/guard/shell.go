@@ -14,39 +14,44 @@ import (
 )
 
 var (
-	interpreterReadsScript = fs.LazyRegexp(`(?is)\b(python[23]?(\.exe)?|node|perl|ruby|bun|deno|php|powershell|pwsh)\b[^\r\n|]*(<<-?\s*['"]?[A-Za-z_]|\s-\s|\s-[cep]\s|\s-[cep]['"])`)
-	scriptWritesGo         = fs.LazyRegexp(`(?is)(\.go['"]\s*,\s*['"][wax]|\.go['"]\s*\)\s*\.\s*write|writeFileSync\s*\(\s*['"][^'"\r\n]*\.go['"]|Set-Content[^\r\n]{0,60}\.go['"]|['"][^'"\r\n]*\.go['"][^\r\n]{0,40}\bmode\s*=\s*['"][wax])`)
-	scriptOpensForWrite    = fs.LazyRegexp(`(?is)\bopen\s*\([^)\r\n]{0,120},\s*['"][wax]`)
-	goWord                 = fs.LazyRegexp(`(?i)\.go\b`)
-	shellWritesSource      = fs.LazyRegexp(`(?i)((^|[;&|(\n]|\$\()\s*((echo|printf|cat)\b[^;&|\n]*)?>>?\s*\S+\.(go|ya?ml|json)\b|\btee\s+(-a\s+)?\S+\.(go|ya?ml|json)\b|\b(cp|mv)\s+\S+\s+\S*\.(go|ya?ml|json)\b)`)
-	sourceFile             = fs.LazyRegexp(`(?i)\.(go|ya?ml|json)\b`)
-	gitChangesTree         = fs.LazyRegexp(`(?i)` + gitThen + `(reset|checkout|restore|clean|stash|revert|merge|rebase|switch|add|commit|rm|mv|push|pull|filter-branch|gc|prune|update-ref|branch\s+-[dD]|tag\s+-d)` + wordEnds)
-	gitDiscardsWork        = fs.LazyRegexp(`(?i)` + gitThen + `(reset\s+(--hard|--merge|--keep)|checkout\s+(--|\.)|restore\b|clean\s+-[a-z]*[fdx]|filter-branch|update-ref)`)
-	gitStash               = fs.LazyRegexp(`(?i)` + gitThen + `stash\b`)
-	tofuRunsAtCommand      = fs.LazyRegexp(`(?im)(^|[;&|(\x60]|\$\()\s*[^\s;&|]*\b(tofu|boji)(\.exe)?["']?\s+run\b`)
-	exeRuns                = fs.LazyRegexp(`(?i)\S+\.exe["']?\s+run\s`)
-	wireOpenrouter         = fs.LazyRegexp(`(?i)--wire[=\s]+openrouter`)
-	dryRun                 = fs.LazyRegexp(`(?i)--dry-run`)
-	liveCost               = fs.LazyRegexp(`(?i)\b(TOFU|BOJI)_LIVE_COST\b`)
-	gitWorktree            = fs.LazyRegexp(`(?i)` + gitThen + `worktree\b`)
-	goTestPattern          = fs.LazyRegexp(`(?i)go\s+test\b[^&|;]*/\.\.\.`)
-	parallelBound          = fs.LazyRegexp(`(?i)-p[= ]\d`)
-	treeWide               = []func() *regexp.Regexp{
+	scriptWrites       = fs.LazyRegexp(`(?i)\bopen\s*\([^)\r\n]*,\s*(mode\s*=\s*)?[rb]?['"][rb]?[wax+]|\.write_(text|bytes)\s*\(|\bshutil\.(copy\w*|move)\s*\(|\bos\.(rename|replace)\s*\(|\b(writeFile|appendFile|copyFile|rename|createWriteStream|outputFile)(Sync)?\s*\(|\bFile\.(write|binwrite)\b|\bfile_put_contents\s*\(|\bopen\s*\(?[^,\r\n]*,\s*['"]\+?>|\b(Set-Content|Add-Content|Out-File|Copy-Item|Move-Item|New-Item)\b|\[(System\.)?IO\.File\]::(Write|Append|Copy|Move)`)
+	powershellRedirect = fs.LazyRegexp(`(?i)(^|[^\w<>=#-])>>?(\s*\$null|[>=&])?`)
+	powershellComments = fs.LazyRegexp(`(?s:@'.*?\n'@|@".*?\n"@|<#.*?#>)|(?m:^[ \t]*#[^\n]*)`)
+	assignment         = fs.LazyRegexp(`(?i)^\s*(const\s+|let\s+|var\s+|my\s+)?(\$?[A-Za-z_]\w*)\s*=([^=]|$)`)
+	identifier         = fs.LazyRegexp(`\$?[A-Za-z_]\w*`)
+	underRepo          = fs.LazyRegexp(`(?i)(^|[\s'"(=,\x60])(\./)?(apps|bench|library|internal|\.tofu|\.claude)/`)
+	outsideRepo        = fs.LazyRegexp(`(?i)tofu-scratchpad|/te?mp/|AppData/Local/Temp|tempfile|gettempdir|mkdtemp|os\.tmpdir|\$env:|TMPDIR|GetTempPath|[A-Za-z]:/|['"]/[A-Za-z]|~/|\$HOME|os\.environ|expanduser|homedir|Path\.home`)
+	scriptName         = fs.LazyRegexp(`(?i)\.` + scriptExtensions + `$`)
+	shellWritesSource  = fs.LazyRegexp(`(?i)((^|[;&|(\n]|\$\()\s*((echo|printf|cat)\b[^;&|\n]*)?>>?\s*\S+\.(go|ya?ml|json)\b|\btee\s+(-a\s+)?\S+\.(go|ya?ml|json)\b|\b(cp|mv)\s+\S+\s+\S*\.(go|ya?ml|json)\b)`)
+	sourceFile         = fs.LazyRegexp(`(?i)\.(go|ya?ml|json)\b`)
+	gitChangesTree     = fs.LazyRegexp(`(?i)` + gitThen + `(reset|checkout|restore|clean|stash|revert|merge|rebase|switch|add|commit|rm|mv|push|pull|filter-branch|gc|prune|update-ref|branch\s+-[dD]|tag\s+-d)` + wordEnds)
+	gitDiscardsWork    = fs.LazyRegexp(`(?i)` + gitThen + `(reset\s+(--hard|--merge|--keep)|checkout\s+(--|\.)|restore\b|clean\s+-[a-z]*[fdx]|filter-branch|update-ref)`)
+	gitStash           = fs.LazyRegexp(`(?i)` + gitThen + `stash\b`)
+	tofuRunsAtCommand  = fs.LazyRegexp(`(?im)(^|[;&|(\x60]|\$\()\s*[^\s;&|]*\b(tofu|boji)(\.exe)?["']?\s+run\b`)
+	exeRuns            = fs.LazyRegexp(`(?i)\S+\.exe["']?\s+run\s`)
+	wireOpenrouter     = fs.LazyRegexp(`(?i)--wire[=\s]+openrouter`)
+	dryRun             = fs.LazyRegexp(`(?i)--dry-run`)
+	liveCost           = fs.LazyRegexp(`(?i)\b(TOFU|BOJI)_LIVE_COST\b`)
+	gitWorktree        = fs.LazyRegexp(`(?i)` + gitThen + `worktree\b`)
+	goTestPattern      = fs.LazyRegexp(`(?i)go\s+test\b[^&|;]*/\.\.\.`)
+	parallelBound      = fs.LazyRegexp(`(?i)-p[= ]\d`)
+	treeWide           = []func() *regexp.Regexp{
 		fs.LazyRegexp(`(?i)go\s+(test|build|vet)\s+\./\.\.\.`),
 		fs.LazyRegexp(`(?i)\bgofmt\s+-w\s+\.`),
 		fs.LazyRegexp(`(?i)\bgo\s+run\b.*\bserve\b`),
 	}
 	gitPublishes = fs.LazyRegexp(`(?i)` + gitThen + `(add|commit|push)` + wordEnds)
 	inlineScript = fs.LazyRegexp(`(?i)(^|[\s;&|(/\\])` + interpreters + `\s+(-\S+\s+)*(-[a-z]*[ce]|--eval|-p|--print|-command)(\s|['"])`)
-	scriptFile   = fs.LazyRegexp(`(?i)>\s*\S+\.(py|sh|bash|js|mjs|cjs|ts|rb|pl|ps1)\b`)
+	scriptFile   = fs.LazyRegexp(`(?i)>\s*\S+\.` + scriptExtensions + `\b`)
 	interpreter  = fs.LazyRegexp(`(?i)^` + interpreters + `$`)
 )
 
 const (
-	gitThen      = `\bgit(\s+(-c\s*("[^"]*"|'[^']*'|\S+)|--(git-dir|work-tree|namespace|exec-path|config-env|super-prefix)(=|\s+)\S+|-[-\w]+))*\s+`
-	wordEnds     = `([^\w-]|$)`
-	interpreters = `(python[23]?|py|node|bash|sh|zsh|perl|ruby|bun|deno|php|powershell|pwsh)(\.exe)?`
-	scriptBytes  = 64 << 10
+	gitThen          = `\bgit(\s+(-c\s*("[^"]*"|'[^']*'|\S+)|--(git-dir|work-tree|namespace|exec-path|config-env|super-prefix)(=|\s+)\S+|-[-\w]+))*\s+`
+	wordEnds         = `([^\w-]|$)`
+	interpreters     = `(python[23]?|py|node|bash|sh|zsh|perl|ruby|bun|deno|php|powershell|pwsh)(\.exe)?`
+	scriptBytes      = 64 << 10
+	scriptExtensions = `(py|sh|bash|js|mjs|cjs|ts|rb|pl|php|ps1)`
 )
 
 func shell(ctx context.Context, env Env, ev event) (Answer, error) {
@@ -58,8 +63,15 @@ func shell(ctx context.Context, env Env, ev event) (Answer, error) {
 	if reason := flowsRefusal(ctx, env, stripped); reason != "" {
 		return deny(reason), nil
 	}
-	git := withoutQuotedText(stripped) + "\n" + scriptCode(scriptText(env, command))
-	reason, err := shellRefusal(env, ev, command, stripped, git)
+	var code strings.Builder
+	for _, s := range scripts(env.Root, command) {
+		if line := repoWrite(env.Root, s); line != "" {
+			return deny(interpreterRefusal(line)), nil
+		}
+		code.WriteString(scriptCode(s.text()) + "\n")
+	}
+	git := withoutQuotedText(stripped) + "\n" + code.String()
+	reason, err := shellRefusal(env, ev, stripped+"\n"+code.String(), git)
 	if reason != "" {
 		return deny(reason), nil
 	}
@@ -72,11 +84,9 @@ func shell(ctx context.Context, env Env, ev event) (Answer, error) {
 	return Answer{}, nil
 }
 
-func shellRefusal(env Env, ev event, command, stripped, git string) (string, error) {
+func shellRefusal(env Env, ev event, checked, git string) (string, error) {
 	switch {
-	case interpreterReadsScript().MatchString(command) && (scriptWritesGo().MatchString(command) || scriptOpensForWrite().MatchString(command) && goWord().MatchString(command)):
-		return interpreterRefusal, nil
-	case shellWritesSource().MatchString(stripped) || sedEditsSource(stripped):
+	case shellWritesSource().MatchString(checked) || sedEditsSource(checked):
 		return shellWriteRefusal, nil
 	case gitChangesTree().MatchString(git):
 		if !blank(ev.AgentID) {
@@ -86,64 +96,128 @@ func shellRefusal(env Env, ev event, command, stripped, git string) (string, err
 			return discardRefusal, nil
 		}
 		return "", nil
-	case (tofuRunsAtCommand().MatchString(stripped) || exeRuns().MatchString(stripped)) && wireOpenrouter().MatchString(stripped) && !dryRun().MatchString(stripped):
+	case (tofuRunsAtCommand().MatchString(checked) || exeRuns().MatchString(checked)) && wireOpenrouter().MatchString(checked) && !dryRun().MatchString(checked):
 		return openrouterRefusal, nil
-	case liveCost().MatchString(stripped) && !dryRun().MatchString(stripped):
+	case liveCost().MatchString(checked) && !dryRun().MatchString(checked):
 		return liveCostRefusal, nil
 	case gitWorktree().MatchString(git):
 		return worktreeRefusal, nil
-	case goTestPattern().MatchString(stripped) && !parallelBound().MatchString(stripped):
+	case goTestPattern().MatchString(checked) && !parallelBound().MatchString(checked):
 		return unboundedTestRefusal, nil
-	case anyMatch(treeWide, stripped):
+	case anyMatch(treeWide, checked):
 		return treeWideRefusal(env)
 	}
 	return "", nil
 }
 
-func scriptText(env Env, command string) string {
-	var out strings.Builder
+type script struct {
+	code       string
+	powershell bool
+	fromFile   bool
+}
+
+func (s script) text() string {
+	if s.powershell {
+		return powershellComments().ReplaceAllString(s.code, "")
+	}
+	return s.code
+}
+
+func scripts(root, command string) []script {
+	var found []script
 	for at := 0; at < len(command); at++ {
-		end, found := heredocAt(command, at)
-		if !found {
+		end, isHeredoc := heredocAt(command, at)
+		if !isHeredoc {
 			continue
 		}
 		segment := command[strings.LastIndexAny(command[:at], ";&|\n(")+1 : at]
 		words := shellWords(segment)[0]
 		if scriptFile().MatchString(segment) || len(words) > 0 && interpreter().MatchString(filepath.Base(words[0])) {
 			body := command[at+2 : end]
-			out.WriteString(body + "\n" + scriptText(env, body) + "\n")
+			found = append(found, script{code: body, powershell: len(words) > 0 && isPowershell(words[0])})
+			found = append(found, scripts(root, body)...)
 		}
 		at = end - 1
 	}
 	stripped := stripHeredocs(command)
-	if inlineScript().MatchString(stripped) {
-		out.WriteString(stripped + "\n")
+	if inline := inlineScript().FindStringSubmatch(stripped); inline != nil {
+		found = append(found, script{code: stripped, powershell: isPowershell(inline[2])})
 	}
-	dir := env.Root
+	dir := root
 	for _, words := range shellWords(stripped) {
 		if len(words) > 1 && words[0] == "cd" {
-			dir = resolved(env.Root, words[1])
+			dir = resolved(root, words[1])
 		}
-		if file := scriptArgument(words); file != "" {
-			out.WriteString(readScript(env, resolved(dir, file)) + "\n")
+		if s, named := scriptArgument(dir, words); named {
+			found = append(found, s)
 		}
 	}
-	return out.String()
+	return found
 }
 
-func scriptArgument(words []string) string {
-	for at, word := range words {
-		if !interpreter().MatchString(filepath.Base(word)) {
+func scriptArgument(dir string, words []string) (script, bool) {
+	at := slices.IndexFunc(words, func(word string) bool { return interpreter().MatchString(filepath.Base(word)) })
+	if at < 0 {
+		return script{}, false
+	}
+	for _, arg := range words[at+1:] {
+		if scriptName().MatchString(arg) {
+			return script{code: readScript(resolved(dir, arg)), powershell: isPowershell(words[at]), fromFile: true}, true
+		}
+	}
+	return script{}, false
+}
+
+func isPowershell(word string) bool {
+	name := strings.TrimSuffix(strings.ToLower(filepath.Base(word)), ".exe")
+	return name == "powershell" || name == "pwsh"
+}
+
+func repoWrite(root string, s script) string {
+	lines := newline().Split(s.text(), -1)
+	assigned := map[string][]string{}
+	for _, line := range lines {
+		if m := assignment().FindStringSubmatch(line); m != nil {
+			name := strings.ToLower(m[2])
+			assigned[name] = append(assigned[name], line)
+		}
+	}
+	repo := strings.ToLower(strings.ReplaceAll(root, `\`, "/"))
+	for _, line := range lines {
+		hit := writeAt(line, s.powershell)
+		if hit < 0 || s.fromFile && s.powershell && strings.Count(line[:hit], "'")%2 == 1 {
 			continue
 		}
-		for _, arg := range words[at+1:] {
-			if !strings.HasPrefix(arg, "-") {
-				return arg
-			}
+		target := line
+		for _, id := range identifier().FindAllString(line, -1) {
+			target += "\n" + strings.Join(assigned[strings.ToLower(id)], "\n")
 		}
-		return ""
+		target = strings.ReplaceAll(target, `\`, "/")
+		if repo != "" && strings.Contains(strings.ToLower(target), repo) || underRepo().MatchString(target) || !outsideRepo().MatchString(target) {
+			return strings.TrimSpace(line)
+		}
 	}
 	return ""
+}
+
+func writeAt(line string, powershell bool) int {
+	hit := -1
+	if at := scriptWrites().FindStringIndex(line); at != nil {
+		hit = at[0]
+	}
+	if !powershell {
+		return hit
+	}
+	for _, at := range powershellRedirect().FindAllStringSubmatchIndex(line, -1) {
+		if at[4] >= 0 {
+			continue
+		}
+		if hit < 0 || at[3] < hit {
+			hit = at[3]
+		}
+		break
+	}
+	return hit
 }
 
 func resolved(dir, path string) string {
@@ -153,12 +227,7 @@ func resolved(dir, path string) string {
 	return filepath.Join(dir, path)
 }
 
-func readScript(env Env, path string) string {
-	_, inProject := underRoot(env.Root, path)
-	_, inScratch := underRoot(env.Temp, path)
-	if !inProject && (blank(env.Temp) || !inScratch) {
-		return ""
-	}
+func readScript(path string) string {
 	file, err := os.Open(path)
 	if err != nil {
 		return ""
@@ -406,13 +475,17 @@ func isWordByte(b byte) bool {
 	return b == '_' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9'
 }
 
-const interpreterRefusal = `A source file may not be written by a script piped into an interpreter.
+func interpreterRefusal(line string) string {
+	return `A repository file may not be written by a script run through an interpreter, inline or from a file.
 
-The heredoc strip in this hook exists so a ticket can quote a forbidden command without being refused for quoting it. A python, node or shell script read from stdin uses the same shape, and its body is stripped before any rule sees it, so a file write inside it passes every check: the em dash rule, the comment rule and the path ownership rule all run on Write and Edit, and none of them ran on this.
+This line writes under the repository, or to a path the hook cannot place outside it:
 
-Found on 2026-09-18 by an agent that had already used the route three times and said so.
+  ` + line + `
 
-Use the Write or Edit tool. If a mechanical change really needs a script, write the script to a file first and run it from there, and say in your report that you did.`
+A python, node, perl or powershell script reaches the disk without passing the checks that run on Write and Edit: the em dash rule, the comment rule and the path ownership rule. On 2026-11-15 an agent wrote a library yaml file this way, and another ran a refused build through a script file.
+
+Use the Write or Edit tool for every file under apps/, bench/, library/, internal/, .tofu/, .claude/ or the repository root. A script may write only under E:/tofu-scratchpad or a temp directory.`
+}
 
 const shellWriteRefusal = `Writing a source file through the shell is refused. Use the Write or Edit tool.
 
