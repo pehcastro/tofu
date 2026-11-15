@@ -23,6 +23,10 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 - Removing a queued message from another window takes that message out by id, so the lead reads only the ones still queued.
 - A new or resumed session waits for a fork or a compaction to end, and a second window joining a forking session waits for it too.
 - Pressing enter on a command no longer stops the screen from drawing while it runs.
+- `/side`, `/reload` and `/resume` keep the screen drawing and taking keys while they read, and typing `/resume` or `/side` again before the first opens says so instead of opening a second.
+- A second window reading the cron book while a job fires no longer makes the save fail with `Access is denied` on Windows.
+- A window joined to a session reads every reply after the events it answers, and a queued message always shows its queued row.
+- zig-dev is reopened until `zig fmt --check --ast-check` has run on the files it changed.
 
 ## 0.5.23 - 2026-11-12
 
