@@ -20,6 +20,7 @@ import (
 
 	"tofu/internal/konst"
 	"tofu/internal/platform/credential"
+	platformfs "tofu/internal/platform/fs"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/safe"
 )
@@ -31,11 +32,6 @@ const (
 	eventsName      = "events.jsonl"
 	headName        = "HEAD"
 	attachmentsName = "attachments"
-)
-
-const (
-	settleWait  time.Duration = 500 * time.Millisecond
-	settleRetry time.Duration = 2 * time.Millisecond
 )
 
 type Store struct {
@@ -307,7 +303,7 @@ func (s *Store) writeWhole(path string, body []byte) error {
 	_, err = tmp.Write(body)
 	err = cmp.Or(err, tmp.Close())
 	if err == nil {
-		err = settled(func() error { return s.rename(name, path) })
+		err = platformfs.Settled(func() error { return s.rename(name, path) })
 	}
 	if err != nil {
 		_ = os.Remove(name)
@@ -315,19 +311,10 @@ func (s *Store) writeWhole(path string, body []byte) error {
 	return err
 }
 
-func settled(try func() error) error {
-	deadline := time.Now().Add(settleWait)
-	for {
-		err := try()
-		if err == nil || errors.Is(err, fs.ErrNotExist) || time.Now().After(deadline) {
-			return err
-		}
-		time.Sleep(settleRetry)
-	}
-}
+func settled(try func() error) error { return platformfs.Settled(try) }
 
 func (s *Store) readSettled(path string) (raw []byte, err error) {
-	err = settled(func() error {
+	err = platformfs.Settled(func() error {
 		raw, err = s.readFile(path)
 		return err
 	})

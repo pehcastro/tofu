@@ -482,6 +482,11 @@ const (
 )
 
 const (
+	SettleWaitMillis  = 500
+	SettleRetryMillis = 2
+)
+
+const (
 	RefusalCarriesWholeUpToBytes = 4096
 	OmissionRefusedOverLostLines = 3
 )

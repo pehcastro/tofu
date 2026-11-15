@@ -1,11 +1,26 @@
 package fs
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
+
+	"tofu/internal/konst"
 )
+
+func Settled(try func() error) error {
+	deadline := time.Now().Add(konst.SettleWaitMillis * time.Millisecond)
+	for {
+		err := try()
+		if err == nil || errors.Is(err, fs.ErrNotExist) || time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(konst.SettleRetryMillis * time.Millisecond)
+	}
+}
 
 func ReadFile(path string) ([]byte, error) {
 	return os.ReadFile(path)

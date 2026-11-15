@@ -99,7 +99,7 @@ func (h *Host) cronMoved() {
 
 func (h *Host) fire(fires []cron.Fire) {
 	if len(fires) > 0 {
-		h.cronMoved()
+		defer h.cronMoved()
 	}
 	for _, fired := range fires {
 		if fired.Prompt == "" {

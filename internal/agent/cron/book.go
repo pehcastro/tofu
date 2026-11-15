@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"tofu/internal/konst"
+	platformfs "tofu/internal/platform/fs"
 )
 
 type By string
@@ -143,7 +144,11 @@ func (b *Book) Load(path string) error {
 }
 
 func readKept(path string) (kept, error) {
-	body, err := os.ReadFile(path)
+	var body []byte
+	err := platformfs.Settled(func() (err error) {
+		body, err = os.ReadFile(path)
+		return err
+	})
 	if err != nil {
 		return kept{}, err
 	}
@@ -188,7 +193,7 @@ func (b *Book) save() error {
 	if err := os.WriteFile(temporary, body, 0o600); err != nil {
 		return err
 	}
-	return os.Rename(temporary, b.path)
+	return platformfs.Settled(func() error { return os.Rename(temporary, b.path) })
 }
 
 func (b *Book) changed() {

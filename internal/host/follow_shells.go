@@ -11,9 +11,10 @@ import (
 )
 
 type heldShells struct {
-	mu      sync.Mutex
-	by      map[string]*heldShell
-	pushing sync.Once
+	mu        sync.Mutex
+	by        map[string]*heldShell
+	pushing   sync.Once
+	terminals sync.Mutex
 }
 
 type heldShell struct {
@@ -25,7 +26,9 @@ func (h *Host) servesShells() bool { return h.shells != nil && !h.joins }
 
 func (h *Host) useTerminals(a *audience) {
 	if h.servesShells() {
+		h.held.terminals.Lock()
 		h.shells.Terminals.Store(a.wantsTerminals())
+		h.held.terminals.Unlock()
 	}
 }
 
