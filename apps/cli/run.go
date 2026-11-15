@@ -848,10 +848,15 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 		asking = append(asking, remember.Remember{Store: run.sessions, Session: sessionID, Project: dir, Inbox: config.Inbox, Judge: judgeverb.MemoryScopeJudge(dir, run.places.Log, run.keys.keyring(), run.notify),
 			Auto: func() bool { on, _ := settingspkg.IntFor(dir, settingspkg.AutoMemory); return on != 0 }})
 	}
+	var startsBoard func() string
 	if store, opened := boardy.OpenStore(dir); wiring.BoardLed(store, opened) {
 		store.Speakers = map[string]boardy.Author{sessionID: *boardy.LeadAuthor(sessionID, "", "", config.Slug)}
 		board := boardy.Managed{Local: boardy.Local{Store: store}, Person: string(boardy.RolePerson), Lead: sessionID}
-		config.Board, config.TicketGrant, config.TicketTools = &board, ticket.Grant, ticket.Tools
+		if wiring.ProjectHasBoard(store, opened) {
+			config.Board, config.TicketGrant, config.TicketTools = &board, ticket.Grant, ticket.Tools
+		} else {
+			startsBoard = startBoard(pm.Boardy{Managed: board}, dir)
+		}
 		leadTickets, err := ticket.Tools(board, sessionID)
 		if err != nil {
 			return loop.Config{}, nil, err
@@ -884,9 +889,7 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 	subAgentBase.Instructions, subAgentBase.Memory = "", ""
 	spawner := loop.NewSpawnTool(orchestratorID, subAgentBase, cmp.Or(run.roster, &subagents.Roster{}))
 	spawner.Inbox, spawner.SubAgents, spawner.Project, spawner.ChecksWork = config.Inbox, prompt.subAgents, dir, prompt.checksWork
-	if config.Board != nil {
-		spawner.StartBoard = startBoard(pm.Boardy{Managed: *config.Board}, dir)
-	}
+	spawner.StartBoard = startsBoard
 	run.current = func(held subagents.Definition) subagents.Definition {
 		return heldAsDefined(scanSubAgents(dir, built).Definitions, held)
 	}
