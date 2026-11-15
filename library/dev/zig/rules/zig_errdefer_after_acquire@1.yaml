@@ -1,0 +1,7 @@
+id: zig_errdefer_after_acquire
+domain: dev
+kind: human
+concern: code_rules
+language: zig
+text: in a function returning `!T` that acquires more than one thing, put `errdefer <release>` on the line after each acquire, so a later `try` frees what came before it, and `defer` for what dies with the scope. after the last fallible step of a function that mutates state, `errdefer comptime unreachable;` makes any later `try` a compile error. a missing errdefer compiles and a plain test passes: for a new function that allocates more than once, write a test with `std.testing.checkAllAllocationFailures(std.testing.allocator, func, .{args})`, which fails each allocation in turn and reports what leaked. `errdefer |err|` is removed in 0.17 and still parses on 0.16.
+notes: a constructor missing an errdefer leaks on its error path, and neither the compiler nor an ordinary test reaches that path. it guards against leaks when a later step of an init fails.

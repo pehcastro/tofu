@@ -1,0 +1,7 @@
+id: zig_no_swallowed_errors
+domain: dev
+kind: human
+concern: code_rules
+language: zig
+text: never `catch {}`, `catch 0`, `catch null` or a catch that returns a default on an error the program can meet. the compiler refuses a discarded error union but compiles `catch {}` and `catch 0`, and the tests still pass while a failed write, open or parse disappears. return the error with `try`, or handle it with `catch |err| switch (err)` naming each error and no `else`, so a new error breaks the build. `catch unreachable` is only for an error that cannot happen, and it panics in Debug and ReleaseSafe when it does: never on an allocation or on input from outside the program. a project with zlint or ziglint reports this as `suppressed-errors` or Z026; run the one it has.
+notes: a swallowed error compiles and passes its tests, so the failure it hides is found only in use. it guards against lost writes, opens and parses.

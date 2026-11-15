@@ -1,0 +1,7 @@
+id: zig_tests_reachable
+domain: dev
+kind: human
+concern: code_rules
+language: zig
+text: zig runs only the tests of files the test root reaches, and a file imported only to use a function still leaves its tests out, so `zig build test` passes with them never run. reach each file with tests from the root, `test { _ = @import("parser.zig"); }`, or put `test { std.testing.refAllDecls(@This()); }` in a file, which is not recursive (`refAllDeclsRecursive` is gone in 0.16). run `zig build test --summary all` before and after the change and compare the test count: the default summary prints nothing when tests pass. code nothing calls is never analysed, so a type error in it compiles: a new function needs a test that calls it.
+notes: a test nobody reaches and a function nobody calls both pass silently. it guards against a green test run that ran none of the new tests and compiled none of the new code.

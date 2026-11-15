@@ -143,7 +143,7 @@ func (o Overlay) readable(ctx context.Context) ([]string, error) {
 	overlays := filepath.Dir(o.Dir)
 	return slices.DeleteFunc(listed, func(rel string) bool {
 		neverRead := slices.ContainsFunc(strings.Split(rel, "/"), func(part string) bool {
-			return slices.Contains([]string{".git", ".local", "target", "zig-out", ".zig-cache", "node_modules"}, part)
+			return slices.Contains([]string{".git", ".local", "target", "zig-out", ".zig-cache", "zig-cache", "zig-pkg", "node_modules"}, part)
 		})
 		return neverRead || slices.Contains(o.hidden, rel) || fs.Inside(overlays, filepath.Join(o.root, filepath.FromSlash(rel)))
 	}), nil

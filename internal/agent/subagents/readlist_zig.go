@@ -8,7 +8,20 @@ import (
 
 func zigChecks(args []shellWord) error {
 	switch first(args) {
-	case "version", "fmt":
+	case "version", "fmt", "ast-check":
+		return nil
+	case "test":
+		for i := 1; i < len(args); i++ {
+			text := args[i].text
+			switch {
+			case slices.Contains([]string{"--test-filter", "-O", "-target", "-mcpu", "--color", "--dep"}, text):
+				i++
+			case !strings.HasPrefix(text, "-"), strings.HasPrefix(text, "-O"), strings.HasPrefix(text, "-M"), strings.HasPrefix(text, "-freference-trace"),
+				slices.Contains([]string{"-lc", "-fno-emit-bin", "--test-no-exec", "-fsanitize-c", "-fno-sanitize-c", "-fsanitize-thread"}, text):
+			default:
+				return ReadListError{Program: "zig test", Why: "with " + text + " writes a file of its own choosing, runs another program or reads a runner this check cannot see"}
+			}
+		}
 		return nil
 	case "build":
 		for _, arg := range args[1:] {
@@ -23,7 +36,7 @@ func zigChecks(args []shellWord) error {
 		}
 		return nil
 	}
-	return ReadListError{Program: "zig " + first(args), Why: "runs here only as zig build, fmt or version: zig build of steps named test, check, lint, typecheck or vet runs for anyone, and of any other step in a build root you hold a path in"}
+	return ReadListError{Program: "zig " + first(args), Why: "runs here only as zig build, test, ast-check, fmt or version: zig build of steps named test, check, lint, typecheck or vet runs for anyone, and of any other step in a build root you hold a path in"}
 }
 
 func (c simpleCommand) zigBuilds() []shellWord {

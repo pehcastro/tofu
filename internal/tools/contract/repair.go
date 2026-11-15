@@ -173,7 +173,7 @@ func BoundedListing(ctx context.Context, r Root, most int) ([]string, error) {
 }
 
 func neverListed(name string) bool {
-	return rules.NeverWalked(name) || slices.Contains([]string{".local", "target", "zig-out", ".zig-cache"}, name)
+	return rules.NeverWalked(name) || slices.Contains([]string{".local", "target", "zig-out", ".zig-cache", "zig-cache", "zig-pkg"}, name)
 }
 
 func WalkListing(r Root) ([]string, error) {

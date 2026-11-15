@@ -1,0 +1,7 @@
+id: zig_version_first
+domain: dev
+kind: human
+concern: code_rules
+language: zig
+text: read the Zig version the project names before writing any std or build.zig call, in the order version tools read it: a `//! zvm-lock: <version>` line in build.zig, `.zig_version` in build.zig.zon, `.minimum_zig_version` in build.zig.zon, a comptime version check in build.zig. run `zig version` and say both, and whether the one on PATH is older, newer or equal; `0.16.0-dev.2905+5d71e3051` is a pre-release of 0.16.0 and sorts before it. `minimum_zig_version` is advisory, the compiler ignores it, so a build on the wrong compiler passes. every minor release breaks the std or build.zig, so write for the project's version and look up a std name you are unsure of in the std source at `.std_dir` from `zig env`, not from memory. a version newer than any the churn reference lists is unknown: say so, never map it to the nearest known one.
+notes: an agent writes the Zig it was trained on, and nothing in zig enforces the version a project names. it guards against code for the wrong release and a passing build on the wrong compiler.

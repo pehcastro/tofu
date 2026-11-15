@@ -11,6 +11,7 @@ import (
 //go:embed dev/rust/rules/*.yaml dev/rust/references/*.md
 //go:embed dev/gpui/rules/*.yaml dev/gpui/references/*.md
 //go:embed dev/python/rules/*.yaml dev/python/references/*.md
+//go:embed dev/zig/rules/*.yaml dev/zig/references/*.md
 //go:embed dev/frontend/rules/*.yaml dev/frontend/references/*.md
 //go:embed dev/react/rules/*.yaml dev/react/references/*.md
 //go:embed dev/svelte/rules/*.yaml dev/svelte/references/*.md

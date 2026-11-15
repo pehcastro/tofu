@@ -1,0 +1,7 @@
+id: zig_flush_writers
+domain: dev
+kind: human
+concern: code_rules
+language: zig
+text: from 0.15 a writer is a buffer you own plus its `.interface`: `var buf: [1024]u8 = undefined;`, then on 0.16 and later `var fw: std.Io.File.Writer = .init(.stdout(), io, &buf);` (0.15: `std.fs.File.stdout().writer(&buf)`), print through `const w = &fw.interface;`, and `try w.flush();` before the buffer goes out of scope. a missing flush compiles and exits 0 with nothing written, so only running the program and reading its output finds it. on 0.16 and later a type with a `format` method prints with `{f}`: `{}` prints its fields without any error, where 0.15 refused it.
+notes: an unflushed writer and a `{}` on a formatted type both pass every check and print the wrong thing. it guards against output lost in a buffer and silent field dumps.

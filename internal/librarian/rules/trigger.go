@@ -45,6 +45,7 @@ func languageExtensions() map[string][]string {
 		"typescript": {".ts", ".tsx"},
 		"vue":        {".vue"},
 		"yaml":       {".yaml", ".yml"},
+		"zig":        {".zig", ".zon"},
 	}
 }
 
