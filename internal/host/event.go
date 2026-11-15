@@ -174,10 +174,10 @@ func (e Event) snapshot() bool {
 	switch e.Kind {
 	case EventPersisted:
 		return e.Logged == nil || e.Logged.Kind != session.EventMessage || e.Agent != ""
-	case EventContext, EventSubAgent, EventSteerQueued, EventMembers:
+	case EventContext, EventSubAgent, EventMembers:
 		return true
 	case EventText, EventTextDelta, EventToolCall, EventToolResult, EventNote, EventFailure, EventStats, EventDone,
-		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteered, EventRequesting, EventPlan,
+		EventDecision, EventGateOff, EventAwaitPerson, EventResumed, EventSteerQueued, EventSteered, EventRequesting, EventPlan,
 		EventSession, EventForkStart, EventForkEnd, EventTask, EventStreamReset, EventThinking, EventTurnStarted, EventTurnEnded, EventMemoryScoped, EventAccount, EventRequestSent:
 		return false
 	}

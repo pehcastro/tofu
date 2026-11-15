@@ -177,13 +177,15 @@ func (q *seatQueue) took(line []byte) {
 	q.bytes.Add(-int64(len(line)))
 }
 
-func (q *seatQueue) drain() {
+func (q *seatQueue) drain() []byte {
+	var taken []byte
 	for {
 		select {
 		case line := <-q.lines:
 			q.took(line)
+			taken = append(taken, line...)
 		default:
-			return
+			return taken
 		}
 	}
 }
@@ -310,6 +312,7 @@ func (s *seat) write() {
 		select {
 		case line = <-s.kept.lines:
 			s.kept.took(line)
+			line = append(s.stream.drain(), line...)
 		case line = <-s.stream.lines:
 			s.stream.took(line)
 		case <-s.gone:
@@ -736,9 +739,7 @@ func (h *Host) mirror(f *following, event Event) {
 		h.mu.Unlock()
 	}
 	h.bus.mu.Lock()
-	told := h.bus.now.apply(event)
-	h.bus.mu.Unlock()
-	h.hand(told, f.gone)
+	h.handUnlocking(h.bus.now.apply(event), f.gone)
 	if event.Kind != EventSession || event.ID != "" {
 		return
 	}

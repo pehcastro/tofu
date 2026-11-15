@@ -31,6 +31,7 @@ type bus struct {
 	now   picture
 	heard map[string]Resolution
 	noted map[string]Resolution
+	ahead chan struct{}
 }
 
 func (p *picture) apply(event Event) Event {
@@ -164,8 +165,7 @@ func (h *Host) deliver(event Event) {
 	}
 	told := h.bus.now.apply(event)
 	h.fanOut(followLine{Seq: h.bus.seq, Event: &event})
-	h.bus.mu.Unlock()
-	h.hand(told, h.done)
+	h.handUnlocking(told, h.done)
 }
 
 func (h *Host) fanOut(said followLine) {
@@ -179,14 +179,36 @@ func (h *Host) snapshot() []byte {
 	return line
 }
 
-func (h *Host) hand(event Event, quit <-chan struct{}) {
-	select {
-	case h.events <- event:
-		return
-	default:
+func (h *Host) handUnlocking(event Event, quit <-chan struct{}) {
+	if h.bus.ahead == nil {
+		select {
+		case h.events <- event:
+			h.bus.mu.Unlock()
+			return
+		default:
+		}
 	}
 	if event.snapshot() {
+		h.bus.mu.Unlock()
 		return
+	}
+	ahead, mine := h.bus.ahead, make(chan struct{})
+	h.bus.ahead = mine
+	h.bus.mu.Unlock()
+	defer func() {
+		h.bus.mu.Lock()
+		if h.bus.ahead == mine {
+			h.bus.ahead = nil
+		}
+		h.bus.mu.Unlock()
+		close(mine)
+	}()
+	if ahead != nil {
+		select {
+		case <-ahead:
+		case <-quit:
+			return
+		}
 	}
 	select {
 	case h.events <- event:
