@@ -71,15 +71,19 @@ func (a *App) resumeTo(handle string) tea.Cmd {
 	if a.refusedMidTurn() {
 		return nil
 	}
-	note, opened := a.options.Resume(handle)
-	a.view.MarkEarlier()
-	for _, event := range opened.Chat {
-		a.absorb(event)
-	}
-	a.view.Stop()
-	a.view.Append(session.Entry{Kind: session.Note, Body: note})
-	a.earlier = opened.Earlier
-	return a.loadEarlier()
+	return carrying(func() carried {
+		note, opened := a.options.Resume(handle)
+		return func(a *App) tea.Cmd {
+			a.view.MarkEarlier()
+			for _, event := range opened.Chat {
+				a.absorb(event)
+			}
+			a.view.Stop()
+			a.view.Append(session.Entry{Kind: session.Note, Body: note})
+			a.earlier = opened.Earlier
+			return a.loadEarlier()
+		}
+	})
 }
 
 type earlierMsg struct {

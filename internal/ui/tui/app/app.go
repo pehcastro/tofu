@@ -269,7 +269,7 @@ type App struct {
 	framed         bool
 	busy           bool
 	leading        bool
-	afterTurn      []func() string
+	afterTurn      []func() carried
 	forking        bool
 	gateOff        bool
 	running        int
@@ -691,6 +691,8 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 	case Event:
 		a.absorb(msg)
 		return a.listen()
+	case carried:
+		return msg(a)
 	case gapReadMsg:
 		a.gapRead(msg)
 		return nil
@@ -845,12 +847,15 @@ func (a *App) closed() tea.Cmd {
 	a.stopWhatStillRuns()
 	a.view.Stop()
 	a.countCrons()
-	a.carryHeld()
+	return tea.Batch(a.carryHeld(), a.pollQuota(), a.readPaths(), a.pollShells(), a.listen(), a.wallsDue())
+}
+
+func (a *App) steerQueued() tea.Cmd {
 	if carried := a.carrySteers(); len(carried) > 0 {
 		a.busy, a.edits.Busy = true, true
 		a.leadTurnBegins()
 		a.view.Release()
 		a.steeredUnread = append(a.steeredUnread, carried...)
 	}
-	return tea.Batch(a.pollQuota(), a.readPaths(), a.pollShells(), a.listen(), a.wallsDue())
+	return nil
 }

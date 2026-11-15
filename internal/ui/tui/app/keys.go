@@ -241,8 +241,8 @@ func (a *App) submit() tea.Cmd {
 	if cmd, asked := a.resumeCommand(); asked {
 		return cmd
 	}
-	if a.commandWithArgument() {
-		return nil
+	if cmd, asked := a.commandWithArgument(); asked {
+		return cmd
 	}
 	if name, asked := a.view.Command(); asked {
 		return a.runCommand(name)

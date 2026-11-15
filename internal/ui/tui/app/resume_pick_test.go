@@ -23,9 +23,9 @@ func TestSlashResumeWithAHandleResumesItAndNeverReachesTheModel(t *testing.T) {
 	}
 
 	typeText(app, "/resume   parser  ")
-	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	press(t, app, tea.KeyPressMsg{Code: tea.KeyEnter})
 	typeText(app, "/resume nowhere")
-	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	press(t, app, tea.KeyPressMsg{Code: tea.KeyEnter})
 	chat := ansi.Strip(app.View().Content)
 	if strings.Join(asked, ",") != "parser,nowhere" || app.top() != nil {
 		t.Fatalf("the handles asked were %q with %T open, want parser then nowhere and no picker", asked, app.top())
@@ -92,7 +92,7 @@ func TestSlashResumePicksASessionByItsFirstLineAndTheChatShowsItsTurn(t *testing
 		t.Fatalf("typing bravo does not leave the bravo session alone\n%s", filtered)
 	}
 
-	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	press(t, app, tea.KeyPressMsg{Code: tea.KeyEnter})
 	if len(resumed) != 1 || resumed[0] != "s-bravo" {
 		t.Fatalf("enter resumed %v, want the bravo session by its id", resumed)
 	}

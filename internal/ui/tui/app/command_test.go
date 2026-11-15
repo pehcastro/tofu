@@ -191,7 +191,7 @@ func TestSlashCompactSaysWhatItShrankAndIsRefusedWhileATurnRuns(t *testing.T) {
 	compacted := 0
 	app.options.Compact = func(string) string { compacted++; return "compacted 2 old tool result(s)" }
 	typeText(app, "/compact")
-	app.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	press(t, app, tea.KeyPressMsg{Code: tea.KeyEnter})
 	if content := ansi.Strip(app.View().Content); compacted != 1 || !strings.Contains(content, "compacted 2 old tool result(s)") {
 		t.Fatalf("/compact ran %d time(s) and the chat does not say what it shrank\n%s", compacted, content)
 	}

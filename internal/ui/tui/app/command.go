@@ -132,15 +132,15 @@ func (a *App) runCommand(name string) tea.Cmd {
 	case "side":
 		return a.openSide()
 	case "new":
-		a.carry(a.newSession)
+		return a.carry(a.newSession)
 	case "compact":
-		a.carry(func() string { return a.options.Compact("") })
+		return a.carry(func() carried { return noted(a.options.Compact("")) })
 	case "fork":
-		a.carry(a.options.Fork)
+		return a.carry(func() carried { return noted(a.options.Fork()) })
 	case "branch":
-		a.carry(a.branchAt(""))
+		return a.carry(a.branchAt(""))
 	case "undo":
-		a.carry(func() string { return a.options.Undo("") })
+		return a.carry(func() carried { return noted(a.options.Undo("")) })
 	case "cron", "loop", "goal":
 		return a.cronLine("/" + name)
 	case "simplify", "debug", "hunt", "generate-map":
@@ -162,12 +162,14 @@ func (a *App) runCommand(name string) tea.Cmd {
 	return nil
 }
 
-func (a *App) newSession() string {
+func (a *App) newSession() carried {
 	note := a.options.NewSession()
-	if a.options.Host != nil && a.options.Host.ID() == "" {
-		a.sessionName, a.sessionID, a.sessionRoot, a.started = "", "", "", a.options.Now()
+	return func(a *App) tea.Cmd {
+		if a.options.Host != nil && a.options.Host.ID() == "" {
+			a.sessionName, a.sessionID, a.sessionRoot, a.started = "", "", "", a.options.Now()
+		}
+		return noted(note)(a)
 	}
-	return note
 }
 
 func (a *App) recordedSession() (*isession.Store, string, string) {
@@ -345,55 +347,84 @@ func (a *App) repick(slug string) string {
 	return ""
 }
 
-func (a *App) carry(change func() string) {
+type carried func(a *App) tea.Cmd
+
+func noted(note string) carried {
+	return func(a *App) tea.Cmd {
+		a.view.Append(session.Entry{Kind: session.Note, Body: note})
+		return nil
+	}
+}
+
+func carrying(change func() carried) tea.Cmd {
+	return func() tea.Msg { return change() }
+}
+
+func (a *App) carry(change func() carried) tea.Cmd {
 	switch {
 	case a.busy && !a.leading:
 		a.afterTurn = append(a.afterTurn, change)
 		a.view.Append(session.Entry{Kind: session.Note, Body: waitsForSubAgentsNote})
 	case !a.refusedMidTurn():
-		a.view.Append(session.Entry{Kind: session.Note, Body: change()})
+		return carrying(change)
 	}
+	return nil
 }
 
-func (a *App) carryHeld() {
-	for _, change := range a.afterTurn {
-		a.view.Append(session.Entry{Kind: session.Note, Body: change()})
+func (a *App) carryHeld() tea.Cmd {
+	if len(a.afterTurn) == 0 {
+		return a.steerQueued()
 	}
+	held := a.afterTurn
 	a.afterTurn = nil
+	return carrying(func() carried {
+		var ended []carried
+		for _, change := range held {
+			ended = append(ended, change())
+		}
+		return func(a *App) tea.Cmd {
+			var cmds []tea.Cmd
+			for _, each := range ended {
+				cmds = append(cmds, each(a))
+			}
+			return tea.Batch(append(cmds, a.steerQueued())...)
+		}
+	})
 }
 
-func (a *App) commandWithArgument() bool {
+func (a *App) commandWithArgument() (tea.Cmd, bool) {
 	draft := a.view.Draft()
 	if which, asked := strings.CutPrefix(draft, permissionsRevoke); asked && a.options.Host != nil {
 		a.view.Reset()
 		a.revokeStanding(strings.TrimSpace(which))
-		return true
+		return nil, true
 	}
-	var change func() string
+	var change func() carried
 	if count, asked := strings.CutPrefix(draft, undoWithCount); asked && a.options.Undo != nil {
-		change = func() string { return a.options.Undo(strings.TrimSpace(count)) }
+		change = func() carried { return noted(a.options.Undo(strings.TrimSpace(count))) }
 	}
 	if focus, asked := strings.CutPrefix(draft, compactWithFocus); asked && a.options.Compact != nil {
-		change = func() string { return a.options.Compact(strings.TrimSpace(focus)) }
+		change = func() carried { return noted(a.options.Compact(strings.TrimSpace(focus))) }
 	}
 	if message, asked := strings.CutPrefix(draft, branchAtMessage); asked && a.options.BranchAt != nil {
 		change = a.branchAt(strings.TrimSpace(message))
 	}
 	if change == nil {
-		return false
+		return nil, false
 	}
 	a.view.Reset()
-	a.carry(change)
-	return true
+	return a.carry(change), true
 }
 
-func (a *App) branchAt(message string) func() string {
-	return func() string {
+func (a *App) branchAt(message string) func() carried {
+	return func() carried {
 		note, words := a.options.BranchAt(message)
-		if words != "" {
-			a.view.Redraft(words)
+		return func(a *App) tea.Cmd {
+			if words != "" {
+				a.view.Redraft(words)
+			}
+			return noted(note)(a)
 		}
-		return note
 	}
 }
 
