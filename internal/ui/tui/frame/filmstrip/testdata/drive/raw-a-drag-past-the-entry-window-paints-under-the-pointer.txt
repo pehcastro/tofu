@@ -1,0 +1,12 @@
+# 505 folded reads put the newest replies past the 500 entry window; scrolled up, a drag over the path paints that path and copies it
+type drag-over-a-path-past-the-window
+key enter
+wait cooked for
+wheel 50 10 up 2
+screen
+press 9 20
+move 20 20
+move 34 20
+screen
+drag 9 20 34 20
+screen

@@ -1,0 +1,1020 @@
+# a long turn: 505 reads fold into one block, so the newest entries sit past the 500 entry window
+requesting
+call r1 read a.go
+result r1 read 1 line
+call r2 read a.go
+result r2 read 1 line
+call r3 read a.go
+result r3 read 1 line
+call r4 read a.go
+result r4 read 1 line
+call r5 read a.go
+result r5 read 1 line
+call r6 read a.go
+result r6 read 1 line
+call r7 read a.go
+result r7 read 1 line
+call r8 read a.go
+result r8 read 1 line
+call r9 read a.go
+result r9 read 1 line
+call r10 read a.go
+result r10 read 1 line
+call r11 read a.go
+result r11 read 1 line
+call r12 read a.go
+result r12 read 1 line
+call r13 read a.go
+result r13 read 1 line
+call r14 read a.go
+result r14 read 1 line
+call r15 read a.go
+result r15 read 1 line
+call r16 read a.go
+result r16 read 1 line
+call r17 read a.go
+result r17 read 1 line
+call r18 read a.go
+result r18 read 1 line
+call r19 read a.go
+result r19 read 1 line
+call r20 read a.go
+result r20 read 1 line
+call r21 read a.go
+result r21 read 1 line
+call r22 read a.go
+result r22 read 1 line
+call r23 read a.go
+result r23 read 1 line
+call r24 read a.go
+result r24 read 1 line
+call r25 read a.go
+result r25 read 1 line
+call r26 read a.go
+result r26 read 1 line
+call r27 read a.go
+result r27 read 1 line
+call r28 read a.go
+result r28 read 1 line
+call r29 read a.go
+result r29 read 1 line
+call r30 read a.go
+result r30 read 1 line
+call r31 read a.go
+result r31 read 1 line
+call r32 read a.go
+result r32 read 1 line
+call r33 read a.go
+result r33 read 1 line
+call r34 read a.go
+result r34 read 1 line
+call r35 read a.go
+result r35 read 1 line
+call r36 read a.go
+result r36 read 1 line
+call r37 read a.go
+result r37 read 1 line
+call r38 read a.go
+result r38 read 1 line
+call r39 read a.go
+result r39 read 1 line
+call r40 read a.go
+result r40 read 1 line
+call r41 read a.go
+result r41 read 1 line
+call r42 read a.go
+result r42 read 1 line
+call r43 read a.go
+result r43 read 1 line
+call r44 read a.go
+result r44 read 1 line
+call r45 read a.go
+result r45 read 1 line
+call r46 read a.go
+result r46 read 1 line
+call r47 read a.go
+result r47 read 1 line
+call r48 read a.go
+result r48 read 1 line
+call r49 read a.go
+result r49 read 1 line
+call r50 read a.go
+result r50 read 1 line
+call r51 read a.go
+result r51 read 1 line
+call r52 read a.go
+result r52 read 1 line
+call r53 read a.go
+result r53 read 1 line
+call r54 read a.go
+result r54 read 1 line
+call r55 read a.go
+result r55 read 1 line
+call r56 read a.go
+result r56 read 1 line
+call r57 read a.go
+result r57 read 1 line
+call r58 read a.go
+result r58 read 1 line
+call r59 read a.go
+result r59 read 1 line
+call r60 read a.go
+result r60 read 1 line
+call r61 read a.go
+result r61 read 1 line
+call r62 read a.go
+result r62 read 1 line
+call r63 read a.go
+result r63 read 1 line
+call r64 read a.go
+result r64 read 1 line
+call r65 read a.go
+result r65 read 1 line
+call r66 read a.go
+result r66 read 1 line
+call r67 read a.go
+result r67 read 1 line
+call r68 read a.go
+result r68 read 1 line
+call r69 read a.go
+result r69 read 1 line
+call r70 read a.go
+result r70 read 1 line
+call r71 read a.go
+result r71 read 1 line
+call r72 read a.go
+result r72 read 1 line
+call r73 read a.go
+result r73 read 1 line
+call r74 read a.go
+result r74 read 1 line
+call r75 read a.go
+result r75 read 1 line
+call r76 read a.go
+result r76 read 1 line
+call r77 read a.go
+result r77 read 1 line
+call r78 read a.go
+result r78 read 1 line
+call r79 read a.go
+result r79 read 1 line
+call r80 read a.go
+result r80 read 1 line
+call r81 read a.go
+result r81 read 1 line
+call r82 read a.go
+result r82 read 1 line
+call r83 read a.go
+result r83 read 1 line
+call r84 read a.go
+result r84 read 1 line
+call r85 read a.go
+result r85 read 1 line
+call r86 read a.go
+result r86 read 1 line
+call r87 read a.go
+result r87 read 1 line
+call r88 read a.go
+result r88 read 1 line
+call r89 read a.go
+result r89 read 1 line
+call r90 read a.go
+result r90 read 1 line
+call r91 read a.go
+result r91 read 1 line
+call r92 read a.go
+result r92 read 1 line
+call r93 read a.go
+result r93 read 1 line
+call r94 read a.go
+result r94 read 1 line
+call r95 read a.go
+result r95 read 1 line
+call r96 read a.go
+result r96 read 1 line
+call r97 read a.go
+result r97 read 1 line
+call r98 read a.go
+result r98 read 1 line
+call r99 read a.go
+result r99 read 1 line
+call r100 read a.go
+result r100 read 1 line
+call r101 read a.go
+result r101 read 1 line
+call r102 read a.go
+result r102 read 1 line
+call r103 read a.go
+result r103 read 1 line
+call r104 read a.go
+result r104 read 1 line
+call r105 read a.go
+result r105 read 1 line
+call r106 read a.go
+result r106 read 1 line
+call r107 read a.go
+result r107 read 1 line
+call r108 read a.go
+result r108 read 1 line
+call r109 read a.go
+result r109 read 1 line
+call r110 read a.go
+result r110 read 1 line
+call r111 read a.go
+result r111 read 1 line
+call r112 read a.go
+result r112 read 1 line
+call r113 read a.go
+result r113 read 1 line
+call r114 read a.go
+result r114 read 1 line
+call r115 read a.go
+result r115 read 1 line
+call r116 read a.go
+result r116 read 1 line
+call r117 read a.go
+result r117 read 1 line
+call r118 read a.go
+result r118 read 1 line
+call r119 read a.go
+result r119 read 1 line
+call r120 read a.go
+result r120 read 1 line
+call r121 read a.go
+result r121 read 1 line
+call r122 read a.go
+result r122 read 1 line
+call r123 read a.go
+result r123 read 1 line
+call r124 read a.go
+result r124 read 1 line
+call r125 read a.go
+result r125 read 1 line
+call r126 read a.go
+result r126 read 1 line
+call r127 read a.go
+result r127 read 1 line
+call r128 read a.go
+result r128 read 1 line
+call r129 read a.go
+result r129 read 1 line
+call r130 read a.go
+result r130 read 1 line
+call r131 read a.go
+result r131 read 1 line
+call r132 read a.go
+result r132 read 1 line
+call r133 read a.go
+result r133 read 1 line
+call r134 read a.go
+result r134 read 1 line
+call r135 read a.go
+result r135 read 1 line
+call r136 read a.go
+result r136 read 1 line
+call r137 read a.go
+result r137 read 1 line
+call r138 read a.go
+result r138 read 1 line
+call r139 read a.go
+result r139 read 1 line
+call r140 read a.go
+result r140 read 1 line
+call r141 read a.go
+result r141 read 1 line
+call r142 read a.go
+result r142 read 1 line
+call r143 read a.go
+result r143 read 1 line
+call r144 read a.go
+result r144 read 1 line
+call r145 read a.go
+result r145 read 1 line
+call r146 read a.go
+result r146 read 1 line
+call r147 read a.go
+result r147 read 1 line
+call r148 read a.go
+result r148 read 1 line
+call r149 read a.go
+result r149 read 1 line
+call r150 read a.go
+result r150 read 1 line
+call r151 read a.go
+result r151 read 1 line
+call r152 read a.go
+result r152 read 1 line
+call r153 read a.go
+result r153 read 1 line
+call r154 read a.go
+result r154 read 1 line
+call r155 read a.go
+result r155 read 1 line
+call r156 read a.go
+result r156 read 1 line
+call r157 read a.go
+result r157 read 1 line
+call r158 read a.go
+result r158 read 1 line
+call r159 read a.go
+result r159 read 1 line
+call r160 read a.go
+result r160 read 1 line
+call r161 read a.go
+result r161 read 1 line
+call r162 read a.go
+result r162 read 1 line
+call r163 read a.go
+result r163 read 1 line
+call r164 read a.go
+result r164 read 1 line
+call r165 read a.go
+result r165 read 1 line
+call r166 read a.go
+result r166 read 1 line
+call r167 read a.go
+result r167 read 1 line
+call r168 read a.go
+result r168 read 1 line
+call r169 read a.go
+result r169 read 1 line
+call r170 read a.go
+result r170 read 1 line
+call r171 read a.go
+result r171 read 1 line
+call r172 read a.go
+result r172 read 1 line
+call r173 read a.go
+result r173 read 1 line
+call r174 read a.go
+result r174 read 1 line
+call r175 read a.go
+result r175 read 1 line
+call r176 read a.go
+result r176 read 1 line
+call r177 read a.go
+result r177 read 1 line
+call r178 read a.go
+result r178 read 1 line
+call r179 read a.go
+result r179 read 1 line
+call r180 read a.go
+result r180 read 1 line
+call r181 read a.go
+result r181 read 1 line
+call r182 read a.go
+result r182 read 1 line
+call r183 read a.go
+result r183 read 1 line
+call r184 read a.go
+result r184 read 1 line
+call r185 read a.go
+result r185 read 1 line
+call r186 read a.go
+result r186 read 1 line
+call r187 read a.go
+result r187 read 1 line
+call r188 read a.go
+result r188 read 1 line
+call r189 read a.go
+result r189 read 1 line
+call r190 read a.go
+result r190 read 1 line
+call r191 read a.go
+result r191 read 1 line
+call r192 read a.go
+result r192 read 1 line
+call r193 read a.go
+result r193 read 1 line
+call r194 read a.go
+result r194 read 1 line
+call r195 read a.go
+result r195 read 1 line
+call r196 read a.go
+result r196 read 1 line
+call r197 read a.go
+result r197 read 1 line
+call r198 read a.go
+result r198 read 1 line
+call r199 read a.go
+result r199 read 1 line
+call r200 read a.go
+result r200 read 1 line
+call r201 read a.go
+result r201 read 1 line
+call r202 read a.go
+result r202 read 1 line
+call r203 read a.go
+result r203 read 1 line
+call r204 read a.go
+result r204 read 1 line
+call r205 read a.go
+result r205 read 1 line
+call r206 read a.go
+result r206 read 1 line
+call r207 read a.go
+result r207 read 1 line
+call r208 read a.go
+result r208 read 1 line
+call r209 read a.go
+result r209 read 1 line
+call r210 read a.go
+result r210 read 1 line
+call r211 read a.go
+result r211 read 1 line
+call r212 read a.go
+result r212 read 1 line
+call r213 read a.go
+result r213 read 1 line
+call r214 read a.go
+result r214 read 1 line
+call r215 read a.go
+result r215 read 1 line
+call r216 read a.go
+result r216 read 1 line
+call r217 read a.go
+result r217 read 1 line
+call r218 read a.go
+result r218 read 1 line
+call r219 read a.go
+result r219 read 1 line
+call r220 read a.go
+result r220 read 1 line
+call r221 read a.go
+result r221 read 1 line
+call r222 read a.go
+result r222 read 1 line
+call r223 read a.go
+result r223 read 1 line
+call r224 read a.go
+result r224 read 1 line
+call r225 read a.go
+result r225 read 1 line
+call r226 read a.go
+result r226 read 1 line
+call r227 read a.go
+result r227 read 1 line
+call r228 read a.go
+result r228 read 1 line
+call r229 read a.go
+result r229 read 1 line
+call r230 read a.go
+result r230 read 1 line
+call r231 read a.go
+result r231 read 1 line
+call r232 read a.go
+result r232 read 1 line
+call r233 read a.go
+result r233 read 1 line
+call r234 read a.go
+result r234 read 1 line
+call r235 read a.go
+result r235 read 1 line
+call r236 read a.go
+result r236 read 1 line
+call r237 read a.go
+result r237 read 1 line
+call r238 read a.go
+result r238 read 1 line
+call r239 read a.go
+result r239 read 1 line
+call r240 read a.go
+result r240 read 1 line
+call r241 read a.go
+result r241 read 1 line
+call r242 read a.go
+result r242 read 1 line
+call r243 read a.go
+result r243 read 1 line
+call r244 read a.go
+result r244 read 1 line
+call r245 read a.go
+result r245 read 1 line
+call r246 read a.go
+result r246 read 1 line
+call r247 read a.go
+result r247 read 1 line
+call r248 read a.go
+result r248 read 1 line
+call r249 read a.go
+result r249 read 1 line
+call r250 read a.go
+result r250 read 1 line
+call r251 read a.go
+result r251 read 1 line
+call r252 read a.go
+result r252 read 1 line
+call r253 read a.go
+result r253 read 1 line
+call r254 read a.go
+result r254 read 1 line
+call r255 read a.go
+result r255 read 1 line
+call r256 read a.go
+result r256 read 1 line
+call r257 read a.go
+result r257 read 1 line
+call r258 read a.go
+result r258 read 1 line
+call r259 read a.go
+result r259 read 1 line
+call r260 read a.go
+result r260 read 1 line
+call r261 read a.go
+result r261 read 1 line
+call r262 read a.go
+result r262 read 1 line
+call r263 read a.go
+result r263 read 1 line
+call r264 read a.go
+result r264 read 1 line
+call r265 read a.go
+result r265 read 1 line
+call r266 read a.go
+result r266 read 1 line
+call r267 read a.go
+result r267 read 1 line
+call r268 read a.go
+result r268 read 1 line
+call r269 read a.go
+result r269 read 1 line
+call r270 read a.go
+result r270 read 1 line
+call r271 read a.go
+result r271 read 1 line
+call r272 read a.go
+result r272 read 1 line
+call r273 read a.go
+result r273 read 1 line
+call r274 read a.go
+result r274 read 1 line
+call r275 read a.go
+result r275 read 1 line
+call r276 read a.go
+result r276 read 1 line
+call r277 read a.go
+result r277 read 1 line
+call r278 read a.go
+result r278 read 1 line
+call r279 read a.go
+result r279 read 1 line
+call r280 read a.go
+result r280 read 1 line
+call r281 read a.go
+result r281 read 1 line
+call r282 read a.go
+result r282 read 1 line
+call r283 read a.go
+result r283 read 1 line
+call r284 read a.go
+result r284 read 1 line
+call r285 read a.go
+result r285 read 1 line
+call r286 read a.go
+result r286 read 1 line
+call r287 read a.go
+result r287 read 1 line
+call r288 read a.go
+result r288 read 1 line
+call r289 read a.go
+result r289 read 1 line
+call r290 read a.go
+result r290 read 1 line
+call r291 read a.go
+result r291 read 1 line
+call r292 read a.go
+result r292 read 1 line
+call r293 read a.go
+result r293 read 1 line
+call r294 read a.go
+result r294 read 1 line
+call r295 read a.go
+result r295 read 1 line
+call r296 read a.go
+result r296 read 1 line
+call r297 read a.go
+result r297 read 1 line
+call r298 read a.go
+result r298 read 1 line
+call r299 read a.go
+result r299 read 1 line
+call r300 read a.go
+result r300 read 1 line
+call r301 read a.go
+result r301 read 1 line
+call r302 read a.go
+result r302 read 1 line
+call r303 read a.go
+result r303 read 1 line
+call r304 read a.go
+result r304 read 1 line
+call r305 read a.go
+result r305 read 1 line
+call r306 read a.go
+result r306 read 1 line
+call r307 read a.go
+result r307 read 1 line
+call r308 read a.go
+result r308 read 1 line
+call r309 read a.go
+result r309 read 1 line
+call r310 read a.go
+result r310 read 1 line
+call r311 read a.go
+result r311 read 1 line
+call r312 read a.go
+result r312 read 1 line
+call r313 read a.go
+result r313 read 1 line
+call r314 read a.go
+result r314 read 1 line
+call r315 read a.go
+result r315 read 1 line
+call r316 read a.go
+result r316 read 1 line
+call r317 read a.go
+result r317 read 1 line
+call r318 read a.go
+result r318 read 1 line
+call r319 read a.go
+result r319 read 1 line
+call r320 read a.go
+result r320 read 1 line
+call r321 read a.go
+result r321 read 1 line
+call r322 read a.go
+result r322 read 1 line
+call r323 read a.go
+result r323 read 1 line
+call r324 read a.go
+result r324 read 1 line
+call r325 read a.go
+result r325 read 1 line
+call r326 read a.go
+result r326 read 1 line
+call r327 read a.go
+result r327 read 1 line
+call r328 read a.go
+result r328 read 1 line
+call r329 read a.go
+result r329 read 1 line
+call r330 read a.go
+result r330 read 1 line
+call r331 read a.go
+result r331 read 1 line
+call r332 read a.go
+result r332 read 1 line
+call r333 read a.go
+result r333 read 1 line
+call r334 read a.go
+result r334 read 1 line
+call r335 read a.go
+result r335 read 1 line
+call r336 read a.go
+result r336 read 1 line
+call r337 read a.go
+result r337 read 1 line
+call r338 read a.go
+result r338 read 1 line
+call r339 read a.go
+result r339 read 1 line
+call r340 read a.go
+result r340 read 1 line
+call r341 read a.go
+result r341 read 1 line
+call r342 read a.go
+result r342 read 1 line
+call r343 read a.go
+result r343 read 1 line
+call r344 read a.go
+result r344 read 1 line
+call r345 read a.go
+result r345 read 1 line
+call r346 read a.go
+result r346 read 1 line
+call r347 read a.go
+result r347 read 1 line
+call r348 read a.go
+result r348 read 1 line
+call r349 read a.go
+result r349 read 1 line
+call r350 read a.go
+result r350 read 1 line
+call r351 read a.go
+result r351 read 1 line
+call r352 read a.go
+result r352 read 1 line
+call r353 read a.go
+result r353 read 1 line
+call r354 read a.go
+result r354 read 1 line
+call r355 read a.go
+result r355 read 1 line
+call r356 read a.go
+result r356 read 1 line
+call r357 read a.go
+result r357 read 1 line
+call r358 read a.go
+result r358 read 1 line
+call r359 read a.go
+result r359 read 1 line
+call r360 read a.go
+result r360 read 1 line
+call r361 read a.go
+result r361 read 1 line
+call r362 read a.go
+result r362 read 1 line
+call r363 read a.go
+result r363 read 1 line
+call r364 read a.go
+result r364 read 1 line
+call r365 read a.go
+result r365 read 1 line
+call r366 read a.go
+result r366 read 1 line
+call r367 read a.go
+result r367 read 1 line
+call r368 read a.go
+result r368 read 1 line
+call r369 read a.go
+result r369 read 1 line
+call r370 read a.go
+result r370 read 1 line
+call r371 read a.go
+result r371 read 1 line
+call r372 read a.go
+result r372 read 1 line
+call r373 read a.go
+result r373 read 1 line
+call r374 read a.go
+result r374 read 1 line
+call r375 read a.go
+result r375 read 1 line
+call r376 read a.go
+result r376 read 1 line
+call r377 read a.go
+result r377 read 1 line
+call r378 read a.go
+result r378 read 1 line
+call r379 read a.go
+result r379 read 1 line
+call r380 read a.go
+result r380 read 1 line
+call r381 read a.go
+result r381 read 1 line
+call r382 read a.go
+result r382 read 1 line
+call r383 read a.go
+result r383 read 1 line
+call r384 read a.go
+result r384 read 1 line
+call r385 read a.go
+result r385 read 1 line
+call r386 read a.go
+result r386 read 1 line
+call r387 read a.go
+result r387 read 1 line
+call r388 read a.go
+result r388 read 1 line
+call r389 read a.go
+result r389 read 1 line
+call r390 read a.go
+result r390 read 1 line
+call r391 read a.go
+result r391 read 1 line
+call r392 read a.go
+result r392 read 1 line
+call r393 read a.go
+result r393 read 1 line
+call r394 read a.go
+result r394 read 1 line
+call r395 read a.go
+result r395 read 1 line
+call r396 read a.go
+result r396 read 1 line
+call r397 read a.go
+result r397 read 1 line
+call r398 read a.go
+result r398 read 1 line
+call r399 read a.go
+result r399 read 1 line
+call r400 read a.go
+result r400 read 1 line
+call r401 read a.go
+result r401 read 1 line
+call r402 read a.go
+result r402 read 1 line
+call r403 read a.go
+result r403 read 1 line
+call r404 read a.go
+result r404 read 1 line
+call r405 read a.go
+result r405 read 1 line
+call r406 read a.go
+result r406 read 1 line
+call r407 read a.go
+result r407 read 1 line
+call r408 read a.go
+result r408 read 1 line
+call r409 read a.go
+result r409 read 1 line
+call r410 read a.go
+result r410 read 1 line
+call r411 read a.go
+result r411 read 1 line
+call r412 read a.go
+result r412 read 1 line
+call r413 read a.go
+result r413 read 1 line
+call r414 read a.go
+result r414 read 1 line
+call r415 read a.go
+result r415 read 1 line
+call r416 read a.go
+result r416 read 1 line
+call r417 read a.go
+result r417 read 1 line
+call r418 read a.go
+result r418 read 1 line
+call r419 read a.go
+result r419 read 1 line
+call r420 read a.go
+result r420 read 1 line
+call r421 read a.go
+result r421 read 1 line
+call r422 read a.go
+result r422 read 1 line
+call r423 read a.go
+result r423 read 1 line
+call r424 read a.go
+result r424 read 1 line
+call r425 read a.go
+result r425 read 1 line
+call r426 read a.go
+result r426 read 1 line
+call r427 read a.go
+result r427 read 1 line
+call r428 read a.go
+result r428 read 1 line
+call r429 read a.go
+result r429 read 1 line
+call r430 read a.go
+result r430 read 1 line
+call r431 read a.go
+result r431 read 1 line
+call r432 read a.go
+result r432 read 1 line
+call r433 read a.go
+result r433 read 1 line
+call r434 read a.go
+result r434 read 1 line
+call r435 read a.go
+result r435 read 1 line
+call r436 read a.go
+result r436 read 1 line
+call r437 read a.go
+result r437 read 1 line
+call r438 read a.go
+result r438 read 1 line
+call r439 read a.go
+result r439 read 1 line
+call r440 read a.go
+result r440 read 1 line
+call r441 read a.go
+result r441 read 1 line
+call r442 read a.go
+result r442 read 1 line
+call r443 read a.go
+result r443 read 1 line
+call r444 read a.go
+result r444 read 1 line
+call r445 read a.go
+result r445 read 1 line
+call r446 read a.go
+result r446 read 1 line
+call r447 read a.go
+result r447 read 1 line
+call r448 read a.go
+result r448 read 1 line
+call r449 read a.go
+result r449 read 1 line
+call r450 read a.go
+result r450 read 1 line
+call r451 read a.go
+result r451 read 1 line
+call r452 read a.go
+result r452 read 1 line
+call r453 read a.go
+result r453 read 1 line
+call r454 read a.go
+result r454 read 1 line
+call r455 read a.go
+result r455 read 1 line
+call r456 read a.go
+result r456 read 1 line
+call r457 read a.go
+result r457 read 1 line
+call r458 read a.go
+result r458 read 1 line
+call r459 read a.go
+result r459 read 1 line
+call r460 read a.go
+result r460 read 1 line
+call r461 read a.go
+result r461 read 1 line
+call r462 read a.go
+result r462 read 1 line
+call r463 read a.go
+result r463 read 1 line
+call r464 read a.go
+result r464 read 1 line
+call r465 read a.go
+result r465 read 1 line
+call r466 read a.go
+result r466 read 1 line
+call r467 read a.go
+result r467 read 1 line
+call r468 read a.go
+result r468 read 1 line
+call r469 read a.go
+result r469 read 1 line
+call r470 read a.go
+result r470 read 1 line
+call r471 read a.go
+result r471 read 1 line
+call r472 read a.go
+result r472 read 1 line
+call r473 read a.go
+result r473 read 1 line
+call r474 read a.go
+result r474 read 1 line
+call r475 read a.go
+result r475 read 1 line
+call r476 read a.go
+result r476 read 1 line
+call r477 read a.go
+result r477 read 1 line
+call r478 read a.go
+result r478 read 1 line
+call r479 read a.go
+result r479 read 1 line
+call r480 read a.go
+result r480 read 1 line
+call r481 read a.go
+result r481 read 1 line
+call r482 read a.go
+result r482 read 1 line
+call r483 read a.go
+result r483 read 1 line
+call r484 read a.go
+result r484 read 1 line
+call r485 read a.go
+result r485 read 1 line
+call r486 read a.go
+result r486 read 1 line
+call r487 read a.go
+result r487 read 1 line
+call r488 read a.go
+result r488 read 1 line
+call r489 read a.go
+result r489 read 1 line
+call r490 read a.go
+result r490 read 1 line
+call r491 read a.go
+result r491 read 1 line
+call r492 read a.go
+result r492 read 1 line
+call r493 read a.go
+result r493 read 1 line
+call r494 read a.go
+result r494 read 1 line
+call r495 read a.go
+result r495 read 1 line
+call r496 read a.go
+result r496 read 1 line
+call r497 read a.go
+result r497 read 1 line
+call r498 read a.go
+result r498 read 1 line
+call r499 read a.go
+result r499 read 1 line
+call r500 read a.go
+result r500 read 1 line
+call r501 read a.go
+result r501 read 1 line
+call r502 read a.go
+result r502 read 1 line
+call r503 read a.go
+result r503 read 1 line
+call r504 read a.go
+result r504 read 1 line
+call r505 read a.go
+result r505 read 1 line
+text 9e0001 The reads are done. Every file the loader touches was read once, and the policy keeps its mode while the ledger writes one row for each decision it makes on the way. The lock is read before the mode, so an enforced policy without a valid lock resolves to shadow and says so in the row it writes. The wire declares its own limits and the caller reads them, so no request cap is invented here. A timeout, a refusal or an oversize request each return ask and never allow, and the row records the build the response reported. The state hash and the state builder version sit beside the distribution, and the outcome slot stays empty until the turn that used the verdict ends. Nothing in the policy reads a clock, a file or the network, and every threshold comes from library data rather than a literal. The three folders below are the ones the session can open next.
+call r506 read b.go
+result r506 read 1 line
+text 9e0002 Pick F:\work\projects\gobta-zed for the game.
+call r507 read c.go
+result r507 read 1 line
+text 9e0003 Once a folder is picked the session opens it, reads its rules and its board, and starts the next turn there. The other two folders stay where they are and nothing in them is read until one of them is picked in a later turn. Say the folder by its path or by its place in the list and the lead opens it the same way.
+done cooked for
