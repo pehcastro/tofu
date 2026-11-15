@@ -99,7 +99,7 @@ func (h *Host) Steer(text string) string {
 		images := h.takePending(text)
 		return h.keepUndelivered(f.ask(followAsk{Op: followSteer, Text: text, Images: images}), images).Steered
 	}
-	return h.queueSteer(text)
+	return h.queueSteer(session.NewEventID(), text)
 }
 
 func (h *Host) CarrySteers() []string {
@@ -109,10 +109,9 @@ func (h *Host) CarrySteers() []string {
 	return h.carrySteers(h.emitter())
 }
 
-func (h *Host) queueSteer(text string) string {
+func (h *Host) queueSteer(id, text string) string {
 	h.steering.mu.Lock()
 	defer h.steering.mu.Unlock()
-	id := session.NewEventID()
 	h.steering.put(steered{id: id, text: text})
 	return id
 }
