@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"tofu/internal/konst"
-	"tofu/internal/platform/fs"
 )
 
 type Op string
@@ -139,8 +138,8 @@ func (w *Writer) closeDay() error {
 }
 
 func openDay(state string, day time.Time) (*os.File, error) {
-	if isDir, _ := fs.IsDir(state); !isDir {
-		return nil, nil
+	if state == "" {
+		return nil, errors.New("walls: no project state folder to write into")
 	}
 	dir := filepath.Join(state, dirName)
 	path := filepath.Join(dir, day.Format(dayLayout)+daySuffix)

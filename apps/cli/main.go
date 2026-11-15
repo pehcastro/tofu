@@ -226,7 +226,9 @@ func appendVerbWall(state, name string, started time.Time, code int, measured *o
 		wall.OutsideMS = &outsideMS
 	}
 	wall.MS = time.Since(started).Milliseconds()
-	_ = walls.Append(state, wall)
+	if err := walls.Append(state, wall); err != nil {
+		_, _ = fmt.Fprintln(os.Stderr, "tofu: the "+name+" verb wall was not written: "+err.Error())
+	}
 }
 
 func withoutProjectFlag(args []string, flag string) ([]string, bool) {
