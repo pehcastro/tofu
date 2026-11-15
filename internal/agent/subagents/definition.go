@@ -48,6 +48,7 @@ type Definition struct {
 	AssignedIn   string       `json:"assigned_in,omitempty"`
 	Effort       core.Effort  `json:"effort,omitempty"`
 	Language     string       `json:"language,omitempty"`
+	Matches      []string     `json:"matches,omitempty"`
 	Domain       string       `json:"domain,omitempty"`
 	Tools        []string     `json:"tools,omitempty"`
 	Gate         []string     `json:"gate,omitempty"`
@@ -226,6 +227,7 @@ func read(fsys fs.FS, name string) (Definition, error) {
 		Written:      strings.Join(fields["model"], " "),
 		Effort:       core.Effort(strings.Join(effort, " ")),
 		Language:     strings.Join(fields["language"], " "),
+		Matches:      commaList(fields["matches"]),
 		Domain:       strings.Join(fields["domain"], " "),
 		Tools:        commaList(fields["tools"]),
 		Gate:         commaList(fields["gate"]),
@@ -237,7 +239,7 @@ func read(fsys fs.FS, name string) (Definition, error) {
 	}
 	for key := range fields {
 		switch key {
-		case "name", "description", "model", "tools", "gate", "effort", "thinking", "references", "language", "domain", "skills", "autoloadSkills":
+		case "name", "description", "model", "tools", "gate", "effort", "thinking", "references", "language", "matches", "domain", "skills", "autoloadSkills":
 		default:
 			definition.Ignored = append(definition.Ignored, key)
 		}
@@ -419,6 +421,9 @@ func (s Scan) place(definition *Definition, tofuWrote bool) {
 		}
 		if definition.Language != "" {
 			definition.Ignored, definition.Language = append(definition.Ignored, "language"), ""
+		}
+		if len(definition.Matches) > 0 {
+			definition.Ignored, definition.Matches = append(definition.Ignored, "matches"), nil
 		}
 		slices.Sort(definition.Ignored)
 		return

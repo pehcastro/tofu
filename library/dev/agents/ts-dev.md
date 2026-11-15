@@ -20,6 +20,7 @@ references:
   - verify-a-running-service
   - interface-craft
 language: typescript
+matches: tsconfig*.json
 model: inherit
 tools: read, glob, search, symbols, edit, typecheck, test, write, bash, skill, codemod, scaffold, format, deps
 gate: typecheck, test

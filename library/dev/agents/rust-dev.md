@@ -16,6 +16,7 @@ references:
   - rust-async
   - rust-unsafe
 language: rust
+matches: Cargo.toml, Cargo.lock, rust-toolchain.toml
 model: inherit
 tools: read, glob, search, symbols, edit, typecheck, test, write, bash, skill, codemod, scaffold, format, deps
 gate: cargo clippy, cargo test

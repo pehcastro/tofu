@@ -149,13 +149,14 @@ func (t *SpawnTool) disjointPrefix(calls []core.ToolCall) int {
 			width = i
 			break
 		}
-		first, sibling := firsts[args.Agent]
+		agent, _ := t.SubAgents.picked(args)
+		first, sibling := firsts[agent]
 		switch {
-		case args.Agent == "":
+		case agent == "":
 		case sibling:
 			warmups[first.leader], warmups[call.ID] = first, first
 		default:
-			firsts[args.Agent] = &warmup{leader: call.ID, ready: make(chan struct{})}
+			firsts[agent] = &warmup{leader: call.ID, ready: make(chan struct{})}
 		}
 	}
 	var called []string

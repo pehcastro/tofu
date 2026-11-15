@@ -225,7 +225,7 @@ func traceRows(events []session.Event, exchanges []session.Exchange) []traceRow 
 			if spawned.Stagger != "" {
 				staggered = "stagger " + spawned.Stagger + ": " + spawned.StaggerWhy
 			}
-			row.Text = traced("spawned by "+cmp.Or(event.Agent, traceLead)+" as "+cmp.Or(spawned.Definition, "unnamed")+" on "+cmp.Or(spawned.Model, "the lead's model"), spawned.Ticket, output.OneLine(spawned.Mission), staggered)
+			row.Text = traced("spawned by "+cmp.Or(event.Agent, traceLead)+" as "+cmp.Or(spawned.Definition, "unnamed")+" on "+cmp.Or(spawned.Model, "the lead's model"), spawned.Ticket, output.OneLine(spawned.Mission), spawned.Picked, staggered)
 		case session.EventAgentEnd:
 			var ended session.AgentEndBody
 			_ = json.Unmarshal(event.Body, &ended)

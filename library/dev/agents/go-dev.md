@@ -8,6 +8,7 @@ references:
   - go-concurrency
   - go-traps
 language: go
+matches: go.mod, go.sum, go.work
 model: inherit
 tools: read, glob, search, symbols, edit, typecheck, test, write, bash, skill, codemod, scaffold, format, deps
 gate: go vet, go test

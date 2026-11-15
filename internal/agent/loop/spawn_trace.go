@@ -32,6 +32,7 @@ func (r *record) site(call string, conversation []core.Message) spawnSite {
 type spawnTrace struct {
 	site       spawnSite
 	definition string
+	picked     string
 	model      string
 	mission    string
 	owns       []string
@@ -69,7 +70,7 @@ func (s spawnTrace) begin(id string) error {
 		return markRun(log, id, subagents.Working, nil)
 	}
 	_, err := log.Append(session.Event{Turn: site.turn, Agent: site.agent, Call: site.call, Kind: session.EventSpawn},
-		session.SpawnBody{Agent: id, Definition: s.definition, Model: s.model, Mission: s.mission, Owns: s.owns, Ticket: s.ticket, Depth: s.depth,
+		session.SpawnBody{Agent: id, Definition: s.definition, Picked: s.picked, Model: s.model, Mission: s.mission, Owns: s.owns, Ticket: s.ticket, Depth: s.depth,
 			Stagger: s.stagger.decided, StaggerWhy: s.stagger.why})
 	return errors.Join(err, log.Edit(func(header *session.Header) {
 		header.Agents = append(header.Agents, session.AgentRun{Agent: id, Definition: s.definition, Model: s.model, ParentAgent: site.agent,

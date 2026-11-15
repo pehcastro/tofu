@@ -462,13 +462,7 @@ func (t budgetedTool) Definition() core.Tool {
 }
 
 func (t budgetedTool) refuse(refusal SourceBudgetError) SourceBudgetError {
-	language := sourceLanguage(refusal.Path)
-	for _, definition := range t.budget.enabled {
-		if language != "" && definition.Language == language {
-			refusal.Spawn = append(refusal.Spawn, definition.Name)
-		}
-	}
-	if len(refusal.Spawn) == 0 {
+	if refusal.Spawn = claiming(t.budget.enabled, refusal.Path); len(refusal.Spawn) == 0 {
 		refusal.Spawn = []string{"a sub-agent"}
 	}
 	refusal.Tool, refusal.Spent, refusal.Scripts = t.Name(), t.budget.spent, t.budget.scripts

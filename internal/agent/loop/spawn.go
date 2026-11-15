@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime/debug"
 	"slices"
@@ -161,6 +162,55 @@ func (s SubAgents) Named(name string) (subagents.Definition, error) {
 	return subagents.Definition{}, AgentRefusedError{Name: name, Why: why, Enabled: s.enabledNames()}
 }
 
+func claiming(enabled []subagents.Definition, file string) []string {
+	language, slashed := sourceLanguage(file), filepath.ToSlash(file)
+	var names []string
+	for _, definition := range enabled {
+		matched := slices.ContainsFunc(definition.Matches, func(glob string) bool {
+			whole, _ := path.Match(glob, slashed)
+			base, _ := path.Match(glob, path.Base(slashed))
+			return whole || base
+		})
+		if matched || language != "" && definition.Language == language {
+			names = append(names, definition.Name)
+		}
+	}
+	return names
+}
+
+func (s SubAgents) picked(args spawnArgs) (name, why string) {
+	if args.Agent != "" {
+		return args.Agent, ""
+	}
+	paths, where := args.Owns, "it owns"
+	if len(paths) == 0 {
+		paths, where = briefPath().FindAllString(args.Task, -1), "its task names"
+	}
+	if len(paths) == 0 {
+		return "", "no agent was picked: it owns no path and its task names none"
+	}
+	enabled := enabledSubAgents(s.Defined)
+	first := ""
+	for _, file := range paths {
+		names := claiming(enabled, file)
+		switch {
+		case len(names) > 1:
+			return "", "no agent was picked: " + strings.Join(names, " and ") + " claim " + file + ", so name one"
+		case len(names) == 0 && sourceLanguage(file) != "":
+			return "", "no agent was picked: no enabled agent claims " + file + ", which is " + sourceLanguage(file)
+		case len(names) == 0:
+		case name == "":
+			name, first = names[0], file
+		case name != names[0]:
+			return "", "no agent was picked: " + name + " claims " + first + " and " + names[0] + " claims " + file
+		}
+	}
+	if name == "" {
+		return "", "no agent was picked: no enabled agent claims a path " + where
+	}
+	return name, "it runs as " + name + " because " + name + " claims every source path " + where
+}
+
 type SubAgentLimits struct {
 	Running   int
 	Depth     int
@@ -206,10 +256,28 @@ type builtOncePerTurn struct {
 func (b *builtOncePerTurn) offered(s SubAgents) (effort, agent map[string]any) {
 	b.offer.Do(func() {
 		b.effort = s.effortProperty()
-		if names := s.enabledNames(); len(names) > 0 {
-			b.agent = map[string]any{"type": "string", "enum": names,
-				"description": "the sub-agent that does the work, on its own model with its own instructions. left out, the sub-agent runs on the orchestrator's model"}
+		enabled := enabledSubAgents(s.Defined)
+		if len(enabled) == 0 {
+			return
 		}
+		described := "the sub-agent that does the work, on its own model with its own instructions. left out, the spawn runs as the one agent that claims every source path in owns, the ticket's owns, or with neither the paths the task names, by its language or its file names, and otherwise on the orchestrator's model. the agents:"
+		var names []string
+		for _, definition := range enabled {
+			names = append(names, definition.Name)
+			sentence, _, _ := strings.Cut(definition.Description, ". ")
+			described += "\n- " + definition.Name + ": " + strings.TrimSuffix(sentence, ".")
+			claims := definition.Matches
+			if definition.Language != "" {
+				claims = append([]string{definition.Language + " files"}, claims...)
+			}
+			if len(claims) > 0 {
+				described += ". claims " + strings.Join(claims, ", ")
+			}
+			if len(definition.Gate) > 0 {
+				described += ". gate: " + strings.Join(definition.Gate, ", ")
+			}
+		}
+		b.agent = map[string]any{"type": "string", "enum": names, "description": described}
 	})
 	return b.effort, b.agent
 }
@@ -430,6 +498,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	t.mu.Unlock()
 	defer naming.passed(site.call)
 	if args.Estimate {
+		args.Agent, _ = t.SubAgents.picked(args)
 		definition, err := t.SubAgents.Named(args.Agent)
 		if err != nil {
 			return contract.Result{}, err
@@ -498,6 +567,8 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 			opened.Close()
 		}
 	}()
+	var pickedWhy string
+	args.Agent, pickedWhy = t.SubAgents.picked(args)
 	definition, err := t.SubAgents.Named(args.Agent)
 	if err != nil {
 		return contract.Result{}, err
@@ -596,7 +667,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 		environment: environment + scratchWords(scratch),
 		briefFiles:  t.briefFiles(context.WithValue(ctx, contract.SubAgentKey{}, subAgentID), args, site.conversation),
 		boundary:    subagents.NewBoundary(subAgentID, scratch.Dir(), args.Owns), scratch: scratch, inbox: NewInbox(),
-		trace: spawnTrace{definition: agent.Agent, model: agent.Model, mission: agent.Mission, owns: args.Owns, ticket: args.Ticket, depth: t.depth + 1}}
+		trace: spawnTrace{definition: agent.Agent, picked: pickedWhy, model: agent.Model, mission: agent.Mission, owns: args.Owns, ticket: args.Ticket, depth: t.depth + 1}}
 	runCtx, cancel := outlivingTheWave(ctx)
 	t.Inbox.keep(held, cancel)
 	t.tree.mu.Lock()
@@ -607,7 +678,11 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 		task += t.SubAgents.Brief(definition, args.Task)
 	}
 	timing.took("brief")
-	said := narrowed + clampedWords(effort, opened) + held.runningWords() + "\n\n"
+	said := narrowed + clampedWords(effort, opened) + held.runningWords()
+	if pickedWhy != "" {
+		said += " " + pickedWhy + "."
+	}
+	said += "\n\n"
 	if madeBoard != "" {
 		said = madeBoard + ". " + said
 	}
