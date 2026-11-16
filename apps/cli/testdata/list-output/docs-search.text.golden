@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                          106 matches
+Docs · "change the colours"                                          108 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -56,6 +56,8 @@ Docs · "change the colours"                                          106 matche
     → tofu docs memory
   Models
     → tofu docs models
+  Restructuring a project
+    → tofu docs restructure
   Scratchpad
     → tofu docs scratchpad
   Every method tofu serve answers
@@ -120,6 +122,8 @@ Docs · "change the colours"                                          106 matche
     → tofu run --dir . --show-prompt "anything"
   write a map of my project's folders
     → /generate-map in the app, then answer yes to write MAP.md
+  propose a cleaner structure for my project
+    → /restructure in the app, then reshape the tree it proposes in your own words
   store the typesafe key the gate needs
     → tofu login classifier typesafe
   bind the classifier the gate runs

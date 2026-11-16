@@ -133,6 +133,11 @@ exit 0
         "summary": "sign in to a subscription, name a model as source/model, bind the model each role runs, add a custom model, and set the tiers"
       },
       {
+        "topic": "restructure",
+        "title": "Restructuring a project",
+        "summary": "how /restructure reads what a project is, designs its tree from that alone, checks it against the real repository, and proposes one clean target tree with release and deployment, moving nothing"
+      },
+      {
         "topic": "rules",
         "title": "Rules",
         "summary": "add your own rules for every project or for one, switch a rule off, and see which rules run"
@@ -591,6 +596,12 @@ exit 0
         "do": "tofu rules off layout_map --reason \"<why>\"",
         "check": "tofu rules index \"add a folder\" --role orchestrator",
         "topic": "generate-map"
+      },
+      {
+        "ask": "propose a cleaner structure for my project",
+        "do": "/restructure in the app, then reshape the tree it proposes in your own words",
+        "check": "git status",
+        "topic": "restructure"
       },
       {
         "ask": "store the typesafe key the gate needs",

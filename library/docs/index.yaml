@@ -230,6 +230,10 @@
   do: tofu rules off layout_map --reason "<why>"
   check: tofu rules index "add a folder" --role orchestrator
   topic: generate-map
+- ask: propose a cleaner structure for my project
+  do: /restructure in the app, then reshape the tree it proposes in your own words
+  check: git status
+  topic: restructure
 - ask: store the typesafe key the gate needs
   do: tofu login classifier typesafe
   check: tofu doctor

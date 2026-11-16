@@ -73,6 +73,7 @@ func Table() []Command {
 		{Name: "debug", Args: "<symptom>", Summary: "reproduce the symptom, then find and fix its cause: /debug <symptom>", Scope: Tofu, Needs: Turn},
 		{Name: "hunt", Args: "[where]", Summary: "a hunter and a skeptic look for bugs, a referee keeps what can be shown", Scope: Tofu, Needs: Turn},
 		{Name: "generate-map", Summary: "draft MAP.md from the tree, one row per top-level folder, or the changes to the one there; writes on your yes", Scope: Tofu, Needs: Turn},
+		{Name: "restructure", Summary: "read what the project is and propose one clean tree, with release and deployment, in text; moves nothing", Scope: Tofu, Needs: Turn},
 		{Name: "help", Summary: "every command and what it does, one line each", Scope: Interface, Needs: Always},
 		{Name: "quit", Summary: "leave tofu", Scope: Interface, Needs: Always},
 	}
