@@ -55,8 +55,12 @@ and it sets `away` to false.
 
 Each session keeps its jobs in `cron.json` beside its record, under
 `~/.tofu/projects/<project>/sessions/<id>/`. Every version of every job is
-in that file with its time, who made it and why. `tofu --continue` and
-`/resume` bring the jobs back; `/new` starts with none.
+in that file with its time, who made it and why. Closing the session's
+last window, or stopping the project's host, ends every job in it: each
+says in that file who closed it and why, and the trace has a `close` row
+naming the jobs it ended. `tofu --continue` and `/resume` reopen the
+session with no job firing; `/new` starts with none. A job in a session
+another window still has open keeps firing there.
 
 Limits: 10 open jobs a session, 50 fires a job, once a minute at most, an
 expiry after 24 hours unless you name one, and a check that runs at most

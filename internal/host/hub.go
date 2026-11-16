@@ -836,9 +836,9 @@ func (h *hub) leave(s *hosted, member Member) {
 	case !last:
 		h.told(s)
 	case onlySpawned:
-		h.end(s, "the last member the host did not start, "+member.named(), "it left and every member still here runs in one of the session's shells, so the session's turn stops and its shells end, taking those members with them")
+		h.end(s, "the last member the host did not start, "+member.named(), "it left and every member still here runs in one of the session's shells, so the session's turn stops and its shells and cron jobs end, taking those members with them")
 	default:
-		h.end(s, "the last member, "+member.named(), "it left, so the session's turn stops and its shells end")
+		h.end(s, "the last member, "+member.named(), "it left, so the session's turn stops and its shells and cron jobs end")
 	}
 }
 
@@ -860,7 +860,7 @@ func (h *hub) endAll() {
 		s.ending = true
 		h.mu.Unlock()
 		if ends {
-			h.end(s, "the tofu host, process "+strconv.Itoa(h.status.PID), "it exits, so the session's turn stops and its shells end")
+			h.end(s, "the tofu host, process "+strconv.Itoa(h.status.PID), "it exits, so the session's turn stops and its shells and cron jobs end")
 		}
 		<-s.ended
 	}

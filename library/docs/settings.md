@@ -65,7 +65,7 @@ Each setting's own line is two sentences at most. The rest is here.
 - `projectManagement`: a spawn names a ticket, its owns become the sub-agent's paths and the sub-agent moves it to review.
 - `boardFlow`: jira says ticket, board, epic, sprint and points. linear says issue, team, project, cycle and estimate.
 - `scratchCleanupDays`: only a folder with no tofu running it is deleted, its processes stopped first.
-- `sessionStaleDays`: no activity means no new event, request or open. The deletion runs when the project's host starts or on `tofu session clean`. A session a kept one continues or branches from, the head, one open now and one with a live cron job are kept.
+- `sessionStaleDays`: no activity means no new event, request or open. The deletion runs when the project's host starts or on `tofu session clean`. A session a kept one continues or branches from, the head and one open now are kept.
 - `browserDriver`: `subagent` hands the steps to a browser sub-agent on `browserModel`, spawned with a task and a tab. `steps` gives the model `browser_observe` and `browser_act`. `goal` gives it `browser_do`, where Jev picks each step toward a whole goal.
 - `browserModel`: a subscription model. Empty takes the dumb tier, then the worker tier, then the turn's own model.
 - `browserEffort`: used when the model lists effort. The model's own default is the lowest it lists at or above low.

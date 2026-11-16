@@ -68,7 +68,7 @@ Clean up old sessions, stop the host, move what an older version left in the pro
     tofu shells stop <name>
     tofu shells restart <name>
 
-`session clean` deletes the sessions idle past `sessionStaleDays` and keeps the head, a session a kept one continues or branches from, one open or busy, and one with a live cron job; `--dry-run` lists them first.
+`session clean` deletes the sessions idle past `sessionStaleDays` and keeps the head, a session a kept one continues or branches from, and one open or busy; `--dry-run` lists them first.
 
 ## Check it
 

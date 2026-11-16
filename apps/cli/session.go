@@ -19,12 +19,10 @@ import (
 	"tofu/apps/cli/output"
 	cli "tofu/apps/cli/page"
 	"tofu/apps/cli/wiring"
-	"tofu/internal/agent/cron"
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/render"
 	"tofu/internal/host"
 	"tofu/internal/judge/ledger"
-	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/models/llm/wire/anthropic"
 	"tofu/internal/platform/credential"
@@ -780,13 +778,6 @@ func sessionKeeps(store *session.Store, header session.Header, head string, life
 	}
 	if header.ID == head {
 		return "it is the head"
-	}
-	var book cron.Book
-	if err := book.Load(filepath.Join(store.Dir(header.ID), konst.CronBookFile)); err != nil {
-		return err.Error()
-	}
-	if book.Live() > 0 {
-		return "a cron job in it still schedules"
 	}
 	if err := store.Busy(header.ID); err != nil {
 		return err.Error()

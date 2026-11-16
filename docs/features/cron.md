@@ -12,7 +12,9 @@ a loop is a job that fires every few minutes, and a goal is a job that fires
 after each turn and stops when its check command exits 0.
 
 Each job has an id like `c1`, a schedule, a prompt, an expiry and, for a
-goal, a check. It lives in the session, so `tofu --continue` brings it back.
+goal, a check. It lives in the session and ends when the session closes:
+closing the last window that has it open ends every job, so
+`tofu --continue` reopens the session without a job firing.
 
 ## Why one scheduler
 
@@ -77,6 +79,10 @@ the orchestrator you are back and it sets `away` to false.
   fires once however many windows follow, and `tofu --continue` in another
   window joins a session that holds only a job before it first fires. Past
   midnight a fire sees the new date.
+- **A close ends every job.** Closing the last window on a session, or
+  stopping the project's host, ends each job with who closed it and why, and
+  the trace's `close` row names the jobs it ended. Closing one of two windows
+  leaves the jobs firing in the other.
 - **A missed fire runs once.** After an hour busy or asleep, a 1-minute loop
   fires once, not sixty times.
 - **No overlap.** A job does not fire again while the turn it started runs.

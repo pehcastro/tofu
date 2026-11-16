@@ -645,6 +645,13 @@ func (h *Host) Close() {
 	h.settled = append(h.settled, h.inbox.CancelCompactions())
 	turnOver, settled, holding := h.turnOver, h.settled, h.heldID != ""
 	h.mu.Unlock()
+	if !h.joins {
+		ended, err := h.cron.End("closed by " + closing.By + ": " + closing.Why)
+		closing.Took = append(closing.Took, ended...)
+		if err != nil {
+			h.trace("the ended cron jobs were not written: "+err.Error(), nil)
+		}
+	}
 	if holding {
 		h.traceStop(closing)
 	}

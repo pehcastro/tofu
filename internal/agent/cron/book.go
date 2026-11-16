@@ -336,6 +336,23 @@ func (b *Book) Delete(id string) error {
 	return b.save()
 }
 
+func (b *Book) End(reason string) ([]string, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	var ended []string
+	for _, job := range b.jobs {
+		if job.Ended == "" {
+			job.Ended, job.waiting = reason, false
+			ended = append(ended, job.Noun()+" "+job.ID)
+		}
+	}
+	if len(ended) == 0 {
+		return nil, nil
+	}
+	b.changed()
+	return ended, b.save()
+}
+
 func (b *Book) Jobs() []Job {
 	b.mu.Lock()
 	defer b.mu.Unlock()

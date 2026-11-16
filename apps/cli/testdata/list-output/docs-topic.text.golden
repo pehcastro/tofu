@@ -152,8 +152,8 @@ The detail
     processes stopped first.
   - `sessionStaleDays`: no activity means no new event, request or open. The
     deletion runs when the project's host starts or on `tofu session clean`. A
-    session a kept one continues or branches from, the head, one open now and
-    one with a live cron job are kept.
+    session a kept one continues or branches from, the head and one open now are
+    kept.
   - `browserDriver`: `subagent` hands the steps to a browser sub-agent on
     `browserModel`, spawned with a task and a tab. `steps` gives the model
     `browser_observe` and `browser_act`. `goal` gives it `browser_do`, where Jev
