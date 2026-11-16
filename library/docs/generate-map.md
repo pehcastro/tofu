@@ -17,7 +17,8 @@ the map: one row for every top-level folder, a table of where new things go,
 the docs folder, the folders not in git, and drift, such as a cache kept in
 the tree or the same files copied twice. When `MAP.md` already exists it
 shows the changes against it instead of a fresh draft. Nothing is written
-until you say yes.
+until you say yes, under auto too: no answer, esc or the ask judge never
+says yes for you.
 
 After the map, it offers the matching change to the instruction file: the
 `AGENTS.md` or `CLAUDE.md` the project already has, or a short `AGENTS.md`

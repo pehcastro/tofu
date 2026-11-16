@@ -21,7 +21,8 @@ path.
   same files copied twice, a top-level folder only one other folder reads.
   It moves nothing.
 - When `MAP.md` exists, it shows the changes against it instead.
-- It writes nothing until you say yes. Then it offers the matching edit to
+- It writes nothing until you say yes, under auto too: no answer, esc or the
+  ask judge never says yes for you. Then it offers the matching edit to
   the instruction file the project already has, `AGENTS.md` or `CLAUDE.md`,
   and a short `AGENTS.md` only when there is neither.
 

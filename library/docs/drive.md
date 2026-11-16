@@ -18,6 +18,7 @@ answer the same.
 - the script: a file of steps, one per line, or `-` for standard input
 - the cassette: `--cassette PATH`, or `TOFU_DRIVE_CASSETTE` when the flag
   is not given. Without one no wire opens and a turn fails saying so.
+  `--live [--model SLUG]` answers from your home's subscription, never a key.
 - the home: without `--home` the run makes an empty one, reads no settings
   file of yours, and deletes it at the end. `--home PATH` reads the
   settings under that home instead. Your real home, a folder above it,
@@ -109,12 +110,11 @@ with `steps.drive` holding:
     requests text 2
 
 prints the settings, then request 2 with every message and its text, and ends naming the session it recorded and the `tofu session trace` command that reads it.
-`tofu drive --help` prints every step, every flag, and the cassette's
-fields.
+`tofu drive --help` prints every step, every flag and the cassette fields.
 
 ## Undo it
 
-A run without `--home` writes nothing of yours: its home is deleted when
-it ends. A run with `--home` writes its session under that home, so delete
-the session there, or point `--home` at a folder made for the run. It
-never writes your real home: `--home` refuses it.
+A run without `--home` or `--live` writes nothing of yours: its home is
+deleted when it ends. A run with `--home` writes its session under that home, so delete
+the session there, or point `--home` at a folder made for the run. Only
+`--live` writes your real home: `--home` refuses it.

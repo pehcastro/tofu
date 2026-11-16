@@ -8,7 +8,7 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
-## Unreleased
+## 0.5.24 - 2026-11-15
 
 ### Added
 
@@ -26,6 +26,7 @@ The minor number carries breaking changes, which is what 0.x means, and **there 
 - `/side`, `/reload` and `/resume` keep the screen drawing and taking keys while they read, and typing `/resume` or `/side` again before the first opens says so instead of opening a second.
 - A second window reading the cron book while a job fires no longer makes the save fail with `Access is denied` on Windows.
 - A window joined to a session reads every reply after the events it answers, and a queued message always shows its queued row.
+- `/generate-map` under auto prints the draft and waits for your yes: a question that needs your own yes is never answered for you by the wait running out, by esc, or by the ask judge.
 - zig-dev is reopened until `zig fmt --check --ast-check` has run on the files it changed.
 
 ## 0.5.23 - 2026-11-12

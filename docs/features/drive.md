@@ -61,6 +61,9 @@ that screen, and `-- FOLDER` opens the desk on a project.
 | `tofu drive desk -- --screen boardy` | open the desk on the board screen and keep its screenshots |
 | `tofu drive desk --help` | every step and flag |
 | `tofu drive steps.drive --cassette read.cassette --plain` | drive the terminal app from a script |
+| `tofu drive steps.drive --live --model claude-sub/claude-opus-5-5` | drive it on the real model, through a subscription the home signed in to; a key is refused |
+
+With `--live` and no `--home`, the run reads your own home, its sign-ins and settings, and records the session there, as tofu does.
 
 A run prints:
 
