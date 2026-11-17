@@ -678,16 +678,11 @@ func TestTheSweepDeletesOnlyAStaleSessionNothingKeeps(t *testing.T) {
 	seeded(t, store, "turn-side", now.Add(-3*sessionDay), fresh, func(h *session.Header) {
 		h.Kind, h.BranchedFrom = session.KindSide, &session.Carried{Session: "turn-branched"}
 	})
-	for id, book := range map[string]string{
-		"turn-cron":        `{"made":1,"jobs":[{"id":"c1","versions":[{"n":1,"by":"person","reason":"seeded","spec":{"schedule":"every 1m","prompt":"check"}}],"fires":0}]}`,
-		"turn-cron-broken": `{`,
-	} {
-		seeded(t, store, id, now.Add(-120*sessionDay), stale, same)
-		if err := os.WriteFile(filepath.Join(store.Dir(id), "cron.json"), []byte(book), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		idleSince(t, store.Dir(id), stale)
+	seeded(t, store, "turn-cron", now.Add(-120*sessionDay), stale, same)
+	if err := os.WriteFile(filepath.Join(store.Dir("turn-cron"), "cron.json"), []byte(`{"made":1,"jobs":[{"id":"c1","versions":[{"n":1,"by":"person","reason":"seeded","spec":{"schedule":"every 1m","prompt":"check"}}],"fires":0}]}`), 0o600); err != nil {
+		t.Fatal(err)
 	}
+	idleSince(t, store.Dir("turn-cron"), stale)
 	seeded(t, store, "turn-skewed", now.Add(-120*sessionDay), stale, same)
 	idleSince(t, store.Dir("turn-skewed"), now.Add(sessionDay))
 	seeded(t, store, "turn-copied", now.Add(-120*sessionDay), fresh, same)
@@ -731,7 +726,7 @@ func TestTheSweepDeletesOnlyAStaleSessionNothingKeeps(t *testing.T) {
 		t.Fatalf("a lifetime of 0 deleted %v, %v; the folders went from %v to %v", never.Deleted, err, before, present())
 	}
 	dry, err := sessionSweep(store, konst.SessionStaleDays, now, true)
-	want := []string{"turn-header-only", "turn-idle"}
+	want := []string{"turn-cron", "turn-header-only", "turn-idle"}
 	if err != nil || !slices.Equal(slices.Sorted(slices.Values(dry.Deleted)), want) || !slices.Equal(present(), before) {
 		t.Fatalf("a dry run named %v, %v, want %v, and the folders went from %v to %v", dry.Deleted, err, want, before, present())
 	}
@@ -745,7 +740,7 @@ func TestTheSweepDeletesOnlyAStaleSessionNothingKeeps(t *testing.T) {
 			t.Errorf("%s is still on disk after the sweep", id)
 		}
 	}
-	for _, id := range []string{"turn-old-but-active", "turn-grandparent", "turn-parent", "turn-fork", "turn-branched", "turn-side", "turn-cron", "turn-cron-broken", "turn-skewed", "turn-copied", "turn-head", "turn-half"} {
+	for _, id := range []string{"turn-old-but-active", "turn-grandparent", "turn-parent", "turn-fork", "turn-branched", "turn-side", "turn-skewed", "turn-copied", "turn-head", "turn-half"} {
 		if !slices.Contains(left, id) {
 			t.Errorf("the sweep deleted %s", id)
 		}

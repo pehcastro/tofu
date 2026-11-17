@@ -18,9 +18,7 @@ opens the prompt in the sub-agents tab. The model reads the prompt as the
 schedule's, never as yours, so it approves nothing and is never carried or
 learned as your words.
 A job the model makes with its `cron` tool fires on time, and a job keeps
-firing while one long turn runs.
-
-The orchestrator has a `cron` tool. Under the rule `cron_edits` it may fix
+firing while one long turn runs. The orchestrator has a `cron` tool. Under the rule `cron_edits` it may fix
 a schedule that misfires, stretch an interval when fires change nothing,
 or pause a job. It may not set a check command, and it may not push an
 expiry more than one step past yours. Each change it makes is one line in
@@ -44,7 +42,6 @@ nobody can restore, a publish, a deploy, money spent, a message sent) is
 held in `needs-decision` instead, and its question says why. When Jev
 cannot answer or no classifier is bound, the question is held too. The gate
 does not relax: a call that would ask you is refused, as in any job's turn.
-
 `tofu boardy catchup` prints every decision taken while away, with the
 ticket, the option and why, and each held question with its reason;
 `--json` carries the same under `away`, and the catch-up file has a
@@ -94,18 +91,14 @@ Change a job; a reason is required and becomes the version's reason:
 rest. A schedule is a 5-field line (minute hour day month weekday),
 `@hourly`, `@daily`, `@weekly`, `@monthly`, `every <duration>`,
 `once at <15:04>` or `after each turn`. An expired job comes back with
-`--expires 24h`; a job that ended any other way does not.
-
-`/cron pause c1` stops a job without losing it, and `/cron resume c1`
-starts it again.
+`--expires 24h`; a job that ended any other way does not. `/cron pause c1`
+stops a job without losing it, and `/cron resume c1` starts it again.
 
 ## Check it
 
 `/cron` opens the crons view: each job with its schedule, version, next
 fire, expiry, fires so far and last result. The status bar shows `cron 1`
-while any job is active.
-
-`/cron history c1` shows every version, oldest first:
+while any job is active. `/cron history c1` shows every version, oldest first:
 
     v1 · Oct 5 05:14:43 · by person · made by /loop
        every 1m · expires Oct 6 05:14:43 · check the build
