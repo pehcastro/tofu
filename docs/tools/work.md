@@ -122,27 +122,43 @@ diff:
 
 ```text
   ? Discount fix  1 of 1
-  no answer yet; the lead hears in 1m 59s that none came, and picks nothing
-  Which fix for the discount do you want?
+  answer whenever: the lead keeps working, and in 4m 59s hears you have not answered yet
+  the full question is in the chat above
   › 1. Round at the end (recommended)                 │   2. Round each line
-    keep cents until the total                        │   round every line first
     - return sum * (100 - rate) / 100                 │   - total += line * (100 - rate) / 100
     + return round(sum * (100 - rate), 100)           │   + total += round(line * (100 - rate), 100)
     3. other  type it in the chat, then enter
+    4. return  close the question without choosing anything
   a note typed in the chat goes with the option enter chooses
-  ↑↓ move   enter choose   tab next question   esc dismiss
+  ↑↓ move   enter choose   tab next question
 ```
+
+The form is the short selector: its header, the numbered labels, other,
+return and any previews. The question, its context and each option's
+description are in the chat row above it, so nothing is shown twice. A long
+line wraps, it is never cut, and a form taller than its share of the screen
+scrolls with the focused option and says which rows it shows.
+**esc** does nothing on the form, so a stray key never answers for you. To
+close the question without choosing, pick **return**: nothing is chosen,
+the lead is told so, and the question stays open.
+
+The chat keeps the question as a row you can scroll back to: the header,
+the question, its context, every option with its description and the
+recommended one marked. Once you answer, the row marks what you chose with
+✓ and says so under the options, or says nothing was chosen when you
+picked return. A reopened session shows the same row.
 
 ### A note with your choice
 
 On a question whose options carry a preview, type a line in the chat and
 press **enter**: the focused option is chosen and your line goes with it as
 a note. You pick a design and say what to change about it in one answer.
-The chat shows both:
+The chat row shows both, under the options:
 
 ```text
-    · you answered
-      Which fix for the discount do you want? › Round at the end · keep it in cents
+    ✓ 1. Round at the end (recommended)  keep cents until the total
+      2. Round each line  round every line first
+    you chose Round at the end, and wrote: keep it in cents
 ```
 
 and the lead reads the note beside the choice:

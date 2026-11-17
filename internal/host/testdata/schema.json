@@ -17678,6 +17678,9 @@
     "turn.PersonQuestion": {
       "additionalProperties": false,
       "properties": {
+        "context": {
+          "type": "string"
+        },
         "header": {
           "type": "string"
         },

@@ -203,11 +203,10 @@ func (b *Inbox) awaitLead(ctx context.Context, held *heldSubAgent, answer chan b
 
 type Asked struct {
 	inbox *Inbox
-	poll  string
 }
 
-func (b *Inbox) Open(poll string) *Asked {
-	asked := &Asked{inbox: b, poll: poll}
+func (b *Inbox) Open() *Asked {
+	asked := &Asked{inbox: b}
 	b.mu.Lock()
 	b.asked = append(b.asked, asked)
 	b.mu.Unlock()
@@ -248,9 +247,119 @@ type PersonQuestion struct {
 	ID          string         `json:"id"`
 	Header      string         `json:"header"`
 	Question    string         `json:"question"`
+	Context     string         `json:"context,omitempty"`
 	Type        QuestionType   `json:"type"`
 	Options     []PersonOption `json:"options,omitempty"`
 	Recommended *int           `json:"recommended,omitempty"`
+}
+
+func (q PersonQuestion) Choices() []PersonOption {
+	if q.Type == QuestionYesNo {
+		return []PersonOption{{Label: "yes"}, {Label: "no"}}
+	}
+	return q.Options
+}
+
+func CheckQuestions(questions []PersonQuestion) error {
+	if len(questions) < 1 || len(questions) > konst.AskPersonQuestionsMost {
+		return fmt.Errorf("asks %d questions, and a call asks 1 to %d", len(questions), konst.AskPersonQuestionsMost)
+	}
+	var ids []string
+	for _, q := range questions {
+		switch {
+		case strings.TrimSpace(q.ID) == "":
+			return errors.New("a question has no id")
+		case slices.Contains(ids, q.ID):
+			return fmt.Errorf("the id %q is used twice", q.ID)
+		case utf8.RuneCountInString(q.Question) > konst.AskPersonQuestionRunesMost:
+			return fmt.Errorf("%s: the question is %d characters, and a question is at most %d: put the why in context", q.ID, utf8.RuneCountInString(q.Question), konst.AskPersonQuestionRunesMost)
+		case utf8.RuneCountInString(q.Context) > konst.AskPersonContextRunesMost:
+			return fmt.Errorf("%s: the context is %d characters, and a context is at most %d: a decision that needs more belongs in your reply as prose with numbered options", q.ID, utf8.RuneCountInString(q.Context), konst.AskPersonContextRunesMost)
+		}
+		if err := memory.WordsAtMost(fmt.Sprintf("the header %q", q.Header), q.Header, konst.AskPersonHeaderWordsMost); err != nil {
+			return fmt.Errorf("%s: %w", q.ID, err)
+		}
+		ids = append(ids, q.ID)
+		if err := checkOptions(q); err != nil {
+			return fmt.Errorf("%s: %w", q.ID, err)
+		}
+	}
+	return nil
+}
+
+func checkOptions(q PersonQuestion) error {
+	switch q.Type {
+	case QuestionText:
+		if len(q.Options) > 0 || q.Recommended != nil {
+			return errors.New("a text question takes no options and no recommended")
+		}
+		return nil
+	case QuestionYesNo:
+		if len(q.Options) > 0 {
+			return errors.New("a yesno question is yes then no, so it takes no options")
+		}
+	case QuestionChoice, QuestionMulti:
+		if len(q.Options) < konst.AskPersonOptionsLeast || len(q.Options) > konst.AskPersonOptionsMost {
+			return fmt.Errorf("offers %d options, and a choice offers %d to %d", len(q.Options), konst.AskPersonOptionsLeast, konst.AskPersonOptionsMost)
+		}
+	default:
+		return fmt.Errorf("the type %q is not choice, multi, text or yesno", q.Type)
+	}
+	for _, o := range q.Options {
+		switch {
+		case strings.TrimSpace(o.Label) == "":
+			return fmt.Errorf("the label %q is empty, and a label is 1 to %d words", o.Label, konst.AskPersonLabelWordsMost)
+		case strings.EqualFold(strings.TrimSpace(o.Label), "other"):
+			return errors.New("tofu adds other to every choice, so the options never name one")
+		case utf8.RuneCountInString(o.Description) > konst.AskPersonDescriptionRunesMost:
+			return fmt.Errorf("the description of %q is %d characters, and a description is at most %d", o.Label, utf8.RuneCountInString(o.Description), konst.AskPersonDescriptionRunesMost)
+		}
+		if err := memory.WordsAtMost(fmt.Sprintf("the label %q", o.Label), o.Label, konst.AskPersonLabelWordsMost); err != nil {
+			return err
+		}
+	}
+	if q.Recommended == nil || *q.Recommended < 0 || *q.Recommended >= len(q.Choices()) {
+		return errors.New("recommended is the index of one of the options, and every question but text names one")
+	}
+	return nil
+}
+
+func ShownAnswers(head string, questions []PersonQuestion, replies []PersonReply) string {
+	lines := []string{head}
+	for _, q := range questions {
+		var given PersonReply
+		if at := slices.IndexFunc(replies, func(r PersonReply) bool { return r.ID == q.ID }); at >= 0 {
+			given = replies[at]
+		}
+		lines = append(lines, q.Question)
+		if q.Context != "" {
+			lines = append(lines, q.Context)
+		}
+		for at, o := range q.Options {
+			var marks []string
+			if q.Recommended != nil && *q.Recommended == at {
+				marks = append(marks, "recommended")
+			}
+			if slices.Contains(given.Chosen, o.Label) {
+				marks = append(marks, "chosen")
+			}
+			line := "  " + o.Label
+			if o.Description != "" {
+				line += ": " + o.Description
+			}
+			if len(marks) > 0 {
+				line += " (" + strings.Join(marks, ", ") + ")"
+			}
+			lines = append(lines, line)
+		}
+		switch {
+		case given.Text != "":
+			lines = append(lines, "  typed: "+given.Text)
+		case len(given.Chosen) == 0:
+			lines = append(lines, "  nothing chosen")
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 type PersonReply struct {
@@ -303,19 +412,6 @@ func PersonFormFrom(ctx context.Context) PersonForm {
 func (f PersonForm) clocked(ctx context.Context, questions []PersonQuestion, wait time.Duration) ([]PersonReply, error) {
 	defer outside.Wait(ctx, outside.Person)()
 	return f(ctx, questions, wait)
-}
-
-func (b *Inbox) stillAsked() []string {
-	if b == nil {
-		return nil
-	}
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	polls := make([]string, len(b.asked))
-	for i, open := range b.asked {
-		polls[i] = open.poll
-	}
-	return polls
 }
 
 func NewInbox() *Inbox {

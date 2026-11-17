@@ -23,7 +23,7 @@ func (a anchor) before(other anchor) bool {
 
 func (m *Model) folds(index int) bool {
 	entry := &m.entries[index]
-	return !m.ChatShowsTools && entry.Kind == Tool && !entry.Promoted
+	return !m.ChatShowsTools && entry.Kind == Tool && !entry.Promoted && !entry.asksPerson()
 }
 
 func (m *Model) blockAt(index int) (int, int) {

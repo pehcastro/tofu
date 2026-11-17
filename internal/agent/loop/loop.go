@@ -197,7 +197,6 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		source = func() Registry { return config.Tools }
 	}
 	var recorded *record
-	personAnswers := config.personAnswers()
 	references := &loadedReferences{held: map[string]string{}}
 	if config.referencesOffered() {
 		maps.Copy(references.held, config.References)
@@ -962,7 +961,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 		row.ForkStop = why
 		return endAt(OutcomeForkStop, why, messages)
 	}
-	askedAgainAfterBlank, polled, nudged, graced := false, false, false, false
+	askedAgainAfterBlank, nudged, graced := false, false, false
 	steeredAt := 0
 	var left []string
 	var asked *openQuestion
@@ -1271,17 +1270,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			if offered := handedBack(decision.Content); offered != "" && config.SpawnedFrom == "" && concluding == "" && handbacks < konst.LeadHandbackContinuations {
 				handbacks++
 				stepRow.Warnings = append(stepRow.Warnings, "the lead ended by handing the person a step, so it was asked to take it: "+offered)
-				asking := stepTools
-				if !personAnswers {
-					asking = NewRegistry()
-				}
-				messages = append(messages, inserted(core.Origin{Source: core.SourceHandback}, handbackNote(offered, asking)))
-				keep(stepRow)
-				continue
-			}
-			if open := config.Inbox.stillAsked(); len(open) > 0 && !polled {
-				polled = true
-				messages = append(messages, inserted(core.Origin{Source: core.SourceHandback}, pollNote(open)))
+				messages = append(messages, inserted(core.Origin{Source: core.SourceHandback}, handbackNote(offered)))
 				keep(stepRow)
 				continue
 			}

@@ -221,48 +221,71 @@ func (t *SpawnTool) askThePerson(ctx context.Context, agent string, ticket board
 	if away, _ := ctx.Value(personAwayKey{}).(bool); away {
 		return t.decidedAway(ticket, q)
 	}
-	reason := strings.ReplaceAll(q.ELI5, "\n", " ")
-	note := fmt.Sprintf("\n\n%s reports %s not possible, so %s is %s on Q%d and the person decides it: no move of yours takes it out until they answer, and you take no option for them:\nQ%d %s\nreason: %s",
-		agent, ticket.ID, ticket.ID, ticket.Status, q.ID, q.ID, q.TLDR, reason)
-	recommended := q.Recommend - 1
-	asked := PersonQuestion{ID: "Q" + strconv.Itoa(q.ID), Header: ticket.ID + " not possible", Question: strings.TrimSuffix(reason, ".") + ": how should " + ticket.ID + " go?", Type: QuestionChoice, Recommended: &recommended}
-	for i, option := range q.Options {
-		note += fmt.Sprintf("\n%d. %s", i+1, option)
-		asked.Options = append(asked.Options, PersonOption{Label: option})
+	note := fmt.Sprintf("\n\n%s reports %s not possible, so %s is %s on Q%d %q and only the person decides it. take no option for them, and do not repeat or re-ask the question in chat: ",
+		agent, ticket.ID, ticket.ID, ticket.Status, q.ID, q.TLDR)
+	asked, form := boardQuestion(ticket.ID, q), PersonFormFrom(ctx)
+	unshown := CheckQuestions([]PersonQuestion{asked})
+	if form == nil || t.Inbox == nil || unshown != nil {
+		why := ""
+		if unshown != nil {
+			why = ". it is not shown as a form, because " + unshown.Error()
+		}
+		return note + "they answer it in catch up, so say in one line that " + ticket.ID + " waits on their decision and go on with other work" + why
 	}
-	note += fmt.Sprintf("\nrecommended %d: %s", q.Recommend, q.Why)
-	form := PersonFormFrom(ctx)
-	if form == nil || t.Inbox == nil {
-		return note + fmt.Sprintf("\n\nnothing here shows the person a question, so put Q%d to them in this turn with %s, its reason and every option, the recommended one marked", q.ID, AskPersonToolName)
-	}
-	open := t.Inbox.Open(asked.Header + ": " + asked.Question)
+	open := t.Inbox.Open()
 	safe.Go(project.Crashes(t.Project), "not possible question", func() {
 		defer open.Close()
 		replies, err := form(context.WithoutCancel(ctx), []PersonQuestion{asked}, 0)
-		said := t.answeredOnBoard(ticket.ID, q, replies, err)
-		open.Answer(said, core.Origin{Source: core.SourceAnswer, Name: asked.ID, Shown: said})
+		said, shown := t.answeredOnBoard(ticket.ID, q, asked, replies, err)
+		open.Answer(said, core.Origin{Source: core.SourceAnswer, Name: asked.ID, Shown: shown})
 	})
-	return note + fmt.Sprintf("\n\ntofu has put Q%d to the person itself, and their answer reaches you as a message once it is written to %s", q.ID, ticket.ID)
+	return note + "tofu has put it to the person as a form, and their answer reaches you as a message once it is written to " + ticket.ID + ". go on with other work"
 }
 
-func (t *SpawnTool) answeredOnBoard(id string, q boardy.Question, replies []PersonReply, asked error) string {
+func boardQuestion(id string, q boardy.Question) PersonQuestion {
+	recommended := q.Recommend - 1
+	asked := PersonQuestion{ID: "Q" + strconv.Itoa(q.ID), Header: id + " not possible", Question: id + " cannot be done as asked. How should it go?",
+		Context: q.ELI5 + "\n\nRecommended: " + strings.TrimSuffix(q.Options[recommended], ".") + ". " + q.Why, Type: QuestionChoice, Recommended: &recommended}
+	fits := func(text string) bool { return len(strings.Fields(text)) <= konst.AskPersonLabelWordsMost }
+	for _, option := range q.Options {
+		switch label, description, split := strings.Cut(option, ": "); {
+		case split && fits(label):
+			asked.Options = append(asked.Options, PersonOption{Label: label, Description: description})
+		case fits(option):
+			asked.Options = append(asked.Options, PersonOption{Label: option})
+		default:
+			asked.Options = append(asked.Options, PersonOption{Label: strings.Join(strings.Fields(option)[:konst.AskPersonLabelWordsMost], " "), Description: option})
+		}
+	}
+	return asked
+}
+
+func (t *SpawnTool) answeredOnBoard(id string, q boardy.Question, asked PersonQuestion, replies []PersonReply, failed error) (string, string) {
 	answer := ""
 	for _, reply := range replies {
 		for _, chosen := range reply.Chosen {
-			if at := slices.Index(q.Options, chosen); at >= 0 {
+			if at := slices.IndexFunc(asked.Options, func(o PersonOption) bool { return o.Label == chosen }); at >= 0 {
 				answer = strconv.Itoa(at + 1)
 			}
 		}
 		answer = strings.TrimSpace(answer + " " + reply.Text)
 	}
+	var said, head string
 	if answer == "" {
-		return fmt.Sprintf("the person gave no answer to %s Q%d (%v), so it stays in %s until they answer it in catch up", id, q.ID, asked, boardy.NeedsDecision)
+		why := "the person closed it without choosing"
+		if failed != nil && !errors.As(failed, &QuestionDismissed{}) {
+			why = "the form could not be shown: " + failed.Error()
+		}
+		said = fmt.Sprintf("%s Q%d got no answer, because %s: nothing was chosen and it stays %s until they answer it in catch up. take no option for them and do not ask it again", id, q.ID, why, boardy.NeedsDecision)
+		head = "nothing was chosen; " + id + " waits on your answer in catch up"
+	} else if ticket, err := t.base.Board.Answer(id, q.ID, answer, cmp.Or(t.base.Board.Person, string(boardy.RolePerson))); err != nil {
+		said = fmt.Sprintf("the person answered %s Q%d with %q, and writing it to the ticket failed: %v", id, q.ID, answer, err)
+		head = "you answered, and writing it to " + id + " failed"
+	} else {
+		said = fmt.Sprintf("the person answered %s Q%d %q with option %s, and %s is %s again", id, q.ID, q.TLDR, answer, id, ticket.Status)
+		head = "you answered; " + id + " is " + string(ticket.Status) + " again"
 	}
-	ticket, err := t.base.Board.Answer(id, q.ID, answer, cmp.Or(t.base.Board.Person, string(boardy.RolePerson)))
-	if err != nil {
-		return fmt.Sprintf("the person answered %s Q%d with %q, and writing it to the ticket failed: %v", id, q.ID, answer, err)
-	}
-	return fmt.Sprintf("the person answered %s Q%d %q with %s, and %s is %s again", id, q.ID, q.TLDR, answer, id, ticket.Status)
+	return said, ShownAnswers(head, []PersonQuestion{asked}, replies)
 }
 
 func (t *SpawnTool) traceAnswer(ctx context.Context, asking string, request core.Request, timing requestTiming, attempts []core.Attempt, decision core.Decision, failed error) {

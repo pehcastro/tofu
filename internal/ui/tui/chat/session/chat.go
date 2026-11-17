@@ -6,8 +6,10 @@ import (
 
 	"charm.land/lipgloss/v2"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/cli/render"
 	"tofu/internal/models/transport"
+	"tofu/internal/ui/tui/composer/question"
 	"tofu/internal/ui/tui/look/look"
 	"tofu/internal/ui/tui/panels/progress"
 	"tofu/internal/ui/tui/panels/trace"
@@ -183,8 +185,11 @@ func (m *Model) render(index int) []string {
 	case Assistant:
 		return m.message(entry, look.AgentRef(orchestrator), entry.displayLines(), false)
 	case Tool:
-		if m.folds(index) {
+		switch {
+		case m.folds(index):
 			return m.groupLines(index)
+		case entry.asksPerson():
+			return indented(question.Transcript(entry.Detail, entry.Output, m.textWidth()))
 		}
 		return []string{continuation + m.toolLine(entry)}
 	case Note:
@@ -302,4 +307,19 @@ func (m *Model) toolLine(entry Entry) string {
 	}
 	room := max(m.textWidth()-render.Cells(right), 1)
 	return look.Style(look.Blue).Render(render.Pad(render.Fit(marker+oneLine(label), room), room)) + right
+}
+
+func (e Entry) asksPerson() bool {
+	return e.Kind == Tool && e.Head == loop.AskPersonToolName && e.Detail != ""
+}
+
+func (m *Model) AskAnswered(ids, answer string) bool {
+	for at := len(m.entries) - 1; at >= 0; at-- {
+		if entry := &m.entries[at]; entry.asksPerson() && question.Asks(entry.Detail, ids) {
+			entry.Output, entry.drawn = answer, drawn{}
+			m.revision++
+			return true
+		}
+	}
+	return false
 }

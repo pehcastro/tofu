@@ -179,7 +179,7 @@ func (t ticketTool) Definition() core.Tool {
 	case ticketNotPossible:
 		describe = "reports that your own ticket cannot be done as asked, which is your status for this work beside done: the reason and the options go to the person as a question, the ticket moves to needs-decision, and nobody but the person moves it on, the lead included. use it when the platform, the library or the code does not give what the ticket asks, never for work that is only hard, and then end your work"
 		properties["reason"] = board.StringParam(fmt.Sprintf("one to %d plain lines: what cannot be done as asked and how you know, such as a vendor doc, an upstream issue or a probe you ran", konst.BoardELI5LinesMost))
-		properties["options"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": fmt.Sprintf("%d to %d ways the person may go, one line each, such as the nearest thing that can be done or dropping the ask", konst.AskPersonOptionsLeast, konst.AskPersonOptionsMost)}
+		properties["options"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": fmt.Sprintf("%d to %d ways the person may go, one line each written as a short label of 1 to %d words, a colon, and what taking it means, such as \"Drop the ask: close the ticket and keep the current behaviour\"", konst.AskPersonOptionsLeast, konst.AskPersonOptionsMost, konst.AskPersonLabelWordsMost)}
 		properties["recommend"] = map[string]any{"type": "integer", "description": "the option you recommend, counted from 1"}
 		properties["why"] = board.StringParam("one line saying why you recommend it")
 		required = append(required, "reason", "options", "recommend", "why")

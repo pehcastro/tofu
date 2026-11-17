@@ -595,20 +595,23 @@ const (
 )
 
 const (
-	AskPersonWaitSeconds     = 120
-	AskPersonQuestionsMost   = 4
-	AskPersonOptionsLeast    = 2
-	AskPersonOptionsMost     = 4
-	AskPersonHeaderWordsMost = 4
-	UpgradeNoteBytes         = 6 << 10
-	AskPersonLabelWordsMost  = 5
-	BoardTLDRRunesMost       = 120
-	BoardELI5LinesMost       = 3
-	BoardReadersMost         = 8
-	BoardHookDepthMost       = 3
-	BoardCallerFilesMost     = 20000
-	BoardCallerLineRunesMost = 100
-	LeadCheckInReviewsMost   = 10
+	AskPersonWaitSeconds          = 300
+	AskPersonQuestionRunesMost    = 200
+	AskPersonDescriptionRunesMost = 200
+	AskPersonContextRunesMost     = 1500
+	AskPersonQuestionsMost        = 4
+	AskPersonOptionsLeast         = 2
+	AskPersonOptionsMost          = 4
+	AskPersonHeaderWordsMost      = 4
+	UpgradeNoteBytes              = 6 << 10
+	AskPersonLabelWordsMost       = 5
+	BoardTLDRRunesMost            = 120
+	BoardELI5LinesMost            = 3
+	BoardReadersMost              = 8
+	BoardHookDepthMost            = 3
+	BoardCallerFilesMost          = 20000
+	BoardCallerLineRunesMost      = 100
+	LeadCheckInReviewsMost        = 10
 
 	BoardAuditFreshDays        = 1
 	BoardAuditStaleDays        = 7

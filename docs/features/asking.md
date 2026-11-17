@@ -2,14 +2,21 @@
 title: Asking you
 description: When only you can settle something, the lead asks with options and a recommended one, and the work keeps going while you decide. Approvals for a tool call are a separate card with five answers.
 order: 16
-updated: 2026-10-13
+updated: 2026-11-16
 ---
 
-When a choice is yours, such as which of two libraries to use, a matter of
-taste, spending money or something that can't be undone, the lead asks you
-with the `ask_person` tool. You get a form above the composer: the question,
-up to four short options with a description each, the one the lead
-recommends, and a last row, **other**, for an answer in your own words.
+When a short choice is yours, such as which of two libraries to use, a name,
+a matter of taste, spending money or something that can't be undone, the
+lead asks you with the `ask_person` tool. You get a form above the composer:
+the question, its context, which says why it is asked and what each way
+leads to, up to four short options with a description each, the one the
+lead recommends, a row, **other**, for an answer in your own words, and a
+last row, **return**, that closes the form with nothing chosen.
+
+**A big decision is written, not asked.** A trade-off that needs
+paragraphs, or a plan to review, comes in the lead's reply as prose with
+numbered options, and you answer in words. A decision is asked once: the
+lead doesn't repeat a form's question or options in the chat.
 
 A tool call the gate is unsure about is a different card, an approval. The
 two never mix: a question is never a request to run something.
@@ -18,7 +25,7 @@ two never mix: a question is never a request to run something.
 
 **In auto, a question never stops the work.** The lead hears at once that
 it asked and keeps going on whatever doesn't depend on the answer. With no
-answer in `askPersonWaitSeconds`, 120 by default, the lead is told none
+answer in `askPersonWaitSeconds`, 300 by default, the lead is told none
 came and picks nothing for you, and the form stays open and says no answer
 yet: an answer you give later still reaches the lead.
 
@@ -46,9 +53,15 @@ written with mode `enforced`, since their verdict decides, and the outcome
 reads `taken_in_auto`.
 
 **A recommendation is always there.** Every question but a free-text one
-carries the option the lead would pick. When you press `Esc`, when the turn
-stops, or when nobody can be asked, the lead takes that option, says which,
-and carries on. A timeout is not one of these: it is no answer.
+carries the option the lead would pick. When the turn stops, or when nobody
+can be asked, the lead takes that option, says which, and carries on.
+Choosing **return** or a timeout is not one of these: nothing is chosen, the
+question stays open, and the lead takes no option for you.
+
+**A ticket reported not possible is asked once.** When a sub-agent reports
+its ticket not possible, tofu puts the decision to you as the same form: the
+reason and the recommended way with why as its context, and each way to go
+as a short label with what it means beside it. The lead is told it is already with you.
 
 **It is offered only where someone can answer.** `ask_person` doesn't exist
 in `tofu run`, in a turn a cron job started, or in a sub-agent. A
@@ -61,13 +74,19 @@ why` shows each question the lead put to you.
 ## Answering a question
 
 A call carries one to four questions, each `choice`, `multi`, `text` or
-`yesno`. In the form:
+`yesno`. A question runs at most 200 characters, its context 1500 and each
+option's description 200; one over a limit goes back to the lead with the
+limit named, never cut. In the form:
 
 - `Up` and `Down` move; a digit or `Enter` chooses.
 - `Space` toggles an option of a `multi` question.
 - `Tab` goes to the next question.
 - On **other**, type the answer in the chat and press `Enter`.
-- `Esc` dismisses the form, and the recommended options stand.
+- `Esc` does nothing, so a stray key never answers for you.
+- **return** closes the form with nothing chosen.
+
+Once answered, the chat keeps the question, its context, every option with
+its description, the recommended one and the one you chose.
 
 Options that carry a preview show side by side with the focused option's preview, and stack one under another when the screen is too narrow. A note typed in the chat goes with the option chosen.
 
@@ -80,7 +99,7 @@ tofu settings set gatePrompt ask
 To give yourself longer in auto:
 
 ```sh
-tofu settings set askPersonWaitSeconds 300
+tofu settings set askPersonWaitSeconds 600
 ```
 
 ## Answering an approval

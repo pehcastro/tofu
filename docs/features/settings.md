@@ -41,7 +41,8 @@ runs and shows in the chat with its verdict, and every decision is a row
 setting always waits for you, so it can never turn its own gate off. When
 Jev can't answer, the call is refused with the reason rather than run on a
 guess. A question the lead asks you with options doesn't stop the work
-either: its recommended option stands after `askPersonWaitSeconds`. See
+either: with no answer in `askPersonWaitSeconds`, 300 by default, the lead
+is told none came, nothing is chosen for you, and the question stays open. See
 [Asking you](/docs/features/asking).
 
 **Asking is one setting away.** `tofu settings set gatePrompt ask` makes a

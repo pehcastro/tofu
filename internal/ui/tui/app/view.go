@@ -43,6 +43,8 @@ const (
 	welcomeNoticeRows = 2
 	shimmerCells      = 4
 	shimmerStep       = 2
+
+	transcriptShareOfAsk = 3
 )
 
 func tabNames() []string { return []string{"chat", "sub-agents", "file edits", "shells"} }
@@ -201,7 +203,7 @@ func (a *App) body() string {
 		a.view.Notice = cmp.Or(a.statusWatch.headsUp, shimmered)
 		a.view.Question = nil
 		if len(a.questions) > 0 {
-			a.view.Question = a.questions[0].Lines(a.width, a.options.Now())
+			a.view.Question = a.questions[0].Lines(a.width, rows-rows/transcriptShareOfAsk, len(a.questions)-1, a.options.Now())
 		}
 		if a.intro.shown {
 			a.view.Welcome, a.view.Notice = a.welcome, ""

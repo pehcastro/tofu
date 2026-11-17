@@ -271,7 +271,7 @@ func (m Managed) heldForThePerson(ticket Ticket, actor, doing string) error {
 	if err != nil || !held {
 		return err
 	}
-	return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("%s reported it not possible (%s), so Q%d %q is the person's to answer, and only the person %s until then: put Q%d to the person with its reason and options, and they answer it in catch up, in the desk or under it in %s, which tofu boardy catchup --answers applies", cmp.Or(said.Agent, said.Actor), said.Text, q.ID, q.TLDR, doing, q.ID, CatchupFileName)}
+	return RefusedError{Ticket: ticket.ID, Why: fmt.Sprintf("%s reported it not possible (%s), so Q%d %q is the person's to answer, and only the person %s until then. it is already put to them: they answer it in the form, in catch up, in the desk or under it in %s, which tofu boardy catchup --answers applies. do not ask it again", cmp.Or(said.Agent, said.Actor), said.Text, q.ID, q.TLDR, doing, CatchupFileName)}
 }
 
 func decidable(ticket Ticket) error {

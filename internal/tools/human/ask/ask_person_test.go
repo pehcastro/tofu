@@ -69,6 +69,9 @@ func TestAskPersonRefusesAQuestionSetOutsideTheShape(t *testing.T) {
 		{"recommended below zero", `{"questions":[` + question("x", "h", "choice", two, `,"recommended":-1`) + `]}`, "recommended"},
 		{"an unknown type", `{"questions":[` + question("x", "h", "poll", two, `,"recommended":0`) + `]}`, "type"},
 		{"text with options", `{"questions":[` + question("x", "h", "text", two, "") + `]}`, "text"},
+		{"a question over the cap", `{"questions":[{"id":"x","header":"h","question":"` + strings.Repeat("é", 201) + `","type":"text"}]}`, "201 characters, and a question is at most 200"},
+		{"a description over the cap", `{"questions":[` + question("x", "h", "choice", `{"label":"a","description":"`+strings.Repeat("d", 201)+`"},`+option("b"), `,"recommended":0`) + `]}`, "201 characters, and a description is at most 200"},
+		{"context over the cap", `{"questions":[{"id":"x","header":"h","question":"q?","context":"` + strings.Repeat("c", 1501) + `","type":"text"}]}`, "1501 characters, and a context is at most 1500"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			tool := ask.AskPerson{Person: personSays(loop.PersonAllowedOnce, nil), Auto: func() bool { return false }}
@@ -255,12 +258,11 @@ func TestAskPersonThroughTheFormSaysWhatWasChosenTypedAndSkipped(t *testing.T) {
 
 func TestAskPersonFormOutcomesWhenNobodyChooses(t *testing.T) {
 	for _, c := range []struct {
-		name    string
-		err     error
-		outcome string
+		name, outcome, chosen, says string
+		err                         error
 	}{
-		{"esc", loop.QuestionDismissed{}, "cancelled"},
-		{"a client without questions", loop.QuestionUndelivered{Why: "the client did not declare questions"}, "undelivered"},
+		{"return", "cancelled", `"chosen":[]`, "stays open", loop.QuestionDismissed{}},
+		{"a client without questions", "undelivered", `"chosen":["net/http"]`, "recommended", loop.QuestionUndelivered{Why: "the client did not declare questions"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			form := func(context.Context, []loop.PersonQuestion, time.Duration) ([]loop.PersonReply, error) {
@@ -268,8 +270,11 @@ func TestAskPersonFormOutcomesWhenNobodyChooses(t *testing.T) {
 			}
 			tool := ask.AskPerson{Person: personSays(loop.PersonAllowedOnce, nil), Auto: func() bool { return false }}
 			result, err := tool.Run(loop.WithPersonForm(t.Context(), form), json.RawMessage(twoLibraries))
-			if err != nil || !strings.Contains(result.Content, `"outcome":"`+c.outcome+`"`) || !strings.Contains(result.Content, `"chosen":["net/http"]`) {
-				t.Fatalf("got %q, %v, want %s with the recommended standing", result.Content, err, c.outcome)
+			if err != nil || !strings.Contains(result.Content, `"outcome":"`+c.outcome+`"`) || !strings.Contains(result.Content, c.chosen) || !strings.Contains(result.Content, c.says) {
+				t.Fatalf("got %q, %v, want %s with %s and saying %q", result.Content, err, c.outcome, c.chosen, c.says)
+			}
+			if c.outcome == "cancelled" && strings.Contains(result.Content, "recommended") {
+				t.Fatalf("a closed question names the recommended option to the lead: %q", result.Content)
 			}
 		})
 	}
@@ -309,7 +314,7 @@ func TestAskPersonNeverTakesAYesThePersonDidNotGive(t *testing.T) {
 		err     error
 		chosen  string
 	}{
-		{"esc", nil, loop.QuestionDismissed{}, ""},
+		{"return", nil, loop.QuestionDismissed{}, ""},
 		{"nobody to ask", nil, loop.QuestionUndelivered{Why: "no client"}, ""},
 		{"skipped", []loop.PersonReply{{ID: "write", Chosen: []string{}}}, nil, ""},
 		{"yes", []loop.PersonReply{{ID: "write", Chosen: []string{"yes"}}}, nil, "yes"},

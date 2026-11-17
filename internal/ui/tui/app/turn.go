@@ -12,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"tofu/internal/agent/commands"
+	"tofu/internal/agent/loop"
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/host"
 	"tofu/internal/konst"
@@ -301,6 +302,7 @@ func (a *App) questionKey(key string) bool {
 	case question.Submitted:
 	}
 	a.questions = a.questions[1:]
+	a.view.AskAnswered(form.Said(action))
 	if a.options.Host != nil {
 		a.options.Host.AnswerQuestion(form.ID, answer, answeredHere)
 	}
@@ -338,6 +340,7 @@ func drawChat(view *session.Model, event Event, status string) {
 	switch event.Kind {
 	case EventTask:
 		switch {
+		case event.Origin.Shown != "" && view.AskAnswered(event.Origin.Name, event.Text):
 		case event.Origin.Shown != "":
 			view.Append(session.Entry{Kind: session.Note, Body: event.Origin.Shown})
 		case (event.Origin.Sub.Answer() || event.Origin.Sub == llm.SourceNoAnswer) && event.Origin.Name != "":
@@ -356,7 +359,11 @@ func drawChat(view *session.Model, event Event, status string) {
 			view.Spawn(event.ID)
 			return
 		}
-		view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: event.Detail, Card: event.Card, Group: event.Group, Started: event.At})
+		detail := event.Detail
+		if event.Tool == loop.AskPersonToolName {
+			detail = string(event.Args)
+		}
+		view.Append(session.Entry{Kind: session.Tool, ID: event.ID, Head: event.Tool, Body: event.Text, Detail: detail, Card: event.Card, Group: event.Group, Started: event.At})
 	case EventToolResult:
 		if event.Outcome == host.ToolSkipped {
 			status = feed.StateSkipped.String()

@@ -19,7 +19,7 @@ Interaction
     gatePrompt                   auto                default
     gateAskWaitSeconds           180                 default
     gateAskTimeout               refuse              default
-    askPersonWaitSeconds         120                 default
+    askPersonWaitSeconds         300                 default
   ● readBeforeEdit               false               global
     autoUpdate                   true                default
 

@@ -27,24 +27,15 @@ func handedBack(reply string) string {
 	return ""
 }
 
-func pollNote(open []string) string {
-	return "your " + AskPersonToolName + " questions are still open, and the person can answer them after this turn:\n" + strings.Join(open, "\n") +
-		"\nend your report with them as a poll: each question and its options, saying it has no answer yet. take no option for the person and do nothing that depends on one."
-}
-
 func unmetNote(unmet []string) string {
 	return "the turn does not end here, because " + done.Name + " reads these acceptance lines as no:\n" + strings.Join(unmet, "\n") +
 		"\nthis is your one grace turn: fix what each check found, run the check again, and call " + done.Name + " with the new call id before you end. " +
 		"a line you cannot meet is reported as unmet, never as met."
 }
 
-func handbackNote(closing string, tools Registry) string {
-	ask := "then ask that one question, and the turn ends."
-	if _, offered := tools.byName[AskPersonToolName]; offered {
-		ask = "then put that one question to the person with " + AskPersonToolName + ", with its options and the one you recommend, and keep working."
-	}
+func handbackNote(closing string) string {
 	return "you ended the turn by handing the person a step: \"" + closing + "\". " +
 		"if you can take that step yourself, take it now and report what came of it, rather than offering it. " +
-		"end on a question only when nothing but the person can settle it: spending money, a matter of taste, something that cannot be undone, " +
-		"or access you do not have. " + ask
+		"when only the person can settle it, such as spending money, a matter of taste, something that cannot be undone, or access you do not have, " +
+		"your reply already put it to them: end the turn now in one line saying it waits on them, without repeating the question or its options."
 }
