@@ -5,7 +5,7 @@ Library · 4 layers                                             ✓ nothing refu
   models         21
   subscriptions  2
   questions      27
-  docs           47 pages · 142 index entries
+  docs           49 pages · 144 index entries
   proxy          rtk · library
 
 layers
@@ -15,7 +15,7 @@ layers
   project   ~/project/.tofu
 
 domains · the binary
-  ✓ dev      148 rules · 4 skills · 10 agents · 42 references
+  ✓ dev      148 rules · 6 skills · 10 agents · 42 references
   ✓ general  38 rules · 5 thresholds · 2 agents · 4 references
   ✓ qa       10 rules · 2 skills · 1 agent · 5 references
   ✓ shell    1 threshold

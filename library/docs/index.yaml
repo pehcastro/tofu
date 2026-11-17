@@ -234,6 +234,10 @@
   do: /restructure in the app, then reshape the tree it proposes in your own words
   check: git status
   topic: restructure
+- ask: review my change for what it breaks
+  do: /code-review in the app, or /code-review HEAD~1..HEAD for one range
+  check: git status
+  topic: code-review
 - ask: store the typesafe key the gate needs
   do: tofu login classifier typesafe
   check: tofu doctor

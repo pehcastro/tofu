@@ -13,6 +13,10 @@ exit 0
         "do": "tofu settings set theme Nord"
       },
       {
+        "text": "review my change for what it breaks",
+        "do": "/code-review in the app, or /code-review HEAD~1..HEAD for one range"
+      },
+      {
         "text": "let a session change tickets on the board",
         "do": "tofu boardy manager add <session>"
       },
@@ -59,6 +63,10 @@ exit 0
       {
         "text": "Calibration",
         "do": "tofu docs calibration"
+      },
+      {
+        "text": "Reviewing a change",
+        "do": "tofu docs code-review"
       },
       {
         "text": "Commands in the app",

@@ -1,9 +1,11 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                          108 matches
+Docs · "change the colours"                                          110 matches
 
   change the colours
     → tofu settings set theme Nord
+  review my change for what it breaks
+    → /code-review in the app, or /code-review HEAD~1..HEAD for one range
   let a session change tickets on the board
     → tofu boardy manager add <session>
   change when a scheduled job fires
@@ -28,6 +30,8 @@ Docs · "change the colours"                                          108 matche
     → tofu docs browser
   Calibration
     → tofu docs calibration
+  Reviewing a change
+    → tofu docs code-review
   Commands in the app
     → tofu docs commands
   Context
