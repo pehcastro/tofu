@@ -76,3 +76,13 @@ Type `/restructure` in the composer, or run it headless:
     git status
 
 shows the tree unchanged after the proposal.
+
+## Undo it
+
+The proposal moves no file, so it has nothing to undo; say no, or reshape
+it, and nothing has changed. After a yes, the plan is what to take back: a
+markdown plan is a file the turn wrote, and `/undo` puts back every file that
+turn changed; see `tofu docs commands`. An epic and its tickets live on the
+board, not in the project, so drop each one instead:
+
+    tofu boardy move DEMO-1 dropped

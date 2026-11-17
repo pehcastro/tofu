@@ -46,3 +46,10 @@ or one markdown plan when there is no board. It still moves nothing.
 | --- | --- |
 | `/restructure` | propose a target tree for the project, in text |
 | `tofu run --dir . --command restructure` | the same turn, headless |
+
+## Undo
+
+The proposal moves no file, so there is nothing to undo until you say yes.
+A markdown plan is a file the turn wrote, and `/undo` puts it back. An epic
+and its tickets live on the board, so drop each one with
+`tofu boardy move <ID> dropped`.
