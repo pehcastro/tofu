@@ -74,11 +74,27 @@ candidate that is at its limit, has no account with room, or whose window
 cannot hold the conversation is skipped with its reason. With nothing set,
 the work stops with one sentence naming the fields to set.
 
-**Waiting resumes by itself.** When the work stops at a limit, the screen
-says when the turn resumes, from the window's reset time, or the reply's
-`Retry-After`, or 10 minutes when neither says. At that time the turn goes
-on with no input. Typing goes on at once with what you typed, and `esc`
-cancels the wait.
+**Waiting resumes by itself.** When the work stops at a limit, one status
+line above the composer says when, and updates in place rather than adding
+rows to the chat:
+
+| State | The line |
+|---|---|
+| waiting | `Claude subscription is out of usage until Wed 03:00. Auto resume in 6h 10m` |
+| trying | `Resuming on your Claude subscription...` |
+| still refused | `Your reset was scheduled for 03:00, Anthropic has still not released it, trying again in 4m 12s, this is the 2nd try.` |
+| given up | `Your Claude subscription did not reset in the scheduled time, try again later or check your Anthropic usage.` |
+
+The reset time comes from the window, or the reply's `Retry-After`, or 10
+minutes when neither says, and the first try goes out 3 minutes past it. The
+countdown shows hours and minutes, then minutes, then minutes and seconds
+under 10 minutes. A refused try waits 5 minutes for the next, and an hour
+past the reset tofu stops trying. On success the line goes away and the turn
+goes on. Typing goes on at once with what you typed, and `esc` cancels the
+wait. The account is named by its source: `claude-sub` is the Claude
+subscription, `codex-sub` the Codex subscription. Every wait and try, who
+decided it, why, and the vendor's raw reply are rows in
+`tofu session trace <session> --grep limit`.
 
 **A refusal says what to do.** When a vendor refuses for billing, sign-in,
 an organization rule or an unknown model, the chat shows one sentence: which

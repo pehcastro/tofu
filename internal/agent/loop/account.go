@@ -64,11 +64,13 @@ func (r *RateLimited) Error() string {
 	}
 	said := "every " + r.Wire + " account this turn could move to answered with its rate limit (" + strings.Join(tried, ", ") +
 		"), and the soonest resets at " + r.ResetAt.Format(time.RFC3339)
+	technical := r.Cause.Error()
 	var refused *transport.Error
 	if errors.As(r.Cause, &refused) {
 		resetting := *refused
 		resetting.ResetAt = r.ResetAt
 		said = resetting.Sentence()
+		technical = strings.Replace(technical, refused.Sentence()+"\n", "", 1)
 		if len(tried) > 1 {
 			said += " Every account this turn could move to is limited: " + strings.Join(tried, ", ") + "."
 		}
@@ -76,7 +78,7 @@ func (r *RateLimited) Error() string {
 	if r.Continuity != "" {
 		said += " " + strings.ToUpper(r.Continuity[:1]) + r.Continuity[1:]
 	}
-	return said + "\n" + r.Cause.Error()
+	return said + "\n" + technical
 }
 
 func (r *RateLimited) Unwrap() error { return r.Cause }

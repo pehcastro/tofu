@@ -191,7 +191,14 @@ func (s *items) translate(event Event, now time.Time) []outgoing {
 		return append(out, kept("decision", &DecisionMade{Identity: id, Judgement: judgementOf(*event.Decision), Point: point, Tool: event.Decision.Tool, OverridesRule: event.Decision.OverridesRule, Call: event.Decision.Call,
 			Provider: event.Decision.Provider, Model: event.Decision.Model, DurationMS: event.Decision.DurationMS, Judge: event.Judge, At: now}))
 	case EventNote:
-		return append(out, notify("note", s.said(id, event, SaidNote)))
+		if event.Limit == nil {
+			return append(out, notify("note", s.said(id, event, SaidNote)))
+		}
+		if event.Text == "" {
+			return out
+		}
+		event.ID = session.EventIDFor(s.turn, "limit")
+		return append(out, merged("note", "limit", s.said(id, event, SaidNote)))
 	case EventGateOff:
 		return append(out, notify("note", s.said(id, event, SaidGateOff)))
 	case EventFailure:

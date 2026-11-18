@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"tofu/internal/agent/loop"
@@ -107,6 +108,7 @@ type Event struct {
 	Group        string
 	GroupSummary *GroupSummary
 	Judge        *JudgeStatus `json:",omitempty"`
+	Limit        *LimitWait   `json:",omitempty"`
 	from         *Host
 }
 
@@ -353,3 +355,93 @@ const (
 	NeverHere
 	AllowedAWhile
 )
+
+type LimitState string
+
+const (
+	LimitWaiting  LimitState = "waiting"
+	LimitRefused  LimitState = "refused"
+	LimitResuming LimitState = "resuming"
+	LimitGaveUp   LimitState = "gave_up"
+	LimitCleared  LimitState = "cleared"
+)
+
+type LimitWait struct {
+	State   LimitState
+	Source  string
+	ResetAt time.Time
+	TryAt   time.Time
+	Tries   int
+}
+
+type LimitPart struct {
+	Text  string
+	Value bool
+}
+
+func (w LimitWait) Parts(now time.Time) []LimitPart {
+	name, subscription := strings.CutSuffix(w.Source, "-sub")
+	named := strings.ToUpper(name[:1]) + name[1:]
+	account, vendor := named+" account", named
+	if subscription {
+		account = named + " subscription"
+	}
+	switch name {
+	case "claude":
+		vendor = "Anthropic"
+	case "codex":
+		vendor = "OpenAI"
+	}
+	said := func(text string) LimitPart { return LimitPart{Text: text} }
+	value := func(text string) LimitPart { return LimitPart{Text: text, Value: true} }
+	switch w.State {
+	case LimitWaiting:
+		return []LimitPart{said(account + " is out of usage until "), value(w.ResetAt.Local().Format("Mon 15:04")), said(". Auto resume in "), value(countdown(w.TryAt.Sub(now)))}
+	case LimitResuming:
+		return []LimitPart{said("Resuming on your " + account + "...")}
+	case LimitRefused:
+		return []LimitPart{said("Your reset was scheduled for "), value(w.ResetAt.Local().Format("15:04")), said(", " + vendor + " has still not released it, trying again in "),
+			value(countdown(w.TryAt.Sub(now))), said(", this is the "), value(ordinal(w.Tries)), said(" try.")}
+	case LimitGaveUp:
+		return []LimitPart{said("Your " + account + " did not reset in the scheduled time, try again later or check your " + vendor + " usage.")}
+	case LimitCleared:
+		return nil
+	}
+	panic("host: unknown limit state " + string(w.State))
+}
+
+func (w *LimitWait) note(now time.Time) Event {
+	var said strings.Builder
+	for _, part := range w.Parts(now) {
+		said.WriteString(part.Text)
+	}
+	return Event{Kind: EventNote, Text: said.String(), Limit: w}
+}
+
+func countdown(left time.Duration) string {
+	left = max(left, 0)
+	hours, minutes, seconds := int(left/time.Hour), int(left%time.Hour/time.Minute), int(left%time.Minute/time.Second)
+	switch {
+	case hours > 0:
+		return strconv.Itoa(hours) + "h " + strconv.Itoa(minutes) + "m"
+	case minutes >= konst.LimitSecondsUnderMinutes:
+		return strconv.Itoa(minutes) + "m"
+	case minutes > 0:
+		return strconv.Itoa(minutes) + "m " + strconv.Itoa(seconds) + "s"
+	}
+	return strconv.Itoa(seconds) + "s"
+}
+
+func ordinal(n int) string {
+	suffix := "th"
+	switch {
+	case n%100 >= 11 && n%100 <= 13:
+	case n%10 == 1:
+		suffix = "st"
+	case n%10 == 2:
+		suffix = "nd"
+	case n%10 == 3:
+		suffix = "rd"
+	}
+	return strconv.Itoa(n) + suffix
+}

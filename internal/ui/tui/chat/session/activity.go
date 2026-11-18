@@ -8,9 +8,11 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	roster "tofu/internal/agent/subagents"
 	"tofu/internal/cli/render"
+	"tofu/internal/host"
 	"tofu/internal/ui/tui/look/look"
 	"tofu/internal/ui/tui/panels/progress"
 	"tofu/internal/ui/tui/panels/subagent"
@@ -176,9 +178,34 @@ func (m *Model) activityLine() string {
 	return render.Fit(margin+strings.Join(parts, look.Muted(foldSeparator)), m.width)
 }
 
+func (m *Model) Limit(wait *host.LimitWait) {
+	m.limit = wait
+	if wait.State == host.LimitCleared {
+		m.limit = nil
+	}
+}
+
+func (m *Model) limitLines() []string {
+	var line strings.Builder
+	for _, part := range m.limit.Parts(m.now()) {
+		style := look.Style(look.Blue)
+		if part.Value {
+			style = look.Style(look.Amber)
+		}
+		line.WriteString(style.Render(part.Text))
+	}
+	lines := strings.Split(ansi.Wrap(line.String(), max(m.width-len(margin)-composerPadX, 1), ""), "\n")
+	for index := range lines {
+		lines[index] = margin + lines[index]
+	}
+	return lines
+}
+
 func (m *Model) turnLines() []string {
 	var lines []string
-	if line := m.requestLine(); line != "" || m.Notice != "" {
+	if m.limit != nil {
+		lines = m.limitLines()
+	} else if line := m.requestLine(); line != "" || m.Notice != "" {
 		lines = append(lines, m.withNotice(cmp.Or(line, margin)))
 	}
 	if m.AskedToStop() {
@@ -444,6 +471,9 @@ func (m *Model) Requesting() {
 
 func (m *Model) Returned() {
 	m.leadThinks = false
+	if m.limit != nil && m.limit.State == host.LimitResuming {
+		m.limit = nil
+	}
 	if !m.inFlight() {
 		return
 	}

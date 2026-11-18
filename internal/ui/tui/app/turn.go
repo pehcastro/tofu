@@ -670,10 +670,13 @@ func (a *App) absorb(event Event) {
 	case EventToolResult:
 		a.answered(event, at)
 	case EventNote:
-		if event.Origin.Kind == host.OriginCron {
+		switch {
+		case event.Limit != nil:
+			a.view.Limit(event.Limit)
+		case event.Origin.Kind == host.OriginCron:
 			a.cronFired(event.Detail)
 			a.firesDrawn = append(a.firesDrawn, event.Detail)
-		} else {
+		default:
 			drawChat(&a.view, event, "")
 		}
 		a.countCrons()

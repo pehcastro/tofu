@@ -1,6 +1,7 @@
 package host
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -23,6 +24,7 @@ type subAccount struct {
 	id           int64
 	before       []core.Decision
 	limitedUntil time.Time
+	reportsReset time.Time
 	spent        bool
 	asked        []core.Request
 }
@@ -97,7 +99,7 @@ func (e *limitedSubscriptions) Prepare(start Turn, hooks Hooks) (Prepared, error
 			return loop.Account{}, false, nil
 		},
 		Resets: func(_ context.Context, pinned loop.Account) (time.Time, bool) {
-			return held(pinned.ID).limitedUntil, true
+			return cmp.Or(held(pinned.ID).reportsReset, held(pinned.ID).limitedUntil), true
 		},
 	}
 	prepared.Account = func(id int64) TurnAccount {
@@ -209,28 +211,50 @@ func TestLimitOnEveryAccountMovesToTheContinuityModelInTheSameTurn(t *testing.T)
 	}
 }
 
+func (r *limitRun) stillOneRequestEach(after time.Duration) {
+	r.t.Helper()
+	time.Sleep(after)
+	for _, account := range r.engine.accounts {
+		if asked := len(account.requests()); asked != 1 {
+			r.t.Fatalf("account %d was asked %d times %s after its limit, want once: no try goes out before the grace", account.id, asked, after)
+		}
+	}
+	for _, frame := range r.seen {
+		for _, leaked := range []string{"429", "rate_limit_error", "Continuity is not set", "Ctrl+L"} {
+			if strings.HasPrefix(frame, "note ") && strings.Contains(frame, leaked) {
+				r.t.Fatalf("the chat note %s shows %q", frame, leaked)
+			}
+		}
+	}
+	r.c.ask("4", "turn.stop", `{"session":"`+r.session+`","turn":"`+r.turn+`"}`)
+	r.until("turn.completed", "")
+}
+
 func TestResumeAtTheResetWithNoInputAndEscCancelsTheWait(t *testing.T) {
-	t.Run("the turn resumes by itself", func(t *testing.T) {
+	t.Run("a reset ahead waits the grace past it", func(t *testing.T) {
 		r := startLimited(t, &limitedSubscriptions{accounts: []*subAccount{limitedFor(1, 1500*time.Millisecond), limitedFor(2, time.Hour)}})
 		r.send()
-		resumes := r.until("note", "resumes by itself at")
-		if !strings.Contains(string(resumes.Params), "Continuity is not set") {
-			t.Fatalf("the wait note %s does not say continuity is not set", resumes.Params)
+		r.until("note", "Claude subscription is out of usage until")
+		r.stillOneRequestEach(2500 * time.Millisecond)
+	})
+	t.Run("a reset already past waits the grace and counts the try", func(t *testing.T) {
+		stale := []*subAccount{limitedFor(1, time.Hour), limitedFor(2, time.Hour)}
+		for _, account := range stale {
+			account.reportsReset = time.Now().Add(-10 * time.Minute)
 		}
-		r.until("note", "limit has reset")
-		r.until("turn.completed", `"status":"finished"`)
-		asked := r.engine.accounts[0].requests()
-		last := asked[len(asked)-1].Messages
-		if !slices.Equal(r.engine.wires(), []string{"anthropic", "anthropic"}) || last[len(last)-1].Content != resumedTask {
-			t.Fatalf("wires %v, last message %q: want anthropic twice and the resume sent as %q", r.engine.wires(), last[len(last)-1].Content, resumedTask)
+		r := startLimited(t, &limitedSubscriptions{accounts: stale})
+		r.send()
+		refused := r.until("note", "this is the 1st try.")
+		if !strings.Contains(string(refused.Params), "Anthropic has still not released it, trying again in 3m 0s") {
+			t.Fatalf("the refused line %s does not count down the 3 minute grace", refused.Params)
 		}
+		r.stillOneRequestEach(2 * time.Second)
 	})
 	t.Run("esc cancels the wait", func(t *testing.T) {
 		r := startLimited(t, &limitedSubscriptions{accounts: []*subAccount{limitedFor(1, time.Hour), limitedFor(2, time.Hour)}})
 		r.send()
-		r.until("note", "resumes by itself at")
+		r.until("note", "Auto resume in 1h 2")
 		r.c.ask("4", "turn.stop", `{"session":"`+r.session+`","turn":"`+r.turn+`"}`)
-		r.until("note", "was cancelled")
 		r.until("turn.completed", "")
 		if wires := r.engine.wires(); len(wires) != 1 {
 			t.Fatalf("the turn prepared %v after esc, want nothing more", wires)
@@ -239,7 +263,7 @@ func TestResumeAtTheResetWithNoInputAndEscCancelsTheWait(t *testing.T) {
 	t.Run("new input ends the wait and becomes the task", func(t *testing.T) {
 		r := startLimited(t, &limitedSubscriptions{accounts: []*subAccount{limitedFor(1, time.Hour), limitedFor(2, time.Hour)}})
 		r.send()
-		r.until("note", "resumes by itself at")
+		r.until("note", "Auto resume in 1h 2")
 		r.engine.accounts[0].mu.Lock()
 		r.engine.accounts[0].limitedUntil = time.Time{}
 		r.engine.accounts[0].mu.Unlock()

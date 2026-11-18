@@ -137,6 +137,7 @@ type Model struct {
 	stopAsked          int
 	stopAskedUntil     time.Time
 	waiting            time.Time
+	limit              *host.LimitWait
 	asks               []string
 	requested          time.Time
 	answered           time.Time
@@ -564,6 +565,9 @@ func (m *Model) Start() {
 	if !m.started {
 		m.dropGreeting()
 		m.started = true
+	}
+	if m.limit != nil && m.limit.State != host.LimitResuming {
+		m.limit = nil
 	}
 	at := m.now()
 	m.entered, m.turns, m.requestID = at, m.turns+1, ""

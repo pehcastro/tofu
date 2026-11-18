@@ -37,9 +37,14 @@ settings, in Settings > Models & roles, make it:
 - `continueOnAPIModel`: a model paid by your key, tried last
 
 A model at its limit, with no account left, or with a window too small for
-the conversation is skipped with its reason. With none set, the work stops
-with one sentence naming the fields, then waits for the reset and resumes
-by itself; typing resumes at once and `esc` cancels the wait.
+the conversation is skipped with its reason. With none set, the work waits
+for the reset and resumes by itself, on one status line above the composer
+that updates in place: `Claude subscription is out of usage until Wed 03:00.
+Auto resume in 6h 10m`. The first try goes out 3 minutes past the reset.
+When the vendor still refuses, the line says so, counts the tries and tries
+again every 5 minutes; an hour past the reset it stops and says to check
+your usage with the vendor. On success the line goes away. Typing resumes at
+once and `esc` cancels it; `tofu session trace --grep limit` shows each try.
 
 Every reading says where it came from and when:
 

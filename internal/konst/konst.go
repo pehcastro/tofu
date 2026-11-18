@@ -583,6 +583,10 @@ const (
 	QuotaNearLimitCloseSeconds = 60
 	QuotaNearLimitAt           = 0.99
 	QuotaNearLimitAtSeconds    = 30
+	LimitGraceMinutes          = 3
+	LimitRetryMinutes          = 5
+	LimitGiveUpMinutes         = 60
+	LimitSecondsUnderMinutes   = 10
 )
 
 const (

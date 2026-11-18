@@ -24,6 +24,7 @@ import (
 	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	llm "tofu/internal/models/llm/core"
+	"tofu/internal/models/transport"
 	"tofu/internal/platform/fs"
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
@@ -87,18 +88,29 @@ type limitReached struct {
 	source string
 }
 
-func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
-	h.runFrom(ctx, pick, task, live, false)
+type limitTries struct {
+	sent    int
+	refused int
 }
 
-func (h *Host) runFrom(ctx context.Context, pick Pick, task string, live Live, resumed bool) {
-	reached := h.lead(ctx, pick, task, live, resumed)
-	if reached.RateLimited == nil {
-		return
-	}
-	if task, origin, resumes := h.waitForTheReset(ctx, reached, live); resumes {
+func (h *Host) run(ctx context.Context, pick Pick, task string, live Live) {
+	reached := h.lead(ctx, pick, task, live, false)
+	var tries limitTries
+	for reached.RateLimited != nil {
+		next, origin, resumes := h.waitForTheReset(ctx, &tries, reached, live)
+		if !resumes {
+			return
+		}
 		live.Origin = origin
-		h.runFrom(ctx, pick, task, live, true)
+		h.mu.Lock()
+		if last := len(h.carried) - 1; last >= 0 && h.carried[last].Role == llm.RoleUser && h.carried[last].Origin.Source == llm.SourceContinue {
+			h.carried = h.carried[:last]
+		}
+		h.mu.Unlock()
+		reached = h.lead(ctx, pick, next, live, true)
+	}
+	if tries.sent > 0 {
+		h.trace("limit: try "+strconv.Itoa(tries.sent)+" went out and the turn ran on without a limit, so tofu stops waiting", nil)
 	}
 }
 
@@ -435,6 +447,9 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 			if prepared.Account != nil {
 				reached.source = cmp.Or(prepared.Account(row.Account).Source, pick.Wire)
 			}
+			if refused := (*transport.Error)(nil); errors.As(err, &refused) {
+				reached.source = cmp.Or(refused.Account.Source, reached.source)
+			}
 		case err != nil:
 			status = StatusFailed
 			fail(err)
@@ -599,22 +614,49 @@ func announcingMoves(accounts loop.Accounts, announce func(loop.Moved)) loop.Acc
 	return accounts
 }
 
-func (h *Host) waitForTheReset(ctx context.Context, reached limitReached, live Live) (string, llm.Origin, bool) {
-	resumesAt := reached.ResetAt.Local().Format(time.DateTime) + ", in " + reached.ResetAt.Sub(h.now()).Round(time.Second).String()
-	said, _, _ := strings.Cut(reached.Error(), "\n")
-	live.Emit(Event{Kind: EventNote, Text: said + "\nevery " + reached.source + " account is at its limit, so the turn resumes by itself at " + resumesAt +
-		": type to go on now, or press esc to cancel"})
-	timer := time.NewTimer(reached.ResetAt.Sub(h.now()))
+func (h *Host) waitForTheReset(ctx context.Context, tries *limitTries, reached limitReached, live Live) (string, llm.Origin, bool) {
+	now, source, reply := h.now(), reached.source, strings.ReplaceAll(reached.Cause.Error(), "\n", " / ")
+	clock := func(at time.Time) string { return at.Local().Format(time.TimeOnly) }
+	state, tryAt, scheduled := LimitWaiting, reached.ResetAt.Add(konst.LimitGraceMinutes*time.Minute), clock(reached.ResetAt)
+	show := func(state LimitState) {
+		live.Emit((&LimitWait{State: state, Source: source, ResetAt: reached.ResetAt, TryAt: tryAt, Tries: tries.refused}).note(h.now()))
+	}
+	why := "the " + source + " limit resets at " + scheduled + ", and tofu adds " + strconv.Itoa(konst.LimitGraceMinutes) + " minutes past it"
+	if reached.ResetAt.After(now) {
+		tries.refused = 0
+	} else {
+		tries.refused++
+		if tries.sent > 0 && now.Sub(reached.ResetAt) >= konst.LimitGiveUpMinutes*time.Minute {
+			show(LimitGaveUp)
+			h.trace("limit: tofu stops trying "+source+" after "+strconv.Itoa(tries.refused)+" refusals, because the reset scheduled for "+scheduled+
+				" has not come "+strconv.Itoa(konst.LimitGiveUpMinutes)+" minutes later; the reply: "+reply, nil)
+			return "", llm.Origin{}, false
+		}
+		wait, after := konst.LimitRetryMinutes*time.Minute, "try "+strconv.Itoa(tries.sent)
+		if tries.sent == 0 {
+			wait, after = konst.LimitGraceMinutes*time.Minute, "the first request"
+		}
+		state, tryAt = LimitRefused, now.Add(wait)
+		why = "the reset scheduled for " + scheduled + " has passed and " + after + " still answered with the limit, refusal " + strconv.Itoa(tries.refused)
+	}
+	show(state)
+	h.trace("limit: tofu waits until "+clock(tryAt)+" to try "+source+" again, because "+why+"; the reply: "+reply, nil)
+	timer := time.NewTimer(tryAt.Sub(h.now()))
 	defer timer.Stop()
 	select {
 	case <-timer.C:
-		live.Emit(Event{Kind: EventNote, Text: "the " + reached.source + " limit has reset, so the turn resumes"})
+		tries.sent++
+		show(LimitResuming)
+		h.trace("limit: tofu sends try "+strconv.Itoa(tries.sent)+" on "+source+", because the wait until "+clock(tryAt)+" ended", nil)
 		return resumedTask, llm.Origin{Source: llm.SourceContinue}, true
 	case typed := <-live.Steering:
+		show(LimitCleared)
+		h.trace("limit: the person typed during the wait on "+source+", so tofu stops waiting and sends what they typed", nil)
 		h.heardTyped(live.Emit, typed)
 		return typed, llm.Origin{Source: llm.SourceTyped}, true
 	case <-ctx.Done():
-		live.Emit(Event{Kind: EventNote, Text: "the wait for the " + reached.source + " limit was cancelled, and the turn does not resume"})
+		show(LimitCleared)
+		h.trace("limit: the wait on "+source+" ended because the turn was stopped, so no try goes out", nil)
 		return "", llm.Origin{}, false
 	}
 }
