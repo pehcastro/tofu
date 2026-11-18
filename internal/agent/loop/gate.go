@@ -35,6 +35,7 @@ import (
 type GateRequest struct {
 	TurnID string
 	Task   string
+	Said   []string
 	Tool   string
 	Args   json.RawMessage
 	Asked  json.RawMessage
@@ -250,7 +251,7 @@ func fallbackArmAllows(request GateRequest) bool {
 	if json.Unmarshal(request.Args, &input) != nil {
 		return false
 	}
-	state, _, err := toolgate.BuildToolGateV3(toolgate.ToolGateInput{Tool: request.Tool, Input: input, Context: toolgate.ToolGateContext{UserRecentMessages: []string{request.Task}}})
+	state, _, err := toolgate.BuildToolGateV3(toolgate.ToolGateInput{Tool: request.Tool, Input: input, Context: toolgate.ToolGateContext{UserRecentMessages: request.Said}})
 	return err == nil && gate.RegexArm(state) == gate.VerdictAllow
 }
 

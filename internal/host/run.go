@@ -174,7 +174,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	}
 	defer func() { _ = releaseTurn() }()
 	labelled := h.labelAhead(id)
-	task += h.takeRan()
+	ran := strings.TrimSpace(h.takeRan())
 	imagesOf := func(said string) []llm.Image {
 		attached, err := h.takePendingImages(said)
 		if err != nil {
@@ -237,6 +237,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	}
 	started.Store(true)
 	sessions, config := prepared.Sessions, prepared.Config
+	config.Notes = append(config.Notes, ran)
 	carryQuotes := func(said string) {
 		if words := quote.Carried(sessions, h.ID(), said); words != "" {
 			h.inbox.Deliver(words, llm.Origin{Source: llm.SourceNotice, Name: quote.Quote{}.Name()})

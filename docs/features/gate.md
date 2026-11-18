@@ -49,25 +49,20 @@ A turn a cron job started asks nobody, and refuses every call that would ask.
 
 ## When Jev cannot answer
 
-**You are told the moment the judge changes.** tofu tries every classifier
-your settings bind, the one bound to `classifier` first, then each other
-classifier with a stored key. A classifier that answers 402, out of credits,
-or refuses the key is skipped for the rest of the session; one that times
-out or is unreachable is tried again on the next call.
+**You are told the moment the judge changes.** tofu asks only the classifier
+your settings bind to `classifier`. A provider that holds a key but is not
+bound is never asked. A gate state over that classifier's request cap is
+shortened to fit before it is sent. A classifier that answers 402, out of
+credits, or refuses the key is skipped for the rest of the session; one that
+times out or is unreachable is tried again on the next call.
 
-Only when every classifier failed does a language model judge the call: the
+Only when the bound classifier failed does a language model judge the call: the
 cheapest model of the plan you are running on, Haiku on `claude-sub`, Luna
 on `codex-sub`. It never runs on an API key. The chat says so once, muted,
 with the model in blue:
 
 ```text
 · judge is running on claude-sub/claude-haiku-4-5-20251001 because typesafe is out of credits
-```
-
-With two classifiers that both refuse:
-
-```text
-· judge is running on claude-sub/claude-haiku-4-5-20251001 because all classifiers configured are out of credit
 ```
 
 When that model cannot judge either, the regex arm decides, and every

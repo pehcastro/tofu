@@ -194,6 +194,36 @@ func (c Config) FirstUserMessage(notes ...string) string {
 	return first + notesOn(slices.Concat(c.Notes, notes))
 }
 
+func (c Config) personSaid(session string, conversation []core.Message) []string {
+	var said []string
+	if c.Sessions != nil && session != "" {
+		if _, earlier, err := cmp.Or(c.Inbox, &Inbox{}).saidBefore(c.Sessions, session); err == nil {
+			for _, one := range earlier {
+				said = append(said, strings.TrimSpace(one.Words))
+			}
+		}
+	}
+	said = append(said, personWords(conversation)...)
+	var recent []string
+	size := 0
+	for _, words := range slices.Backward(slices.Compact(said)) {
+		if len(recent) > 0 && size+len(words) > konst.CarrySaidBytes {
+			break
+		}
+		recent, size = append(recent, words), size+len(words)
+	}
+	slices.Reverse(recent)
+	return recent
+}
+
+func (c Config) lastSaid(session string, conversation []core.Message) string {
+	said := c.personSaid(session, conversation)
+	if len(said) == 0 {
+		return ""
+	}
+	return said[len(said)-1]
+}
+
 func notesOn(notes []string) string {
 	notes = slices.DeleteFunc(notes, func(note string) bool { return strings.TrimSpace(note) == "" })
 	if len(notes) == 0 {

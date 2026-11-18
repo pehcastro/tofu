@@ -1,6 +1,10 @@
 package toolgate
 
 import (
+	"maps"
+	"slices"
+	"unicode/utf8"
+
 	"tofu/internal/judge/ledger"
 	"tofu/internal/judge/points"
 )
@@ -66,4 +70,48 @@ func BuildToolGateV3(in ToolGateInput) ([]byte, string, error) {
 		return nil, "", err
 	}
 	return canon, ToolGateV3Version(), nil
+}
+
+const elidedMark = " [elided to fit the judge] "
+
+func ShortenLongest(in ToolGateInput, by int) (ToolGateInput, bool) {
+	at, size := 0, 0
+	for i, text := range in.Context.UserRecentMessages {
+		if len(text) > size {
+			at, size = i, len(text)
+		}
+	}
+	if size > 0 {
+		in.Context.UserRecentMessages = slices.Clone(in.Context.UserRecentMessages)
+		in.Context.UserRecentMessages[at] = cutMiddle(in.Context.UserRecentMessages[at], by)
+		return in, true
+	}
+	field := ""
+	for key, value := range in.Input {
+		if text, ok := value.(string); ok && len(text) > size {
+			field, size = key, len(text)
+		}
+	}
+	if size == 0 {
+		return in, false
+	}
+	in.Input = maps.Clone(in.Input)
+	in.Input[field] = cutMiddle(in.Input[field].(string), by)
+	in.InputTruncated = true
+	return in, true
+}
+
+func cutMiddle(text string, by int) string {
+	keep := len(text) - by - len(elidedMark)
+	if keep <= 0 {
+		return ""
+	}
+	head, tail := keep/2, len(text)-(keep-keep/2)
+	for head > 0 && !utf8.RuneStart(text[head]) {
+		head--
+	}
+	for tail < len(text) && !utf8.RuneStart(text[tail]) {
+		tail++
+	}
+	return text[:head] + elidedMark + text[tail:]
 }

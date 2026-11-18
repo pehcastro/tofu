@@ -1008,7 +1008,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				steeredAt = step
 				said := inserted(core.Origin{Source: core.SourceSteer}, steered)
 				if config.Inbox != nil {
-					notes := config.Inbox.notesOn(ctx, config.Sessions, cmp.Or(row.Session, config.Session), steered, messages, config.Task)
+					notes := config.Inbox.notesOn(ctx, config.Sessions, cmp.Or(row.Session, config.Session), steered, messages, config.lastSaid(cmp.Or(row.Session, config.Session), messages))
 					asked.restated = asked.restated || strings.Contains(notes, requestOpenNote)
 					said.Content += notesOn([]string{notes})
 				}
@@ -1341,7 +1341,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				keep(stepRow)
 				continue
 			}
-			if turnFiles != nil {
+			if turnFiles != nil && slices.ContainsFunc(decision.ToolCalls, mayWriteFiles) {
 				_ = turnFiles.Begun()
 			}
 			pending, batches := decision.ToolCalls, 0
@@ -1357,7 +1357,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			var repeated ToolCallRow
 			var repeats int
 			var leadStop error
-			author := row.author()
+			author, said := row.author(), config.personSaid(cmp.Or(row.Session, config.Session), messages)
 			for len(pending) > 0 && !tripped && leadStop == nil {
 				width := max(stepTools.parallelPrefix(pending), 1)
 				heard := make([]heardCall, width)
@@ -1373,7 +1373,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 					if pre.Args != nil {
 						call.Arguments = pre.Args
 					}
-					request := GateRequest{TurnID: row.ID, Task: config.Task, Tool: call.Name, Args: call.Arguments, Call: call.ID, Reason: decision.Content}
+					request := GateRequest{TurnID: row.ID, Task: config.Task, Said: said, Tool: call.Name, Args: call.Arguments, Call: call.ID, Reason: decision.Content}
 					if pre.Args == nil {
 						request.Asked = asked.Arguments
 					}
@@ -1966,6 +1966,10 @@ func callOrders(ctx context.Context, n int) ([]context.Context, []func()) {
 		after = done
 	}
 	return contexts, released
+}
+
+func mayWriteFiles(call core.ToolCall) bool {
+	return !readOnly(call.Name) || call.Name == "test" || call.Name == "typecheck"
 }
 
 func InCallOrder(ctx context.Context, write func()) {

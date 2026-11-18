@@ -31,13 +31,13 @@ const (
 )
 
 type toolGate struct {
-	chain     []wiring.Classifier
-	set       wiring.Battery
-	cwd       string
-	rows      wiring.RowLedger
-	watch     func(ctx context.Context, tool string, decision loop.GateDecision, err error)
-	decisions int
-	costUSD   float64
+	classifier wiring.Classifier
+	set        wiring.Battery
+	cwd        string
+	rows       wiring.RowLedger
+	watch      func(ctx context.Context, tool string, decision loop.GateDecision, err error)
+	decisions  int
+	costUSD    float64
 }
 
 type jevUnavailable struct{ cause error }
@@ -55,7 +55,7 @@ func toolGateOn(dir, log string, keys core.Keyring) (*toolGate, error) {
 	if err != nil {
 		return nil, unusableRule{err}
 	}
-	chain, err := wiring.ClassifierChain(keys, konst.TurnParallelToolCalls)
+	classifier, err := wiring.OpenBound(keys, konst.TurnParallelToolCalls)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,7 @@ func toolGateOn(dir, log string, keys core.Keyring) (*toolGate, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &toolGate{chain: chain, set: set, cwd: dir, rows: rows}, nil
+	return &toolGate{classifier: classifier, set: set, cwd: dir, rows: rows}, nil
 }
 
 func resolvePoint(point, dir string) (wiring.Battery, error) {
@@ -157,12 +157,12 @@ func (g *toolGate) ask(ctx context.Context, request loop.GateRequest) func() (le
 		Input:      input,
 		Cwd:        g.cwd,
 		ProjectDir: g.cwd,
-		Context:    toolgate.ToolGateContext{UserRecentMessages: []string{request.Task}},
+		Context:    toolgate.ToolGateContext{UserRecentMessages: request.Said},
 	}
 	if place, found := scratch.ScratchOf(ctx); found {
 		call.ScratchDir = place.Dir()
 	}
-	built, builder, err := toolgate.BuildToolGateV3(call)
+	built, builder, err := g.fitted(call)
 	if err != nil {
 		return func() (ledger.Row, error) { return ledger.Row{}, err }
 	}
@@ -172,22 +172,17 @@ func (g *toolGate) ask(ctx context.Context, request loop.GateRequest) func() (le
 		return func() (ledger.Row, error) { return g.rows.AppendOwnShell(builtState, g.set, written, own) }
 	}
 	chain := host.JudgeChainOf(ctx)
-	var failed error
-	var failures []string
-	for _, classifier := range g.chain {
-		provider := string(classifier.Model.Provider)
-		err := chain.Skipped(provider)
-		if err == nil {
-			var decision core.Decision
-			decision, err = classifier.Client.Ask(ctx, core.Request{State: builtState, Questions: g.set.Questions})
-			chain.Tried(provider, err)
-			if err == nil {
-				written.Decision = &decision
-				written.Answers = wiring.ToLedgerAnswers(g.set.QuestionsVersion, decision.Answers)
-				return g.written(builtState, written, func() { chain.JudgedByClassifier(classifier.Model.Slug()) })
-			}
+	provider := string(g.classifier.Model.Provider)
+	failed := chain.Skipped(provider)
+	if failed == nil {
+		var decision core.Decision
+		decision, failed = g.classifier.Client.Ask(ctx, core.Request{State: builtState, Questions: g.set.Questions})
+		chain.Tried(provider, failed)
+		if failed == nil {
+			written.Decision = &decision
+			written.Answers = wiring.ToLedgerAnswers(g.set.QuestionsVersion, decision.Answers)
+			return g.written(builtState, written, func() { chain.JudgedByClassifier(g.classifier.Model.Slug()) })
 		}
-		failed, failures = err, append(failures, provider+" "+failureOf(err))
 	}
 	cheap, err := wiring.CheapModelOf(g.cwd, chain.Source())
 	var judged wiring.ModelJudged
@@ -195,7 +190,7 @@ func (g *toolGate) ask(ctx context.Context, request loop.GateRequest) func() (le
 		judged, written.Answers, err = g.judgeOnModel(ctx, chain, cheap, builtState)
 	}
 	if err == nil {
-		judged.Why = "judged by " + judged.Slug + " because every classifier failed: " + strings.Join(failures, ", ")
+		judged.Why = "judged by " + judged.Slug + " because the classifier failed: " + provider + " " + failureOf(failed)
 		written.Judged = &judged
 		return g.written(builtState, written, func() { chain.JudgedByModel(judged.Slug) })
 	}
@@ -207,6 +202,24 @@ func (g *toolGate) ask(ctx context.Context, request loop.GateRequest) func() (le
 			return row, writeErr
 		}
 		return row, jevUnavailable{failed}
+	}
+}
+
+func (g *toolGate) fitted(call toolgate.ToolGateInput) ([]byte, string, error) {
+	room := g.classifier.Client.Caps().MaxRequestBytes
+	for {
+		built, builder, err := toolgate.BuildToolGateV3(call)
+		if err != nil {
+			return nil, "", err
+		}
+		body, err := core.Request{State: json.RawMessage(built), Questions: g.set.Questions}.Encode(g.classifier.Client.Model())
+		if err != nil || room <= 0 || len(body) <= room {
+			return built, builder, err
+		}
+		var shortened bool
+		if call, shortened = toolgate.ShortenLongest(call, len(body)-room); !shortened {
+			return nil, "", fmt.Errorf("the %s call alone is %d bytes over what %s accepts", call.Tool, len(body)-room, g.classifier.Model.Slug())
+		}
 	}
 }
 

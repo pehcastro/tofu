@@ -34,10 +34,9 @@ call of that kind until the run ends. A call that would wait for you is refused.
 
 ## Where it lives
 
-jev runs through the provider bound to the `classifier` role, `typesafe/jev-latest` at `api.typesafe.ai` or `openrouter/jev-latest`, then through each other classifier with a stored key. A classifier that answers 402 or refuses its key is skipped for the rest of the session; a timeout or an unreachable one is tried again next call. Only when every classifier failed does the cheapest model of the plan you run on judge the call, `claude-sub/claude-haiku-4-5-20251001` or `codex-sub/gpt-5.6-luna`, never one on an API key. When it cannot judge either, the regex arm decides and every verdict is recorded as ask. The chat says once, muted, each time the judge changes:
+jev runs through the provider bound to the `classifier` role, `typesafe/jev-latest` at `api.typesafe.ai` or `openrouter/jev-latest`, and through no other. A provider that holds a key but is not bound to `classifier` is never asked. A gate state over the classifier's request cap is shortened to fit before it is sent. A classifier that answers 402 or refuses its key is skipped for the rest of the session; a timeout or an unreachable one is tried again next call. Only when the bound classifier failed does the cheapest model of the plan you run on judge the call, `claude-sub/claude-haiku-4-5-20251001` or `codex-sub/gpt-5.6-luna`, never one on an API key. When it cannot judge either, the regex arm decides and every verdict is recorded as ask. The chat says once, muted, each time the judge changes:
 
     · judge is running on claude-sub/claude-haiku-4-5-20251001 because typesafe is out of credits
-    · judge is running on claude-sub/claude-haiku-4-5-20251001 because all classifiers configured are out of credit
 
 and the footer keeps `jev out of credits · judge <model>` while it lasts. A working classifier prints nothing. `tofu serve` carries the same status as `judge` on each `decision` event and on `query.usage`: each classifier tried with its state, `ok`, `out of credits`, `refusing` or `unreachable`, the judge running now, and the line the chat said.
 

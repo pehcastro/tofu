@@ -723,7 +723,7 @@ func (r *record) message(message core.Message, request string, results map[strin
 		r.add(session.Event{Kind: session.EventToolResult, Call: message.ToolCallID, Request: request},
 			resultRow{ToolCallRow: row, Content: message.Content, ToolOutcome: toolOutcomeName(message.ToolOutcome), Pictures: held.Pictures, KeptHead: message.KeptHead})
 	case core.RoleAssistant:
-		if len(message.ToolCalls) > 0 {
+		if slices.ContainsFunc(message.ToolCalls, mayWriteFiles) {
 			r.undoStarted()
 		}
 		if _, alreadySaid := r.said[request]; alreadySaid || request == "" {

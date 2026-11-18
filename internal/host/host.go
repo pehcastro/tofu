@@ -1174,11 +1174,12 @@ type judgeChainKey struct{}
 type JudgeChain struct {
 	mu           sync.Mutex
 	session      string
-	tried        []classifierTry
+	tried        classifierTry
 	judge        string
 	byClassifier bool
 	noModel      error
 	told         string
+	toldJudge    string
 	source       string
 	open         func(ctx context.Context, slug string) (loop.Model, error)
 }
@@ -1200,7 +1201,7 @@ func (c *JudgeChain) during(ctx context.Context, session, source string, open fu
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.session != session {
-		c.tried, c.judge, c.byClassifier, c.noModel, c.told = nil, "", false, nil, ""
+		c.tried, c.judge, c.byClassifier, c.noModel, c.told, c.toldJudge = classifierTry{}, "", false, nil, "", ""
 	}
 	c.session, c.source, c.open = session, source, open
 	return context.WithValue(ctx, judgeChainKey{}, c)
@@ -1215,10 +1216,8 @@ func (c *JudgeChain) Source() string {
 func (c *JudgeChain) Skipped(provider string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	for _, try := range c.tried {
-		if try.Provider == provider && try.skip {
-			return try.err
-		}
+	if c.tried.Provider == provider && c.tried.skip {
+		return c.tried.err
 	}
 	return nil
 }
@@ -1234,11 +1233,7 @@ func (c *JudgeChain) Tried(provider string, err error) {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if at := slices.IndexFunc(c.tried, func(held classifierTry) bool { return held.Provider == provider }); at >= 0 {
-		c.tried[at] = try
-		return
-	}
-	c.tried = append(c.tried, try)
+	c.tried = try
 }
 
 func classifierStateOf(kind transport.Kind) (state ClassifierState, skipForTheSession bool) {
@@ -1280,51 +1275,25 @@ func (c *JudgeChain) judged(by string, byClassifier bool, noModel error) {
 func (c *JudgeChain) tell() (line, accent string, changed bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	var failed []classifierTry
-	for _, try := range c.tried {
-		if try.State != ClassifierOK {
-			failed = append(failed, try)
-		}
+	if c.judge == "" || c.judge == c.toldJudge {
+		return "", "", false
 	}
+	first := c.toldJudge == ""
+	c.toldJudge = c.judge
+	because := c.tried.Provider + " is " + string(c.tried.State)
 	accent = c.judge
 	switch {
-	case c.judge == "":
-	case c.byClassifier && len(failed) == 0 && c.told != "":
-		line = "judge is back on " + c.judge
-	case c.byClassifier && len(failed) == 0:
-	case c.noModel == nil:
-		line = "judge is running on " + c.judge + " because " + c.because(failed)
-	default:
-		accent, line = "", "judge is running on "+RegexJudge+" because "+c.because(failed)+", and "+c.noModel.Error()
-	}
-	if line == "" || line == c.told {
+	case c.byClassifier && first:
 		return "", "", false
+	case c.byClassifier:
+		line = "judge is back on " + c.judge
+	case c.noModel == nil:
+		line = "judge is running on " + c.judge + " because " + because
+	default:
+		accent, line = "", "judge is running on "+RegexJudge+" because "+because+", and "+c.noModel.Error()
 	}
 	c.told = line
 	return line, accent, true
-}
-
-func (c *JudgeChain) because(failed []classifierTry) string {
-	if len(failed) > 1 && len(failed) == len(c.tried) {
-		unreachable := 0
-		for _, try := range failed {
-			if try.State == ClassifierUnreachable {
-				unreachable++
-			}
-		}
-		switch unreachable {
-		case 0:
-			return "all classifiers configured are out of credit"
-		case len(failed):
-			return "all classifiers configured are unreachable"
-		}
-		return "all classifiers configured failed"
-	}
-	said := make([]string, len(failed))
-	for i, try := range failed {
-		said[i] = try.Provider + " is " + string(try.State)
-	}
-	return strings.Join(said, " and ")
 }
 
 func (c *JudgeChain) status() *JudgeStatus {
@@ -1333,9 +1302,9 @@ func (c *JudgeChain) status() *JudgeStatus {
 	if c.judge == "" {
 		return nil
 	}
-	status := &JudgeStatus{Classifiers: make([]ClassifierHealth, len(c.tried)), Judge: c.judge, Line: c.told}
-	for i, try := range c.tried {
-		status.Classifiers[i] = try.ClassifierHealth
+	status := &JudgeStatus{Classifiers: []ClassifierHealth{}, Judge: c.judge, Line: c.told}
+	if c.tried.Provider != "" {
+		status.Classifiers = append(status.Classifiers, c.tried.ClassifierHealth)
 	}
 	return status
 }

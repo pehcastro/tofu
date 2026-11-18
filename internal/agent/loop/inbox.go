@@ -542,39 +542,38 @@ func NewestOnTheLine(store *session.Store, id string) (session.Header, error) {
 }
 
 func (b *Inbox) SaidInChain(store *session.Store, id string) ([]PersonSaid, error) {
-	newest, err := NewestOnTheLine(store, id)
+	newest, said, err := b.saidBefore(store, id)
 	if err != nil {
 		return nil, err
+	}
+	reading, err := store.Reading(newest.ID)
+	if err != nil {
+		return nil, err
+	}
+	return append(said, saidIn(newest.ID, reading.Messages)...), nil
+}
+
+func (b *Inbox) saidBefore(store *session.Store, id string) (session.Header, []PersonSaid, error) {
+	newest, err := NewestOnTheLine(store, id)
+	if err != nil {
+		return newest, nil, err
 	}
 	chain, err := store.Ancestors(newest.ID)
 	if err != nil {
-		return nil, err
+		return newest, nil, err
 	}
 	slices.Reverse(chain)
 	var said []PersonSaid
-	for _, header := range append(chain, newest) {
+	for _, header := range chain {
 		b.mu.Lock()
 		kept, known := b.said[header.ID]
 		b.mu.Unlock()
-		if known && header.ID != newest.ID {
-			said = append(said, kept...)
-			continue
-		}
-		reading, err := store.Reading(header.ID)
-		if err != nil {
-			return nil, err
-		}
-		for _, message := range reading.Messages {
-			task, typed := TaskIn(message.Content)
-			if task = beforeCronFire(task); task == "" || !typed || message.Role != session.RoleUser || !saidByThePerson(OriginOf(message.MessageBody)) {
-				continue
+		if !known {
+			reading, err := store.Reading(header.ID)
+			if err != nil {
+				return newest, nil, err
 			}
-			_, notes, _ := strings.Cut(message.Content, NotesAfterTheTask+repeatNoteOpening)
-			_, quoted, _ := strings.Cut(notes, repeatQuoteOpens)
-			quoted, _, _ = strings.Cut(quoted, `"`)
-			kept = append(kept, PersonSaid{Session: header.ID, At: message.TakenAt, Words: task, Quoted: quoted})
-		}
-		if header.ID != newest.ID {
+			kept = saidIn(header.ID, reading.Messages)
 			b.mu.Lock()
 			if b.said == nil {
 				b.said = map[string][]PersonSaid{}
@@ -584,7 +583,22 @@ func (b *Inbox) SaidInChain(store *session.Store, id string) ([]PersonSaid, erro
 		}
 		said = append(said, kept...)
 	}
-	return said, nil
+	return newest, said, nil
+}
+
+func saidIn(id string, messages []session.Message) []PersonSaid {
+	var said []PersonSaid
+	for _, message := range messages {
+		task, typed := TaskIn(message.Content)
+		if task = beforeCronFire(task); task == "" || !typed || message.Role != session.RoleUser || !saidByThePerson(OriginOf(message.MessageBody)) {
+			continue
+		}
+		_, notes, _ := strings.Cut(message.Content, NotesAfterTheTask+repeatNoteOpening)
+		_, quoted, _ := strings.Cut(notes, repeatQuoteOpens)
+		quoted, _, _ = strings.Cut(quoted, `"`)
+		said = append(said, PersonSaid{Session: id, At: message.TakenAt, Words: task, Quoted: quoted})
+	}
+	return said
 }
 
 func (b *Inbox) openJudges(config Config) {
@@ -636,7 +650,7 @@ func (c Config) notifyNoJev(unseen string, err error) {
 const requestOpenNote = "this request is open: it leaves to you what the work is. before any tool call, restate it in your own words with the goal, what is in, what is out and what you would do first, " +
 	"then end the turn and wait for the person's go or correction, as the rule restate_open says."
 
-func (b *Inbox) notesOn(ctx context.Context, store *session.Store, id, said string, conversation []core.Message, task string) string {
+func (b *Inbox) notesOn(ctx context.Context, store *session.Store, id, said string, conversation []core.Message, earlier string) string {
 	notes := b.repeatNote(store, id, said)
 	b.mu.Lock()
 	judge := b.opens
@@ -655,7 +669,7 @@ func (b *Inbox) notesOn(ctx context.Context, store *session.Store, id, said stri
 		Said    string `json:"said"`
 		Replied string `json:"replied"`
 		Task    string `json:"task"`
-	}{said, runeSafeTail(replied, konst.CarrySaidMessageBytes), runeSafeHead(beforeCronFire(task), konst.CarrySaidMessageBytes)}); !open {
+	}{said, runeSafeTail(replied, konst.CarrySaidMessageBytes), runeSafeHead(earlier, konst.CarrySaidMessageBytes)}); !open {
 		return notes
 	}
 	if notes == "" {
@@ -1281,7 +1295,7 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 	config.Inbox.mu.Unlock()
 	config.Inbox.openJudges(config)
 	if config.TaskOrigin.Source == "" || saidByThePerson(config.TaskOrigin) {
-		config.Notes = []string{config.Inbox.notesOn(ctx, config.Sessions, config.Session, config.Task, config.History, "")}
+		config.Notes = append(config.Notes, config.Inbox.notesOn(ctx, config.Sessions, config.Session, config.Task, config.History, config.lastSaid(config.Session, config.History)))
 	}
 	for {
 		config.Inbox.mu.Lock()
@@ -1301,7 +1315,7 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 			if heard != nil {
 				heard(said)
 			}
-			note = config.Inbox.notesOn(ctx, config.Sessions, cmp.Or(row.Session, config.Session), said, row.Conversation, config.Task)
+			note = config.Inbox.notesOn(ctx, config.Sessions, cmp.Or(row.Session, config.Session), said, row.Conversation, config.lastSaid(cmp.Or(row.Session, config.Session), row.Conversation))
 			if config.Steering != nil {
 				said = strings.Join(append([]string{said}, config.Steering()...), "\n\n")
 			}
