@@ -207,6 +207,7 @@ const (
 	shellPoll     = 250 * time.Millisecond
 	shellPulses   = int(shellPoll / pulseInterval)
 	pickPoll      = 500 * time.Millisecond
+	quotaPoll     = konst.ServeQuotaPollMinutes * time.Minute
 	exitReset     = "\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[0m" + ansi.ResetBackgroundColor
 )
 
@@ -295,6 +296,7 @@ type App struct {
 	liveShells     []shells.Entry
 	shellsTicking  bool
 	shellsPolling  bool
+	quotaTicking   bool
 	happened       []feed.Event
 	happenedIndex  map[string]int
 	lengthenedIDs  map[string]string
@@ -351,6 +353,8 @@ type foldDueMsg struct{}
 type shellsMsg []shells.Entry
 
 type shellsDueMsg struct{}
+
+type quotaDueMsg struct{}
 
 type noticeMsg string
 
@@ -724,7 +728,14 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		return nil
 	case []frame.Quota:
 		a.status.Quotas = inSpendOrder(msg, a.serving, a.options.Now())
-		return nil
+		if a.quotaTicking {
+			return nil
+		}
+		a.quotaTicking = true
+		return tea.Tick(quotaPoll, func(time.Time) tea.Msg { return quotaDueMsg{} })
+	case quotaDueMsg:
+		a.quotaTicking = false
+		return a.pollQuota()
 	case recheckMsg:
 		recheck := a.options.Recheck
 		if recheck == nil {
