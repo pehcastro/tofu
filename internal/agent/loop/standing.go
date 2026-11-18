@@ -34,6 +34,7 @@ type standingJudge struct {
 	notify    func(string)
 	mu        sync.Mutex
 	decided   map[string]bool
+	spent     int
 }
 
 func newStandingJudge(config Config, route classifiers.Opener) *standingJudge {
@@ -65,26 +66,40 @@ func (j *standingJudge) open(project string, route classifiers.Opener) error {
 }
 
 func (j *standingJudge) orders(sentences []string) []bool {
-	kept := make([]bool, len(sentences))
-	var asking sync.WaitGroup
-	for i, sentence := range sentences {
-		asking.Go(func() { kept[i] = j.order(sentence) })
+	worded := make([]bool, len(sentences))
+	var ranked, plain []int
+	for i, sentence := range slices.Backward(sentences) {
+		if worded[i] = recall.StandingByWords(sentence); worded[i] {
+			ranked = append(ranked, i)
+		} else {
+			plain = append(plain, i)
+		}
 	}
+	var asking sync.WaitGroup
+	j.mu.Lock()
+	for _, i := range append(ranked, plain...) {
+		if _, claimed := j.decided[sentences[i]]; !claimed && j.spent < konst.CarryStandingAsks {
+			j.spent++
+			j.decided[sentences[i]] = worded[i]
+			asking.Go(func() { j.order(sentences[i], worded[i]) })
+		}
+	}
+	j.mu.Unlock()
 	asking.Wait()
-	return kept
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	for i, sentence := range sentences {
+		if judged, decided := j.decided[sentence]; decided {
+			worded[i] = judged
+		}
+	}
+	return worded
 }
 
-func (j *standingJudge) order(sentence string) bool {
-	j.mu.Lock()
-	kept, done := j.decided[sentence]
-	j.mu.Unlock()
-	if done {
-		return kept
-	}
+func (j *standingJudge) order(sentence string, kept bool) {
 	body, _ := json.Marshal(struct {
 		Sentence string `json:"sentence"`
 	}{sentence})
-	kept = recall.StandingByWords(sentence)
 	row := ledger.Row{Point: standingOrderPoint, Questions: j.set.Name, Version: j.set.QuestionsVersion, StateHash: ledger.HashOf(body), StateBuilder: standingOrderBuilder, State: body,
 		Reason: &ledger.Reason{Question: standingOrderName, Comparison: ">= " + strconv.FormatFloat(j.threshold, 'f', -1, 64), Threshold: j.threshold, Mode: ledger.ModeEnforced}}
 	if j.unasked != nil {
@@ -109,5 +124,4 @@ func (j *standingJudge) order(sentence string) bool {
 	if err != nil && j.notify != nil {
 		j.notify("a standing order decision was not written to the ledger: " + err.Error())
 	}
-	return kept
 }
