@@ -340,7 +340,7 @@ func drawChat(view *session.Model, event Event, status string) {
 	switch event.Kind {
 	case EventTask:
 		switch {
-		case event.Origin.Shown != "" && view.AskAnswered(event.Origin.Name, event.Text):
+		case event.Origin.Shown != "" && view.AskAnswered(event.Origin.Name, question.Answered(event.Origin.Shown, event.Text)):
 		case event.Origin.Shown != "":
 			view.Append(session.Entry{Kind: session.Note, Body: event.Origin.Shown})
 		case (event.Origin.Sub.Answer() || event.Origin.Sub == llm.SourceNoAnswer) && event.Origin.Name != "":
@@ -728,6 +728,7 @@ func (a *App) absorb(event Event) {
 		a.feed.SetPlan(planLine(event.Plan))
 	case EventAwaitPerson:
 		if event.Questions != nil {
+			a.view.Asked(event.Questions)
 			a.questions = append(a.questions, question.Open(event.ID, event.Questions, event.Wait, at))
 			return
 		}

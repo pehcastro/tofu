@@ -1,8 +1,8 @@
  tofu  ./tofu/                     chat   agents   edits   shells                     0s [settings] 
                                                                                                     
-                                                                                                    
-                                                                                                    
-                                                                                                    
+    ? Stale lock                                                                                    
+    Which way should Resolve treat a stale lock?                                                    
+    waiting for your answer in the form below                                                       
                                                                                                     
                                                                                                     
   ? Stale lock  1 of 1                                                                              

@@ -325,41 +325,25 @@ func checkOptions(q PersonQuestion) error {
 }
 
 func ShownAnswers(head string, questions []PersonQuestion, replies []PersonReply) string {
-	lines := []string{head}
+	var picks []string
 	for _, q := range questions {
-		var given PersonReply
-		if at := slices.IndexFunc(replies, func(r PersonReply) bool { return r.ID == q.ID }); at >= 0 {
-			given = replies[at]
+		at := slices.IndexFunc(replies, func(r PersonReply) bool { return r.ID == q.ID })
+		if at < 0 {
+			continue
 		}
-		lines = append(lines, q.Question)
-		if q.Context != "" {
-			lines = append(lines, q.Context)
-		}
-		for at, o := range q.Options {
-			var marks []string
-			if q.Recommended != nil && *q.Recommended == at {
-				marks = append(marks, "recommended")
-			}
-			if slices.Contains(given.Chosen, o.Label) {
-				marks = append(marks, "chosen")
-			}
-			line := "  " + o.Label
-			if o.Description != "" {
-				line += ": " + o.Description
-			}
-			if len(marks) > 0 {
-				line += " (" + strings.Join(marks, ", ") + ")"
-			}
-			lines = append(lines, line)
-		}
+		pick := strings.Join(slices.DeleteFunc(append(slices.Clone(replies[at].Chosen), replies[at].Text), func(said string) bool { return said == "" }), ", ")
 		switch {
-		case given.Text != "":
-			lines = append(lines, "  typed: "+given.Text)
-		case len(given.Chosen) == 0:
-			lines = append(lines, "  nothing chosen")
+		case pick == "":
+		case len(questions) > 1:
+			picks = append(picks, q.Header+": "+pick)
+		default:
+			picks = append(picks, pick)
 		}
 	}
-	return strings.Join(lines, "\n")
+	if len(picks) == 0 {
+		return head
+	}
+	return head + ": " + strings.Join(picks, "; ")
 }
 
 type PersonReply struct {

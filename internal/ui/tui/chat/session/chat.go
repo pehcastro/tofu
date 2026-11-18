@@ -188,7 +188,7 @@ func (m *Model) render(index int) []string {
 		switch {
 		case m.folds(index):
 			return m.groupLines(index)
-		case entry.asksPerson():
+		case entry.asksPerson() && !entry.Failed:
 			return indented(question.Transcript(entry.Detail, entry.Output, m.textWidth()))
 		}
 		return []string{continuation + m.toolLine(entry)}
@@ -311,6 +311,16 @@ func (m *Model) toolLine(entry Entry) string {
 
 func (e Entry) asksPerson() bool {
 	return e.Kind == Tool && e.Head == loop.AskPersonToolName && e.Detail != ""
+}
+
+func (m *Model) Asked(questions []loop.PersonQuestion) {
+	args, ids := question.Call(questions)
+	for _, entry := range m.entries {
+		if entry.asksPerson() && !question.Settled(entry.Output) && question.Asks(entry.Detail, ids) {
+			return
+		}
+	}
+	m.Append(Entry{Kind: Tool, Head: loop.AskPersonToolName, Detail: args})
 }
 
 func (m *Model) AskAnswered(ids, answer string) bool {
