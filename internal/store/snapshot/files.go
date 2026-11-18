@@ -34,6 +34,7 @@ const (
 	snapshotLockName     = "snapshot.lock"
 	largestKeptFileBytes = 10 << 20
 	packEveryBlob        = "core.bigFileThreshold=1"
+	fastestCompression   = "core.compression=1"
 	verbatimAttributes   = "* -text -filter -ident -working-tree-encoding\n"
 	alwaysExcluded       = "node_modules/\n.venv/\n__pycache__/\n/*/**/" + platformfs.StateDirName + "/\n/*/**/" + platformfs.LegacyStateDirName + "/\n"
 )
@@ -168,15 +169,15 @@ func (f Files) track(ctx context.Context) (string, error) {
 	if err := f.exclude(nil); err != nil {
 		return "", err
 	}
-	skipped, err := f.linksAndLargeFiles(ctx)
+	walked, err := f.walk(ctx)
 	if err != nil {
 		return "", err
 	}
-	if err := f.exclude(skipped); err != nil {
+	if err := f.exclude(walked.skipped()); err != nil {
 		return "", err
 	}
 	if _, missing := os.Stat(index); errors.Is(missing, fs.ErrNotExist) {
-		err = f.addInParts(ctx)
+		err = f.addInParts(ctx, walked.Dirs)
 	} else {
 		_, err = f.Git(ctx, "", "add", "--all")
 	}
@@ -186,32 +187,44 @@ func (f Files) track(ctx context.Context) (string, error) {
 	return f.writeTree(ctx)
 }
 
-func (f Files) addInParts(ctx context.Context) error {
-	names, err := os.ReadDir(f.Tree)
-	if err != nil {
-		return err
-	}
+func (f Files) addInParts(ctx context.Context, dirs map[string]walkedDir) error {
 	rules, err := os.ReadFile(f.path(excludeName))
 	if err != nil {
 		return err
 	}
-	parts := max(1, min(runtime.NumCPU(), len(names)))
+	shares := shareOut(dirs, runtime.NumCPU())
+	parts := len(shares)
 	indexes, failures := make([][]byte, parts), make([]error, parts)
 	var running sync.WaitGroup
 	for part := range parts {
-		hidden := slices.Clone(rules)
-		for i, name := range names {
-			if i%parts != part {
-				hidden = append(hidden, anchored(name.Name())+"\n"...)
+		var hiddenFiles, hiddenDirs []string
+		for other, share := range shares {
+			if other == part {
+				continue
+			}
+			for _, one := range share {
+				if !one.filesOnly {
+					hiddenDirs = append(hiddenDirs, anchored(one.dir)+"/")
+					continue
+				}
+				inside := ""
+				if one.dir != "." {
+					inside = anchored(one.dir)
+				}
+				hiddenFiles = append(hiddenFiles, inside+"/*")
+				for _, child := range dirs[one.dir].Children {
+					hiddenFiles = append(hiddenFiles, "!"+anchored(path.Join(one.dir, child))+"/")
+				}
 			}
 		}
+		hidden := append(slices.Clone(rules), strings.Join(slices.Concat(hiddenFiles, hiddenDirs, []string{""}), "\n")...)
 		excludes, index := f.path(excludeName+"-"+strconv.Itoa(part)), f.path(indexName+"-"+strconv.Itoa(part))
 		running.Go(func() {
 			defer func() { _, _ = os.Remove(excludes), os.Remove(index) }()
 			if failures[part] = os.WriteFile(excludes, hidden, 0o644); failures[part] != nil {
 				return
 			}
-			if _, failures[part] = f.gitIndexed(ctx, index, "", "-c", "core.excludesFile="+excludes, "-c", packEveryBlob, "-c", "index.version=2", "add", "--all"); failures[part] != nil {
+			if _, failures[part] = f.gitIndexed(ctx, index, "", "-c", "core.excludesFile="+excludes, "-c", packEveryBlob, "-c", fastestCompression, "-c", "index.version=2", "add", "--all"); failures[part] != nil {
 				return
 			}
 			if raw, err := os.ReadFile(index); !errors.Is(err, fs.ErrNotExist) {
@@ -234,6 +247,50 @@ func (f Files) addInParts(ctx context.Context) error {
 	return os.Rename(f.path(indexName+".joined"), f.path(indexName))
 }
 
+type addShare struct {
+	dir       string
+	filesOnly bool
+	weight    int
+}
+
+func shareOut(dirs map[string]walkedDir, parts int) [][]addShare {
+	weights := map[string]int{}
+	var weigh func(dir string) int
+	weigh = func(dir string) int {
+		weights[dir] = dirs[dir].Files
+		for _, child := range dirs[dir].Children {
+			weights[dir] += weigh(path.Join(dir, child))
+		}
+		return weights[dir]
+	}
+	most := max(1, weigh(".")/parts)
+	var units []addShare
+	var split func(dir string)
+	split = func(dir string) {
+		units = append(units, addShare{dir: dir, filesOnly: true, weight: dirs[dir].Files})
+		for _, child := range dirs[dir].Children {
+			if inside := path.Join(dir, child); weights[inside] > most {
+				split(inside)
+			} else {
+				units = append(units, addShare{dir: inside, weight: weights[inside]})
+			}
+		}
+	}
+	split(".")
+	slices.SortStableFunc(units, func(a, b addShare) int { return cmp.Compare(b.weight, a.weight) })
+	shares, loads := make([][]addShare, min(parts, len(units))), make([]int, min(parts, len(units)))
+	for _, one := range units {
+		least := 0
+		for i := range shares {
+			if loads[i] < loads[least] || loads[i] == loads[least] && len(shares[i]) < len(shares[least]) {
+				least = i
+			}
+		}
+		shares[least], loads[least] = append(shares[least], one), loads[least]+one.weight
+	}
+	return shares
+}
+
 func anchored(path string) string {
 	return "/" + strings.NewReplacer(`\`, `\\`, "*", `\*`, "?", `\?`, "[", `\[`).Replace(path)
 }
@@ -254,6 +311,7 @@ func (f Files) exclude(skipped []string) error {
 
 type walkedDir struct {
 	Changed  int64    `json:"changed"`
+	Files    int      `json:"files,omitempty"`
 	Ignore   string   `json:"ignore,omitempty"`
 	Children []string `json:"children,omitempty"`
 	Ignored  []string `json:"ignored,omitempty"`
@@ -271,10 +329,10 @@ type visit struct {
 	trusted bool
 }
 
-func (f Files) linksAndLargeFiles(ctx context.Context) ([]string, error) {
+func (f Files) walk(ctx context.Context) (walk, error) {
 	rules, err := os.ReadFile(f.path(excludeName))
 	if err != nil {
-		return nil, err
+		return walk{}, err
 	}
 	var was walk
 	if raw, err := os.ReadFile(f.path(walkName)); err == nil {
@@ -287,7 +345,7 @@ func (f Files) linksAndLargeFiles(ctx context.Context) ([]string, error) {
 		next, fresh := f.readLevel(level, was, now)
 		ignored, err := f.askIgnored(ctx, &asker, fresh)
 		if err != nil {
-			return nil, err
+			return walk{}, err
 		}
 		for _, child := range fresh {
 			parent, name := path.Dir(child), path.Base(child)
@@ -305,6 +363,10 @@ func (f Files) linksAndLargeFiles(ctx context.Context) ([]string, error) {
 	if raw, err := json.Marshal(now); err == nil {
 		_ = os.WriteFile(f.path(walkName), raw, 0o644)
 	}
+	return now, nil
+}
+
+func (now walk) skipped() []string {
 	var found []string
 	for dir, seen := range now.Dirs {
 		for _, skipped := range slices.Concat(seen.Links, seen.Large) {
@@ -312,7 +374,7 @@ func (f Files) linksAndLargeFiles(ctx context.Context) ([]string, error) {
 		}
 	}
 	slices.Sort(found)
-	return found, nil
+	return found
 }
 
 func (f Files) readLevel(level []visit, was, now walk) (next []visit, fresh []string) {
@@ -355,6 +417,7 @@ func (f Files) readLevel(level []visit, was, now walk) (next []visit, fresh []st
 					seen.Links = append(seen.Links, name)
 				}
 			case !one.IsDir():
+				seen.Files++
 				if info, err := one.Info(); err == nil && info.Size() > largestKeptFileBytes {
 					seen.Large = append(seen.Large, name)
 				}

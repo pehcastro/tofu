@@ -12,9 +12,11 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -62,8 +64,8 @@ func (f Files) Commit(ctx context.Context, message, tree string, parents ...stri
 		body += "parent " + parent + "\n"
 	}
 	signed := "tofu <tofu@localhost> " + strconv.FormatInt(time.Now().Unix(), 10) + " +0000\n"
-	id, err := f.writeObject("commit", []byte(body+"author "+signed+"committer "+signed+"\n"+message))
-	return hex.EncodeToString(id), err
+	commit := objectOf("commit", []byte(body+"author "+signed+"committer "+signed+"\n"+message))
+	return hex.EncodeToString(commit.id[:]), f.writeLoose(commit)
 }
 
 func (f Files) sha1Objects() bool {
@@ -83,8 +85,22 @@ func (f Files) writeTreeHere() (string, bool) {
 	if !ok {
 		return "", false
 	}
-	id, err := f.writeTreeOf(entries, "")
-	return hex.EncodeToString(id), err == nil
+	var trees []object
+	id := treesOf(entries, "", &trees)
+	slices.SortFunc(trees, func(a, b object) int { return bytes.Compare(a.id[:], b.id[:]) })
+	trees = slices.CompactFunc(trees, func(a, b object) bool { return a.id == b.id })
+	writers := min(runtime.NumCPU(), len(trees))
+	failures := make([]error, writers)
+	var writing sync.WaitGroup
+	for writer := range writers {
+		writing.Go(func() {
+			for i := writer; i < len(trees) && failures[writer] == nil; i += writers {
+				failures[writer] = f.writeLoose(trees[i])
+			}
+		})
+	}
+	writing.Wait()
+	return hex.EncodeToString(id[:]), errors.Join(failures...) == nil
 }
 
 func readIndex(raw []byte) ([]indexed, bool) {
@@ -133,6 +149,7 @@ func joinIndexes(parts [][]byte) ([]byte, bool) {
 		entries = append(entries, read...)
 	}
 	slices.SortFunc(entries, func(a, b indexed) int { return strings.Compare(a.path, b.path) })
+	entries = slices.CompactFunc(entries, func(a, b indexed) bool { return a.path == b.path })
 	joined := binary.BigEndian.AppendUint32(binary.BigEndian.AppendUint32([]byte(indexSignature), 2), uint32(len(entries)))
 	for _, one := range entries {
 		joined = append(joined, one.raw...)
@@ -141,7 +158,17 @@ func joinIndexes(parts [][]byte) ([]byte, bool) {
 	return append(joined, sum[:]...), true
 }
 
-func (f Files) writeTreeOf(entries []indexed, prefix string) ([]byte, error) {
+type object struct {
+	id  [sha1.Size]byte
+	raw []byte
+}
+
+func objectOf(kind string, body []byte) object {
+	raw := append([]byte(kind+" "+strconv.Itoa(len(body))+"\x00"), body...)
+	return object{id: sha1.Sum(raw), raw: raw}
+}
+
+func treesOf(entries []indexed, prefix string, trees *[]object) [sha1.Size]byte {
 	type entry struct {
 		mode, name string
 		id         []byte
@@ -159,11 +186,8 @@ func (f Files) writeTreeOf(entries []indexed, prefix string) ([]byte, error) {
 		for j < len(entries) && strings.HasPrefix(entries[j].path, inside) {
 			j++
 		}
-		id, err := f.writeTreeOf(entries[i:j], inside)
-		if err != nil {
-			return nil, err
-		}
-		tree = append(tree, entry{mode: treeMode, name: name + "/", id: id})
+		id := treesOf(entries[i:j], inside, trees)
+		tree = append(tree, entry{mode: treeMode, name: name + "/", id: id[:]})
 		i = j
 	}
 	slices.SortFunc(tree, func(a, b entry) int { return cmp.Compare(a.name, b.name) })
@@ -172,22 +196,22 @@ func (f Files) writeTreeOf(entries []indexed, prefix string) ([]byte, error) {
 		body.WriteString(one.mode + " " + strings.TrimSuffix(one.name, "/") + "\x00")
 		body.Write(one.id)
 	}
-	return f.writeObject("tree", body.Bytes())
+	written := objectOf("tree", body.Bytes())
+	*trees = append(*trees, written)
+	return written.id
 }
 
-func (f Files) writeObject(kind string, body []byte) ([]byte, error) {
-	object := append([]byte(kind+" "+strconv.Itoa(len(body))+"\x00"), body...)
-	sum := sha1.Sum(object)
-	name := hex.EncodeToString(sum[:])
+func (f Files) writeLoose(written object) error {
+	name := hex.EncodeToString(written.id[:])
 	dir := filepath.Join(f.Dir(), "objects", name[:2])
 	if _, err := os.Stat(filepath.Join(dir, name[2:])); err == nil {
-		return sum[:], nil
+		return nil
 	}
 	var packed bytes.Buffer
 	deflate := zlib.NewWriter(&packed)
-	_, _ = deflate.Write(object)
+	_, _ = deflate.Write(written.raw)
 	if err := deflate.Close(); err != nil {
-		return nil, err
+		return err
 	}
 	temp, err := os.CreateTemp(dir, "tmp_obj_")
 	if errors.Is(err, fs.ErrNotExist) {
@@ -196,7 +220,7 @@ func (f Files) writeObject(kind string, body []byte) ([]byte, error) {
 		}
 	}
 	if err != nil {
-		return nil, err
+		return err
 	}
 	_, err = temp.Write(packed.Bytes())
 	if err = errors.Join(err, temp.Close()); err == nil {
@@ -204,7 +228,6 @@ func (f Files) writeObject(kind string, body []byte) ([]byte, error) {
 	}
 	if err != nil {
 		_ = os.Remove(temp.Name())
-		return nil, err
 	}
-	return sum[:], nil
+	return err
 }
