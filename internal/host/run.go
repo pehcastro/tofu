@@ -26,6 +26,7 @@ import (
 	llm "tofu/internal/models/llm/core"
 	"tofu/internal/models/transport"
 	"tofu/internal/platform/fs"
+	"tofu/internal/store/memory/entries"
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
 	"tofu/internal/tools/contract"
@@ -185,6 +186,7 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 		return limitReached{}
 	}
 	defer func() { _ = releaseTurn() }()
+	defer h.cronMoved()
 	labelled := h.labelAhead(id)
 	ran := strings.TrimSpace(h.takeRan())
 	imagesOf := func(said string) []llm.Image {
@@ -197,15 +199,23 @@ func (h *Host) lead(ctx context.Context, pick Pick, task string, live Live, resu
 	images := imagesOf(task)
 	watch := &watcher{held: h.roster, spent: h.spent, emit: emit, now: h.now, turnID: live.Turn, seen: h.shown, stop: &leadStop{}}
 	var prepared Prepared
-	person, asking := awaitPerson(emit, h.asks, &prepared.Config), loop.WithQuestionsBlock(loop.WithShellRegistry(remember.WithMemoryKept(context.WithValue(ctx, cronFiredKey{}, h.cronFired), keptMemory(emit)), h.shells), h.questionsBlock)
-	fired, err := h.cron.Job(live.Origin.ID)
-	switch {
-	case live.Unattended && err == nil && fired.Spec().Away:
-		person, asking = unattended, loop.WithPersonAway(asking)
-	case live.Unattended:
-		person = unattended
-	default:
-		asking = loop.WithPersonForm(remember.WithMemoryPick(asking, pickMemory(emit, h.memoryPicks)), askForm(emit, h.questions))
+	away := func() bool { return h.cron.Away().On }
+	person, asking := unattended, loop.WithPersonAway(loop.WithQuestionsBlock(loop.WithShellRegistry(remember.WithMemoryKept(context.WithValue(ctx, cronFiredKey{}, h.cronFired), keptMemory(emit)), h.shells), h.questionsBlock), away)
+	if !live.Unattended {
+		attended, picked := awaitPerson(emit, h.asks, &prepared.Config), pickMemory(emit, h.memoryPicks)
+		person = func(ctx context.Context, request loop.GateRequest, decision loop.GateDecision) (loop.PersonAnswer, error) {
+			if away() {
+				return loop.PersonDenied, personAway
+			}
+			return attended(ctx, request, decision)
+		}
+		scoped := func(ctx context.Context, offer remember.MemoryOffer) (entries.Scope, error) {
+			if away() {
+				return "", personAway
+			}
+			return picked(ctx, offer)
+		}
+		asking = loop.WithPersonForm(remember.WithMemoryPick(asking, scoped), askForm(emit, h.questions))
 	}
 	prepared, err = h.engine.Prepare(Turn{ID: watch.turnID, Session: id, Task: task, Pick: pick, Images: images}, Hooks{
 		Lead:     func(model loop.Model) loop.Model { watch.inner = model; return watch },
@@ -954,14 +964,17 @@ func recordStanding(log string, request loop.GateRequest, place string, stood An
 	_, _ = ledger.NewWriter(log).Append(ledger.Row{Point: standingPoint, StateHash: ledger.HashOf(body), State: body, Verdict: verdict, TurnID: request.TurnID})
 }
 
-type noPerson struct{}
+type noPerson string
 
-func (noPerson) Error() string {
-	return "no person: a cron job started this turn and nobody is there to answer, so a call that would ask is refused"
-}
+func (n noPerson) Error() string { return string(n) }
+
+const (
+	cronFiredTurn noPerson = "no person: a cron job started this turn and nobody is there to answer, so a call that would ask is refused"
+	personAway    noPerson = "no person: the person is away until they say they are back, so a call that would ask is refused"
+)
 
 func unattended(context.Context, loop.GateRequest, loop.GateDecision) (loop.PersonAnswer, error) {
-	return loop.PersonDenied, noPerson{}
+	return loop.PersonDenied, cronFiredTurn
 }
 
 func askedPlace(request loop.GateRequest) string {

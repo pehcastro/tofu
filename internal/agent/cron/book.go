@@ -28,7 +28,7 @@ const (
 const (
 	idPrefix    = "c"
 	expiredWord = "expired "
-	whileAway   = "the person is away while this job runs, so nobody answers in this turn: keep working, and where a question has a recommended option that can be undone, " +
+	whileAway   = "the person is away, so nobody answers in this turn: keep working, and where a question has a recommended option that can be undone, " +
 		"take it and say in your reply what you took and why. anything that pushes, deletes, publishes or spends waits for the person"
 )
 
@@ -37,6 +37,7 @@ var (
 	errAgentCheck  = errors.New("a check command runs with no gate, so only the person names one: ask the person to set it")
 	errGoalCheck   = errors.New("a job that fires after each turn needs a check command, or it fires until a cap stops it")
 	errUnchanged   = errors.New("the change leaves the job as it was")
+	errAwayAlready = errors.New("the session is already set that way")
 	errEmptyPrompt = errors.New("a cron job needs a prompt")
 )
 
@@ -46,7 +47,13 @@ type Spec struct {
 	Expires  time.Time `json:"expires"`
 	Until    string    `json:"until,omitempty"`
 	Paused   bool      `json:"paused,omitempty"`
-	Away     bool      `json:"away,omitempty"`
+}
+
+type Away struct {
+	On     bool      `json:"on"`
+	At     time.Time `json:"at"`
+	By     By        `json:"by"`
+	Reason string    `json:"reason"`
 }
 
 type Version struct {
@@ -106,7 +113,6 @@ type Change struct {
 	Expires  time.Time
 	Until    string
 	Paused   *bool
-	Away     *bool
 }
 
 type Book struct {
@@ -116,17 +122,19 @@ type Book struct {
 	path    string
 	made    int
 	jobs    []*Job
+	away    Away
 }
 
 type kept struct {
 	Made int    `json:"made"`
 	Jobs []*Job `json:"jobs"`
+	Away Away   `json:"away,omitzero"`
 }
 
 func (b *Book) Load(path string) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.path, b.made, b.jobs = path, 0, nil
+	b.path, b.made, b.jobs, b.away = path, 0, nil, Away{}
 	defer b.changed()
 	if path == "" {
 		return nil
@@ -139,7 +147,7 @@ func (b *Book) Load(path string) error {
 		b.path = ""
 		return err
 	}
-	b.made, b.jobs = read.Made, read.Jobs
+	b.made, b.jobs, b.away = read.Made, read.Jobs, read.Away
 	return nil
 }
 
@@ -179,10 +187,10 @@ func (b *Book) save() error {
 	if _, err := readKept(b.path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	if b.made == 0 {
+	if b.made == 0 && b.away == (Away{}) {
 		return nil
 	}
-	body, err := json.MarshalIndent(kept{Made: b.made, Jobs: b.jobs}, "", "  ")
+	body, err := json.MarshalIndent(kept{Made: b.made, Jobs: b.jobs, Away: b.away}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -275,9 +283,6 @@ func (b *Book) Update(id string, change Change, by By, reason string, now time.T
 	}
 	if change.Paused != nil {
 		after.Paused = *change.Paused
-	}
-	if change.Away != nil {
-		after.Away = *change.Away
 	}
 	stretch := personExpiry(*job).Add(konst.CronExpiryHours * time.Hour)
 	expired := strings.HasPrefix(job.Ended, expiredWord)
@@ -419,7 +424,7 @@ func (b *Book) Due(ctx context.Context, now time.Time, moment Moment) []Fire {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for _, one := range due {
-		fires = append(fires, fire(one, now))
+		fires = append(fires, fire(one, b.away.On, now))
 	}
 	if len(fires) == 0 {
 		return nil
@@ -448,7 +453,7 @@ func (b *Book) check(ctx context.Context, command string) (bool, string, error) 
 	return exit == 0, "`" + command + "` exited " + strconv.Itoa(exit) + "\n" + tail, nil
 }
 
-func fire(one pending, now time.Time) Fire {
+func fire(one pending, away bool, now time.Time) Fire {
 	job, spec := one.job, one.spec
 	said, _, _ := strings.Cut(one.checked, "\n")
 	schedule, _ := Parse(spec.Schedule, now)
@@ -474,7 +479,7 @@ func fire(one pending, now time.Time) Fire {
 		prompt += "\n\nits check is not met yet: " + one.checked
 		line += " · not met: " + said
 	}
-	if spec.Away {
+	if away {
 		prompt += "\n\n" + whileAway
 		line += " · " + awayWord
 	}
@@ -484,6 +489,34 @@ func fire(one pending, now time.Time) Fire {
 func firstLine(text string) string {
 	line, _, _ := strings.Cut(strings.TrimSpace(text), "\n")
 	return line
+}
+
+func (b *Book) Away() Away {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.away
+}
+
+func (b *Book) SetAway(on bool, by By, reason string, now time.Time) (Away, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	switch {
+	case reason == "":
+		return b.away, ErrNoReason
+	case on == b.away.On:
+		return b.away, errAwayAlready
+	}
+	b.away = Away{On: on, At: now, By: by, Reason: reason}
+	b.changed()
+	return b.away, b.save()
+}
+
+func (a Away) Line() string {
+	state := "back"
+	if a.On {
+		state = "away"
+	}
+	return "the person is " + state + ", set by " + string(a.By) + ": " + a.Reason
 }
 
 func (b *Book) Hand(id string, at time.Time) {

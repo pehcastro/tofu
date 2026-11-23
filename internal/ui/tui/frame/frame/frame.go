@@ -63,6 +63,7 @@ type Status struct {
 	InUse        []string
 	Agents       int
 	Crons        int
+	Away         bool
 	Judge        *host.JudgeStatus
 	At           time.Time
 	Note         string

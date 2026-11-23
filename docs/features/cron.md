@@ -43,14 +43,22 @@ on time too, and a job keeps firing while one long turn runs.
 ## While you are away
 
 Tell the orchestrator you are leaving, going to sleep or away from the
-computer, and that the work should go on. It makes a job for that work with
-`away` set, or sets `away` on a job you already have, with its `cron` tool.
-There is no command to type and no switch to remember: the job carries the
-value, and the crons view and the fire line say `away: decides what can be
-undone`.
+computer. It sets the session away with its `cron` tool, action `away` and
+the reason, and makes a job that brings the work back while you are gone if
+you want it to go on. There is no command to type and no switch to
+remember. The chat says `the person is away, set by agent: <reason>`,
+`tofu session trace` has a `cron` row with the reason, and the session keeps
+the state in its `cron.json`, so a resumed session stays away. A job that
+fires while you are away says `away: decides what can be undone` on its
+fire line.
 
-A turn an away job starts does not wait for you:
+Away covers the whole session, not one job. Every turn while you are away
+does not wait for you, whatever started it: a cron fire, a sub-agent's
+report, a shell notice or a check-in.
 
+- **No form opens.** A call to `ask_person` answers `person_away`, the
+  chat shows `answered as person_away`, and the lead takes the option it
+  recommended.
 - **A sub-agent's question is decided.** When a sub-agent reports its ticket
   not possible, tofu takes the option it recommended and the ticket goes back
   to work. The ticket's Log and its question say it was `decided while the
@@ -65,11 +73,15 @@ A turn an away job starts does not wait for you:
   while you were away, with the ticket, the option and why, and each held
   question with the reason it was held. `--json` carries the same under
   `away`, and the catch-up file has a `Decided while you were away` section.
-- **The gate does not relax.** A tool call that would ask you is refused in
-  an away turn as in any job's turn, and `git push` stays blocked.
+- **The gate does not relax.** A tool call that would ask you is refused,
+  saying the person is away until they say they are back, and `git push`
+  stays blocked. A memory that would ask you where to keep it is not kept.
+- **The footer says so.** The status line shows `away` beside the cron count
+  while the session is away.
 
-A job without `away`, or a turn you start yourself, asks you as before. Tell
-the orchestrator you are back and it sets `away` to false.
+Tell the orchestrator you are back and it turns away off with action
+`back`: the chat says `the person is back, set by agent: <reason>`, the
+trace has the `cron` row, and the next `ask_person` opens a form again.
 
 ## Guards
 

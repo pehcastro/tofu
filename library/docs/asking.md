@@ -60,13 +60,14 @@ message under `auto`:
   and the question stays open, or the turn stopped, and the recommended
   option stands; `timed_out`, no answer in time under auto, nothing chosen;
   `undelivered`, nobody could be asked; `taken_in_auto`, the question never
-  reached you, see below
+  reached you, see below; `person_away`, the session is away, so no form
+  opened, see `tofu docs cron`
 - status: `answered`; `skipped`, you chose nothing; `unanswered`
 - a client of `tofu serve` sees it as a `tofu/askPerson` request; see
   `tofu docs serve`
 
-On `undelivered`, or a turn that stopped, the lead takes each recommended
-option, says which, and carries on. On return or `timed_out` it picks
+On `undelivered`, `person_away`, or a turn that stopped, the lead takes
+each recommended option, says which, and carries on. On return or `timed_out` it picks
 nothing for you, does nothing that depends on the answer, and does not ask
 again. Once answered, the chat keeps the question, its context, every option
 with its description, the recommended one and the one you chose. The tool

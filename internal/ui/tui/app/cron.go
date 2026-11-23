@@ -88,6 +88,6 @@ func (a *App) cronLine(line string) tea.Cmd {
 
 func (a *App) countCrons() {
 	if a.options.Host != nil {
-		a.status.Crons = a.options.Host.Cron().Live()
+		a.status.Crons, a.status.Away = a.options.Host.Cron().Live(), a.options.Host.Cron().Away().On
 	}
 }

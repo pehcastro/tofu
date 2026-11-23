@@ -219,9 +219,6 @@ func (j Job) Line(now time.Time) string {
 	if j.Ended == "" {
 		parts = append(parts, "expires "+spec.Expires.Format(timeLayout))
 	}
-	if spec.Away {
-		parts = append(parts, awayWord)
-	}
 	parts = append(parts, "fired "+strconv.Itoa(j.Fires))
 	if j.LastResult != "" {
 		parts = append(parts, "last: "+j.LastResult)
@@ -239,9 +236,6 @@ func (j Job) History() []string {
 		}
 		if spec.Paused {
 			detail = append(detail, "paused")
-		}
-		if spec.Away {
-			detail = append(detail, awayWord)
 		}
 		lines = append(lines,
 			"v"+strconv.Itoa(version.N)+" · "+version.At.Format(timeLayout)+" · by "+string(version.By)+" · "+version.Reason,

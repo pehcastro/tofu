@@ -200,8 +200,13 @@ func leadOf(site spawnSite, asking string) (string, bool) {
 
 type personAwayKey struct{}
 
-func WithPersonAway(ctx context.Context) context.Context {
-	return context.WithValue(ctx, personAwayKey{}, true)
+func WithPersonAway(ctx context.Context, away func() bool) context.Context {
+	return context.WithValue(ctx, personAwayKey{}, away)
+}
+
+func PersonAway(ctx context.Context) bool {
+	away, _ := ctx.Value(personAwayKey{}).(func() bool)
+	return away != nil && away()
 }
 
 func (t *SpawnTool) decidedAway(ticket boardy.Ticket, q boardy.Question) string {
@@ -218,7 +223,7 @@ func (t *SpawnTool) decidedAway(ticket boardy.Ticket, q boardy.Question) string 
 }
 
 func (t *SpawnTool) askThePerson(ctx context.Context, agent string, ticket boardy.Ticket, q boardy.Question) string {
-	if away, _ := ctx.Value(personAwayKey{}).(bool); away {
+	if PersonAway(ctx) {
 		return t.decidedAway(ticket, q)
 	}
 	note := fmt.Sprintf("\n\n%s reports %s not possible, so %s is %s on Q%d %q and only the person decides it. take no option for them, and do not repeat or re-ask the question in chat: ",

@@ -115,6 +115,9 @@ func footerLeft(status Status, rate TokenRate, width int, form quotaLabel) (head
 	if status.Crons > 0 {
 		head = append(head, panel(footerSeparator+"cron "+strconv.Itoa(status.Crons), look.Mint))
 	}
+	if status.Away {
+		head = append(head, panel(footerSeparator+"away", look.Amber))
+	}
 	if judge := judgeSays(status.Judge); judge != "" {
 		head = append(head, panel(footerSeparator+judge, look.Amber))
 	}

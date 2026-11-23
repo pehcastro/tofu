@@ -29,6 +29,7 @@ const (
 	askTimedOut    askOutcome = "timed_out"
 	askUndelivered askOutcome = "undelivered"
 	askTakenInAuto askOutcome = "taken_in_auto"
+	askPersonAway  askOutcome = "person_away"
 )
 
 type askStatus string
@@ -51,6 +52,8 @@ const noAnswerYet = "no answer came in time, so nothing was chosen and the quest
 
 const closedStaysOpen = "the person closed the question without choosing, so nothing was chosen and the question stays open: take no option for them, do nothing that depends on it, and do not ask it again. " +
 	"keep to work that does not depend on it, or end the turn saying it waits on their decision; they answer in words when they are ready."
+
+const personIsAway = "the person is away until they say they are back, so nobody was asked and no form opened: do not ask again while they are away"
 
 const noAnswerHead = "no answer yet; nothing was chosen and the question stays open"
 
@@ -121,6 +124,7 @@ func (AskPerson) Definition() core.Tool {
 			"tofu adds a free-text other to every choice, so never write one. the answer says the outcome and, for each question, its status, what was chosen and any note the person typed with it. " +
 			"in auto the work never stops on it: with no answer in time you are told none came, nothing is chosen, and the question stays open until the person answers. " +
 			"a person who closes the form chooses nothing, and the decision stays open. " +
+			"while the person is away no form opens: the call is refused with outcome person_away and the recommended option stands. " +
 			"a reversible recommendation the ask judge agrees with is taken without asking, unless it needs_yes",
 		Parameters: map[string]any{
 			"type":       "object",
@@ -153,6 +157,10 @@ func (a AskPerson) Run(ctx context.Context, raw json.RawMessage) (contract.Resul
 	}
 	for i := range questions {
 		questions[i].Options = questions[i].Choices()
+	}
+	if loop.PersonAway(ctx) {
+		shown, err := json.Marshal(resolved(askPersonAway, questions, held, personIsAway))
+		return contract.Result{Content: string(shown)}, err
 	}
 	auto := a.Auto()
 	if blocks, decided := loop.QuestionsBlockFrom(ctx); decided {
