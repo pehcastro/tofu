@@ -48,8 +48,9 @@ func RestoreSubAgents(store *session.Store, id string, roster *subagents.Roster,
 	if err != nil {
 		return err
 	}
-	runs := recordedSubAgents(sessionChain(lineage))
-	stopErr := endStoppedByTheRestart(store, runs)
+	chain := sessionChain(lineage)
+	runs := recordedSubAgents(chain)
+	stopErr := endStoppedByTheRestart(store, runs, lastHostEnd(chain))
 	store.ForgetRead()
 	roster.RecallWith(spawnedIn(store, lineage))
 	for _, run := range runs {
@@ -88,7 +89,27 @@ func readBack(store *session.Store, id, agentID string) func() ([]core.Message, 
 	}
 }
 
-func endStoppedByTheRestart(store *session.Store, runs []*recordedSubAgent) error {
+const HostEnded session.StopKind = "host end"
+
+type hostEnd struct {
+	stop session.Stop
+	at   time.Time
+}
+
+func lastHostEnd(chain []recordedSession) hostEnd {
+	var last hostEnd
+	for _, recorded := range chain {
+		for _, event := range recorded.events {
+			var notice session.StopBody
+			if event.Kind == session.EventNotice && json.Unmarshal(event.Body, &notice) == nil && notice.Stop != nil && notice.Stop.Kind == HostEnded {
+				last = hostEnd{stop: *notice.Stop, at: event.At}
+			}
+		}
+	}
+	return last
+}
+
+func endStoppedByTheRestart(store *session.Store, runs []*recordedSubAgent, ended hostEnd) error {
 	var failed []error
 	for _, run := range runs {
 		if run.ended {
@@ -110,8 +131,13 @@ func endStoppedByTheRestart(store *session.Store, runs []*recordedSubAgent) erro
 			continue
 		}
 		stopped := "sub-agent " + run.agent.ID + " is " + subagents.Errored.String() + ": tofu closed it at step " + strconv.Itoa(run.steps) + " of " + strconv.Quote(run.agent.Mission)
+		after := ", after "
+		if ended.at.After(run.active) {
+			stopped += " because the host, " + ended.stop.By + ", " + ended.stop.Why
+			after = "; its last call was "
+		}
 		if len(run.calls) > 0 {
-			stopped += ", after " + run.calls[len(run.calls)-1]
+			stopped += after + run.calls[len(run.calls)-1]
 		}
 		stopped += "; message it to resume."
 		_, err = log.Append(session.Event{Agent: run.agent.ID, Kind: session.EventReport}, session.ReportBody{State: subagents.Errored.String(), Text: stopped})

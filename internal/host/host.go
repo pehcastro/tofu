@@ -140,6 +140,7 @@ type Host struct {
 	ran       []string
 	release   func() error
 	heldID    string
+	alive     *heartbeat
 	turn      string
 	asking    AskingMode
 
@@ -718,6 +719,7 @@ func (h *Host) hold(id string) error {
 	h.release, h.heldID = release, id
 	switch {
 	case release != nil:
+		h.alive = h.beat(store.Dir(id))
 		h.openAudience(moving)
 	case moving != nil:
 		moving.close()
@@ -761,10 +763,13 @@ func (h *Host) letGo() {
 	if f := h.following.Swap(nil); f != nil {
 		f.leave()
 	}
+	if h.alive != nil {
+		h.alive.stop()
+	}
 	if h.release != nil {
 		_ = h.release()
 	}
-	h.release, h.heldID = nil, ""
+	h.release, h.heldID, h.alive = nil, "", nil
 }
 
 func (h *Host) loadCron(id string) error {
@@ -801,7 +806,7 @@ func (h *Host) carry(resumed Carry) error {
 	}
 	store, err := resumed.reading(h.dir)
 	if err == nil && !h.joins {
-		err = loop.RestoreSubAgents(store, resumed.Session, h.roster, h.inbox)
+		err = errors.Join(h.traceUnseenEnds(store, resumed.Session), loop.RestoreSubAgents(store, resumed.Session, h.roster, h.inbox))
 	}
 	if err != nil {
 		return fmt.Errorf("the sub-agents of %s were not all read back: %w", resumed.Session, err)

@@ -1,10 +1,22 @@
 package host
 
 import (
+	"os"
 	"path/filepath"
 
 	"golang.org/x/sys/windows"
 )
+
+func errorOutputInto(file *os.File) (restore func(), err error) {
+	was, err := windows.GetStdHandle(windows.STD_ERROR_HANDLE)
+	if err != nil {
+		return nil, err
+	}
+	if err := windows.SetStdHandle(windows.STD_ERROR_HANDLE, windows.Handle(file.Fd())); err != nil {
+		return nil, err
+	}
+	return func() { _ = windows.SetStdHandle(windows.STD_ERROR_HANDLE, was) }, nil
+}
 
 func hubSocketOf(home, name string) (string, error) {
 	return tempSocketOf(home, name)

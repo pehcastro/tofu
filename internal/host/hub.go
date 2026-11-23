@@ -414,6 +414,12 @@ func RunHub(project string, report safe.Report, say func(string), open HubSessio
 		return err
 	}
 	defer func() { _ = fs.Unlock(lock) }()
+	defer keepCrashOutput(place, say)()
+	if seam := os.Getenv(fatalAfterVariable); seam != "" {
+		if err := fatalAfter(seam); err != nil {
+			return err
+		}
+	}
 	_ = os.Remove(place.socket)
 	var listener *net.UnixListener
 	if err := throughSocketDir(place.socket, func(reachable string) (err error) {

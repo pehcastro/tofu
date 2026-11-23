@@ -83,6 +83,19 @@ exits 5 s after its last member leaves. When the last member leaves, the
 host stops the session's turn, naming that member, and ends its shells. A
 member that stops answering for 10 s is let go.
 
+A host that ends without closing its sessions still says why. While it
+holds a session it writes, every 5 s, a liveness record beside it: its
+process, the time, and what was running. It also keeps its error output
+in `~/.tofu/h/<key>.<process>.crash`, so a Go fatal error, out of memory
+included, lands there. The next open of that session writes one `host end`
+stop row naming the old process, its last event, when it was last alive,
+the gap, and the cause it can read: `crashed: "fatal error: ..."` with the
+first line of that output, `ended with no crash record` for a kill, or
+`was alive but made no progress since <time>` when work was running and
+nothing was recorded for 5 minutes before it ended. The sub-agents it
+stopped report that cause, and `tofu session trace` names it under
+`stops`.
+
 ```sh
 tofu host status
 tofu host ensure

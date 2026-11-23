@@ -10,6 +10,7 @@ import (
 
 	"tofu/apps/cli/output"
 	cli "tofu/apps/cli/page"
+	"tofu/internal/agent/loop"
 	"tofu/internal/agent/subagents"
 	"tofu/internal/cli/render"
 	"tofu/internal/store/session"
@@ -106,12 +107,12 @@ func traceSummaryLines(page cli.Page, timeline traceTimeline) []string {
 	lines := append(page.Title("Trace", facts, cli.Verdict{}), "")
 	lines = append(lines, cli.Indent(page.Facts([]cli.Fact{{Label: "turns", Text: strings.Join(turnWords, ", ")},
 		{Label: "rows", Text: strings.Join(kindWords, " · ")}, {Label: "startup", Text: startup}})...)...)
-	section := func(name string, rows []cli.Row) {
+	section := func(name string, rows []cli.Row, shown func(cli.Page, []cli.Row) []string) {
 		if len(rows) > 0 {
-			lines = append(append(lines, "", page.Section(name, cli.Verdict{})), fitted(page, rows)...)
+			lines = append(append(lines, "", page.Section(name, cli.Verdict{})), shown(page, rows)...)
 		}
 	}
-	section("sub-agents", traceAgentRows(timeline))
+	section("sub-agents", traceAgentRows(timeline), fitted)
 	var failed []cli.Row
 	for _, kind := range traceKinds() {
 		if group := failures[kind]; len(group) > 0 {
@@ -119,8 +120,8 @@ func traceSummaryLines(page cli.Page, timeline traceTimeline) []string {
 			failed = append(failed, cli.Row{Mark: cli.Fail, Cells: []string{string(kind), output.Plural(len(group), "failure"), "last " + latest.At.Format(time.TimeOnly), latest.who()}, Detail: latest.Text})
 		}
 	}
-	section("errors", failed)
-	section("stops", traceStopRows(stops))
+	section("errors", failed, fitted)
+	section("stops", traceStopRows(stops), func(page cli.Page, rows []cli.Row) []string { return cli.Indent(page.Rows(rows)...) })
 	hint := "tofu session trace " + timeline.Handle
 	return append(append(lines, "", page.Section("drill down", cli.Verdict{})), cli.Indent(
 		page.Hint(hint+" --kind stop,error"), page.Hint(hint+" --since 1h --agent lead --kind message"),
@@ -167,20 +168,28 @@ func traceStopRows(stops map[string][]traceRow) []cli.Row {
 	stopped := make([]cli.Row, len(turns))
 	for i, turnID := range turns {
 		group := stops[turnID]
-		var who, asked []string
+		var who, asked, ends []string
 		for _, row := range group {
 			if row.Asked == "" && !slices.Contains(who, row.who()) {
 				who = append(who, row.who())
 			}
 		}
 		for _, row := range asking {
-			if !row.At.Before(group[0].At) && !row.At.After(group[len(group)-1].At) && !slices.Contains(asked, row.Asked) {
+			if row.At.Before(group[0].At) || row.At.After(group[len(group)-1].At) {
+				continue
+			}
+			if row.State == string(loop.HostEnded) {
+				ends = append(ends, row.Text)
+			} else if !slices.Contains(asked, row.Asked) {
 				asked = append(asked, row.Asked)
 			}
 		}
 		said := "no stop row names who asked"
 		if len(asked) > 0 {
 			said = "asked by " + strings.Join(asked, "; ")
+		}
+		if len(ends) > 0 {
+			said = strings.Join(ends, "; ")
 		}
 		if len(who) > 0 {
 			said = "stopped " + strings.Join(who, ", ") + " · " + said
