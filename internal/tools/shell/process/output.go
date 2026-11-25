@@ -70,7 +70,7 @@ func (t *Tails) Tail(r *Registry, name string, lines int) (string, error) {
 	moved := held == nil || held.key != key
 	if moved {
 		held = &tailed{key: key, logs: []logEnd{{path: r.logPath(name), limit: konst.ShellTailBytes}}}
-		for _, path := range namedLogs(entry.Dir, entry.Command) {
+		for _, path := range namedLogs(entry) {
 			held.logs = append(held.logs, logEnd{path: path, since: entry.Started, limit: konst.ShellNamedLogBytes})
 		}
 		t.shells[name] = held
@@ -154,7 +154,7 @@ func (r *Registry) Timing(entry Shell, now time.Time) Timing {
 		now, timing.Ended = *entry.Ended, *entry.Ended
 	}
 	timing.Ran = now.Sub(entry.Started)
-	for _, path := range append(namedLogs(entry.Dir, entry.Command), r.logPath(entry.Name)) {
+	for _, path := range append(namedLogs(entry), r.logPath(entry.Name)) {
 		if info, err := os.Stat(path); err == nil && written(info, entry.Started) && info.ModTime().After(timing.Last) {
 			timing.Last = info.ModTime()
 		}
@@ -199,7 +199,7 @@ func (r *Registry) Follow(name string, cursor *Cursor) (string, error) {
 	}
 	cursor.noted = true
 	own := r.logPath(name)
-	for _, path := range append([]string{own}, namedLogs(entry.Dir, entry.Command)...) {
+	for _, path := range append([]string{own}, namedLogs(entry)...) {
 		at := cursor.logs[path]
 		if at == nil {
 			at = &followed{}
@@ -293,9 +293,9 @@ func Steps(dir, command string) []Step {
 	return steps
 }
 
-func namedLogs(dir, command string) []string {
+func namedLogs(entry Shell) []string {
 	var paths []string
-	for _, step := range Steps(dir, command) {
+	for _, step := range Steps(entry.Dir, entry.Command) {
 		if step.Moved {
 			continue
 		}
@@ -303,12 +303,26 @@ func namedLogs(dir, command string) []string {
 			if slices.Contains([]string{"/dev/null", "$null", "nul"}, strings.ToLower(match[1])) {
 				continue
 			}
-			if path := within(step.Dir, match[1]); !slices.Contains(paths, path) {
+			if path := within(step.Dir, entry.expand(match[1])); !slices.Contains(paths, path) {
 				paths = append(paths, path)
 			}
 		}
 	}
 	return paths
+}
+
+func (s Shell) expand(path string) string {
+	return os.Expand(path, func(name string) string {
+		for _, entry := range slices.Backward(s.Env) {
+			if value, set := strings.CutPrefix(entry, name+"="); set {
+				return value
+			}
+		}
+		if value, set := os.LookupEnv(name); set {
+			return value
+		}
+		return "$" + name
+	})
 }
 
 func within(dir, path string) string {

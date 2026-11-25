@@ -137,10 +137,25 @@ func openJobByName(pid int, access uint32) (windows.Handle, error) {
 	return 0, callErr
 }
 
-func activeProcesses(job windows.Handle) (uint32, error) {
+func accounted(job windows.Handle) (jobAccounting, error) {
 	var accounting jobAccounting
 	err := windows.QueryInformationJobObject(job, windows.JobObjectBasicAccountingInformation, uintptr(unsafe.Pointer(&accounting)), uint32(unsafe.Sizeof(accounting)), nil)
+	return accounting, err
+}
+
+func activeProcesses(job windows.Handle) (uint32, error) {
+	accounting, err := accounted(job)
 	return accounting.ActiveProcesses, err
+}
+
+func treeCPU(pid int) (time.Duration, error) {
+	job, err := openJobByName(pid, jobAccessQuery)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = windows.CloseHandle(job) }()
+	accounting, err := accounted(job)
+	return time.Duration(accounting.TotalUserTime+accounting.TotalKernelTime) * 100, err
 }
 
 func treeAlive(pid int) bool {

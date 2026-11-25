@@ -27,11 +27,15 @@ func decodeIn(output []byte, console, oem uint32) string {
 	if page == 0 || page == codePageUTF8 {
 		page = oem
 	}
+	lines := bytes.SplitAfter(output, []byte("\n"))
+	if last := lines[len(lines)-1]; utf8.Valid(last[:wholeRunes(last)]) {
+		lines[len(lines)-1] = last[:wholeRunes(last)]
+	}
 	if page == codePageUTF8 {
-		return string(output)
+		return string(bytes.Join(lines, nil))
 	}
 	var decoded strings.Builder
-	for _, line := range bytes.SplitAfter(output, []byte("\n")) {
+	for _, line := range lines {
 		if utf8.Valid(line) {
 			decoded.Write(line)
 			continue

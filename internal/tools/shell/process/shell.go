@@ -86,6 +86,7 @@ type live struct {
 	drained  <-chan struct{}
 	finished chan struct{}
 	killed   bool
+	told     bool
 }
 
 type Lifetime int

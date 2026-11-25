@@ -21,6 +21,9 @@ func TestDecodeReadsEachLineInTheCodePageItWasWrittenIn(t *testing.T) {
 		{"one utf-8 line and one oem line", "café\n" + chcpLine, codePageUTF8, oem850, "café\n" + chcpRead},
 		{"the oem page is utf-8 too", chcpLine, codePageUTF8, codePageUTF8, chcpLine},
 		{"a trailing newline", "caf\x82\n", 0, oem850, "café\n"},
+		{"a running shell read while its last line was half a rune", "└─ [4] compile\n   └─ [80\xe2\x94", 0, oem850, "└─ [4] compile\n   └─ [80"},
+		{"a finished line ending in a lead byte is the code page", "abc\xe2\n", 0, oem850, "abcÔ\n"},
+		{"a utf-8 system read while the last line was half a rune", "└─ [4] compile\n   └─ [80\xe2\x94", codePageUTF8, codePageUTF8, "└─ [4] compile\n   └─ [80"},
 	} {
 		if got := decodeIn([]byte(row.output), row.console, row.oem); got != row.want {
 			t.Errorf("%s: %q, want %q", row.name, got, row.want)

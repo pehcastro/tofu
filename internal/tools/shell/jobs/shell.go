@@ -7,11 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 
 	"tofu/internal/agent/loop"
+	"tofu/internal/cli/render"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/tools/contract"
@@ -24,8 +26,16 @@ type Shells struct {
 }
 
 type Seen struct {
+	mu     sync.Mutex
+	shells map[seenShell]*seenState
+}
+
+type seenState struct {
 	mu      sync.Mutex
-	cursors map[seenShell]*process.Cursor
+	logs    process.Cursor
+	watched process.Watcher
+	waited  time.Time
+	idle    bool
 }
 
 type seenShell struct {
@@ -39,12 +49,12 @@ func (Shells) Definition() core.Tool {
 	return core.Tool{
 		Name: loop.ShellToolName,
 		Description: fmt.Sprintf("controls a process bash kept running, by the name that call returned, such as bash-1: a background: true start, or a command bash moved to a background shell because it was still running. "+
-			"wait returns as soon as it ends, as soon as its last lines hold the until text, or after %d s, with whether it is still running, its exit code and its last lines: one wait covers a long build, never sleep in bash. "+
+			"wait returns as soon as it ends, as soon as its last lines hold the until text, as soon as it or a file it writes to prints a failure line, as soon as it sits %s with no output and no CPU, or after %d s, with whether it is still running, the CPU its process tree used, the files it writes to, its exit code and its last lines: one wait covers a long build, never sleep in bash. "+
 			"wait with for returns as soon as the thing is ready, as JSON with met, after_ms and the matched line, or met false and its last lines: for is a regex over every line it printed, such as listening on, or port:3000, file:dist/app.js, or an http:// address that must answer 200. "+
 			"logs folds what it printed into templates with counts, and the end of a log file its command names, such as -Log build.log or > build.log; a later logs prints only new_since_last_call. "+
 			"stop kills its whole process tree, children included, so the port it held is free when this returns. "+
 			"restart stops it and starts the same command in the same folder under the same name. never stop a server with kill, taskkill or pkill. "+
-			"ports needs no name and says, one JSON line per port, who listens on port, or on every port when port is left out: pid, command, the shell holding it and started_by this_session, other_session or outside, or free; it never kills", konst.ShellWaitMillis/1000),
+			"ports needs no name and says, one JSON line per port, who listens on port, or on every port when port is left out: pid, command, the shell holding it and started_by this_session, other_session or outside, or free; it never kills", process.QuietBeforeIdle, konst.ShellWaitMillis/1000),
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -105,7 +115,10 @@ func (s Shells) runOp(ctx context.Context, registry *process.Registry, args shel
 		if err != nil {
 			return "", nil, err
 		}
-		text, first, err := s.Seen.follow(registry, entry)
+		state, first := s.Seen.of(entry)
+		state.mu.Lock()
+		text, err := registry.Follow(entry.Name, &state.logs)
+		state.mu.Unlock()
 		if err != nil {
 			return "", nil, err
 		}
@@ -137,43 +150,126 @@ func (s Shells) runOp(ctx context.Context, registry *process.Registry, args shel
 		if loop.ExitComesBack(ctx, args.Name) {
 			return args.Name + " is your own command, moved to the background, and its exit comes back to you as a message when it ends, so this does not wait: answer the person, go on with other work, or end your turn", nil, nil
 		}
-		ended, tail, err := awaitEndOrText(ctx, registry, args.Name, args.Until)
-		if err != nil {
-			return "", nil, err
-		}
-		state := args.Name + " is still running: wait again, or stop it"
-		switch words := endWords(ended); {
-		case ended.HeldByPerson():
-			return args.Name + " was taken over by the person; no longer waiting", nil, nil
-		case ended.State == process.Running && args.Until != "" && strings.Contains(tail, args.Until):
-			state = fmt.Sprintf("%s printed %q and is still running", args.Name, args.Until)
-		case words != "":
-			state = args.Name + " " + words
-		}
-		now := time.Now()
-		return state + ", " + registry.Timing(ended, now).Words(now) + ". its last lines:\n" + tail, ended.ExitCode, nil
+		state, _ := s.Seen.of(entry)
+		state.mu.Lock()
+		defer state.mu.Unlock()
+		return waitOn(ctx, registry, entry, args.Until, state)
 	}
 	return "", nil, fmt.Errorf("op %q is not wait, logs, stop, restart or ports", args.Op)
 }
 
-func (s *Seen) follow(registry *process.Registry, entry process.Shell) (string, bool, error) {
+func (s *Seen) of(entry process.Shell) (*seenState, bool) {
 	if s == nil {
-		text, err := registry.Follow(entry.Name, &process.Cursor{})
-		return text, true, err
+		return &seenState{}, true
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	key := seenShell{name: entry.Name, started: entry.Started.UnixNano()}
-	cursor, seen := s.cursors[key]
+	state, seen := s.shells[key]
 	if !seen {
-		if s.cursors == nil {
-			s.cursors = map[seenShell]*process.Cursor{}
+		if s.shells == nil {
+			s.shells = map[seenShell]*seenState{}
 		}
-		cursor = &process.Cursor{}
-		s.cursors[key] = cursor
+		state = &seenState{}
+		s.shells[key] = state
 	}
-	text, err := registry.Follow(entry.Name, cursor)
-	return text, !seen, err
+	return state, !seen
+}
+
+func waitOn(ctx context.Context, registry *process.Registry, entry process.Shell, until string, state *seenState) (string, *int, error) {
+	deadline := time.Now().Add(konst.ShellWaitMillis * time.Millisecond)
+	cpuFrom, err := entry.TreeCPU()
+	use, cpuAt, ended, tail := treeUse{err: err}, time.Now(), entry, ""
+	var news process.News
+	for {
+		if ended, err = registry.AwaitEnd(ctx, entry.Name, min(time.Until(deadline), konst.ShellWaitMatchMillis*time.Millisecond)); err != nil {
+			return "", nil, err
+		}
+		if ended.HeldByPerson() {
+			return entry.Name + " was taken over by the person; no longer waiting", nil, nil
+		}
+		got, err := registry.Watch(entry.Name, &state.watched)
+		if err != nil {
+			return "", nil, err
+		}
+		news.Lines, news.Trouble = news.Lines+got.Lines, append(news.Trouble, got.Trouble...)
+		if until != "" {
+			if tail, err = registry.Tail(entry.Name, process.DefaultTail); err != nil {
+				return "", nil, err
+			}
+		}
+		now := time.Now()
+		if use.err == nil && now.Sub(cpuAt) >= process.QuietBeforeIdle {
+			used, err := ended.TreeCPU()
+			use, cpuFrom, cpuAt = treeUse{used: used - cpuFrom, over: now.Sub(cpuAt), whole: true, err: err}, used, now
+		}
+		if use.idle(quietFor(registry, ended, now)) || len(news.Trouble) > 0 || until != "" && strings.Contains(tail, until) ||
+			ended.State != process.Running || ctx.Err() != nil || !now.Before(deadline) {
+			break
+		}
+	}
+	if tail, err = registry.Tail(entry.Name, process.DefaultTail); err != nil {
+		return "", nil, err
+	}
+	now := time.Now()
+	timing := registry.Timing(ended, now).Words(now)
+	said := []string{entry.Name + " is still running, " + timing + "."}
+	switch words := endWords(ended); {
+	case words != "":
+		said[0] = entry.Name + " " + words + ", " + timing + "."
+	case until != "" && strings.Contains(tail, until):
+		said[0] = fmt.Sprintf("%s printed %q and is still running, %s.", entry.Name, until, timing)
+	default:
+		if !use.whole && use.err == nil {
+			used, err := ended.TreeCPU()
+			use = treeUse{used: used - cpuFrom, over: now.Sub(cpuAt), err: err}
+		}
+		said = append(said, treeWords(entry.Name, use, quietFor(registry, ended, now), news, state, now)...)
+	}
+	if len(news.Trouble) > 0 {
+		registry.Tell(entry.Name)
+		said = append(said, "it printed failure lines:\n"+strings.Join(news.Trouble, "\n"))
+	}
+	state.waited = now
+	return strings.Join(slices.Concat(said, ended.Redirects(now), []string{"its last lines:\n" + tail}), "\n"), ended.ExitCode, nil
+}
+
+type treeUse struct {
+	used, over time.Duration
+	whole      bool
+	err        error
+}
+
+func (u treeUse) idle(quiet time.Duration) bool {
+	return u.whole && u.err == nil && u.used < process.IdleCPU && quiet >= process.QuietBeforeIdle
+}
+
+func quietFor(registry *process.Registry, entry process.Shell, now time.Time) time.Duration {
+	return now.Sub(cmp.Or(registry.Timing(entry, now).Last, entry.Started))
+}
+
+func treeWords(name string, use treeUse, quiet time.Duration, news process.News, state *seenState, now time.Time) []string {
+	printed := fmt.Sprintf("%d lines printed since it started.", news.Lines)
+	if !state.waited.IsZero() {
+		printed = fmt.Sprintf("%d lines printed since your last wait %s ago.", news.Lines, render.Until(now.Sub(state.waited)))
+	}
+	if use.err != nil {
+		state.idle = false
+		return []string{printed, "tofu could not read the CPU its process tree used: " + use.err.Error()}
+	}
+	cpu := fmt.Sprintf("its process tree used %.1f s of CPU in the last %s", use.used.Seconds(), render.Until(use.over))
+	stuck := " if it should be working it is stuck: stop it with shell stop " + name + " and run the step on its own, without a pipe or redirect, to see where it waits."
+	wasIdle := state.idle
+	state.idle = use.idle(quiet)
+	switch {
+	case state.idle && wasIdle && news.Lines == 0:
+		return []string{printed, cpu + " and printed nothing, the same answer as your last wait: another wait answers the same again." + stuck}
+	case state.idle:
+		return []string{printed, cpu + " and printed nothing: it is waiting on something, not working." + stuck}
+	case use.whole:
+		return []string{printed, cpu + ": it is working."}
+	}
+	return []string{printed, cpu + "."}
 }
 
 func folded(text string) string {
@@ -206,22 +302,4 @@ func templates(lines []string) []string {
 		folded[i] = cmp.Or(unmasked[line], line)
 	}
 	return folded
-}
-
-func awaitEndOrText(ctx context.Context, registry *process.Registry, name, until string) (process.Shell, string, error) {
-	deadline := time.Now().Add(konst.ShellWaitMillis * time.Millisecond)
-	for {
-		step := time.Until(deadline)
-		if until != "" {
-			step = min(step, konst.ShellWaitMatchMillis*time.Millisecond)
-		}
-		ended, err := registry.AwaitEnd(ctx, name, step)
-		if err != nil || ended.HeldByPerson() {
-			return ended, "", err
-		}
-		tail, err := registry.Tail(name, process.DefaultTail)
-		if err != nil || ended.State != process.Running || ctx.Err() != nil || time.Until(deadline) <= 0 || until != "" && strings.Contains(tail, until) {
-			return ended, tail, err
-		}
-	}
 }

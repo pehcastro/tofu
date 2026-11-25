@@ -31,7 +31,18 @@ A sub-agent's command still running after 30 s, such as a long build, moves to a
 background shell instead of holding the call. The call returns its name, such
 as `bash-3`, and what it printed so far, and the command keeps running on the
 **shells** tab. The sub-agent reads it back with `shell wait`, which returns when
-the command ends or after another 30 s, with its exit code and last lines.
+the command ends or after another 5 minutes, with its exit code and last lines.
+A wait returns early when the command, or a file it redirects into, prints a
+failure line such as `error: FileNotFound`, and when it has printed nothing
+for 30 s while its process tree used no CPU. It says how many lines were
+printed since the last wait, the CPU the process tree used, and each file the
+command writes to with its size and last write, or that the file does not
+exist yet or cannot be read. A command piped into `tail -40` that sits idle
+is called out as waiting rather than working, and a repeat of the same answer
+says so and what to do instead. CPU is read from the Windows job object, and
+from `ps` on Linux and macOS, once every 30 s of a wait, so nothing polls
+while nobody waits. A failure line printed after a command moved comes back
+to the agent that ran it as one message, without a wait.
 The lead's own command moves after 10 s, or at once when you type, so you can
 always talk to it: its turn ends without waiting, and the exit comes back to
 the lead as one message with the exit code and last lines.

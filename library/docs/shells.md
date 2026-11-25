@@ -15,8 +15,18 @@ its bash call started, such as a long build or test run.
 The second kind is not killed. The call returns the shell's name, such as
 `bash-3`, and what it printed so far, and the command keeps running. The
 model, or a sub-agent, reads it back with `shell wait`, which returns as
-soon as the command ends, or after another 30 s, with its exit code and its
-last lines. The lead's own command moves after 10 s instead, or at once when you type, and its exit comes back to the lead as one message, so the lead never waits on it and you can always talk to it. A sub-agent that can run bash can always use `shell`, and may
+soon as the command ends, or after another 5 minutes, with its exit code and its
+last lines. A wait also returns early when the command, or a file it
+redirects into, prints a failure line such as `error: FileNotFound`, and when
+it has printed nothing for 30 s while its process tree used no CPU. A wait
+on a running command says how many lines it printed since the last wait, how
+much CPU its process tree used, and each file it writes to with its size and
+when it was last written, or that the file does not exist yet or cannot be
+read. A command piped into `tail -40` that sits idle is called out as waiting
+on something rather than working, and a second wait that would say the same
+says so and to stop it and run the step on its own. A failure line printed
+after the command moved comes back to the agent that ran it as one message,
+within a second, without a wait. The lead's own command moves after 10 s instead, or at once when you type, and its exit comes back to the lead as one message, so the lead never waits on it and you can always talk to it. A sub-agent that can run bash can always use `shell`, and may
 start a server, a watcher or a `sleep` with `background: true`; outside
 the background it sleeps 5 s at most.
 
