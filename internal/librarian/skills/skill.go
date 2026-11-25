@@ -49,7 +49,8 @@ type Skill struct {
 }
 
 func triggerOf(fields map[string][]string) (Trigger, []string, error) {
-	switch trigger := Trigger(cmp.Or(strings.Join(fields["trigger"], ""), string(TriggerManual))); trigger {
+	written := cmp.Or(strings.Join(fields["trigger"], ""), string(TriggerManual))
+	switch trigger := Trigger(strings.ToLower(written)); trigger {
 	case TriggerManual:
 		return trigger, nil, nil
 	case TriggerAuto:
@@ -63,13 +64,13 @@ func triggerOf(fields map[string][]string) (Trigger, []string, error) {
 		}
 		return trigger, keywords, nil
 	default:
-		return "", nil, fmt.Errorf("its trigger is %q, and a trigger is one of %s", trigger, strings.Join(trigger.Enum(), ", "))
+		return "", nil, fmt.Errorf("its trigger is %q, and a trigger is one of %s", written, strings.Join(trigger.Enum(), ", "))
 	}
 }
 
 func (s Skill) Said(words string) string {
 	for _, phrase := range s.Keywords {
-		if regexp.MustCompile(`(?i)(^|\W)` + regexp.QuoteMeta(phrase) + `(\W|$)`).MatchString(words) {
+		if regexp.MustCompile(`(?i)(^|\W)` + strings.Join(strings.Fields(regexp.QuoteMeta(phrase)), `\s+`) + `(\W|$)`).MatchString(words) {
 			return phrase
 		}
 	}

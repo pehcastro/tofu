@@ -3,6 +3,7 @@ package main
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -611,6 +612,24 @@ func writeNotice(w io.Writer) func(string) {
 	return func(notice string) { _, _ = fmt.Fprintln(w, "tofu: "+notice) }
 }
 
+func skillDropsTold(sessions *session.Store, id string) []session.PromptPart {
+	if sessions == nil || id == "" {
+		return nil
+	}
+	prompts, _ := sessions.EventsOf(id, session.EventPrompt)
+	var told []session.PromptPart
+	for _, event := range prompts {
+		var prompt session.PromptBody
+		if event.Agent != "" || json.Unmarshal(event.Body, &prompt) != nil {
+			continue
+		}
+		told = append(told, slices.DeleteFunc(prompt.Parts, func(part session.PromptPart) bool {
+			return part.Kind != string(loop.ConcernSkills) || part.State != session.PartDropped
+		})...)
+	}
+	return told
+}
+
 type composedRun struct {
 	opts         wiring.RunOpts
 	environment  string
@@ -709,11 +728,13 @@ func composeRun(opts wiring.RunOpts, built []contract.Tool, run runtime) (compos
 	if opts.ToolSet != toolSetThree && !skillsOff {
 		home, _ := os.UserHomeDir()
 		offered := skill.Discover(dir, home)
-		for _, warning := range offered.Warnings {
-			say(warning)
-		}
-		for _, one := range offered.Unoffered {
-			unloaded = append(unloaded, loop.PromptPart{Concern: loop.ConcernSkills, Name: one.Name, File: filepath.ToSlash(one.File), Why: one.Why, State: session.PartDropped})
+		told := skillDropsTold(run.sessions, opts.Session)
+		for at, one := range offered.Unoffered {
+			part := loop.PromptPart{Concern: loop.ConcernSkills, Name: one.Name, File: filepath.ToSlash(one.File), Why: one.Why, State: session.PartDropped}
+			unloaded = append(unloaded, part)
+			if !slices.ContainsFunc(told, func(was session.PromptPart) bool { return was.File == part.File && was.Why == part.Why }) {
+				say(offered.Warnings[at])
+			}
 		}
 		library, err := skill.Shipped(shipped.Files(), wiring.LibraryRoot)
 		if err != nil {

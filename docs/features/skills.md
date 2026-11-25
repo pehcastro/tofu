@@ -17,8 +17,9 @@ for it.
 ## Why it works the way it does
 
 **Your words, not a guess.** A skill with `trigger: auto` loads when a message
-you write holds one of its `keywords`, matched exactly, in any case, as whole
-words. No model decides it, so "teach me" fires and "teach meaning" does not.
+you write holds one of its `keywords`, matched in any case, as whole words,
+across any run of spaces between them. No model decides it, so "teach me" and
+"TEACH   ME" fire and "teach meaning" does not.
 
 **Once while it is active.** The body goes into the conversation once. A later
 match while it is still there adds nothing, so a long session does not carry
@@ -60,12 +61,12 @@ See every load, skip and off, with who said what:
 
 | Field | Values | Default |
 |---|---|---|
-| `trigger` | `auto`, `manual` | `manual` |
+| `trigger` | `auto`, `manual`, in any case | `manual` |
 | `keywords` | comma separated phrases, read only when `trigger` is `auto` | none |
 
 A `manual` skill loads only through the skill tool or a sub-agent's `skills`
 list. Any other `trigger` value keeps the skill out of the list, and tofu
-names the file and the allowed values.
+names the file and the allowed values once per session.
 
 The host's `skills` query answers with `active`: each skill active in the
 lead's conversation, what loaded it, and when.

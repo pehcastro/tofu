@@ -67,14 +67,17 @@ by itself when you say one of its phrases:
     keywords: teach me, tutor me, quiz me
     ---
 
-`trigger` is `auto` or `manual`. With no `trigger` a skill is `manual`
+`trigger` is `auto` or `manual`, in any case: `auto`, `Auto` and `AUTO`
+are the same. With no `trigger` a skill is `manual`
 and loads only through the skill tool or a sub-agent's `skills` list, as
 before. `keywords` is a comma separated list of phrases and is ignored
 unless `trigger` is `auto`. Any other `trigger` value keeps the skill out
-of the list, and tofu names the file and the allowed values.
+of the list, and tofu names the file and the allowed values once per
+session, not at every message.
 
-A phrase matches exactly, in any case, as whole words: `teach me` fires
-on "can you teach me goroutines" and not on "teach meaning". It is read
+A phrase matches in any case, as whole words, across any run of spaces
+between its words: `teach me` fires on "can you teach me goroutines" and
+on "TEACH   ME", and not on "teach meaning". It is read
 only in a message you write to the lead, or in a message the lead sends
 to a running sub-agent. A sub-agent's brief, a report and the model's
 own words never fire it.
