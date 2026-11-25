@@ -55,7 +55,7 @@ type Inbox struct {
 	led      bool
 	settling chan struct{}
 	queued   laterCompaction
-	said     map[string][]PersonSaid
+	said     *saidInClosedGenerations
 	repeats  *repeat.Judge
 	opens    *oneQuestion
 	route    classifiers.Opener
@@ -399,7 +399,39 @@ func (f PersonForm) clocked(ctx context.Context, questions []PersonQuestion, wai
 }
 
 func NewInbox() *Inbox {
-	return &Inbox{wake: make(chan struct{}, 1), held: map[string]*heldSubAgent{}, logs: map[*session.Log]int{}, watched: map[string]bool{}}
+	return &Inbox{wake: make(chan struct{}, 1), held: map[string]*heldSubAgent{}, logs: map[*session.Log]int{}, watched: map[string]bool{},
+		said: &saidInClosedGenerations{by: map[string][]PersonSaid{}}}
+}
+
+func (b *Inbox) forSubAgent() *Inbox {
+	sub := NewInbox()
+	sub.said = b.said
+	return sub
+}
+
+type saidInClosedGenerations struct {
+	mu sync.Mutex
+	by map[string][]PersonSaid
+}
+
+func (s *saidInClosedGenerations) in(store *session.Store, generation string) ([]PersonSaid, error) {
+	read := func() ([]PersonSaid, error) {
+		messages, err := store.LeadUserMessages(generation)
+		return saidIn(generation, messages), err
+	}
+	if s == nil {
+		return read()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if said, known := s.by[generation]; known {
+		return said, nil
+	}
+	said, err := read()
+	if err == nil {
+		s.by[generation] = said
+	}
+	return said, err
 }
 
 type leadInboxKey struct{}
@@ -526,48 +558,34 @@ func NewestOnTheLine(store *session.Store, id string) (session.Header, error) {
 }
 
 func (b *Inbox) SaidInChain(store *session.Store, id string) ([]PersonSaid, error) {
-	newest, said, err := b.saidBefore(store, id)
+	var generations [][]PersonSaid
+	newest, err := b.saidNewestFirst(store, id, func(said []PersonSaid) bool {
+		generations = append(generations, said)
+		return true
+	})
 	if err != nil {
 		return nil, err
 	}
-	reading, err := store.Reading(newest.ID)
+	messages, err := store.LeadUserMessages(newest.ID)
 	if err != nil {
 		return nil, err
 	}
-	return append(said, saidIn(newest.ID, reading.Messages)...), nil
+	slices.Reverse(generations)
+	return append(slices.Concat(generations...), saidIn(newest.ID, messages)...), nil
 }
 
-func (b *Inbox) saidBefore(store *session.Store, id string) (session.Header, []PersonSaid, error) {
+func (b *Inbox) saidNewestFirst(store *session.Store, id string, more func(said []PersonSaid) bool) (session.Header, error) {
 	newest, err := NewestOnTheLine(store, id)
 	if err != nil {
-		return newest, nil, err
+		return newest, err
 	}
-	chain, err := store.Ancestors(newest.ID)
-	if err != nil {
-		return newest, nil, err
-	}
-	slices.Reverse(chain)
-	var said []PersonSaid
-	for _, header := range chain {
-		b.mu.Lock()
-		kept, known := b.said[header.ID]
-		b.mu.Unlock()
-		if !known {
-			reading, err := store.Reading(header.ID)
-			if err != nil {
-				return newest, nil, err
-			}
-			kept = saidIn(header.ID, reading.Messages)
-			b.mu.Lock()
-			if b.said == nil {
-				b.said = map[string][]PersonSaid{}
-			}
-			b.said[header.ID] = kept
-			b.mu.Unlock()
-		}
-		said = append(said, kept...)
-	}
-	return newest, said, nil
+	var unread error
+	walked := store.EachAncestor(newest.ID, func(header session.Header) bool {
+		said, err := b.said.in(store, header.ID)
+		unread = err
+		return err == nil && more(said)
+	})
+	return newest, cmp.Or(unread, walked)
 }
 
 func saidIn(id string, messages []session.Message) []PersonSaid {

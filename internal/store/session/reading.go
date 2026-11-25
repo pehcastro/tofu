@@ -1,6 +1,8 @@
 package session
 
 import (
+	"bytes"
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -82,6 +84,33 @@ func ReadEvents(events []Event) (Reading, error) {
 		}
 	}
 	return reading, nil
+}
+
+func (s *Store) LeadUserMessages(id string) ([]Message, error) {
+	var messages []Message
+	var unread error
+	kept := func(event Event) bool {
+		if event.Kind != EventMessage || event.Agent != "" {
+			return true
+		}
+		message := Message{Event: event.ID, Raw: event.Body}
+		if err := json.Unmarshal(event.Body, &message.MessageBody); err != nil {
+			unread = fmt.Errorf("session %s: the message %s does not parse: %w", id, event.ID, err)
+			return false
+		}
+		if message.Role == RoleUser {
+			messages = append(messages, message)
+		}
+		return true
+	}
+	err := s.scanEvents(id, kept, func(line []byte, number int) (bool, error) {
+		if !bytes.Contains(line, []byte(`"kind":"`+EventMessage+`"`)) || !bytes.Contains(line, []byte(`{"role":"`+RoleUser+`"`)) {
+			return true, nil
+		}
+		event, err := parseLine[Event](line, id, number)
+		return err == nil && kept(event), err
+	})
+	return messages, cmp.Or(unread, err)
 }
 
 func (s *Store) Reading(id string) (Reading, error) {

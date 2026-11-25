@@ -454,16 +454,26 @@ func (s *Store) WriteUnlessHeld(header Header) error {
 
 func (s *Store) Ancestors(id string) ([]Header, error) {
 	var chain []Header
+	err := s.EachAncestor(id, func(header Header) bool {
+		chain = append(chain, header)
+		return true
+	})
+	return chain, err
+}
+
+func (s *Store) EachAncestor(id string, more func(Header) bool) error {
+	var seen []string
 	header, err := s.read(id)
-	for err == nil && header.Parent != "" && header.Parent != id && !slices.ContainsFunc(chain, func(seen Header) bool { return seen.ID == header.Parent }) {
-		if header, err = s.read(header.Parent); err == nil {
-			chain = append(chain, header)
+	for err == nil && header.Parent != "" && header.Parent != id && !slices.Contains(seen, header.Parent) {
+		seen = append(seen, header.Parent)
+		if header, err = s.read(header.Parent); err == nil && !more(header) {
+			return nil
 		}
 	}
 	if errors.Is(err, fs.ErrNotExist) {
-		return chain, nil
+		return nil
 	}
-	return chain, err
+	return err
 }
 
 type Generation struct {
@@ -592,18 +602,21 @@ func logLineage(head string, lineage []Generation) {
 func (s *Store) Unread(id string) { delete(s.parsed, id) }
 
 func (s *Store) Spawns(id string) ([]Event, error) {
-	raw, err := s.readFile(s.EventsPath(id))
-	if err != nil {
-		return nil, err
-	}
 	var spawns []Event
-	for line := range bytes.Lines(raw) {
-		var event Event
-		if bytes.Contains(line, []byte(`"kind":"`+EventSpawn+`"`)) && json.Unmarshal(line, &event) == nil && event.Kind == EventSpawn {
+	kept := func(event Event) bool {
+		if event.Kind == EventSpawn {
 			spawns = append(spawns, event)
 		}
+		return true
 	}
-	return spawns, nil
+	err := s.scanEvents(id, kept, func(line []byte, _ int) (bool, error) {
+		var event Event
+		if bytes.Contains(line, []byte(`"kind":"`+EventSpawn+`"`)) && json.Unmarshal(line, &event) == nil {
+			kept(event)
+		}
+		return true, nil
+	})
+	return spawns, err
 }
 
 func (s *Store) Events(id string) ([]Event, error) {

@@ -97,21 +97,40 @@ func (f *statusFeed) follow(event Event) {
 	}
 }
 
-func agentStatusID(rows []SubAgentRow, name string) string {
+func parentsOf(rows []SubAgentRow) map[string]string {
+	parentOf := make(map[string]string, len(rows))
+	for _, row := range rows {
+		if _, held := parentOf[row.Name]; !held {
+			parentOf[row.Name] = row.Parent
+		}
+	}
+	return parentOf
+}
+
+func agentStatusID(parentOf map[string]string, name string) string {
 	parts := []string{"agents", name}
-	for range rows {
-		at := slices.IndexFunc(rows, func(row SubAgentRow) bool { return row.Name == name })
-		if at < 0 || rows[at].Parent == "" || slices.Contains(parts, rows[at].Parent) {
+	for range parentOf {
+		parent, held := parentOf[name]
+		if !held || parent == "" || slices.Contains(parts, parent) {
 			break
 		}
-		name = rows[at].Parent
+		name = parent
 		parts = append([]string{"agents", name}, parts...)
 	}
 	return statusline.Path(parts...)
 }
 
-func AgentStatus(row SubAgentRow, rows []SubAgentRow) statusline.Record {
-	record := statusline.Record{ID: agentStatusID(rows, row.Name), Title: row.Name, Msg: row.Doing}
+func AgentStatuses(rows []SubAgentRow) []statusline.Record {
+	parentOf := parentsOf(rows)
+	records := make([]statusline.Record, len(rows))
+	for at, row := range rows {
+		records[at] = agentStatus(row, parentOf)
+	}
+	return records
+}
+
+func agentStatus(row SubAgentRow, parentOf map[string]string) statusline.Record {
+	record := statusline.Record{ID: agentStatusID(parentOf, row.Name), Title: row.Name, Msg: row.Doing}
 	switch row.State {
 	case roster.Working, roster.Reopened:
 		record.State = statusline.Working
@@ -156,8 +175,8 @@ func (f *statusFeed) records(shells map[string]*watchedShell) []statusline.Recor
 	if f.cron != "" {
 		records = append(records, statusline.Record{ID: statusline.Path("cron", f.cron), State: lead.State, Kind: lead.Kind, App: statusApp, Title: f.cron, Msg: lead.Msg, Ask: lead.Ask})
 	}
-	for _, row := range f.agents {
-		record := AgentStatus(row, f.agents)
+	for at, record := range AgentStatuses(f.agents) {
+		row := f.agents[at]
 		if ask, blocked := asked[row.Name]; blocked {
 			record.State, record.Ask = statusline.Blocked, ask.ID
 			record.Kind, record.Msg = AskStatus(ask)

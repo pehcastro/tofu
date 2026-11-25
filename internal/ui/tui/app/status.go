@@ -56,10 +56,7 @@ func sameForStatus(a, b host.SubAgentRow) bool {
 func (a *App) agentRecords() []statusline.Record {
 	watch := &a.statusWatch
 	if !slices.EqualFunc(watch.rows, a.subAgents, sameForStatus) {
-		watch.rows, watch.agents = slices.Clone(a.subAgents), make([]statusline.Record, len(a.subAgents))
-		for index, row := range a.subAgents {
-			watch.agents[index] = host.AgentStatus(row, a.subAgents)
-		}
+		watch.rows, watch.agents = slices.Clone(a.subAgents), host.AgentStatuses(a.subAgents)
 	}
 	return watch.agents
 }

@@ -647,7 +647,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	a.flushFeed()
 	filling := a.fillGap()
 	a.syncFeed()
-	return a, caught(tea.Batch(cmd, counting, filling, a.startPulse(), a.reportStatus(), a.foldLater()))
+	var status tea.Cmd
+	if !streamed(msg) {
+		status = a.reportStatus()
+	}
+	return a, caught(tea.Batch(cmd, counting, filling, a.startPulse(), status, a.foldLater()))
+}
+
+func streamed(msg tea.Msg) bool {
+	event, isEvent := msg.(Event)
+	return isEvent && (event.Kind == EventTextDelta || event.Kind == EventThinking)
 }
 
 func (a *App) update(msg tea.Msg) tea.Cmd {

@@ -102,16 +102,17 @@ func TestServeStatusNamesTheLeadNestedAgentsAndAShellsOwnReport(t *testing.T) {
 
 func TestStatusAgentIDFollowsParentsAndSurvivesALoop(t *testing.T) {
 	rows := []SubAgentRow{{Name: "a"}, {Name: "b", Parent: "a"}, {Name: "c", Parent: "b"}, {Name: "x", Parent: "y"}, {Name: "y", Parent: "x"}, {Name: "lost", Parent: "gone"}}
+	parentOf := parentsOf(rows)
 	for name, want := range map[string]string{
 		"a":    "agents/a",
 		"c":    "agents/a/agents/b/agents/c",
 		"lost": "agents/gone/agents/lost",
 	} {
-		if got := agentStatusID(rows, name); got != want {
+		if got := agentStatusID(parentOf, name); got != want {
 			t.Errorf("agentStatusID(%s) = %q, want %q", name, got, want)
 		}
 	}
-	if looped := agentStatusID(rows, "x"); !strings.HasSuffix(looped, "agents/x") {
+	if looped := agentStatusID(parentOf, "x"); !strings.HasSuffix(looped, "agents/x") {
 		t.Errorf("a parent loop gave %q", looped)
 	}
 }

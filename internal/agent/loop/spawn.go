@@ -667,7 +667,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	held := &heldSubAgent{agent: agent, definition: definition, effort: opened.Effort, askedEffort: effort, system: system, parts: parts,
 		environment: environment + scratchWords(scratch),
 		briefFiles:  t.briefFiles(context.WithValue(ctx, contract.SubAgentKey{}, subAgentID), args, site.conversation),
-		boundary:    subagents.NewBoundary(subAgentID, scratch.Dir(), args.Owns), scratch: scratch, inbox: NewInbox(),
+		boundary:    subagents.NewBoundary(subAgentID, scratch.Dir(), args.Owns), scratch: scratch, inbox: t.Inbox.forSubAgent(),
 		trace: spawnTrace{definition: agent.Agent, picked: pickedWhy, model: agent.Model, mission: agent.Mission, owns: args.Owns, ticket: args.Ticket, depth: t.depth + 1}}
 	runCtx, cancel := outlivingTheWave(ctx)
 	t.Inbox.keep(held, cancel)
@@ -841,7 +841,7 @@ func (t *SpawnTool) RecordedSpawn(definition subagents.Definition, task string) 
 	if err != nil {
 		return Config{}, err
 	}
-	held := &heldSubAgent{agent: subagents.SubAgent{ID: definition.Name}, definition: definition, parts: parts, boundary: subagents.NewBoundary(definition.Name, "", nil), inbox: NewInbox()}
+	held := &heldSubAgent{agent: subagents.SubAgent{ID: definition.Name}, definition: definition, parts: parts, boundary: subagents.NewBoundary(definition.Name, "", nil), inbox: t.Inbox.forSubAgent()}
 	spawned := t.subAgentConfig(held, spawnSite{}, nil, SubAgentLimits{})
 	spawned.Sessions = t.base.Sessions
 	return spawned, nil

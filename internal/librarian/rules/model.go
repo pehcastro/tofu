@@ -118,7 +118,7 @@ func (r Rule) ReachesDevFor(task Task) bool {
 	case ReachQAOnly:
 		return false
 	case ReachWorkOnTests:
-		return task.touchesTests()
+		return task.onTests()
 	}
 	panic("rule: unknown reach " + string(r.AlsoReaches))
 }

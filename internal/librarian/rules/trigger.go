@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"unicode"
 
 	"tofu/internal/agent/subagents"
@@ -70,6 +71,49 @@ type Task struct {
 	Judged     map[string]Judged
 	judged     *Judged
 	leadWrites bool
+	scanned    *scannedText
+}
+
+type scannedText struct {
+	mu      sync.Mutex
+	found   map[[2]*regexp.Regexp]string
+	onTests bool
+}
+
+func (t Task) Scanned() Task {
+	t.scanned = &scannedText{found: map[[2]*regexp.Regexp]string{}, onTests: t.touchesTests()}
+	return t
+}
+
+func (s *scannedText) match(pattern [2]*regexp.Regexp, scan func() string) string {
+	if s == nil {
+		return scan()
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	found, scanned := s.found[pattern]
+	if !scanned {
+		found = scan()
+		s.found[pattern] = found
+	}
+	return found
+}
+
+func (t Task) conditionFound(trigger Trigger) string {
+	return t.scanned.match([2]*regexp.Regexp{trigger.condition, trigger.unless}, func() string { return trigger.matchOutsideUnless(t.Text) })
+}
+
+func (t Task) touchesFound(trigger Trigger) string {
+	return t.scanned.match([2]*regexp.Regexp{trigger.touches}, func() string {
+		return trigger.touches.FindString(strings.Join(append([]string{t.Text}, t.Paths...), "\n"))
+	})
+}
+
+func (t Task) onTests() bool {
+	if t.scanned != nil {
+		return t.scanned.onTests
+	}
+	return t.touchesTests()
 }
 
 type Judged struct {
@@ -340,7 +384,7 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 		why = append(why, fmt.Sprintf("the prompt is the %s's", t.role))
 	}
 	if t.condition != nil {
-		found := t.matchOutsideUnless(task.Text)
+		found := task.conditionFound(t)
 		if found == "" && t.unless != nil {
 			return false, fmt.Sprintf("the condition %s matches only on lines the unless %s drops", t.condition, t.unless)
 		}
@@ -350,7 +394,7 @@ func (t Trigger) firesFor(task Task) (bool, string) {
 		why = append(why, fmt.Sprintf("the condition %s matched %q", t.condition, found))
 	}
 	if t.touches != nil && (task.Role == RoleSubAgent || task.Alone || task.leadWrites || t.frameworks == nil) {
-		found := t.touches.FindString(strings.Join(append([]string{task.Text}, task.Paths...), "\n"))
+		found := task.touchesFound(t)
 		switch {
 		case task.Role != RoleSubAgent && !task.Alone && found == "":
 			return false, fmt.Sprintf("the touches %s matches nothing in the task or its paths, so Jev is not asked", t.touches)
@@ -470,7 +514,7 @@ func (t Trigger) onlyRole() bool {
 }
 
 func Index(rules []Rule, task Task) []Match {
-	index := make([]Match, len(rules))
+	index, onTests := make([]Match, len(rules)), task.onTests()
 	for i, r := range rules {
 		ruled := task
 		ruled.leadWrites = r.leadWrites(task)
@@ -485,7 +529,7 @@ func Index(rules []Rule, task Task) []Match {
 		switch {
 		case !fires && task.Verb == VerbPlan && r.Domain == DomainQA && r.Trigger.onlyPaths():
 			fires, why = true, "the task plans work, and a qa rule scoped to paths reaches the plan before the paths exist"
-		case !fires && task.touchesTests() && r.Domain == DomainQA && r.Trigger.onlyPaths():
+		case !fires && onTests && r.Domain == DomainQA && r.Trigger.onlyPaths():
 			fires, why = true, "the task works on tests, and a qa rule scoped to paths reaches the test before its file is named"
 		case fires && ruled.leadWrites && r.Trigger.touches != nil:
 			why += ", and a lead that may spawn writes code too, so Jev's judgment of the touches reaches it"
@@ -516,7 +560,10 @@ func AskedOfTheTask(rules []Rule, agentDomain string, task Task) []Rule {
 }
 
 func IndexReaching(rules []Rule, agentDomain string, task Task) []Match {
-	index := Index(rules, task)
+	index := make([]Match, len(rules))
+	var reached []Rule
+	var whys []string
+	var at []int
 	for i, r := range rules {
 		reaches, why := r.ReachesDomain(agentDomain, task)
 		switch {
@@ -524,9 +571,15 @@ func IndexReaching(rules []Rule, agentDomain string, task Task) []Match {
 			index[i] = Match{RuleID: r.ID, Reason: ReasonMode, Why: "the rule's mode is off"}
 		case !reaches:
 			index[i] = Match{RuleID: r.ID, Reason: ReasonDomain, Why: why}
-		case why != "" && index[i].Fires:
-			index[i].Why = why + ", and " + index[i].Why
+		default:
+			reached, whys, at = append(reached, r), append(whys, why), append(at, i)
 		}
+	}
+	for k, match := range Index(reached, task) {
+		if whys[k] != "" && match.Fires {
+			match.Why = whys[k] + ", and " + match.Why
+		}
+		index[at[k]] = match
 	}
 	return index
 }

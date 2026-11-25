@@ -196,30 +196,36 @@ func (c Config) FirstUserMessage(notes ...string) string {
 	return first + notesOn(slices.Concat(c.Notes, notes))
 }
 
-func (c Config) personSaid(session string, conversation []core.Message) []string {
-	var said []string
-	if c.Sessions != nil && session != "" {
-		if _, earlier, err := cmp.Or(c.Inbox, &Inbox{}).saidBefore(c.Sessions, session); err == nil {
-			for _, one := range earlier {
-				said = append(said, strings.TrimSpace(one.Words))
-			}
-		}
-	}
-	said = append(said, personWords(conversation)...)
+func (c Config) personSaid(session string, conversation []core.Message, budget int) []string {
 	var recent []string
 	size := 0
-	for _, words := range slices.Backward(slices.Compact(said)) {
-		if len(recent) > 0 && size+len(words) > konst.CarrySaidBytes {
-			break
+	room := func(said []string) bool {
+		for _, words := range slices.Backward(said) {
+			switch {
+			case len(recent) > 0 && words == recent[len(recent)-1]:
+			case len(recent) > 0 && size+len(words) > budget:
+				return false
+			default:
+				recent, size = append(recent, words), size+len(words)
+			}
 		}
-		recent, size = append(recent, words), size+len(words)
+		return len(recent) == 0 || size < budget
+	}
+	if room(personWords(conversation)) && c.Sessions != nil && session != "" {
+		_, _ = cmp.Or(c.Inbox, &Inbox{}).saidNewestFirst(c.Sessions, session, func(said []PersonSaid) bool {
+			words := make([]string, len(said))
+			for at, one := range said {
+				words[at] = strings.TrimSpace(one.Words)
+			}
+			return room(words)
+		})
 	}
 	slices.Reverse(recent)
 	return recent
 }
 
 func (c Config) lastSaid(session string, conversation []core.Message) string {
-	said := c.personSaid(session, conversation)
+	said := c.personSaid(session, conversation, 0)
 	if len(said) == 0 {
 		return ""
 	}

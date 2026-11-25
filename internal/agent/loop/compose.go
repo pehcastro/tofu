@@ -422,6 +422,7 @@ func Compose(spec ComposeSpec) (Composed, error) {
 		composed.Parts = append(composed.Parts, builtin)
 	}
 	agentDomain := cmp.Or(spec.Agent.Domain, rules.DomainDev)
+	composed.Task = composed.Task.Scanned()
 	if asked := rules.AskedOfTheTask(spec.Rules, agentDomain, composed.Task); spec.Applies != nil && len(asked) > 0 {
 		var keywordDecided error
 		text := "Jev read which of the framework's rules reach this task"

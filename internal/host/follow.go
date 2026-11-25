@@ -113,6 +113,7 @@ type followLine struct {
 	Seq      uint64        `json:",omitempty"`
 	Snapshot *picture      `json:",omitempty"`
 	Event    *Event        `json:",omitempty"`
+	Roster   *rosterMove   `json:",omitempty"`
 	Reply    *followReply  `json:",omitempty"`
 	Settings *heldSettings `json:",omitempty"`
 	Raw      *ShellRaw     `json:",omitempty"`
@@ -708,6 +709,11 @@ func (h *Host) heed(f *following) {
 			}
 		}
 		if event := line.Event; event != nil {
+			if line.Roster != nil {
+				h.bus.mu.Lock()
+				event.SubAgents = line.Roster.onto(h.bus.now.Agents)
+				h.bus.mu.Unlock()
+			}
 			f.seq = line.Seq
 			if f.echoes(*event) {
 				f.saw(*event)

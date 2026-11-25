@@ -163,9 +163,50 @@ func (h *Host) deliver(event Event) {
 		delete(h.bus.heard, event.ID)
 		delete(h.bus.noted, event.ID)
 	}
+	was := h.bus.now.Agents
 	told := h.bus.now.apply(event)
-	h.fanOut(followLine{Seq: h.bus.seq, Event: &event})
+	h.fanOut(lineOf(h.bus.seq, event, was))
 	h.handUnlocking(told, h.done)
+}
+
+type rosterMove struct {
+	Names []string
+	Rows  []SubAgentRow `json:",omitempty"`
+}
+
+func lineOf(seq uint64, event Event, was []SubAgentRow) followLine {
+	if event.SubAgents == nil {
+		return followLine{Seq: seq, Event: &event}
+	}
+	held := make(map[string]int, len(was))
+	for at, row := range was {
+		held[row.Name] = at
+	}
+	move := rosterMove{Names: make([]string, len(event.SubAgents))}
+	for at, row := range event.SubAgents {
+		move.Names[at] = row.Name
+		if before, kept := held[row.Name]; !kept || !reflect.DeepEqual(was[before], row) {
+			move.Rows = append(move.Rows, row)
+		}
+	}
+	event.SubAgents = nil
+	return followLine{Seq: seq, Event: &event, Roster: &move}
+}
+
+func (move rosterMove) onto(was []SubAgentRow) []SubAgentRow {
+	held := make(map[string]*SubAgentRow, len(was)+len(move.Rows))
+	for _, rows := range [][]SubAgentRow{was, move.Rows} {
+		for at := range rows {
+			held[rows[at].Name] = &rows[at]
+		}
+	}
+	rows := make([]SubAgentRow, 0, len(move.Names))
+	for _, name := range move.Names {
+		if row := held[name]; row != nil {
+			rows = append(rows, *row)
+		}
+	}
+	return rows
 }
 
 func (h *Host) fanOut(said followLine) {

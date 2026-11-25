@@ -1364,7 +1364,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			var repeated ToolCallRow
 			var repeats int
 			var leadStop error
-			author, said := row.author(), config.personSaid(cmp.Or(row.Session, config.Session), messages)
+			author, said := row.author(), config.personSaid(cmp.Or(row.Session, config.Session), messages, konst.CarrySaidBytes)
 			for len(pending) > 0 && !tripped && leadStop == nil {
 				width := max(stepTools.parallelPrefix(pending), 1)
 				heard := make([]heardCall, width)
