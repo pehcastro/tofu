@@ -10,7 +10,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
+	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
 	"tofu/internal/models/llm/catalog"
@@ -42,10 +44,12 @@ Avoid omissions. Name a minor item in a word or two rather than drop it: an abse
 const compactionExample = `user: rename --fast to --quick, keep --fast working for one release, ask before touching config.toml; lead: renamed in cli/flags.go, --fast prints a warning; work: [Tester] TestFlags failed (want 3 flags, got 4), fixed the table, not the code; user: commit it; lead: committed 4f2a9c1; open: the warning wording`
 
 type MemoryModel struct {
-	Slug string
-	wire string
-	held *Accounts
-	err  error
+	Slug            string
+	wire            string
+	held            *Accounts
+	roomBytes       int
+	bytesPerMessage int
+	err             error
 }
 
 func chooseMemoryModel(dir string, session catalog.Model) (MemoryModel, catalog.Model) {
@@ -75,6 +79,17 @@ func (m MemoryModel) open(dir string, model catalog.Model, open Opener) MemoryMo
 	if m.err != nil {
 		return m
 	}
+	registry, err := ModelRegistry()
+	estimate, estimateErr := recall.LoadConfig()
+	if m.err = errors.Join(err, estimateErr); m.err != nil {
+		return m
+	}
+	promptTokens := konst.ContextCeilingTokens
+	if window, _ := catalog.WindowFor(model, registry, catalog.Served{}); window > konst.ContextOutputReserveTokens {
+		promptTokens = min(window-konst.ContextOutputReserveTokens, promptTokens)
+	}
+	bytesPerThousand := estimate.OnWire(m.wire).BytesPerThousandTokens
+	m.roomBytes, m.bytesPerMessage = promptTokens*bytesPerThousand/1000, konst.MessageFramingTokens*bytesPerThousand/1000
 	opts := RunOpts{Dir: dir, Wire: m.wire, Model: m.Slug}
 	if len(model.Efforts) > 0 {
 		opts.Effort = DefaultEffort(model.Efforts)
@@ -153,10 +168,11 @@ func (m MemoryModel) Compactors(ask loop.RecordedAsk) (tree.Compact, tree.Compac
 	system := fmt.Sprintf("%s\n\nYour line is about %d bytes, the length of this ruler, never over %d:\n%s\nA line of that length about another log, for its size and form only:\n%s\nYour line has at most %d words: rewrite <input> shorter, never join or copy it.",
 		compactionSystem, len(compactionExample), konst.MemtreeLineBytes, strings.Repeat("-", len(compactionExample)), compactionExample, len(strings.Fields(compactionExample)))
 	chatStep := konst.MemtreeCompactionsAtOnce * konst.MemtreeLineBytes
-	written := func(ctx context.Context, before, why, task string) (string, error) {
-		messages := []core.Message{{Role: core.RoleSystem, Content: system}, {Role: core.RoleUser, Content: "<chat>\n"}}
-		cachedChat, offset, sharedEnd := 0, 0, len(before)/chatStep*chatStep
-		for line := range strings.Lines(before) {
+	written := func(ctx context.Context, before, why string, inputs []string, taskOf func(inputs []string) string) (string, error) {
+		opening, chat, closing := m.fitted(system, before, inputs, taskOf)
+		messages := []core.Message{{Role: core.RoleSystem, Content: system}, {Role: core.RoleUser, Content: opening}}
+		cachedChat, offset, sharedEnd := 0, 0, len(chat)/chatStep*chatStep
+		for line := range strings.Lines(chat) {
 			offset += len(line)
 			message := core.Message{Role: core.RoleUser, Content: line}
 			if offset <= sharedEnd {
@@ -168,10 +184,10 @@ func (m MemoryModel) Compactors(ask loop.RecordedAsk) (tree.Compact, tree.Compac
 		}
 		mu.Lock()
 		account, err := m.held.ForTurn().Pick(ctx)
-		chatCached, anotherCallWritesThisChat := chatsBeingWritten[before[:cachedChat]]
+		chatCached, anotherCallWritesThisChat := chatsBeingWritten[chat[:cachedChat]]
 		if err == nil && !anotherCallWritesThisChat {
 			chatCached = make(chan struct{})
-			chatsBeingWritten[before[:cachedChat]] = chatCached
+			chatsBeingWritten[chat[:cachedChat]] = chatCached
 		}
 		mu.Unlock()
 		if err != nil {
@@ -184,11 +200,11 @@ func (m MemoryModel) Compactors(ask loop.RecordedAsk) (tree.Compact, tree.Compac
 				return "", ctx.Err()
 			}
 		}
-		messages = append(messages, core.Message{Role: core.RoleUser, Origin: core.Origin{Source: anthropic.SourceAfterTheCachedPrefix}, Content: "\n</chat>\n\n" + task})
+		messages = append(messages, core.Message{Role: core.RoleUser, Origin: core.Origin{Source: anthropic.SourceAfterTheCachedPrefix}, Content: closing})
 		decision, err := ask(anthropic.WithCacheTTL(ctx, anthropic.CacheTTLFiveMinutes), why, m.wire, account.Model, core.Request{Messages: messages})
 		if !anotherCallWritesThisChat {
 			mu.Lock()
-			delete(chatsBeingWritten, before[:cachedChat])
+			delete(chatsBeingWritten, chat[:cachedChat])
 			close(chatCached)
 			mu.Unlock()
 		}
@@ -205,14 +221,15 @@ func (m MemoryModel) Compactors(ask loop.RecordedAsk) (tree.Compact, tree.Compac
 		if right != "" {
 			task, input = "merge these two adjacent lines", left+"\n"+right
 		}
-		line, err := written(ctx, before, "memory model: "+task, fmt.Sprintf("Compaction: %s into one line.\n<input>\n%s\n</input>\n<input> is %d words.", task, input, len(strings.Fields(input))))
+		line, err := written(ctx, before, "memory model: "+task, []string{input}, func(inputs []string) string {
+			return fmt.Sprintf("Compaction: %s into one line.\n<input>\n%s\n</input>\n<input> is %d words.", task, inputs[0], len(strings.Fields(inputs[0])))
+		})
 		return cutAtAWord(line), err
 	}
 	all := func(ctx context.Context, before string, steps []tree.Step) ([]string, error) {
-		var tasks strings.Builder
-		fmt.Fprintf(&tasks, "Compaction: %d tasks, one line each, all in this one reply. Write each line as its task number, a bar and the line, as in 1|user: ..., one per row and nothing else. Each line keeps the rules above on its own: the ruler, the word limit, the order of value, and every name it is asked to keep.\n", len(steps))
+		inputs := make([]string, len(steps))
 		for number, step := range steps {
-			task, input := "compress this item", step.Left
+			inputs[number] = step.Left
 			if step.Level > 0 {
 				halves := []string{step.Left, step.Right}
 				for i, from := range step.From {
@@ -220,17 +237,27 @@ func (m MemoryModel) Compactors(ask loop.RecordedAsk) (tree.Compact, tree.Compac
 						halves[i] = fmt.Sprintf("(your line for task %d)", from)
 					}
 				}
-				task, input = "merge these two adjacent lines", strings.Join(halves, "\n")
-			}
-			fmt.Fprintf(&tasks, "\nTask %d: %s into one line.\n<input>\n%s\n</input>", number+1, task, input)
-			if step.From == [2]int{} {
-				fmt.Fprintf(&tasks, "\n<input> is %d words.", len(strings.Fields(input)))
-			}
-			if names := tree.Names(input); len(names) > 0 {
-				fmt.Fprintf(&tasks, " Keep these names as written: %s.", strings.Join(names, ", "))
+				inputs[number] = strings.Join(halves, "\n")
 			}
 		}
-		reply, err := written(ctx, before, fmt.Sprintf("memory model: %d compactions in one reply", len(steps)), tasks.String())
+		reply, err := written(ctx, before, fmt.Sprintf("memory model: %d compactions in one reply", len(steps)), inputs, func(inputs []string) string {
+			var tasks strings.Builder
+			fmt.Fprintf(&tasks, "Compaction: %d tasks, one line each, all in this one reply. Write each line as its task number, a bar and the line, as in 1|user: ..., one per row and nothing else. Each line keeps the rules above on its own: the ruler, the word limit, the order of value, and every name it is asked to keep.\n", len(steps))
+			for number, step := range steps {
+				task := "compress this item"
+				if step.Level > 0 {
+					task = "merge these two adjacent lines"
+				}
+				fmt.Fprintf(&tasks, "\nTask %d: %s into one line.\n<input>\n%s\n</input>", number+1, task, inputs[number])
+				if step.From == [2]int{} {
+					fmt.Fprintf(&tasks, "\n<input> is %d words.", len(strings.Fields(inputs[number])))
+				}
+				if names := tree.Names(inputs[number]); len(names) > 0 {
+					fmt.Fprintf(&tasks, " Keep these names as written: %s.", strings.Join(names, ", "))
+				}
+			}
+			return tasks.String()
+		})
 		lines := make([]string, len(steps))
 		for row := range strings.Lines(reply) {
 			number, line, found := strings.Cut(strings.TrimSpace(row), "|")
@@ -242,6 +269,65 @@ func (m MemoryModel) Compactors(ask loop.RecordedAsk) (tree.Compact, tree.Compac
 		return lines, err
 	}
 	return one, all
+}
+
+const (
+	chatOpening = "<chat>\n"
+	chatClosing = "\n</chat>\n\n"
+	chatLeftOut = "(%d older lines of the chat are left out: they do not fit the memory model's window)\n"
+	inputCut    = "\n(cut by tofu: %d of this item's %d bytes, in its middle, do not fit the memory model's window)\n"
+)
+
+func (m MemoryModel) fitted(system, before string, inputs []string, taskOf func([]string) string) (string, string, string) {
+	lines := slices.Collect(strings.Lines(before))
+	room := m.roomBytes - len(system) - len(chatOpening+chatClosing) - len(fmt.Sprintf(chatLeftOut, len(lines))) - 3*m.bytesPerMessage
+	task := taskOf(inputs)
+	for inputRoom := len(strings.Join(inputs, "")); len(task) > room && inputRoom > 0; {
+		inputRoom -= len(task) - room
+		task = taskOf(cutToFit(inputs, inputRoom))
+	}
+	chatRoom, start := room-len(task), len(lines)
+	for ; start > 0 && len(lines[start-1])+m.bytesPerMessage <= chatRoom; start-- {
+		chatRoom -= len(lines[start-1]) + m.bytesPerMessage
+	}
+	opening := chatOpening
+	if start > 0 {
+		opening += fmt.Sprintf(chatLeftOut, start)
+	}
+	return opening, strings.Join(lines[start:], ""), chatClosing + task
+}
+
+func cutToFit(inputs []string, room int) []string {
+	lengths := make([]int, len(inputs))
+	for i, input := range inputs {
+		lengths[i] = len(input)
+	}
+	slices.Sort(lengths)
+	for i, length := range lengths {
+		if share := max(room, 0) / (len(lengths) - i); length > share {
+			cut := slices.Clone(inputs)
+			for j, input := range cut {
+				if len(input) > share {
+					cut[j] = cutInTheMiddle(input, share)
+				}
+			}
+			return cut
+		}
+		room -= length
+	}
+	return inputs
+}
+
+func cutInTheMiddle(text string, keep int) string {
+	half := max(keep-len(fmt.Sprintf(inputCut, len(text), len(text))), 0) / 2
+	head, tail := half, len(text)-half
+	for head > 0 && !utf8.RuneStart(text[head]) {
+		head--
+	}
+	for tail < len(text) && !utf8.RuneStart(text[tail]) {
+		tail++
+	}
+	return text[:head] + fmt.Sprintf(inputCut, tail-head, len(text)) + text[tail:]
 }
 
 func cutAtAWord(line string) string {
