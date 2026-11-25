@@ -35,6 +35,8 @@ func (namedTool) Run(context.Context, json.RawMessage) (contract.Result, error) 
 	return contract.Result{}, nil
 }
 
+var unbuiltHere = []string{"whatif", "note", "digest", "checkpoint", "forget", "project_report", "changes", "trail", "budget", "eval", "plan", "fetch"}
+
 func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing.T) {
 	root := t.TempDir()
 	reader, err := read.NewReadTool(root)
@@ -50,7 +52,7 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 	for _, tool := range base {
 		names = append(names, tool.Name())
 	}
-	found := subagents.Definitions(subagents.Scan{Library: library.Files(), Tools: append(names, "spawn", "skill"), KnownTools: []string{"web_search"}})
+	found := subagents.Definitions(subagents.Scan{Library: library.Files(), Tools: append(names, "spawn", "skill"), KnownTools: append(unbuiltHere, "web_search")})
 	gates := map[string]string{"go-dev": "go vet, go test", "py-dev": "ruff check, pytest"}
 	for _, definition := range found.Definitions {
 		if gate, isLanguageAgent := gates[definition.Name]; isLanguageAgent && (len(definition.References) != 4 || len(definition.Cut) > 0 || strings.Join(definition.Gate, ", ") != gate) {
@@ -66,7 +68,7 @@ func TestASubAgentIsOfferedWriteAndEditOnlyWhenItsDefinitionNamesThem(t *testing
 		"go-dev":   dev,
 		"py-dev":   dev,
 		"qa":       "read write typecheck test glob search symbols bash reference",
-		"":         "read write edit typecheck test browser_tabs browser_observe browser_act browser_motion fetch glob search symbols codemod scaffold format deps bash spawn message subagents",
+		"":         "read write edit typecheck test fetch glob search format bash spawn message subagents",
 	} {
 		model := &stubModel{decisions: []core.Decision{claimDecision("did the piece")}}
 		config := Config{Model: model, Spend: SpendAPIKey, Tools: NewRegistry(base...), Caps: Caps{MaxSteps: 5}, ResultBytesCap: 4096,
@@ -430,7 +432,7 @@ func TestRustDevCarriesTheGpuiReferencesOnlyWhereItsOwnsReachGpuiCe(t *testing.T
 
 func TestASpawnWithNoOwnsStartsAndItsWriteEditAndNestedSpawnAreRefused(t *testing.T) {
 	names := []string{"read", "write", "edit", "typecheck", "test", "glob", "search", "symbols", "bash", "spawn", "skill", "codemod", "scaffold", "format", "deps"}
-	found := subagents.Definitions(subagents.Scan{Library: library.Files(), Tools: names})
+	found := subagents.Definitions(subagents.Scan{Library: library.Files(), Tools: names, KnownTools: unbuiltHere})
 	for spawned, nested := range map[string]string{
 		`{"agent":"ts-dev","task":"run ping and report"}`: `unknown tool "spawn"`,
 		`{"task":"run ping and report","owns":[]}`:        "spawned without owns, so a sub-agent you spawn holds none either",

@@ -124,7 +124,7 @@ func (e AgentRefusedError) Error() string {
 func enabledSubAgents(defined []subagents.Definition) []subagents.Definition {
 	var enabled []subagents.Definition
 	for _, definition := range defined {
-		if definition.Runs == subagents.RunsModel || definition.Runs == subagents.RunsInherit {
+		if definition.Name != unnamedDefinition && (definition.Runs == subagents.RunsModel || definition.Runs == subagents.RunsInherit) {
 			enabled = append(enabled, definition)
 		}
 	}
@@ -141,7 +141,7 @@ func (s SubAgents) enabledNames() []string {
 
 func (s SubAgents) Named(name string) (subagents.Definition, error) {
 	if name == "" {
-		return subagents.Definition{}, nil
+		return s.unnamed()
 	}
 	why := "is no sub-agent tofu found"
 	for _, definition := range s.Defined {
@@ -160,6 +160,19 @@ func (s SubAgents) Named(name string) (subagents.Definition, error) {
 		}
 	}
 	return subagents.Definition{}, AgentRefusedError{Name: name, Why: why, Enabled: s.enabledNames()}
+}
+
+const unnamedDefinition = "unnamed"
+
+func (s SubAgents) unnamed() (subagents.Definition, error) {
+	at := slices.IndexFunc(s.Defined, func(definition subagents.Definition) bool { return definition.Name == unnamedDefinition })
+	switch {
+	case at < 0:
+		return subagents.Definition{}, nil
+	case len(s.Defined[at].Refused) > 0:
+		return subagents.Definition{}, AgentRefusedError{Name: unnamedAgent, Why: "cannot run: its default tools in " + s.Defined[at].Path + " " + strings.Join(s.Defined[at].Refused, "; "), Enabled: s.enabledNames()}
+	}
+	return subagents.Definition{Tools: s.Defined[at].Tools}, nil
 }
 
 func claiming(enabled []subagents.Definition, file string) []string {

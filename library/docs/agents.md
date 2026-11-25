@@ -17,6 +17,12 @@ In a session the model steers its sub-agents with two tools. `subagents` lists t
 
 A name is one plain lower-case word: letters, digits and `-`, starting with a letter, like `planner` or `ts-dev`.
 
+## A sub-agent with no agent
+
+A spawn that names no agent runs on the lead's model with the tools of the `unnamed` file tofu ships: read, write, edit, bash, glob, search, test, typecheck, format, eval, plan, fetch, whatif, note, digest, checkpoint, forget, project_report, changes, trail, budget, skill and spawn, the tools such sub-agents called in real sessions. Beside them it always gets ask, artifact_fetch, history, reference, the scratch tools, shell with bash, message and subagents with spawn, and the ticket tools when the spawn names a ticket. Its first request carries 34 tools where it carried every tool the lead had, 65 on a fresh project. An `unnamed.md` in `.tofu/agents/` or `~/.tofu/agents/` replaces the list, and `tofu agents` shows which one is read. The lead is never offered `unnamed` by name.
+
+A list naming a tool tofu does not have is refused when it is read: `tofu agents` marks it `✗ refused` with `names the tool "<name>", which tofu does not have`, and every spawn with no agent is refused with the same reason until the file is fixed.
+
 ## The checks it ran
 
 When any check a sub-agent ran did not pass, its report lists each check that failed or was skipped, in order, each with its exit code and the first error line it printed; the checks that passed are a count:

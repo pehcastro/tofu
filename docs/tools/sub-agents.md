@@ -2,7 +2,7 @@
 title: Sub-agent tools
 description: spawn, race, message, subagents and ask, the tools the lead and its sub-agents use to hand out work, weigh its cost and talk while it runs.
 order: 7
-updated: 2026-11-06
+updated: 2026-11-25
 ---
 
 Five tools, tofu's own Go code. The lead gets `spawn` and `race`; the loop
@@ -117,6 +117,27 @@ limits in settings.
 
 `subAgentsPerTurn` (10) and `subAgentDepth` (2) are settings, and `tofu
 agents` lists the sub-agents `agent` can name.
+
+## A spawn with no agent
+
+A sub-agent spawned with no `agent` gets the tools such sub-agents called in
+real sessions, not every tool the lead holds. The list is the `unnamed`
+file tofu ships: read, write, edit, bash, glob, search, test, typecheck,
+format, eval, plan, fetch, whatif, note, digest, checkpoint, forget,
+project_report, changes, trail, budget, skill and spawn, with ask,
+artifact_fetch, history, reference, the scratch tools, shell, message and
+subagents always beside them, and the ticket tools when the spawn names a
+ticket. Its first request carries 34 tools and 40,395 bytes of tool schemas
+where it carried 65 and 82,615, and it can still spawn its own sub-agents.
+
+Put an `unnamed.md` in `.tofu/agents/` or `~/.tofu/agents/` to change the
+list. A tool tofu does not have is refused when the file is read, `tofu
+agents` names it, and a spawn with no agent says the same thing until the
+file is fixed:
+
+```text
+spawn refused: a sub-agent on the lead's model cannot run: its default tools in .tofu\agents\unnamed.md names the tool "nosuchtool", which tofu does not have
+```
 
 ## Before the lead takes a hand-back
 
