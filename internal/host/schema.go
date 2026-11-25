@@ -88,7 +88,7 @@ func pinnedNames() map[reflect.Type]string {
 		},
 		"sys": {scratch.ScratchFolder{}, scratch.ScratchReport{}},
 		"turn": {
-			loop.HookRun{}, loop.LoopGuardStop{}, loop.PersonOption{}, loop.PersonQuestion{}, loop.PersonReply{},
+			loop.ActiveSkill{}, loop.HookRun{}, loop.LoopGuardStop{}, loop.PersonOption{}, loop.PersonQuestion{}, loop.PersonReply{},
 			loop.ProxyRow{}, loop.ToolCallRow{},
 		},
 	} {

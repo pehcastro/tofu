@@ -1,7 +1,7 @@
 ---
 topic: skills
 title: Skills
-summary: where tofu finds skills, how to add one for every project or for one, and how to turn skills off
+summary: where tofu finds skills, how to add one for every project or for one, how a skill loads on your own words, and how to turn skills off
 verbs: run, settings
 ---
 
@@ -54,6 +54,54 @@ A sub-agent file can name skills in its own front matter, as
 sub-agent's prompt when it starts. A sub-agent without the skill tool is
 told which skills were loaded for it, and a brief that names one it cannot
 load gets a note to work without it.
+
+## Load a skill when you say its words
+
+Right below the description, `trigger` and `keywords` make a skill load
+by itself when you say one of its phrases:
+
+    ---
+    name: socratic-tutor
+    description: teaches a topic by asking questions
+    trigger: auto
+    keywords: teach me, tutor me, quiz me
+    ---
+
+`trigger` is `auto` or `manual`. With no `trigger` a skill is `manual`
+and loads only through the skill tool or a sub-agent's `skills` list, as
+before. `keywords` is a comma separated list of phrases and is ignored
+unless `trigger` is `auto`. Any other `trigger` value keeps the skill out
+of the list, and tofu names the file and the allowed values.
+
+A phrase matches exactly, in any case, as whole words: `teach me` fires
+on "can you teach me goroutines" and not on "teach meaning". It is read
+only in a message you write to the lead, or in a message the lead sends
+to a running sub-agent. A sub-agent's brief, a report and the model's
+own words never fire it.
+
+When a phrase matches, tofu puts the skill's body in the conversation
+once, and the chat shows one row:
+
+    · skill socratic-tutor loaded: you said "teach me"
+
+While the body is still in the conversation the skill is active, and a
+later match adds nothing. Once compaction drops the body, the skill is no
+longer active and the next match loads it again. A skill the model loaded
+with the skill tool counts as active too.
+
+Turn an active skill off by typing:
+
+    /skill off socratic-tutor
+
+tofu tells the model to stop following it, and it stays off until you
+say one of its phrases again.
+
+Every load, every match skipped because the skill is active, and every
+off writes a row to the session trace, with who said what:
+
+    tofu session trace <session> --kind notice --grep skill
+
+A skill that never matches adds nothing to a request.
 
 ## Change it
 

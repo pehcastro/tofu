@@ -22,12 +22,13 @@ const (
 	Turn     Needs = "turn"
 	DiffTurn Needs = "diff-turn"
 	Standing Needs = "standing"
+	Said     Needs = "said"
 )
 
 func (Scope) Enum() []string { return []string{string(Tofu), string(Interface)} }
 
 func (Needs) Enum() []string {
-	return []string{string(Always), string(Reload), string(Resume), string(Fresh), string(Compact), string(Fork), string(Branch), string(Undo), string(Cron), string(Turn), string(DiffTurn), string(Standing)}
+	return []string{string(Always), string(Reload), string(Resume), string(Fresh), string(Compact), string(Fork), string(Branch), string(Undo), string(Cron), string(Turn), string(DiffTurn), string(Standing), string(Said)}
 }
 
 func (c Command) Starts() bool { return c.Needs == Turn || c.Needs == DiffTurn }
@@ -58,6 +59,7 @@ func Table() []Command {
 		{Name: "memory", Summary: "what tofu remembers for you, global and for this project", Scope: Tofu, Needs: Always},
 		{Name: "remember", Args: "<what>", Summary: "keep a line for every later session: /remember <what>", Scope: Tofu, Needs: Always},
 		{Name: "permissions", Args: "[revoke <n>]", Summary: "every always here and never here answer standing in this session, what it decides, where, since and until when; /permissions revoke <n> asks again", Scope: Tofu, Needs: Standing},
+		{Name: "skill", Args: "off <name>", Summary: "stop following a skill your words loaded, until you say one of its keywords again: /skill off <name>", Scope: Tofu, Needs: Said},
 		{Name: "reload", Summary: "re-read settings, rules, skills, sub-agents, models, instructions and keys from disk", Scope: Tofu, Needs: Reload},
 		{Name: "resume", Summary: "pick a session of this project to carry into the next task", Scope: Tofu, Needs: Resume},
 		{Name: "side", Summary: "open a side chat beside this session, on its cache, while it keeps running", Scope: Tofu, Needs: Resume},

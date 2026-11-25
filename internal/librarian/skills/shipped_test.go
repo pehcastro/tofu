@@ -19,8 +19,8 @@ func TestShippedReadsEverySkillFileInTheLibraryWithItsDomain(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Skill{
-		{Name: "flake-triage", Description: "prove a test disagrees with itself", Domain: "qa", Origin: OriginLibrary, File: "library/qa/general/skills/flake-triage.md", Dir: "library/qa/general/skills"},
-		{Name: "unnamed", Description: "no name given", Domain: "dev", Origin: OriginLibrary, File: "library/dev/skills/unnamed.md", Dir: "library/dev/skills"},
+		{Name: "flake-triage", Description: "prove a test disagrees with itself", Trigger: TriggerManual, Domain: "qa", Origin: OriginLibrary, File: "library/qa/general/skills/flake-triage.md", Dir: "library/qa/general/skills"},
+		{Name: "unnamed", Description: "no name given", Trigger: TriggerManual, Domain: "dev", Origin: OriginLibrary, File: "library/dev/skills/unnamed.md", Dir: "library/dev/skills"},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("shipped\n got %+v\nwant %+v", got, want)

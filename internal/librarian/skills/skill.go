@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -25,15 +26,54 @@ const (
 	OriginLibrary Origin = "library"
 )
 
+type Trigger string
+
+const (
+	TriggerManual Trigger = "manual"
+	TriggerAuto   Trigger = "auto"
+)
+
+func (Trigger) Enum() []string { return []string{string(TriggerAuto), string(TriggerManual)} }
+
 type Skill struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
+	Trigger     Trigger  `json:"trigger"`
+	Keywords    []string `json:"keywords,omitempty"`
 	Domain      string   `json:"domain,omitempty"`
 	Origin      Origin   `json:"origin"`
 	File        string   `json:"path"`
 	Dir         string   `json:"dir"`
 	Hidden      bool     `json:"hidden"`
 	References  []string `json:"references,omitempty"`
+}
+
+func triggerOf(fields map[string][]string) (Trigger, []string, error) {
+	switch trigger := Trigger(cmp.Or(strings.Join(fields["trigger"], ""), string(TriggerManual))); trigger {
+	case TriggerManual:
+		return trigger, nil, nil
+	case TriggerAuto:
+		var keywords []string
+		for _, listed := range fields["keywords"] {
+			for _, phrase := range strings.Split(listed, ",") {
+				if phrase = unquote(strings.TrimSpace(phrase)); phrase != "" {
+					keywords = append(keywords, phrase)
+				}
+			}
+		}
+		return trigger, keywords, nil
+	default:
+		return "", nil, fmt.Errorf("its trigger is %q, and a trigger is one of %s", trigger, strings.Join(trigger.Enum(), ", "))
+	}
+}
+
+func (s Skill) Said(words string) string {
+	for _, phrase := range s.Keywords {
+		if regexp.MustCompile(`(?i)(^|\W)` + regexp.QuoteMeta(phrase) + `(\W|$)`).MatchString(words) {
+			return phrase
+		}
+	}
+	return ""
 }
 
 type Found struct {
@@ -105,6 +145,10 @@ func Discover(project, home string) Found {
 				found.unoffer(one.Name, file, "it has no description")
 				continue
 			}
+			if one.Trigger, one.Keywords, err = triggerOf(fields); err != nil {
+				found.unoffer(one.Name, file, err.Error())
+				continue
+			}
 			if earlier, taken := fileNamed[one.Name]; taken {
 				found.unoffer(one.Name, file, earlier+" already has that name")
 				continue
@@ -129,8 +173,12 @@ func Shipped(library fs.FS, root string) ([]Skill, error) {
 		}
 		fields, _ := FrontMatter(string(data))
 		file := path.Join(root, name)
+		trigger, keywords, err := triggerOf(fields)
+		if err != nil {
+			return fmt.Errorf("the skill %s is not offered: %w", file, err)
+		}
 		shipped = append(shipped, Skill{Name: cmp.Or(strings.Join(fields["name"], " "), strings.TrimSuffix(path.Base(name), ".md")),
-			Description: strings.Join(fields["description"], " "), Domain: strings.Join(fields["domain"], " "), Origin: OriginLibrary, File: file, Dir: path.Dir(file), References: fields["references"]})
+			Description: strings.Join(fields["description"], " "), Trigger: trigger, Keywords: keywords, Domain: strings.Join(fields["domain"], " "), Origin: OriginLibrary, File: file, Dir: path.Dir(file), References: fields["references"]})
 		return nil
 	})
 	slices.SortFunc(shipped, func(a, b Skill) int { return strings.Compare(a.Name, b.Name) })

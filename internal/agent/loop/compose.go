@@ -191,25 +191,33 @@ func referenceParts(definition subagents.Definition) []PromptPart {
 
 func autoloadedSkills(definition subagents.Definition, skills []skill.Skill, skillsOff bool) (string, []PromptPart, error) {
 	if skillsOff && len(definition.Skills) > 0 {
-		return "\n\nthe skills setting is off, so the skills your definition names are not loaded: " + strings.Join(definition.Skills, ", ") + ". work without them and say so in your report", nil, nil
+		return "\n\nthe skills setting is off, so these skills are not loaded: " + strings.Join(definition.Skills, ", ") + ". work without them and say so in your report", nil, nil
 	}
 	if skillsOff {
 		return "", nil, nil
 	}
+	shippedSkills, elsewhere := definition, []string(nil)
+	shippedSkills.Skills = nil
+	for _, name := range definition.Skills {
+		held := slices.ContainsFunc(skills, func(one skill.Skill) bool { return one.Name == name && one.Origin != skill.OriginLibrary })
+		if definition.Origin == "library" && (!held || len(skill.LibraryFiles(shipped.Files(), "skills", name)) > 0) {
+			shippedSkills.Skills = append(shippedSkills.Skills, name)
+		} else {
+			elsewhere = append(elsewhere, name)
+		}
+	}
+	fromLibrary, err := librarySkills(shipped.Files(), shippedSkills)
+	if err != nil {
+		return "", nil, err
+	}
 	var loaded []PromptPart
-	if definition.Origin == "library" {
-		text, err := librarySkills(shipped.Files(), definition)
-		if err != nil {
-			return "", nil, err
-		}
-		for _, name := range definition.Skills {
-			loaded = append(loaded, PromptPart{Concern: ConcernSkills, Agent: definition.Name, Name: name, File: "library/" + skill.LibraryFiles(shipped.Files(), "skills", name)[0], State: session.PartLoaded,
-				Why: "the library sub-agent's definition names it"})
-		}
-		return text, loaded, nil
+	for _, name := range shippedSkills.Skills {
+		loaded = append(loaded, PromptPart{Concern: ConcernSkills, Agent: definition.Name, Name: name, File: "library/" + skill.LibraryFiles(shipped.Files(), "skills", name)[0], State: session.PartLoaded,
+			Why: "the library sub-agent's definition names it"})
 	}
 	var text strings.Builder
-	for _, name := range definition.Skills {
+	text.WriteString(fromLibrary)
+	for _, name := range elsewhere {
 		one, err := skill.Find(skills, name)
 		var body string
 		if err == nil {
@@ -223,7 +231,7 @@ func autoloadedSkills(definition subagents.Definition, skills []skill.Skill, ski
 		case definition.Origin == ".tofu" || definition.Origin == "~/.tofu":
 			return "", nil, fmt.Errorf("the sub-agent %s names the skill %s: %w", definition.Name, name, err)
 		default:
-			text.WriteString("\n\nthe skill " + name + ", which your definition names, did not load: " + err.Error() + ". work without it and say so in your report")
+			text.WriteString("\n\nthe skill " + name + " did not load: " + err.Error() + ". work without it and say so in your report")
 			loaded = append(loaded, PromptPart{Concern: ConcernSkills, Agent: definition.Name, Name: name, File: filepath.ToSlash(one.File), State: session.PartDropped,
 				Why: "the sub-agent's definition names it and it did not load: " + err.Error()})
 		}
@@ -233,10 +241,11 @@ func autoloadedSkills(definition subagents.Definition, skills []skill.Skill, ski
 
 func autoloadedReferences(definition subagents.Definition, skills []skill.Skill, loaded []PromptPart) ([]subagents.Reference, []PromptPart, error) {
 	if definition.Origin == "library" {
-		var err error
-		if skills, err = skill.Shipped(shipped.Files(), ""); err != nil {
+		library, err := skill.Shipped(shipped.Files(), "")
+		if err != nil {
 			return nil, nil, err
 		}
+		skills = slices.Concat(library, skills)
 	}
 	var references []subagents.Reference
 	var parts []PromptPart

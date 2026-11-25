@@ -512,7 +512,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 	if isReport(config.TaskOrigin) {
 		boardLine = lead.boardLine(config.Task)
 	}
-	messages = append(append(messages, config.opening(taskOrigin, concluding+taken, boardLine, upgraded)...), hooked...)
+	unheard := config.opening(taskOrigin, concluding+taken, boardLine, upgraded)
+	messages = append(append(messages, unheard...), hooked...)
 	episode(episodeKind(taskOrigin), config.Task)
 
 	var written, shadowed sync.WaitGroup
@@ -1015,7 +1016,7 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 				if config.ImagesOf != nil {
 					said.Images = config.ImagesOf(steered)
 				}
-				messages = append(messages, said)
+				messages, unheard = append(messages, said), append(unheard, said)
 				episode(episodeOfPerson, steered)
 			}
 		}
@@ -1026,7 +1027,8 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 						item.text += "\n\n" + line
 					}
 				}
-				messages = append(messages, inserted(item.origin, item.text))
+				arrived := inserted(item.origin, item.text)
+				messages, unheard = append(messages, arrived), append(unheard, arrived)
 				episode(episodeKind(item.origin), item.text)
 				if item.origin.Source == core.SourceMemorySaved {
 					recorded.noted(item.origin, item.text)
@@ -1088,6 +1090,11 @@ func Run(ctx context.Context, config Config) (ran Row, runErr error) {
 			}
 			trimmedBefore = cmp.Or(unforked, trimmedBefore)
 		}
+		if heard := config.withSkillsSaid(messages, unheard, recorded); len(heard) > len(messages) {
+			messages = heard
+			flush()
+		}
+		unheard = nil
 		if picturesToDrop(messages) > 0 {
 			tokensBefore := sentTokens(messages)
 			drops := keepNewestPictures(messages)

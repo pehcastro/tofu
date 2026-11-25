@@ -90,8 +90,9 @@ type AccountSpend struct {
 type SkillListing = skills.Skill
 
 type SkillsReport struct {
-	Skills   []SkillListing `json:"skills"`
-	Warnings []string       `json:"warnings"`
+	Skills   []SkillListing     `json:"skills"`
+	Active   []loop.ActiveSkill `json:"active"`
+	Warnings []string           `json:"warnings"`
 }
 
 type LedgerSummaryParams struct {
@@ -225,7 +226,7 @@ func (s *server) skills(NoParams) (any, error) {
 	}
 	home, _ := os.UserHomeDir()
 	found := skills.Discover(s.Host.dir, home)
-	return SkillsReport{Skills: append(shipped, found.Skills...), Warnings: append([]string{}, found.Warnings...)}, nil
+	return SkillsReport{Skills: append(shipped, found.Skills...), Active: loop.ActiveSkills(s.Host.Carried()), Warnings: append([]string{}, found.Warnings...)}, nil
 }
 
 func (s *server) ledgerSummary(p LedgerSummaryParams) (any, error) {

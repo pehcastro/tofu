@@ -16,6 +16,7 @@ import (
 	"tofu/internal/agent/subagents"
 	"tofu/internal/konst"
 	"tofu/internal/librarian/rules"
+	skill "tofu/internal/librarian/skills"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/models/llm/core"
 	"tofu/internal/platform/credential"
@@ -104,6 +105,7 @@ type Config struct {
 	System          string
 	Parts           []PromptPart
 	References      map[string]string
+	Skills          []skill.Skill
 	Environment     string
 	Instructions    string
 	Memory          string

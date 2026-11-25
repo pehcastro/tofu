@@ -58,7 +58,7 @@ func offered(options Options, needs commands.Needs) bool {
 		return options.BranchAt != nil
 	case commands.Undo:
 		return options.Undo != nil
-	case commands.Cron, commands.Turn, commands.DiffTurn, commands.Standing:
+	case commands.Cron, commands.Turn, commands.DiffTurn, commands.Standing, commands.Said:
 		return options.Host != nil
 	}
 	panic("tui: unknown command need " + string(needs))
@@ -126,6 +126,8 @@ func (a *App) runCommand(name string) tea.Cmd {
 		a.view.Append(session.Entry{Kind: session.Note, Body: rememberUsage})
 	case "permissions":
 		a.listStanding()
+	case "skill":
+		a.view.Insert("/skill off ")
 	case "reload":
 		return a.reload()
 	case "resume":

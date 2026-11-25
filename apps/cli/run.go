@@ -836,6 +836,7 @@ func runConfig(opts wiring.RunOpts, built []contract.Tool, run runtime) (loop.Co
 		Places:        run.places,
 		Redactor:      &redactor,
 		References:    references,
+		Skills:        prompt.skills,
 		Model:         run.model,
 		Now:           run.now,
 		Accounts:      run.applyThinkingSummary(run.accounts),

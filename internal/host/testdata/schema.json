@@ -7525,6 +7525,15 @@
     "SkillsReport": {
       "additionalProperties": false,
       "properties": {
+        "active": {
+          "items": {
+            "$ref": "#/$defs/turn.ActiveSkill"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "skills": {
           "items": {
             "$ref": "#/$defs/skill.Skill"
@@ -7546,6 +7555,7 @@
       },
       "required": [
         "skills",
+        "active",
         "warnings"
       ],
       "type": "object"
@@ -11560,6 +11570,15 @@
           ],
           "type": "string"
         },
+        "skills": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "spec": {
           "type": "string"
         },
@@ -14966,7 +14985,8 @@
             "cron",
             "turn",
             "diff-turn",
-            "standing"
+            "standing",
+            "said"
           ],
           "type": "string"
         },
@@ -17181,6 +17201,15 @@
         "hidden": {
           "type": "boolean"
         },
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "type": [
+            "array",
+            "null"
+          ]
+        },
         "name": {
           "type": "string"
         },
@@ -17198,11 +17227,19 @@
             "array",
             "null"
           ]
+        },
+        "trigger": {
+          "enum": [
+            "auto",
+            "manual"
+          ],
+          "type": "string"
         }
       },
       "required": [
         "name",
         "description",
+        "trigger",
         "origin",
         "path",
         "dir",
@@ -17608,6 +17645,26 @@
       "required": [
         "root",
         "folders"
+      ],
+      "type": "object"
+    },
+    "turn.ActiveSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "said": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "said"
       ],
       "type": "object"
     },
