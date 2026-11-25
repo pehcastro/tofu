@@ -491,12 +491,32 @@ func estimateRow(row traceRow, estimated session.Estimated) traceRow {
 		return row
 	}
 	promised := []string{"said " + spanOf(said.SaidMS), "done by " + spanOf(said.DoneByMS)}
+	if said.BuildMS+said.VerifyMS+said.TestMS > 0 {
+		promised = append(promised, "agent "+spanOf(said.AgentMS)+", tests "+spanOf(said.TestMS)+", builds "+spanOf(said.BuildMS)+", verify "+spanOf(said.VerifyMS))
+	}
+	if said.ElapsedMS > 0 {
+		promised = append(promised, spanOf(said.ElapsedMS)+" elapsed when asked")
+	}
+	whose, onModel := "", " on "+said.Model
+	switch said.Match {
+	case session.MatchAgent:
+		onModel = " on models other than " + said.Model
+		fallthrough
+	case session.MatchAgentModel:
+		whose = " of " + cmp.Or(said.Definition, "the lead")
+	case session.MatchModel:
+		whose = " of every agent"
+	case "":
+	default:
+		row.Text = traced(where, "an estimate this build cannot read")
+		return row
+	}
 	var basis string
 	switch said.Basis {
 	case session.EstimateFromHistory:
-		basis = "from " + output.Plural(said.Runs, "earlier run") + " here on " + said.Model
+		basis = "from " + output.Plural(said.Runs, "earlier run") + whose + " here" + onModel
 	case session.EstimateFirstRun:
-		basis = "first run, from " + output.Plural(said.Runs, "run") + " in other projects on " + said.Model
+		basis = "first run, from " + output.Plural(said.Runs, "run") + whose + " in other projects" + onModel
 	case session.EstimateNoHistory:
 		basis, promised = "first run, no history on "+said.Model+" anywhere", []string{"no promise"}
 	default:
@@ -520,7 +540,8 @@ func estimateRow(row traceRow, estimated session.Estimated) traceRow {
 	case session.PromiseNone, session.PromiseOpen:
 	}
 	row.Text = traced(append(parts, "took "+spanOf(settled.TookMS), string(settled.Outcome), verdict,
-		"model "+spanOf(settled.ModelMS)+", tools "+spanOf(settled.ToolsMS)+", tests and builds "+spanOf(settled.TestMS)+" in "+output.Plural(settled.TestCalls, "call")+
+		"model "+spanOf(settled.ModelMS)+", tools "+spanOf(settled.ToolsMS)+", tests "+spanOf(settled.TestMS)+", builds "+spanOf(settled.BuildMS)+", verify "+spanOf(settled.VerifyMS)+
+			" in "+output.Plural(settled.CheckCalls, "call")+
 			", permission "+spanOf(settled.PermissionMS)+" left out of the verdict, queue "+spanOf(settled.QueueMS))...)
 	return row
 }

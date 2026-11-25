@@ -21,6 +21,14 @@ const (
 	EstimateNoHistory   EstimateBasis = "no_history"
 )
 
+type EstimateMatch string
+
+const (
+	MatchAgentModel EstimateMatch = "agent_model"
+	MatchAgent      EstimateMatch = "agent"
+	MatchModel      EstimateMatch = "model"
+)
+
 type EstimateOutcome string
 
 const (
@@ -32,23 +40,35 @@ const (
 type EstimateBody struct {
 	Scope       EstimateScope `json:"scope"`
 	Agent       string        `json:"agent,omitempty"`
+	Definition  string        `json:"definition,omitempty"`
 	Basis       EstimateBasis `json:"basis"`
+	Match       EstimateMatch `json:"match,omitempty"`
 	SaidMS      int64         `json:"said_ms"`
 	DoneByMS    int64         `json:"done_by_ms"`
 	AgentMS     int64         `json:"agent_ms"`
 	TestMS      int64         `json:"test_ms"`
+	BuildMS     int64         `json:"build_ms"`
+	VerifyMS    int64         `json:"verify_ms"`
+	ElapsedMS   int64         `json:"elapsed_ms,omitempty"`
 	Model       string        `json:"model"`
 	Project     string        `json:"project"`
 	PromptChars int           `json:"prompt_chars"`
 	Runs        int           `json:"runs"`
-	TestSource  string        `json:"test_source"`
+	SizedRuns   int           `json:"sized_runs,omitempty"`
+	TestRuns    int           `json:"test_runs"`
+	BuildRuns   int           `json:"build_runs"`
+	VerifyRuns  int           `json:"verify_runs"`
+	LastedRuns  int           `json:"lasted_runs,omitempty"`
+	LongestMS   int64         `json:"longest_ms,omitempty"`
 }
 
 type EstimateSplit struct {
 	ModelMS      int64 `json:"model_ms"`
 	ToolsMS      int64 `json:"tools_ms"`
 	TestMS       int64 `json:"test_ms"`
-	TestCalls    int   `json:"test_calls"`
+	BuildMS      int64 `json:"build_ms"`
+	VerifyMS     int64 `json:"verify_ms"`
+	CheckCalls   int   `json:"test_calls"`
 	PermissionMS int64 `json:"permission_ms"`
 	QueueMS      int64 `json:"queue_ms"`
 }

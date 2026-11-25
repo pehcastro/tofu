@@ -15,26 +15,25 @@ import (
 	"unicode/utf8"
 
 	"tofu/internal/agent/subagents"
-	"tofu/internal/konst"
 	platformfs "tofu/internal/platform/fs"
 	"tofu/internal/store/session"
 	"tofu/internal/store/walls"
 )
 
-const settledRunsName = "estimates.jsonl"
+const settledRunsName = "settled-runs.jsonl"
 
 type historyRun struct {
-	Project      string `json:"project,omitempty"`
-	Model        string `json:"model"`
-	Chars        int    `json:"chars"`
-	TookMS       int64  `json:"took_ms"`
-	Split        bool   `json:"split,omitempty"`
-	TestMS       int64  `json:"test_ms,omitempty"`
-	PermissionMS int64  `json:"permission_ms,omitempty"`
-	TestCalls    int    `json:"test_calls,omitempty"`
+	At      time.Time             `json:"at"`
+	Project string                `json:"project,omitempty"`
+	Model   string                `json:"model"`
+	Scope   session.EstimateScope `json:"scope"`
+	Agent   string                `json:"agent,omitempty"`
+	Chars   int                   `json:"chars"`
+	TookMS  int64                 `json:"took_ms"`
+	session.EstimateSplit
 }
 
-func settledRuns(state string, keep func(project string) bool, model func(string) bool) ([]historyRun, int, error) {
+func settledRuns(state string, keep func(project string) bool) ([]historyRun, int, error) {
 	written, err := os.ReadFile(filepath.Join(state, settledRunsName))
 	builtFrom := 0
 	if errors.Is(err, fs.ErrNotExist) {
@@ -44,10 +43,10 @@ func settledRuns(state string, keep func(project string) bool, model func(string
 		return nil, 0, err
 	}
 	var runs []historyRun
-	for rest := bytes.TrimRight(written, "\n"); len(rest) > 0 && len(runs) < konst.SpawnEstimateRunsMost; {
+	for rest := bytes.TrimRight(written, "\n"); len(rest) > 0; {
 		cut := bytes.LastIndexByte(rest, '\n')
 		var run historyRun
-		if json.Unmarshal(rest[cut+1:], &run) == nil && keep(run.Project) && model(run.Model) {
+		if json.Unmarshal(rest[cut+1:], &run) == nil && keep(run.Project) {
 			runs = append(runs, run)
 		}
 		rest = rest[:max(cut, 0)]
@@ -55,7 +54,7 @@ func settledRuns(state string, keep func(project string) bool, model func(string
 	return runs, builtFrom, nil
 }
 
-func historyElsewhere(state string, keep func(project string) bool, model func(string) bool) ([]historyRun, int, error) {
+func historyElsewhere(state string, keep func(project string) bool) ([]historyRun, int, error) {
 	root := filepath.Dir(state)
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -74,21 +73,12 @@ func historyElsewhere(state string, keep func(project string) bool, model func(s
 	}
 	slices.SortFunc(projects, func(a, b project) int { return b.changed.Compare(a.changed) })
 	found, builtFrom, failed := make([][]historyRun, len(projects)), make([]int, len(projects)), make([]error, len(projects))
-	readAtOnce(len(projects), func(at int) { found[at], builtFrom[at], failed[at] = settledRuns(projects[at].state, keep, model) })
-	var runs []historyRun
-	for at := range projects {
-		if failed[at] != nil {
-			return nil, 0, failed[at]
-		}
-		if runs = append(runs, found[at]...); len(runs) >= konst.SpawnEstimateRunsMost {
-			break
-		}
-	}
+	readAtOnce(len(projects), func(at int) { found[at], builtFrom[at], failed[at] = settledRuns(projects[at].state, keep) })
 	built := 0
 	for _, sessions := range builtFrom {
 		built += sessions
 	}
-	return runs[:min(len(runs), konst.SpawnEstimateRunsMost)], built, nil
+	return slices.Concat(found...), built, errors.Join(failed...)
 }
 
 func readAtOnce(count int, read func(at int)) {
@@ -116,33 +106,24 @@ func buildSettled(state string) ([]byte, int, error) {
 	}
 	var written bytes.Buffer
 	encoder := json.NewEncoder(&written)
-	for _, run := range slices.Backward(slices.Concat(found...)) {
+	for _, run := range slices.SortedStableFunc(slices.Values(slices.Concat(found...)), func(a, b historyRun) int { return a.At.Compare(b.At) }) {
 		if err := encoder.Encode(run); err != nil {
 			return nil, 0, err
 		}
 	}
 	return written.Bytes(), len(listing.Sessions), platformfs.WriteFile(filepath.Join(state, settledRunsName), written.Bytes(), 0o644)
 }
+
 func runsIn(store *session.Store, header session.Header) ([]historyRun, error) {
-	events, err := store.EventsOf(header.ID, session.EventTurnEnd, session.EventToolCall, session.EventEstimate, session.EventEstimateSettled, session.EventWall)
+	events, err := store.EventsOf(header.ID, session.EventTurnEnd, session.EventToolCall, session.EventToolResult, session.EventWall)
 	if err != nil {
 		return nil, err
 	}
-	estimated, err := session.Estimates(events)
-	if err != nil {
-		return nil, err
-	}
+	tools, briefs, turnMS := map[string]string{}, map[string]int{}, map[string]int64{}
+	splits, shells := map[string]*session.EstimateSplit{}, map[string]map[string]checkKind{}
 	var runs []historyRun
-	counted := map[string]bool{}
-	for _, one := range estimated {
-		if one.Settled != nil && one.Settled.Outcome == session.EstimateDone && one.Scope != session.EstimateCall {
-			runs = append(runs, historyRun{Project: header.Project, Model: one.Model, Chars: one.PromptChars, TookMS: one.Settled.TookMS, Split: true,
-				TestMS: one.Settled.TestMS, PermissionMS: one.Settled.PermissionMS, TestCalls: one.Settled.TestCalls})
-			counted[cmp.Or(one.Agent, one.Event.Turn)] = true
-		}
-	}
-	briefs, turnMS := map[string]int{}, map[string]int64{}
 	for _, event := range events {
+		ran := cmp.Or(event.Agent, "turn "+event.Turn)
 		switch event.Kind {
 		case session.EventWall:
 			if wall, err := session.DecodeWall(event); err == nil && wall.Op == string(walls.OpTurn) && event.Agent == "" {
@@ -151,9 +132,21 @@ func runsIn(store *session.Store, header session.Header) ([]historyRun, error) {
 		case session.EventToolCall:
 			var call session.CallBody
 			var args spawnArgs
-			if json.Unmarshal(event.Body, &call) == nil && call.Tool == SpawnToolName && json.Unmarshal(call.Args, &args) == nil {
+			if json.Unmarshal(event.Body, &call) != nil {
+				continue
+			}
+			if tools[event.Call] = call.Tool; call.Tool == SpawnToolName && json.Unmarshal(call.Args, &args) == nil {
 				briefs[event.Call] = utf8.RuneCountInString(args.Task)
 			}
+		case session.EventToolResult:
+			var row ToolCallRow
+			if json.Unmarshal(event.Body, &row) != nil {
+				continue
+			}
+			if splits[ran] == nil {
+				splits[ran], shells[ran] = &session.EstimateSplit{}, map[string]checkKind{}
+			}
+			addCall(splits[ran], shells[ran], tools[event.Call], row)
 		case session.EventTurnEnd:
 			var ended struct {
 				Task        string          `json:"task"`
@@ -161,14 +154,16 @@ func runsIn(store *session.Store, header session.Header) ([]historyRun, error) {
 				Outcome     session.Outcome `json:"outcome"`
 				WallClockMS int64           `json:"wall_clock_ms"`
 			}
-			if event.Agent == "" && !counted[event.Turn] && json.Unmarshal(event.Body, &ended) == nil && ended.Outcome == session.OutcomeStopped {
-				runs = append(runs, historyRun{Project: header.Project, Model: ended.Model, Chars: utf8.RuneCountInString(ended.Task), TookMS: cmp.Or(turnMS[event.Turn], ended.WallClockMS)})
+			if event.Agent == "" && json.Unmarshal(event.Body, &ended) == nil && ended.Outcome == session.OutcomeStopped {
+				runs = append(runs, historyRun{At: event.At, Project: header.Project, Model: ended.Model, Scope: session.EstimateTurn, Chars: utf8.RuneCountInString(ended.Task),
+					TookMS: cmp.Or(turnMS[event.Turn], ended.WallClockMS), EstimateSplit: *cmp.Or(splits[ran], &session.EstimateSplit{})})
 			}
 		}
 	}
 	for _, run := range header.Agents {
-		if !counted[run.Agent] && run.EndedAt != nil && run.Status == subagents.Finished.String() {
-			runs = append(runs, historyRun{Project: header.Project, Model: run.Model, Chars: briefs[run.SpawnCall], TookMS: run.EndedAt.Sub(run.StartedAt).Milliseconds()})
+		if run.EndedAt != nil && run.Status == subagents.Finished.String() {
+			runs = append(runs, historyRun{At: *run.EndedAt, Project: header.Project, Model: run.Model, Scope: session.EstimateAgent, Agent: run.Definition,
+				Chars: briefs[run.SpawnCall], TookMS: run.EndedAt.Sub(run.StartedAt).Milliseconds(), EstimateSplit: *cmp.Or(splits[run.Agent], &session.EstimateSplit{})})
 		}
 	}
 	return runs, nil

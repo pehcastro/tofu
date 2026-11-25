@@ -42,9 +42,9 @@ type spawnTrace struct {
 	estimate   *openEstimate
 }
 
-func (t *SpawnTool) estimateStart(site spawnSite, agent, model, task string) (*openEstimate, error) {
+func (t *SpawnTool) estimateStart(site spawnSite, asked estimateFor) (*openEstimate, error) {
 	at := time.Now()
-	body, err := t.base.estimate(estimateFor{scope: session.EstimateAgent, agent: agent, model: model, task: task})
+	body, err := t.base.estimate(asked)
 	if err != nil || site.log == nil {
 		return &openEstimate{at: at, body: body}, err
 	}

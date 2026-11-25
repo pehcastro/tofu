@@ -91,26 +91,56 @@ sub-agents: 0 of 0
 
 `estimate_time` answers how long a piece of work will take before it
 starts, so asking the lead "how long will this take?" gets numbers, not a
-guess. It makes no model call and runs nothing: it reads earlier runs of
-the same model in this project, the ones whose task was closest in length,
-and on a first run here the same model's runs in other projects. It names
-the estimate, the done-by promise, where the figure came from, and the part
-spent in tests and builds. The call is recorded and settled when the next
-lead turn ends, so `tofu session trace <s> --kind estimate` shows whether it
-held.
+guess. It makes no model call and runs nothing. It estimates the whole
+work, not the model calls alone: the agent's own time, then the time spent
+testing, building and verifying, each with its basis, and a total.
 
-The earlier runs come from one file per project, `estimates.jsonl` beside
-its sessions, with one line for each turn or sub-agent that finished. A
-call reads that file and no session, so it answers in a few milliseconds
-however long the history is. A project that has no such file yet gets it
-built once from its sessions, and standard error says so.
+It reads the 10 newest finished runs of the same agent on the same model in
+this project: lead turns for the lead, and runs of that sub-agent
+definition for a sub-agent. When the agent has none it says so and widens
+one step at a time, naming the sample it used: the same agent on other
+models, then the same agent in other projects, then every agent on the
+model. A brief whose length falls within those runs' briefs is matched to
+the half nearest in length; a short description of the work is not sized
+against full briefs, and the answer says so. The total is the median of
+those runs. Each part is its average share of the middle half of those
+runs by time, applied to the total.
+
+A call is a test when its command runs `test`, `pytest`, `jest` or
+`vitest`; a build when it runs `build`, `compile`, `tsc` or `make`; and a
+verify when it runs `verify`, `check`, `lint`, `vet`, `clippy`, `drive`,
+`e2e` or `smoke`, or moves a ticket through the board's gates. A command
+that moved to a background shell is counted under its own kind for every
+wait on that shell.
+
+Named with the id of a sub-agent that is still running, it answers with
+the time elapsed and what remains: the median of what the earlier runs
+that lasted that long took past that point.
+
+The call is recorded and settled when the next lead turn ends, so
+`tofu session trace <s> --kind estimate` shows whether it held.
+
+The earlier runs come from one file per project, `settled-runs.jsonl`
+beside its sessions, with one line for each turn or sub-agent that
+finished: its agent, scope, brief length, time, and test, build and verify
+split. A call reads that file and no session, so it answers in a few
+milliseconds however long the history is. A project that has no such file
+yet gets it built once from its sessions, and standard error says so.
 
 ```bash
-tofu tool estimate_time '{"work":"add a --json flag to tofu session reads","model":"claude-sub/claude-opus-5"}' --dir .
+tofu tool estimate_time '{"work":"rewrite old folder paths across ~330 files after a repository layout move, make check-layout strict, then full zig build test and app verify","agent":"zig-dev"}' --dir .
 ```
 
 ```text
-estimate for the lead on claude-sub/claude-opus-5: about 47s, done by 1m47s, from 20 earlier runs in this project on this model (agent 47s, tests and builds 0s: no test or build call recorded)
+estimate for zig-dev on any model, the whole work: about 1h1m56s, done by 1h32m54s. agent 12m40s, tests 21m52s (6 of 10 runs tested), builds 25s (6 built), verify 26m59s (10 verified). basis: the 10 newest zig-dev runs in this project on any model; the work is 140 chars, outside the lengths of their briefs, so all 10 count unsized; each part is its average share of the middle half of those runs by time, applied to their median
+```
+
+```bash
+tofu tool estimate_time '{"work":"the layout move","agent":"zig-dev-190"}' --session <s> --dir .
+```
+
+```text
+zig-dev-190 on claude-sub/claude-opus-5-5 is running, 43m0s elapsed: about 21m1s remain, done by 1h14m32s in all. basis: 7 of the 10 newest zig-dev runs in this project on claude-sub/claude-opus-5-5 ran past 43m0s, and they took 1h4m1s in all at the median
 ```
 
 Model time is summed over the requests. Wall time runs from the first event
@@ -236,7 +266,7 @@ model runs in.
 | `context` | `session` | the session to read |
 | `budget` | `session` | the session to count |
 | `estimate_time` | `work` | what the work is; required |
-| `estimate_time` | `agent` | the sub-agent definition that runs it; the lead when left out |
+| `estimate_time` | `agent` | the sub-agent definition that runs it, or the id of a running sub-agent; the lead when left out |
 | `estimate_time` | `model` | the model that runs it; the turn's model when left out |
 | `forget` | `calls` | the call ids to drop, as `context` lists them; required |
 | `note` | `text` | adds one note, one line, at most 500 bytes |

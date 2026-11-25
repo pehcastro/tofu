@@ -17,11 +17,17 @@ work before you read about it.
 - `budget` reports calls, weighted tokens, USD and model and wall time for
   the turn, the session, the lead and each sub-agent, counted as `tofu
   session drain` counts them.
-- `estimate_time` says how long a piece of work will take, with no model
-  call: the estimate, the done-by promise and its basis from earlier runs
-  of the same model here, or in other projects on a first run. The runs
-  are read from the project's `estimates.jsonl`, one line per finished
-  run, built once from the sessions when it is missing.
+- `estimate_time` says how long a piece of work will take in all, with no
+  model call: the total, the done-by promise, and the agent, test, build
+  and verify parts, each with its basis. It reads the 10 newest finished
+  runs of the same agent (the lead, or the named sub-agent) on the same
+  model here; with none it says so and widens to the agent on other
+  models, then other projects, then every agent on the model. A brief
+  within the length of those runs' briefs is matched to the nearest half.
+  Named with the id of a running sub-agent, it says the elapsed time and
+  what remains, from the runs that lasted that long. The runs are read
+  from the project's `settled-runs.jsonl`, one line per finished run with
+  its agent, scope and split, built once from the sessions when missing.
 - `forget` drops results the model names by call id, each left as one
   line, and says the tokens freed and the cache cost. Only a result after
   the last cache breakpoint can go. When a request passes 70% of the

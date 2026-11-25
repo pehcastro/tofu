@@ -516,7 +516,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 		if err != nil {
 			return contract.Result{}, err
 		}
-		said, err := t.base.estimate(estimateFor{scope: session.EstimateAgent, model: cmp.Or(definition.Model, t.base.Slug), task: args.Task})
+		said, err := t.base.estimate(estimateFor{scope: session.EstimateAgent, definition: definition.Name, model: cmp.Or(definition.Model, t.base.Slug), task: args.Task})
 		if err != nil {
 			return contract.Result{}, fmt.Errorf("spawn: no estimate: %w", err)
 		}
@@ -700,7 +700,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	if madeBoard != "" {
 		said = madeBoard + ". " + said
 	}
-	if estimated, err := t.estimateStart(site, subAgentID, opened.Slug, args.Task); err != nil {
+	if estimated, err := t.estimateStart(site, estimateFor{scope: session.EstimateAgent, agent: subAgentID, definition: definition.Name, model: opened.Slug, task: args.Task}); err != nil {
 		said += "no estimate: " + err.Error()
 	} else {
 		held.trace.estimate, said = estimated, said+estimateWords(definition.Name, estimated.body)

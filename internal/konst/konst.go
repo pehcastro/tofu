@@ -722,13 +722,14 @@ const (
 	ClaimsOutputBytes  = 600
 )
 
-const SpawnEstimateRunsMost = 20
-
 const (
+	EstimateSampleRuns     = 10
 	EstimateDoneByFactor   = 1.5
 	EstimateFirstRunFactor = 1.75
 	EstimateShortMillis    = 120_000
 	EstimateShortPadMillis = 60_000
+
+	EstimateCommandFieldsRead = 3
 )
 
 const (
