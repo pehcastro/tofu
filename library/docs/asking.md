@@ -75,6 +75,15 @@ is not offered where nobody can answer: in `tofu run`, in a turn a cron job
 started, and in a sub-agent. A sub-agent asks the lead instead, and the lead
 may put the question to you naming it.
 
+A sub-agent's `ask` takes a `question` of at most 300 bytes, a `why` of at
+most 1,200 and a `default` of at most 300, all three required, and may add 2
+to 4 `options` of at most 120 bytes each and up to 5 `refs` of at most 200,
+such as `src/server.ts:12`, naming what it read rather than pasting it. An
+ask over any of these is refused whole, naming the field, its size and its
+cap, and nothing is sent. The lead reads the fields as written and what runs
+now, which lists only the running sub-agents and shells; its answer reaches
+the sub-agent cut to 1,000 bytes.
+
 Each message you type, between turns or while the lead works, is put to
 Jev's `request_open` question, beside the end of the lead's last reply and the
 task in hand. When it judges the lead would have to guess what you want, the

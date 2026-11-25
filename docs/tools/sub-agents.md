@@ -112,7 +112,8 @@ limits in settings.
 | `race` | `command` | for `command`, the program and its arguments as a list |
 | `message` | `to`, `text`, `stop` | more work, a correction, or a stop; resumes a finished one |
 | `subagents` | none | each sub-agent's state, steps and last tool |
-| `ask` | `question`, `why`, `default` | the default stands when no answer comes |
+| `ask` | `question`, `why`, `default` | at most 300, 1,200 and 300 bytes; the default stands when no answer comes |
+| `ask` | `options`, `refs` | 2 to 4 choices of 120 bytes, up to 5 places of 200 the lead may open; an ask over a cap is refused naming the field |
 
 `subAgentsPerTurn` (10) and `subAgentDepth` (2) are settings, and `tofu
 agents` lists the sub-agents `agent` can name.
@@ -138,6 +139,26 @@ shell, is refused until you answer there or in catch up. The done review does
 not send such a run back for unmet acceptance lines. A call with no reason goes
 back to the sub-agent, naming the missing reason. See
 [Boardy](/docs/features/boardy).
+
+## What the lead reads
+
+A sub-agent's report reaches the lead as a card of at most 8,000 bytes, so
+a run that pasted a whole check log does not fill the lead's context. Each
+part has its own cap: findings 1,600 (600 each), checks that did not pass
+1,200 (240 each), files written 400, warnings 300, board lines 500, and the
+sub-agent's last message what is left, up to 4,000 of its own bytes. Checks
+that passed are a count. A cut part keeps its head and tail around
+`...(N bytes cut)...`, and a cut list ends `+K more ... in the full report`.
+
+When anything was cut, the whole report is kept as one artifact and the card
+names it under its counts:
+
+    full report: artifact 0eb58161518280f6128acef55c8badd7 holds all 100432 bytes, every check, finding and line whole: read any range with artifact_fetch
+
+When it cannot be written, the line says so and why, and the card keeps its
+caps. On reports from a real session, one of 13,462 bytes reaches the lead as
+about 6,200, one of 39,469 as about 6,400, and one of 119,364, whose finding
+carried a check script's whole output, as about 7,300.
 
 ## Who calls what it changed
 

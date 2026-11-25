@@ -19,16 +19,25 @@ A name is one plain lower-case word: letters, digits and `-`, starting with a le
 
 ## The checks it ran
 
-When any check a sub-agent ran failed, its report lists every check it ran, in order, each with its exit code and the first error line it printed:
+When any check a sub-agent ran did not pass, its report lists each check that failed or was skipped, in order, each with its exit code and the first error line it printed; the checks that passed are a count:
 
-    checks it ran, each with its exit code and first error line:
-      go vet ./... exited 0
+    counts: 1 findings noted, 2 checks failed, 41 checks passed
+    checks it ran that did not pass, each with its exit code and first error line:
       go test ./... exited 1: --- FAIL: TestAdd (0.00s)
       cargo test 2>&1 | tail -5 exited 0 at the last stage of its pipe, and printed a failure: test result: FAILED. 0 passed; 1 failed
-      go test ./... exited 0
     noted: sent back once: go test exited 1: --- FAIL: TestAdd (0.00s)
 
 A check is a shell command, `test` or `typecheck`. A report where every check passed has no list, and a send-back quotes the same line.
+
+## What the lead reads
+
+The lead reads a sub-agent's report as a card of at most 8,000 bytes. Each part has its own cap: findings 1,600 (600 each), checks 1,200 (240 each), files written 400, warnings 300, the board lines 500, and the sub-agent's last message what is left, up to 4,000 of its own bytes. A part over its cap keeps its head and tail around `...(N bytes cut)...`, and a list over its cap ends `+K more ... in the full report`. The counts line is taken before any cut, so a dropped finding or check is still counted.
+
+When anything was cut, the whole report is kept as one artifact, every check, finding and line whole, and the card names it right under its counts, before anything that can be cut:
+
+    full report: artifact 0eb58161518280f6128acef55c8badd7 holds all 100432 bytes, every check, finding and line whole: read any range with artifact_fetch
+
+When it cannot be written, that line says the full report was not kept and why, and the card still holds its caps. A report of 13,462 bytes reaches the lead as about 6,200, and one of 119,364, whose finding carried a check script's whole output, as about 7,300.
 
 A pipe exits with its last stage, so `cargo test | tail -5` exits 0 when the test failed, and the line names that exit. For `go test`, `go vet` and
 `cargo test`, tofu also reads what the command printed: when it shows a

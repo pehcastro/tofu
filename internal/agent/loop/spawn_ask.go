@@ -34,9 +34,43 @@ type askTool struct {
 }
 
 type askArgs struct {
-	Question string `json:"question"`
-	Why      string `json:"why"`
-	Default  string `json:"default"`
+	Question string   `json:"question"`
+	Why      string   `json:"why"`
+	Default  string   `json:"default"`
+	Options  []string `json:"options"`
+	Refs     []string `json:"refs"`
+}
+
+func (args askArgs) refused() error {
+	for _, field := range []struct {
+		name, text string
+		most       int
+	}{{"question", args.Question, konst.SubAgentAskQuestionBytes}, {"why", args.Why, konst.SubAgentAskWhyBytes}, {"default", args.Default, konst.SubAgentAskDefaultBytes}} {
+		if strings.TrimSpace(field.text) == "" {
+			return fmt.Errorf("ask: %s is required. nothing was asked", field.name)
+		}
+		if len(field.text) > field.most {
+			return fmt.Errorf("ask: %s is %d bytes and holds at most %d: say it shorter and name what you read in refs instead of pasting it. nothing was asked", field.name, len(field.text), field.most)
+		}
+	}
+	for _, list := range []struct {
+		name               string
+		items              []string
+		fewest, most, each int
+	}{
+		{"options", args.Options, konst.SubAgentAskOptionsFewest, konst.SubAgentAskOptionsMost, konst.SubAgentAskOptionBytes},
+		{"refs", args.Refs, 0, konst.SubAgentAskRefsMost, konst.SubAgentAskRefBytes},
+	} {
+		if len(list.items) > 0 && (len(list.items) < list.fewest || len(list.items) > list.most) {
+			return fmt.Errorf("ask: %s holds %d and takes %d to %d, or none. nothing was asked", list.name, len(list.items), list.fewest, list.most)
+		}
+		for i, item := range list.items {
+			if len(item) > list.each {
+				return fmt.Errorf("ask: %s %d is %d bytes and holds at most %d. nothing was asked", list.name, i+1, len(item), list.each)
+			}
+		}
+	}
+	return nil
 }
 
 const (
@@ -48,15 +82,20 @@ func (askTool) Name() string { return "ask" }
 
 func (askTool) Definition() core.Tool {
 	text := map[string]any{"type": "string"}
+	list := map[string]any{"type": "array", "items": text}
 	return core.Tool{
 		Name: "ask",
 		Description: "asks the orchestrator one question and waits for its answer, which comes back as this result. " +
 			"ask before you start a server or a watcher, bind a port, kill a process you did not start, or change a file outside the paths you hold. " +
 			"question is the question alone, in one or two sentences, and why carries the reasoning and the facts behind it. " +
-			"default is what you would do with no answer: when the orchestrator cannot answer in time it stands, and the result says it was assumed",
+			"default is what you would do with no answer: when the orchestrator cannot answer in time it stands, and the result says it was assumed. " +
+			fmt.Sprintf("question holds at most %d bytes, why %d and default %d. ", konst.SubAgentAskQuestionBytes, konst.SubAgentAskWhyBytes, konst.SubAgentAskDefaultBytes) +
+			fmt.Sprintf("options, when you give them, are %d to %d choices of at most %d bytes each, your default first. ", konst.SubAgentAskOptionsFewest, konst.SubAgentAskOptionsMost, konst.SubAgentAskOptionBytes) +
+			fmt.Sprintf("refs are up to %d places the orchestrator may open, such as file:line, an artifact handle or a ticket id, at most %d bytes each: name what you read there rather than pasting it. ", konst.SubAgentAskRefsMost, konst.SubAgentAskRefBytes) +
+			"an ask over any of these is refused whole, naming the field",
 		Parameters: map[string]any{
 			"type":       "object",
-			"properties": map[string]any{"question": text, "why": text, "default": text},
+			"properties": map[string]any{"question": text, "why": text, "default": text, "options": list, "refs": list},
 			"required":   []string{"question", "why", "default"},
 		},
 	}
@@ -67,8 +106,8 @@ func (a askTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result,
 	if err := json.Unmarshal(raw, &args); err != nil {
 		return contract.Result{}, fmt.Errorf("ask: arguments are not the expected shape: %w", err)
 	}
-	if strings.TrimSpace(args.Question) == "" || strings.TrimSpace(args.Default) == "" {
-		return contract.Result{}, errors.New("ask: question and default are both required")
+	if err := args.refused(); err != nil {
+		return contract.Result{}, err
 	}
 	t, id := a.orchestrator, a.asking.ID
 	asked := boardy.Event{At: t.clock().UTC().Truncate(time.Second), Kind: boardy.Asked, Author: boardy.SubAgentAuthor(t.base.Session, id), Agent: id,
@@ -142,10 +181,23 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagents.SubAgent, conve
 	if err != nil {
 		return "", err
 	}
-	question := fmt.Sprintf("%ssub-agent %s, whose brief is %q, asks you: %s\nwhy: %s\nwhat it does with no answer: %s\n\nwhat runs now: %s\n\n"+
-		"answer it in one line of text: that text is the whole answer %s receives, and no tool runs in this reply, so do not reach for message or any other tool.",
-		unruled, asking.ID, asking.Brief, args.Question, args.Why, args.Default, running, asking.ID)
-	request.Messages = append(request.Messages, core.Message{Role: core.RoleUser, Content: question, Origin: core.Origin{Source: core.SourceAfterTheCachedPrefix}})
+	brief := "its brief is in your spawn call for it"
+	if leadRequest == "" {
+		brief, _ = fitted(asking.Brief, konst.SubAgentAskBriefBytes)
+		brief = fmt.Sprintf("whose brief is %q", brief)
+	}
+	asked := &strings.Builder{}
+	fmt.Fprintf(asked, "%ssub-agent %s, on ticket %s, mission %q, %s, asks you: %s\nwhy: %s\nwhat it does with no answer: %s\n",
+		unruled, asking.ID, cmp.Or(asking.Ticket, "none"), asking.Mission, brief, args.Question, args.Why, args.Default)
+	for i, option := range args.Options {
+		fmt.Fprintf(asked, "option %d: %s\n", i+1, option)
+	}
+	if len(args.Refs) > 0 {
+		fmt.Fprintf(asked, "refs: %s\n", strings.Join(args.Refs, "; "))
+	}
+	fmt.Fprintf(asked, "\nwhat runs now: %s\n\nanswer it in one line of text: that text is the whole answer %s receives, and no tool runs in this reply, so do not reach for message or any other tool.",
+		running, asking.ID)
+	request.Messages = append(request.Messages, core.Message{Role: core.RoleUser, Content: asked.String(), Origin: core.Origin{Source: core.SourceAfterTheCachedPrefix}})
 	within, cancel := context.WithTimeout(ctx, konst.SubAgentAskMillis*time.Millisecond)
 	defer cancel()
 	tapped, tap := core.Tapped(within)
@@ -158,6 +210,7 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagents.SubAgent, conve
 		return "", err
 	}
 	if answer := strings.TrimSpace(decision.Content); decision.Outcome == core.OutcomeMessage && answer != "" {
+		answer, _ = fitted(answer, konst.SubAgentAskAnswerBytes)
 		return answer, nil
 	}
 	var called []string

@@ -1000,17 +1000,19 @@ func (t *SpawnTool) converse(ctx context.Context, held *heldSubAgent, subAgent C
 	if t.SubAgents.Ended != nil {
 		t.SubAgents.Ended(held.definition, agent.Brief, append(forked, claims...), report, runErr == nil && state != subagents.Errored && !stoppedEarly(state, last.Outcome) && unbelievedAtCap == "")
 	}
-	text := report.Text(t.proseStore())
 	if agent.Ticket != "" && t.base.Board != nil {
-		text += t.reportedOnBoard(ctx, agent, site.call, report, stoppedEarly(state, last.Outcome))
+		report.Board = t.reportedOnBoard(ctx, agent, site.call, report, stoppedEarly(state, last.Outcome))
 	}
+	text := report.Text(t.proseStore())
 	if runs := held.runsAs(); runs != "" {
-		text = agent.ID + " ran" + runs + "\n\n" + text
+		ran, _ := fitted(agent.ID+" ran"+runs, konst.SubAgentRunsAsBytes-2)
+		text = ran + "\n\n" + text
 	}
 	t.roster.Reached(agent.ID, state, text)
 	held.agent.State = state
 	if runErr != nil && state != subagents.Parked {
-		return fmt.Sprintf("sub-agent %s is %s: %v\n\n%s", agent.ID, state, runErr, text), report.Completion
+		failed, _ := fitted(fmt.Sprintf("sub-agent %s is %s: %v", agent.ID, state, runErr), konst.SubAgentRunErrorBytes-2)
+		return failed + "\n\n" + text, report.Completion
 	}
 	return text, report.Completion
 }

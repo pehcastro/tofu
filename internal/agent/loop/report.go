@@ -102,6 +102,7 @@ type SubAgentReport struct {
 	Asked      []subagents.Question `json:"asked,omitempty"`
 	Prose      string               `json:"prose,omitempty"`
 	ProseStep  int                  `json:"prose_step,omitempty"`
+	Board      string               `json:"-"`
 }
 
 func reportOf(agent subagents.SubAgent, forked, attempts []Row, state subagents.State) SubAgentReport {
@@ -276,79 +277,193 @@ func writtenPath(call ToolCallRow) string {
 	return args.Path
 }
 
-func (r SubAgentReport) Text(store *recall.Store) string {
-	body := &strings.Builder{}
+type reportPart struct {
+	label, sep, what string
+	whole, shown     []string
+	each, most       int
+}
+
+const (
+	cutMark  = "...(%d bytes cut)..."
+	moreMark = "+%d more %s in the full report"
+)
+
+func (r SubAgentReport) parts() (string, []reportPart) {
 	forks := ""
 	if r.Forks > 0 {
 		forks = fmt.Sprintf(" across %d forks", r.Forks)
 	}
-	fmt.Fprintf(body, "sub-agent %s is %s, %s, %s after %d steps and %d tool calls%s, costing $%.4f\n",
-		r.ID, r.State, r.Completion, r.Outcome, r.Steps, len(r.Ran), forks, r.CostUSD)
+	var attempts, impact, checks, failing, findings, shown, asked []string
 	if len(r.Attempts) > 1 {
-		fmt.Fprintf(body, "escalating after %d attempts:\n", len(r.Attempts))
 		for i, attempt := range r.Attempts {
-			fmt.Fprintf(body, "  attempt %d, %s, tried %s, ended %s\n", i+1, attempt.ID, attempt.Tried, attempt.Outcome)
+			attempts = append(attempts, fmt.Sprintf("  attempt %d, %s, tried %s, ended %s", i+1, attempt.ID, attempt.Tried, attempt.Outcome))
 		}
 	}
-	if len(r.Wrote) > 0 {
-		fmt.Fprintf(body, "wrote %s\n", strings.Join(r.Wrote, ", "))
+	for _, item := range r.Impact.Items {
+		impact = append(impact, fmt.Sprintf("  %s: %s", item.Item, cmp.Or(strings.Join(item.Callers, ", "), "no call site found")))
 	}
-	if len(r.Impact.Items) > 0 || len(r.Impact.Unread) > 0 {
-		body.WriteString("impact, each exported item it changed and the call sites outside its file that the symbols tool matched by name:\n")
-		for _, item := range r.Impact.Items {
-			fmt.Fprintf(body, "  %s: %s\n", item.Item, cmp.Or(strings.Join(item.Callers, ", "), "no call site found"))
-		}
-		for _, unread := range r.Impact.Unread {
-			fmt.Fprintf(body, "  unread %s\n", unread)
-		}
-		if r.Impact.Stopped != "" {
-			fmt.Fprintf(body, "  %s\n", r.Impact.Stopped)
-		}
+	for _, unread := range r.Impact.Unread {
+		impact = append(impact, "  unread "+unread)
 	}
-	var checks []string
-	notPassed := false
+	if r.Impact.Stopped != "" {
+		impact = append(impact, "  "+r.Impact.Stopped)
+	}
+	failed, skipped := 0, 0
 	for _, ran := range r.Ran {
-		if line, check := ran.checked(); check {
-			checks, notPassed = append(checks, "  "+line), notPassed || ran.Failed || ran.Skipped != ""
+		line, check := ran.checked()
+		if !check {
+			continue
+		}
+		checks = append(checks, "  "+line)
+		switch {
+		case ran.Skipped != "":
+			failing, skipped = append(failing, "  "+line), skipped+1
+		case ran.Failed:
+			failing, failed = append(failing, "  "+line), failed+1
 		}
 	}
-	if notPassed {
-		fmt.Fprintf(body, "checks it ran, each with its exit code and first error line:\n%s\n", strings.Join(checks, "\n"))
-	}
+	bucketed := map[subagents.Bucket]int{}
 	for _, finding := range r.Findings {
-		fmt.Fprintf(body, "%s: %s\n", finding.Bucket, finding.Text)
+		findings, bucketed[finding.Bucket] = append(findings, fmt.Sprintf("%s: %s", finding.Bucket, finding.Text)), bucketed[finding.Bucket]+1
 	}
-	if len(r.Learned) > 0 {
-		fmt.Fprintf(body, "learned: %s\n", strings.Join(r.Learned, "; "))
+	for _, bucket := range []subagents.Bucket{subagents.ActOn, subagents.Consider, subagents.Noted} {
+		for i, finding := range r.Findings {
+			if finding.Bucket == bucket {
+				shown = append(shown, findings[i])
+			}
+		}
 	}
 	for _, question := range r.Asked {
-		fmt.Fprintf(body, "asks a %s: %s\n", question.Kind, question.Ask)
+		asked = append(asked, fmt.Sprintf("asks a %s: %s", question.Kind, question.Ask))
 	}
-	prose, spoke := r.Prose, "its last message"
-	if r.ProseStep > 0 && r.ProseStep < r.Steps {
-		spoke = fmt.Sprintf("it last spoke at step %d of %d", r.ProseStep, r.Steps)
-	}
-	if prose == "" {
-		return body.String()
-	}
-	if len(prose) <= konst.SubAgentProseBytes {
-		fmt.Fprintf(body, "%s, each line marked >:\n%s", spoke, marked(prose))
-		return body.String()
-	}
-	head, tail := runeSafeHead(prose, konst.SubAgentProseEndBytes), runeSafeTail(prose, konst.SubAgentProseEndBytes)
-	dropped := len(prose) - len(head) - len(tail)
-	held := fmt.Sprintf("the %d bytes between were dropped and not stored anywhere", dropped)
-	if store != nil {
-		elided, err := recall.Elide(store, recall.Config{ElideAboveBytes: konst.SubAgentProseBytes}, []byte(prose), true)
-		if err != nil {
-			held += ", because storing them failed: " + err.Error()
-		} else {
-			held = "artifact " + elided.Reference.ID + " holds it whole: call artifact_fetch with this handle, an offset and a length to read any other range"
+	var counted []string
+	for _, count := range []struct {
+		n    int
+		what string
+	}{
+		{bucketed[subagents.ActOn], "findings to act on"}, {bucketed[subagents.Consider], "findings to consider"}, {bucketed[subagents.Noted], "findings noted"},
+		{bucketed[subagents.Dismissed], "findings dismissed"}, {failed, "checks failed"}, {skipped, "checks skipped"}, {len(checks) - failed - skipped, "checks passed"},
+		{len(r.Wrote), "files written"},
+	} {
+		if count.n > 0 {
+			counted = append(counted, fmt.Sprintf("%d %s", count.n, count.what))
 		}
 	}
-	fmt.Fprintf(body, "%s is %d bytes, each line marked >. the first %d and the last %d bytes follow, and %s:\n%s\n...(%d bytes cut)...\n%s",
-		spoke, len(prose), len(head), len(tail), held, marked(head), dropped, marked(tail))
-	return body.String()
+	head := fmt.Sprintf("sub-agent %s is %s, %s, %s after %d steps and %d tool calls%s, costing $%.4f\n",
+		r.ID, r.State, r.Completion, r.Outcome, r.Steps, len(r.Ran), forks, r.CostUSD)
+	if len(counted) > 0 {
+		head += "counts: " + strings.Join(counted, ", ") + "\n"
+	}
+	return head, []reportPart{
+		{label: fmt.Sprintf("escalating after %d attempts:\n", len(r.Attempts)), sep: "\n", what: "attempts", whole: attempts, shown: attempts,
+			each: konst.SubAgentAttemptBytes, most: konst.SubAgentAttemptsBytes},
+		{label: "wrote ", sep: ", ", what: "paths", whole: r.Wrote, shown: r.Wrote, each: konst.SubAgentWroteBytes, most: konst.SubAgentWroteBytes},
+		{label: "impact, each exported item it changed and the call sites outside its file that the symbols tool matched by name:\n", sep: "\n",
+			what: "impact lines", whole: impact, shown: impact, each: konst.SubAgentImpactBytes, most: konst.SubAgentImpactBytes},
+		{label: "checks it ran that did not pass, each with its exit code and first error line:\n", sep: "\n",
+			what: "checks that did not pass", whole: checks, shown: failing, each: konst.SubAgentCheckBytes, most: konst.SubAgentChecksBytes},
+		{sep: "\n", what: "findings", whole: findings, shown: shown, each: konst.SubAgentFindingBytes, most: konst.SubAgentFindingsBytes},
+		{label: "learned: ", sep: "; ", what: "warnings", whole: r.Learned, shown: r.Learned, each: konst.SubAgentLearnedItemBytes, most: konst.SubAgentLearnedBytes},
+		{sep: "\n", what: "asks", whole: asked, shown: asked, each: konst.SubAgentAskedBytes, most: konst.SubAgentAskedBytes},
+	}
+}
+
+func (r SubAgentReport) Text(store *recall.Store) string {
+	head, parts := r.parts()
+	whole, rest, card := &strings.Builder{}, &strings.Builder{}, &reportCard{}
+	whole.WriteString(head)
+	head = card.fit(head, konst.SubAgentReportHeadBytes)
+	for _, part := range parts {
+		if len(part.whole) > 0 {
+			fmt.Fprintf(whole, "%s%s\n", part.label, strings.Join(part.whole, part.sep))
+		}
+		if len(part.shown) > 0 {
+			fmt.Fprintf(rest, "%s%s\n", part.label, card.list(part.shown, part.each, part.most-len(part.label)-1, part.sep, part.what))
+		}
+		card.cut = card.cut || len(part.shown) != len(part.whole)
+	}
+	if r.Prose != "" {
+		label := "its last message, each line marked >:\n"
+		if r.ProseStep > 0 && r.ProseStep < r.Steps {
+			label = fmt.Sprintf("it last spoke at step %d of %d, each line marked >:\n", r.ProseStep, r.Steps)
+		}
+		shown := marked(r.Prose)
+		whole.WriteString(label + shown)
+		room := min(konst.SubAgentProseBytes+len(shown)-len(r.Prose), konst.SubAgentReportBytes-konst.SubAgentReportFullBytes-len(head)-rest.Len()-len(label))
+		rest.WriteString(label + card.marked(r.Prose, room))
+	}
+	whole.WriteString(r.Board)
+	rest.WriteString(card.fit(r.Board, konst.SubAgentBoardBytes))
+	full := "full report: nothing was cut, this is all of it"
+	if card.cut {
+		full = "full report: not kept, because this turn keeps no artifacts, so what was cut is lost"
+		if store != nil {
+			if elided, err := recall.Elide(store, recall.Config{}, []byte(whole.String()), true); err != nil {
+				full = "full report: not kept, writing it failed: " + err.Error() + ". what was cut is lost"
+			} else {
+				full = fmt.Sprintf("full report: artifact %s holds all %d bytes, every check, finding and line whole: read any range with artifact_fetch",
+					elided.Reference.ID, elided.Reference.Bytes)
+			}
+		}
+	}
+	return head + card.fit(full, konst.SubAgentReportFullBytes-1) + "\n" + rest.String()
+}
+
+type reportCard struct {
+	cut bool
+}
+
+func (c *reportCard) fit(text string, most int) string {
+	shown, cut := fitted(text, most)
+	c.cut = c.cut || cut
+	return shown
+}
+
+func (c *reportCard) list(items []string, each, most int, sep, what string) string {
+	reserve := len(fmt.Sprintf(moreMark, len(items), what)) + len(sep)
+	var kept []string
+	used := 0
+	for i, item := range items {
+		shown := c.fit(item, each)
+		if used+len(shown)+len(sep) > most-reserve {
+			c.cut = true
+			return strings.Join(append(kept, fmt.Sprintf(moreMark, len(items)-i, what)), sep)
+		}
+		kept, used = append(kept, shown), used+len(shown)+len(sep)
+	}
+	return strings.Join(kept, sep)
+}
+
+func (c *reportCard) marked(prose string, room int) string {
+	if shown := marked(prose); len(shown) <= room {
+		return shown
+	}
+	c.cut = true
+	for most := room; most > 0; {
+		head, tail := cutAt(prose, most)
+		shown := fmt.Sprintf("%s\n"+cutMark+"\n%s", marked(strings.TrimSuffix(head, "\n")), len(prose)-len(head)-len(tail), marked(strings.TrimPrefix(tail, "\n")))
+		if len(shown) <= room {
+			return shown
+		}
+		most -= len(shown) - room
+	}
+	return ""
+}
+
+func cutAt(text string, most int) (string, string) {
+	head, tail := runeSafeHead(text, most*2/3), runeSafeTail(text, most/3)
+	if nl := strings.LastIndexByte(head, '\n'); nl >= len(head)/2 {
+		head = head[:nl+1]
+	}
+	return head, tail
+}
+
+func fitted(text string, most int) (string, bool) {
+	if len(text) <= most {
+		return text, false
+	}
+	head, tail := cutAt(text, max(most-len(fmt.Sprintf(cutMark, len(text))), 0))
+	return head + fmt.Sprintf(cutMark, len(text)-len(head)-len(tail)) + tail, true
 }
 
 func (t *SpawnTool) boardLine(reports string) string {

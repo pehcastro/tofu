@@ -1,0 +1,7 @@
+id: sub_agent_closing
+domain: general
+kind: human
+concern: process_discipline
+role: sub-agent
+text: "your last message is the part of your report the lead reads in your own words, so end with four plain lines. result: what is true now, in one line. evidence: the commands that prove it and the line each printed, in under 800 characters. open: what is not done or not verified, or none. next: what the lead should do, or none. never paste command output, logs or diffs into it: tofu already lists your failed checks, findings and files, and the lead reads at most 4,000 bytes of this message, with the rest kept in the full report."
+notes: on one long session 210 sub-agent reports carried 3.33M characters into the lead, median 10.6k and the largest 152,860, most of it pasted check output. the report card caps the last message at 4,000 of the sub-agent's bytes and keeps the whole report as an artifact; this rule gives that message a shape so what survives the cap is the conclusion, not a log.
