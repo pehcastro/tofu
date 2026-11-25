@@ -70,6 +70,7 @@ type ticketTool struct {
 	tracker pm.Tracker
 	actor   string
 	manager bool
+	store   boardy.Store
 }
 
 func Tools(managed boardy.Managed, actor string) ([]contract.Tool, error) {
@@ -87,7 +88,7 @@ func Tools(managed boardy.Managed, actor string) ([]contract.Tool, error) {
 	}
 	list := make([]contract.Tool, len(verbs))
 	for i, verb := range verbs {
-		list[i] = ticketTool{verb: verb, tracker: tracker, actor: actor, manager: manager}
+		list[i] = ticketTool{verb: verb, tracker: tracker, actor: actor, manager: manager, store: managed.Store}
 	}
 	if manager {
 		list = append(list, board.Tools(tracker, actor)...)
@@ -163,6 +164,7 @@ func (t ticketTool) Definition() core.Tool {
 		if t.verb == ticketCreate {
 			describe = "creates a ticket on a board you manage, numbered by the board; put it in an epic and a sprint, and make them first with epic and sprint when none fits. a sub-ticket's owns sit inside its parent's owns, which are the ceiling, so a parent that owns nothing takes no sub-ticket and the new one is made without a parent; no owns glob may overlap the owns of a ticket in doing on any board, and the refusal names the glob and the ticket"
 			properties["epic"], properties["sprint"] = board.StringParam("the epic id it belongs to, from epic list"), board.StringParam("the sprint id it is planned in, from sprint list")
+			properties["skills"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "skills, by name, that a sub-agent spawned on the ticket loads before its task, beside the ones its definition names; a name no skill carries is refused, naming the skills that exist"}
 		}
 		describe += ". a ticket carries before, driven, still_works and error_case, and one asking for a visual or platform effect, such as a blur or transparency, carries feasibility too; a ticket missing one is refused naming it"
 	case ticketMove:
@@ -201,7 +203,7 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (contract.Result
 		StillWorks                                                                                                        string `json:"still_works"`
 		ErrorCase                                                                                                         string `json:"error_case"`
 		Kind                                                                                                              logKind
-		Owns, Options, Labels                                                                                             []string
+		Owns, Skills, Options, Labels                                                                                     []string
 		Recommend, Line                                                                                                   int
 		Leave                                                                                                             []int
 	}
@@ -248,11 +250,14 @@ func (t ticketTool) Run(_ context.Context, raw json.RawMessage) (contract.Result
 			said = "asked in the Log of " + ticket.ID + "; a manager answers there"
 		case ticketRequest, ticketCreate:
 			command = string(t.verb) + " " + args.Board
-			draft := boardy.Ticket{Front: boardy.Front{Title: args.Title, Owns: args.Owns, Labels: args.Labels, Parent: args.Parent, Epic: args.Epic, Sprint: args.Sprint}, Problem: args.Problem, Scope: args.Scope,
+			draft := boardy.Ticket{Front: boardy.Front{Title: args.Title, Owns: args.Owns, Skills: args.Skills, Labels: args.Labels, Parent: args.Parent, Epic: args.Epic, Sprint: args.Sprint}, Problem: args.Problem, Scope: args.Scope,
 				Before: args.Before, Driven: args.Driven, StillWorks: args.StillWorks, ErrorCase: args.ErrorCase, Feasibility: args.Feasibility, Acceptance: []string{args.Acceptance}}
 			file := t.tracker.Create
 			if t.verb == ticketRequest {
 				file = t.tracker.Request
+			}
+			if err = t.store.KnownSkills(args.Skills); err != nil {
+				break
 			}
 			if ticket, err = file(args.Board, draft, t.actor); ticket.ID == "" {
 				said = ticket.Reason

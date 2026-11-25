@@ -102,6 +102,13 @@ func (m Managed) Reown(id string, owns []string, actor string) (Ticket, error) {
 	})
 }
 
+func (m Managed) Reskill(id string, names []string, actor string) (Ticket, error) {
+	return m.setFields(id, "set skills "+cmp.Or(strings.Join(names, ", "), "to nothing"), actor, []string{"skills"}, func(t *Ticket) error {
+		t.Skills = names
+		return nil
+	})
+}
+
 func (m Managed) setFields(id, text, actor string, fields []string, change func(*Ticket) error) (Ticket, error) {
 	ticket, board, err := m.ticketOnBoard(id)
 	if err != nil {

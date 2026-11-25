@@ -370,6 +370,14 @@ tofu boardy manager add <lead session id>
 - The lead spawns a sub-agent for a ticket by its id. The ticket's owns
   become the paths the sub-agent may write, the ticket is assigned to the
   sub-agent and moves to doing.
+- A ticket can name skills, `tofu boardy new --skills minify,debug` or
+  `tofu boardy set <id> --skills minify`, and the lead's `ticket_create` takes
+  `skills` the same way. A sub-agent spawned on it loads them
+  beside the skills its definition names, once each, and the session trace
+  says `skill minify loaded · the ticket DEMO-1 names it`. A name no skill
+  carries is refused when the ticket is written, listing the skills that exist.
+  A sub-agent restored after its host restarts reads the ticket again and
+  keeps them.
 - The sub-agent reads the ticket, logs its evidence and moves its own ticket
   to review, and nothing further. A manager moves it to done or back to
   doing.
@@ -410,7 +418,7 @@ the lead gives it.
 | Command | Does |
 |---|---|
 | `tofu boardy init --key KEY [--name text] [--mode default\|empty\|custom] [--hooks id,id]` | makes a board with the starter and library hooks, none of them, or only the named ones |
-| `tofu boardy new [--board KEY \| --parent ID] [--type t] [--priority P0..P4] [--status s] [--points n] [--size S\|M\|L] [--spec path] [--owns a,b] [--problem text] [--scope text] --before text --driven text --still-works line... --error-case text [--feasibility text] [--acceptance text] [--as name] <title>` | makes a ticket with the next number |
+| `tofu boardy new [--board KEY \| --parent ID] [--type t] [--priority P0..P4] [--status s] [--points n] [--size S\|M\|L] [--spec path] [--owns a,b] [--skills a,b] [--problem text] [--scope text] --before text --driven text --still-works line... --error-case text [--feasibility text] [--acceptance text] [--as name] <title>` | makes a ticket with the next number |
 | `tofu boardy list [--board KEY] [--status s] [--all] [--fields id,status,assignee,owns]` | lists live tickets, or only the named front matter fields |
 | `tofu boardy held <path>` | names the ticket holding a path on any board, and the glob, or says it is not held |
 | `tofu boardy show <ticket> [--thread]` | prints one ticket; `--thread` adds its Activity in order |

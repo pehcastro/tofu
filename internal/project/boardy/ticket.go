@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"tofu/internal/librarian/skills"
 	"tofu/internal/platform/fs"
+	shipped "tofu/library"
 )
 
 type Status string
@@ -107,6 +109,7 @@ type Front struct {
 	Priority   Priority  `json:"priority"`
 	Points     int       `json:"points,omitempty"`
 	Owns       []string  `json:"owns,omitempty"`
+	Skills     []string  `json:"skills,omitempty"`
 	Depends    []string  `json:"depends,omitempty"`
 	Blocks     []string  `json:"blocks,omitempty"`
 	Relates    []string  `json:"relates,omitempty"`
@@ -162,6 +165,20 @@ func (t Ticket) undrafted() []Drafted {
 	return slices.DeleteFunc(t.Drafted(), func(d Drafted) bool { return d.Heading == FeasibilityHeading || strings.TrimSpace(*d.Body) != "" })
 }
 
+func (s Store) KnownSkills(names []string) error {
+	if len(names) == 0 {
+		return nil
+	}
+	home, _ := os.UserHomeDir()
+	known, err := skills.Shipped(shipped.Files(), "")
+	known = append(known, skills.Discover(s.Root, home).Skills...)
+	for _, name := range names {
+		_, unknown := skills.Find(known, name)
+		err = errors.Join(err, unknown)
+	}
+	return err
+}
+
 func (t Ticket) Board() string { key, _, _ := strings.Cut(t.ID, "-"); return key }
 
 var ticketID = fs.LazyRegexp(`^([A-Z][A-Z0-9]*)-([1-9][0-9]*)(?:-([1-9][0-9]*))?$`)
@@ -208,6 +225,9 @@ func (t Ticket) Markdown() []byte {
 	scalar("priority", string(t.Priority))
 	scalar("points", strconv.Itoa(t.Points))
 	list("owns", t.Owns)
+	if len(t.Skills) > 0 {
+		list("skills", t.Skills)
+	}
 	list("depends", t.Depends)
 	list("blocks", t.Blocks)
 	list("relates", t.Relates)
@@ -323,6 +343,8 @@ func (t *Ticket) set(key, value string) error {
 		t.Points, err = strconv.Atoi(value)
 	case "owns":
 		err = list(&t.Owns)
+	case "skills":
+		err = list(&t.Skills)
 	case "depends":
 		err = list(&t.Depends)
 	case "blocks":

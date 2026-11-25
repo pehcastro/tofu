@@ -309,8 +309,16 @@ func (t *SpawnTool) recompose(held *heldSubAgent) error {
 	if err != nil {
 		return err
 	}
+	var ticketSkills []string
+	if held.agent.Ticket != "" && t.base.Board != nil {
+		ticket, err := t.base.Board.Get(held.agent.Ticket)
+		if err != nil {
+			return fmt.Errorf("%s's ticket %s did not read back: %w", held.agent.ID, held.agent.Ticket, err)
+		}
+		ticketSkills = ticket.Skills
+	}
 	owns := held.boundary.Owns()
-	system, parts, environment, err := t.SubAgents.prompt(t.base, definition, held.agent.Brief, owns)
+	system, parts, environment, err := t.SubAgents.ticketPrompt(t.base, &definition, held.agent.Brief, owns, held.agent.Ticket, ticketSkills)
 	if err != nil {
 		return err
 	}

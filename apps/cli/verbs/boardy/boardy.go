@@ -31,7 +31,7 @@ func UsageOf(subcommand string) string {
 	case "init":
 		return "tofu boardy init --key KEY [--name text] [--mode default|empty|custom] [--hooks id,id] [--json]"
 	case "new":
-		return "tofu boardy new [--board KEY | --parent ID] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--size S|M|L] [--spec path] [--owns a,b]... [--labels docs-only,...]... [--epic E] [--sprint S] [--problem text] [--scope text] --before text --driven text --still-works line... --error-case text [--feasibility text] [--acceptance line]... [--as name] <title> [--json]"
+		return "tofu boardy new [--board KEY | --parent ID] [--type story|task|bug|subtask] [--priority P0..P4] [--status s] [--points n] [--size S|M|L] [--spec path] [--owns a,b]... [--skills a,b]... [--labels docs-only,...]... [--epic E] [--sprint S] [--problem text] [--scope text] --before text --driven text --still-works line... --error-case text [--feasibility text] [--acceptance line]... [--as name] <title> [--json]"
 	case "list":
 		return "tofu boardy list [--board KEY] [--status s] [--all] [--fields id,status,assignee,owns] [--json]"
 	case "held":
@@ -47,7 +47,7 @@ func UsageOf(subcommand string) string {
 	case "boards":
 		return "tofu boardy boards [--json]"
 	case "set":
-		return "tofu boardy set <ticket | request [--board KEY]> [--title text] [--owns a,b]... [--epic E] [--sprint S] [--acceptance line]... [--reason text] [--before text] [--driven text] [--still-works line]... [--error-case text] [--feasibility text] [--as name] [--json]"
+		return "tofu boardy set <ticket | request [--board KEY]> [--title text] [--owns a,b]... [--skills a,b]... [--epic E] [--sprint S] [--acceptance line]... [--reason text] [--before text] [--driven text] [--still-works line]... [--error-case text] [--feasibility text] [--as name] [--json]"
 	case "tick":
 		return "tofu boardy tick [--board KEY] [--json]"
 	case "fire":
@@ -187,7 +187,7 @@ func boardyFlags(args []string) (map[string]string, []string, error) {
 			return nil, nil, fmt.Errorf("--%s needs a value", name)
 		case (name == "acceptance" || name == "still-works") && flags[name] != "":
 			flags[name], i = flags[name]+"\n"+args[i+1], i+1
-		case (name == "owns" || name == "labels") && flags[name] != "":
+		case (name == "owns" || name == "skills" || name == "labels") && flags[name] != "":
 			flags[name], i = flags[name]+","+args[i+1], i+1
 		default:
 			flags[name], i = args[i+1], i+1
@@ -239,7 +239,7 @@ func (c boardyCall) create() int {
 	if err != nil {
 		return c.o.Fail(err)
 	}
-	ticket := boardy.Ticket{Front: boardy.Front{Title: title, Owns: splitList(c.flags["owns"]), Labels: splitList(c.flags["labels"]), Spec: c.flags["spec"], Parent: c.flags["parent"], Epic: c.flags["epic"], Sprint: c.flags["sprint"]}, Problem: c.flags["problem"], Scope: c.flags["scope"]}
+	ticket := boardy.Ticket{Front: boardy.Front{Title: title, Owns: splitList(c.flags["owns"]), Skills: splitList(c.flags["skills"]), Labels: splitList(c.flags["labels"]), Spec: c.flags["spec"], Parent: c.flags["parent"], Epic: c.flags["epic"], Sprint: c.flags["sprint"]}, Problem: c.flags["problem"], Scope: c.flags["scope"]}
 	if acceptance := c.flags["acceptance"]; acceptance != "" {
 		ticket.Acceptance = []string{acceptance}
 	}
@@ -264,7 +264,7 @@ func (c boardyCall) create() int {
 		parseErrs = append(parseErrs, err)
 	}
 	ticket.Size, err = boardy.ParseSize(c.flags["size"])
-	parseErrs = append(parseErrs, err)
+	parseErrs = append(parseErrs, err, c.store.KnownSkills(ticket.Skills))
 	if err := errors.Join(parseErrs...); err != nil {
 		return c.o.Usage(err)
 	}
@@ -447,6 +447,7 @@ func (c boardyCall) show() int {
 			{Label: "size", Text: dash(string(ticket.Size))},
 			{Label: "spec", Text: dash(ticket.Spec)},
 			{Label: "owns", Text: strings.Join(ticket.Owns, ", ")},
+			{Label: "skills", Text: dash(strings.Join(ticket.Skills, ", "))},
 			{Label: "depends", Text: strings.Join(ticket.Depends, ", ")},
 			{Label: "relates", Text: strings.Join(ticket.Relates, ", ")},
 			{Label: "updated", Text: ticket.Updated.Local().Format(time.DateTime)},
@@ -612,6 +613,7 @@ func (c boardyCall) plan() int {
 	}
 	title, retitle := c.flags["title"]
 	owns, reown := c.flags["owns"]
+	named, reskill := c.flags["skills"]
 	acceptance, reaccept := c.flags["acceptance"]
 	var ticket boardy.Ticket
 	var err error
@@ -620,6 +622,11 @@ func (c boardyCall) plan() int {
 	}
 	if err == nil && reown {
 		ticket, err = c.managed.Reown(id, splitList(owns), c.actor)
+	}
+	if names := splitList(named); err == nil && reskill {
+		if err = c.store.KnownSkills(names); err == nil {
+			ticket, err = c.managed.Reskill(id, names, c.actor)
+		}
 	}
 	if err == nil && reaccept {
 		ticket, err = c.managed.Reaccept(id, acceptance, c.flags["reason"], c.actor)
@@ -630,10 +637,13 @@ func (c boardyCall) plan() int {
 		}
 		return err
 	})
-	if err == nil && (c.flags["epic"] != "" || c.flags["sprint"] != "" || !retitle && !reown && !reaccept && redrafted == nil) {
+	if err == nil && (c.flags["epic"] != "" || c.flags["sprint"] != "" || !retitle && !reown && !reskill && !reaccept && redrafted == nil) {
 		ticket, err = c.managed.Plan(id, c.flags["epic"], c.flags["sprint"], c.actor)
 	}
 	summary := ticket.ID + " " + ticket.Title + ": owns " + dash(strings.Join(ticket.Owns, ", ")) + ", " + c.words.Epic + " " + dash(ticket.Epic) + ", " + c.words.Sprint + " " + dash(ticket.Sprint)
+	if reskill {
+		summary += ", skills " + dash(strings.Join(ticket.Skills, ", "))
+	}
 	if redrafted != nil {
 		summary += ", set " + strings.Join(redrafted, ", ")
 	}

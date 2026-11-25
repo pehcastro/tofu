@@ -528,6 +528,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 		}
 	}
 	var boardSizes map[string]int64
+	var ticketSkills []string
 	revision := 0
 	if args.Ticket != "" && t.base.Board != nil {
 		boardSizes = t.base.Board.Store.EventSizes()
@@ -546,7 +547,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 		if err := raisedTwice(args.Ticket, thread, revision, effort); err != nil {
 			return contract.Result{}, err
 		}
-		args.Owns = ticket.Owns
+		args.Owns, ticketSkills = ticket.Owns, ticket.Skills
 	}
 	timing.took("ticket grant")
 	limits := t.limits()
@@ -600,7 +601,7 @@ func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Resu
 	if err := sideHeldOwns(t.Name(), t.base.Sessions, t.base.Session, args.Owns); err != nil {
 		return contract.Result{}, err
 	}
-	system, parts, environment, err := t.SubAgents.prompt(t.base, definition, args.Task, args.Owns)
+	system, parts, environment, err := t.SubAgents.ticketPrompt(t.base, &definition, args.Task, args.Owns, args.Ticket, ticketSkills)
 	if err != nil {
 		return contract.Result{}, fmt.Errorf("spawn: the sub-agent's prompt did not compose: %w", err)
 	}
@@ -810,6 +811,29 @@ func (t *SpawnTool) settle(ctx context.Context, held *heldSubAgent, report strin
 		held.shed(readBack(t.base.Sessions, log.ID(), held.agent.ID))
 	}
 	return nil
+}
+
+func (s SubAgents) ticketPrompt(inherited Config, definition *subagents.Definition, task string, owns []string, ticket string, ticketSkills []string) (string, []PromptPart, string, error) {
+	defined := definition.Skills
+	definition.Skills = slices.Clone(defined)
+	for _, name := range ticketSkills {
+		if !slices.Contains(definition.Skills, name) {
+			definition.Skills = append(definition.Skills, name)
+		}
+	}
+	system, parts, environment, err := s.prompt(inherited, *definition, task, owns)
+	for i, part := range parts {
+		if part.Concern != ConcernSkills || part.Agent != definition.Name || !slices.Contains(ticketSkills, part.Name) {
+			continue
+		}
+		namer := "the ticket " + ticket + " names it"
+		if slices.Contains(defined, part.Name) {
+			namer = "the sub-agent's definition and the ticket " + ticket + " name it"
+		}
+		_, after, _ := strings.Cut(part.Why, "names it")
+		parts[i].Why = namer + after
+	}
+	return system, parts, environment, err
 }
 
 func (t *SpawnTool) RecordedSpawn(definition subagents.Definition, task string) (Config, error) {

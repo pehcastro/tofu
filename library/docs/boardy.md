@@ -8,7 +8,7 @@ summary: boards of tickets kept as markdown files under the tofu home, numbered 
 
 Boardy keeps a project's tickets as plain markdown files, the way a Jira or Linear board keeps them on a server. A project holds as many boards as it needs, each with a short key such as `DEMO` or `OPS`, and each board numbers its own tickets from 1: `DEMO-1`, `DEMO-2`, `OPS-1`. On a board of 1,500 tickets the `boardy` verbs and the `boardy.*` calls of `tofu serve` answer in about half the time they took in 0.5.14, with the same output.
 
-A ticket has front matter (type, status, assignee, priority P0 to P4, points, owns, depends, blocks, relates, duplicates, epic, sprint, labels, component, spec, size S, M or L) and its sections: Problem, Scope, Before, Driven path, Still works, Empty or error case, Feasibility, Acceptance and Log. A ticket that goes back from review to doing gets a numbered acceptance revision, `Acceptance 2`, so every round keeps its own list.
+A ticket has front matter (type, status, assignee, priority P0 to P4, points, owns, skills, depends, blocks, relates, duplicates, epic, sprint, labels, component, spec, size S, M or L) and its sections: Problem, Scope, Before, Driven path, Still works, Empty or error case, Feasibility, Acceptance and Log. A ticket that goes back from review to doing gets a numbered acceptance revision, `Acceptance 2`, so every round keeps its own list.
 
 A ticket is made with Before (how it works now), Driven path (the steps a person performs to see the change), Still works (a line for each neighbour it touches) and Empty or error case (what an empty or failing input does); `new` without one is refused, naming each one missing. When Jev's `ticket_feasibility@1` judges the ask a visual or platform effect, such as a blur, Feasibility is required too: what the platform gives, what it does not, and the source.
 
@@ -62,11 +62,18 @@ agent that manages nothing gets `ticket_not_possible`. An agent's `ticket_move` 
 
 A spawn names a ticket by id. Its owns become the sub-agent's paths, the
 ticket is assigned to the sub-agent and moves to doing, and the ticket id
-rides on the sub-agent's row, so `--continue` keeps it. The contract reads
+rides on the sub-agent's row, so `--continue` keeps it. The skills a ticket
+names, `tofu boardy new --skills minify,debug` or `tofu boardy set <id> --skills
+minify`, load into the sub-agent's prompt beside the skills its definition
+names, through the same loader and once each, and the session trace says
+`skill minify loaded · the ticket DEMO-1 names it`. A name no project, home or
+library skill carries is refused when the ticket is written, listing the skills
+that exist, and `set --skills ""` clears the list. A sub-agent restored after
+its host restarts reads the ticket again and keeps them. The contract reads
 the ticket by that id and its last acceptance revision, never the first
 ticket-shaped word in the brief. The spawn and the report, with the files
 the sub-agent wrote, land on the ticket's thread, and so does a
-`ticket_ask`. `ticket_create` takes `parent` to make a sub-ticket, and asks for `before`, `driven`, `still_works`, `error_case` and, for a visual or platform effect, `feasibility`.
+`ticket_ask`. `ticket_create` takes `parent` to make a sub-ticket and `skills` with the same check as `--skills`, and asks for `before`, `driven`, `still_works`, `error_case` and, for a visual or platform effect, `feasibility`.
 Evidence names the line it proves with `line`, a move to review names lines left for the lead with `leave`, and `evidence_at_review` refuses review while a line is unmet. The report is one entry: the engineer's last words in two sentences at most, a `verdict` (done, done with concerns, blocked, needs you or not possible), and each line as met, unmet or not mine to prove.
 
 With no managers the lead manages the board as the lead, never as you, with
