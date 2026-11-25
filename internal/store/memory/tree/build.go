@@ -7,6 +7,7 @@ import (
 	"maps"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -184,7 +185,7 @@ func (s *Store) passesHighMark() bool {
 
 func (s *Store) halves(ref Ref) (string, string) {
 	if ref.Level == 0 {
-		return s.items[ref.Index].rendered(), ""
+		return capped(s.items[ref.Index].rendered()), ""
 	}
 	return s.nodes[Ref{ref.Level - 1, 2 * ref.Index}], s.nodes[Ref{ref.Level - 1, 2*ref.Index + 1}]
 }
@@ -424,4 +425,20 @@ func clip(text string) string {
 		cut--
 	}
 	return text[:cut]
+}
+
+const memtreeItemBytes = 8 << 10
+
+func capped(text string) string {
+	if len(text) <= memtreeItemBytes {
+		return text
+	}
+	head, tail := memtreeItemBytes/2, len(text)-memtreeItemBytes/2
+	for head > 0 && !utf8.RuneStart(text[head]) {
+		head--
+	}
+	for tail < len(text) && !utf8.RuneStart(text[tail]) {
+		tail++
+	}
+	return text[:head] + "\n[" + strconv.Itoa(tail-head) + " bytes cut]\n" + text[tail:]
 }
