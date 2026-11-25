@@ -308,11 +308,14 @@ row carries prints `no row carries DEMO-9` and exits 0.
 and each sub-agent run, and whether it held:
 
 ```text
-lead turn · from 6 earlier runs here on claude-sub/claude-opus-5 · said 4m · done by 6m · took 5m 12s · done · in time · model 3m 40s, tools 1m 32s, tests and builds 48s in 3 calls, permission 0s left out of the verdict, queue 0s
+lead call · from 10 earlier runs of zig-dev here on claude-sub/claude-opus-5 · said 56m 54s · done by 1h 25m · agent 12m 28s, tests 14m 58s, builds 13s, verify 29m 13s
 ```
 
-The estimate comes from earlier runs of the same model in the same
-project, the ones whose task was closest in length. The promise is the estimate
+The estimate is for the whole work: the agent's own time, then testing,
+building and verifying. It comes from the 10 newest runs of the same agent
+on the same model in this project, and widens to other models, other
+projects, then every agent when that agent has none, naming the sample it
+used. See [estimate_time](/docs/tools/own-context). The promise is the estimate
 times 1.5, or the estimate plus one minute when it is under two minutes.
 On a first run here, tofu reads the same model's runs in other projects
 and pads more: times 1.75, or plus 70 seconds. With no run of that model

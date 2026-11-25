@@ -168,7 +168,9 @@ a run that pasted a whole check log does not fill the lead's context. Each
 part has its own cap: findings 1,600 (600 each), checks that did not pass
 1,200 (240 each), files written 400, warnings 300, board lines 500, and the
 sub-agent's last message what is left, up to 4,000 of its own bytes. Checks
-that passed are a count. A cut part keeps its head and tail around
+that passed are a count. A sub-agent's shells stop when it ends, and the
+report names each one with any failure lines it had printed, such as
+`bash-1 had printed failure lines: error: FileNotFound`. A cut part keeps its head and tail around
 `...(N bytes cut)...`, and a cut list ends `+K more ... in the full report`.
 
 When anything was cut, the whole report is kept as one artifact and the card

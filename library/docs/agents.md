@@ -33,7 +33,7 @@ When any check a sub-agent ran did not pass, its report lists each check that fa
       cargo test 2>&1 | tail -5 exited 0 at the last stage of its pipe, and printed a failure: test result: FAILED. 0 passed; 1 failed
     noted: sent back once: go test exited 1: --- FAIL: TestAdd (0.00s)
 
-A check is a shell command, `test` or `typecheck`. A report where every check passed has no list, and a send-back quotes the same line.
+A check is a shell command, `test` or `typecheck`. A report where every check passed has no list, and a send-back quotes the same line. A sub-agent's shells stop when it ends, and the report names each one with any failure lines it had printed: `bash-1 had printed failure lines: error: FileNotFound`.
 
 ## What the lead reads
 
