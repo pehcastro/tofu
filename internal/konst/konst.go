@@ -286,6 +286,8 @@ const (
 	SubAgentWarmMillis       = 8000
 	SubAgentSleepSeconds     = 5
 	SubAgentAskMillis        = 30000
+	SubAgentAskLineRunes     = 200
+	SubAgentAskRunningRunes  = 2000
 	SubAgentGateAnswerMillis = 300000
 	ReportGatherQuietMillis  = 1500
 	ReportGatherCapMillis    = 10000

@@ -115,19 +115,107 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagents.SubAgent, conve
 	if err != nil {
 		return "", err
 	}
-	sent := Sendable(WithoutThinking(conversation))
-	if len(sent) == 0 {
-		sent = []core.Message{{Role: core.RoleSystem, Content: t.base.System}}
+	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
+	request, leadRequest, err := t.leadStep(site, asking.ID)
+	if err != nil {
+		return "", err
+	}
+	if leadRequest == "" {
+		request = core.Request{Messages: Sendable(WithoutThinking(conversation))}
+		if len(request.Messages) == 0 {
+			request.Messages = []core.Message{{Role: core.RoleSystem, Content: t.base.System}}
+		}
+		if tools := t.base.Tools.Definitions(); len(tools) > 0 {
+			request.Tools, request.ToolChoice = tools, core.ToolChoiceNone
+		}
 	}
 	var system, unruled string
-	if sent[0].Role == core.RoleSystem {
-		system = sent[0].Content
+	if request.Messages[0].Role == core.RoleSystem {
+		system = request.Messages[0].Content
 	}
 	for _, loaded := range rules {
 		if loaded.ID == "answer_asks" && !strings.Contains(system, loaded.Text) {
 			unruled = loaded.Text + "\n\n"
 		}
 	}
+	running, err := t.runningNow(ctx)
+	if err != nil {
+		return "", err
+	}
+	question := fmt.Sprintf("%ssub-agent %s, whose brief is %q, asks you: %s\nwhy: %s\nwhat it does with no answer: %s\n\nwhat runs now: %s\n\n"+
+		"answer it in one line of text: that text is the whole answer %s receives, and no tool runs in this reply, so do not reach for message or any other tool.",
+		unruled, asking.ID, asking.Brief, args.Question, args.Why, args.Default, running, asking.ID)
+	request.Messages = append(request.Messages, core.Message{Role: core.RoleUser, Content: question, Origin: core.Origin{Source: core.SourceAfterTheCachedPrefix}})
+	within, cancel := context.WithTimeout(ctx, konst.SubAgentAskMillis*time.Millisecond)
+	defer cancel()
+	tapped, tap := core.Tapped(within)
+	decision, timing, err := askCountingAttempts(tapped, model, request)
+	if errors.Is(err, context.DeadlineExceeded) {
+		err = fmt.Errorf("the orchestrator's model gave no answer within %v", konst.SubAgentAskMillis*time.Millisecond)
+	}
+	t.traceAnswer(ctx, asking.ID, leadRequest, request, timing, tap.Attempts(), decision, err)
+	if err != nil {
+		return "", err
+	}
+	if answer := strings.TrimSpace(decision.Content); decision.Outcome == core.OutcomeMessage && answer != "" {
+		return answer, nil
+	}
+	var called []string
+	for _, call := range decision.ToolCalls {
+		called = append(called, call.Name)
+	}
+	return "", fmt.Errorf("the orchestrator's model returned no answer text: it ended as %s, stop reason %q, calling %s",
+		decision.Outcome, decision.Stop, cmp.Or(strings.Join(called, ", "), "no tool"))
+}
+
+const leadStepWhy = "step "
+
+func (t *SpawnTool) leadStep(site spawnSite, asking string) (core.Request, string, error) {
+	lead, recorded := leadOf(site, asking)
+	if !recorded || t.base.Sessions == nil {
+		return core.Request{}, "", nil
+	}
+	exchanges, err := t.base.Sessions.Exchanges(site.log.ID())
+	if err != nil {
+		return core.Request{}, "", err
+	}
+	for _, exchange := range slices.Backward(exchanges) {
+		if exchange.Agent != lead || exchange.Error != "" || !strings.HasPrefix(exchange.Why, leadStepWhy) {
+			continue
+		}
+		blobs, err := t.base.Sessions.Blobs(site.log.ID())
+		if err != nil {
+			return core.Request{}, "", err
+		}
+		var request core.Request
+		if exchange.ToolChoice == core.ToolChoiceNone.OpenAIValue() {
+			request.ToolChoice = core.ToolChoiceNone
+		}
+		if err := json.Unmarshal(blobs[exchange.Tools], &request.Tools); err != nil {
+			return core.Request{}, "", fmt.Errorf("the tools of lead request %s did not read back: %w", exchange.Request, err)
+		}
+		for _, hash := range exchange.Messages {
+			var row MessageRow
+			if err := json.Unmarshal(blobs[hash], &row); err != nil {
+				return core.Request{}, "", fmt.Errorf("message %s of lead request %s did not read back: %w", hash, exchange.Request, err)
+			}
+			for i, picture := range row.Pictures {
+				if err := json.Unmarshal(blobs[picture.Blob], &row.Pictures[i].Data); err != nil {
+					return core.Request{}, "", fmt.Errorf("picture %s of lead request %s did not read back: %w", picture.Blob, exchange.Request, err)
+				}
+			}
+			message, err := messageOf(row)
+			if err != nil {
+				return core.Request{}, "", err
+			}
+			request.Messages = append(request.Messages, message)
+		}
+		return request, exchange.Request, nil
+	}
+	return core.Request{}, "", nil
+}
+
+func (t *SpawnTool) runningNow(ctx context.Context) (string, error) {
 	var running []string
 	if registry := ShellRegistryFrom(ctx); registry != nil {
 		shells, err := registry.List()
@@ -145,45 +233,31 @@ func (t *SpawnTool) answer(ctx context.Context, asking subagents.SubAgent, conve
 			running = append(running, line)
 		}
 	}
+	ended := 0
 	for _, held := range t.roster.SubAgents() {
-		running = append(running, fmt.Sprintf("sub-agent %s is %s on %q, holding %s", held.ID, held.State, held.Mission, strings.Join(held.Owns, ", ")))
-	}
-	question := fmt.Sprintf("%ssub-agent %s, whose brief is %q, asks you: %s\nwhy: %s\nwhat it does with no answer: %s\n\nwhat runs now: %s\n\n"+
-		"answer it in one line of text: that text is the whole answer %s receives, and no tool runs in this reply, so do not reach for message or any other tool.",
-		unruled, asking.ID, asking.Brief, args.Question, args.Why, args.Default, strings.Join(running, "; "), asking.ID)
-	request := core.Request{Messages: append(sent, core.Message{Role: core.RoleUser, Content: question})}
-	tools := t.base.Tools.Definitions()
-	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
-	if lead, recorded := leadOf(site, asking.ID); recorded && t.base.Sessions != nil {
-		held, err := HeldPrefix(t.base.Sessions, site.log.ID(), lead)
-		if err != nil {
-			return "", err
+		switch held.State {
+		case subagents.Working, subagents.WaitingAnswer, subagents.InReview, subagents.Reopened:
+			running = append(running, fmt.Sprintf("sub-agent %s is %s on %q, holding %s", held.ID, held.State, held.Mission, strings.Join(held.Owns, ", ")))
+		case subagents.Parked, subagents.Errored, subagents.Finished:
+			ended++
 		}
-		tools = held.toolsOr(tools)
 	}
-	if len(tools) > 0 {
-		request.Tools, request.ToolChoice = tools, core.ToolChoiceNone
+	const between = "; "
+	var listed []string
+	room := konst.SubAgentAskRunningRunes
+	for _, line := range running {
+		cut := []rune(line)
+		cut = cut[:min(len(cut), konst.SubAgentAskLineRunes)]
+		if room -= len(cut) + len(between); room < 0 {
+			break
+		}
+		listed = append(listed, string(cut))
 	}
-	within, cancel := context.WithTimeout(ctx, konst.SubAgentAskMillis*time.Millisecond)
-	defer cancel()
-	tapped, tap := core.Tapped(within)
-	decision, timing, err := askCountingAttempts(tapped, model, request)
-	if errors.Is(err, context.DeadlineExceeded) {
-		err = fmt.Errorf("the orchestrator's model gave no answer within %v", konst.SubAgentAskMillis*time.Millisecond)
+	counted := fmt.Sprintf("%d sub-agents ended or parked and are not listed", ended)
+	if unlisted := len(running) - len(listed); unlisted > 0 {
+		counted += fmt.Sprintf(", nor %d more that run, past the %d characters this list holds", unlisted, konst.SubAgentAskRunningRunes)
 	}
-	t.traceAnswer(ctx, asking.ID, request, timing, tap.Attempts(), decision, err)
-	if err != nil {
-		return "", err
-	}
-	if answer := strings.TrimSpace(decision.Content); decision.Outcome == core.OutcomeMessage && answer != "" {
-		return answer, nil
-	}
-	var called []string
-	for _, call := range decision.ToolCalls {
-		called = append(called, call.Name)
-	}
-	return "", fmt.Errorf("the orchestrator's model returned no answer text: it ended as %s, stop reason %q, calling %s",
-		decision.Outcome, decision.Stop, cmp.Or(strings.Join(called, ", "), "no tool"))
+	return strings.Join(append(listed, counted), between), nil
 }
 
 func leadOf(site spawnSite, asking string) (string, bool) {
@@ -293,14 +367,17 @@ func (t *SpawnTool) answeredOnBoard(id string, q boardy.Question, asked PersonQu
 	return said, ShownAnswers(head, []PersonQuestion{asked}, replies)
 }
 
-func (t *SpawnTool) traceAnswer(ctx context.Context, asking string, request core.Request, timing requestTiming, attempts []core.Attempt, decision core.Decision, failed error) {
+func (t *SpawnTool) traceAnswer(ctx context.Context, asking, leadRequest string, request core.Request, timing requestTiming, attempts []core.Attempt, decision core.Decision, failed error) {
 	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	lead, recorded := leadOf(site, asking)
 	if !recorded {
 		return
 	}
 	answering := &record{log: site.log, scope: site.turn, turn: site.turn, agent: lead, said: map[string]string{}, announce: t.base.Sent, lastSent: &messagesKept{}}
-	id, why := session.NewEventID(), "answers "+asking+"'s ask"
+	id, why := session.NewEventID(), "answers "+asking+"'s ask on lead request "+leadRequest
+	if leadRequest == "" {
+		why = "answers " + asking + "'s ask with no lead request recorded, so no cache to reuse"
+	}
 	if failed == nil {
 		why += fmt.Sprintf(": ended as %s, stop reason %q", decision.Outcome, decision.Stop)
 	}
