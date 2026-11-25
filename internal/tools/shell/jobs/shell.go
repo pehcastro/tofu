@@ -54,7 +54,7 @@ func (Shells) Definition() core.Tool {
 			"logs folds what it printed into templates with counts, and the end of a log file its command names, such as -Log build.log or > build.log; a later logs prints only new_since_last_call. "+
 			"stop kills its whole process tree, children included, so the port it held is free when this returns. "+
 			"restart stops it and starts the same command in the same folder under the same name. never stop a server with kill, taskkill or pkill. "+
-			"ports needs no name and says, one JSON line per port, who listens on port, or on every port when port is left out: pid, command, the shell holding it and started_by this_session, other_session or outside, or free; it never kills", process.QuietBeforeIdle, konst.ShellWaitMillis/1000),
+			"ports needs no name and says, one JSON line per port, who listens on port, or on every port when port is left out: pid, command, the shell holding it and started_by this_session, other_session or outside, or free; it never kills", konst.ShellQuietIdleMillis*time.Millisecond, konst.ShellWaitMillis/1000),
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -199,7 +199,7 @@ func waitOn(ctx context.Context, registry *process.Registry, entry process.Shell
 			}
 		}
 		now := time.Now()
-		if use.err == nil && now.Sub(cpuAt) >= process.QuietBeforeIdle {
+		if use.err == nil && now.Sub(cpuAt) >= konst.ShellQuietIdleMillis*time.Millisecond {
 			used, err := ended.TreeCPU()
 			use, cpuFrom, cpuAt = treeUse{used: used - cpuFrom, over: now.Sub(cpuAt), whole: true, err: err}, used, now
 		}
@@ -241,7 +241,7 @@ type treeUse struct {
 }
 
 func (u treeUse) idle(quiet time.Duration) bool {
-	return u.whole && u.err == nil && u.used < process.IdleCPU && quiet >= process.QuietBeforeIdle
+	return u.whole && u.err == nil && u.used < konst.ShellIdleCPUMillis*time.Millisecond && quiet >= konst.ShellQuietIdleMillis*time.Millisecond
 }
 
 func quietFor(registry *process.Registry, entry process.Shell, now time.Time) time.Duration {

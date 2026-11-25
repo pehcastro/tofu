@@ -13,16 +13,31 @@ import (
 	"tofu/internal/platform/fs"
 )
 
-const (
-	QuietBeforeIdle = 30 * time.Second
-	IdleCPU         = 50 * time.Millisecond
-	tofuSays        = "tofu: "
-)
+const tofuSays = "tofu: "
 
 var (
-	troubleWord = fs.LazyRegexp(`(?i)(?:^|[\s:\[(])(?:errors?|failed|failure|fatal|panic(?:ked)?|exception|traceback)(?:[:\s\])]|$)|\w(?:Error|Exception|NotFound)\b`)
-	noTrouble   = fs.LazyRegexp(`(?i)\b(?:0|no) (?:errors?|failed|failures?)\b`)
+	failureNamed  = fs.LazyRegexp(`^(?:error(?:\[\w+\])?: |--- FAIL|FAIL(?:ED)?\b|\[FAIL\]|panic: |fatal: |\S+\.go:\d+:\d+: |test \S+ \.\.\. FAILED$|test result: FAILED|thread '.+' panicked at |.*\berror TS\d+|Traceback |E {3}|\w+Error: )`)
+	failureWorded = fs.LazyRegexp(`(?i)(?:^|[\s:\[(])(?:errors?|failed|failure|fatal|panic(?:ked)?|exception|traceback)(?:[:\s\])]|$)|\w(?:Error|Exception|NotFound)\b`)
+	noFailure     = fs.LazyRegexp(`(?i)\b(?:0|no) (?:errors?|failed|failures?)\b`)
 )
+
+type Failure int
+
+const (
+	FailureNone Failure = iota
+	FailureWorded
+	FailureNamed
+)
+
+func FailureIn(line string) Failure {
+	switch {
+	case failureNamed().MatchString(line):
+		return FailureNamed
+	case failureWorded().MatchString(line) && !noFailure().MatchString(line):
+		return FailureWorded
+	}
+	return FailureNone
+}
 
 type Watcher struct {
 	cursor  Cursor
@@ -52,7 +67,7 @@ func (r *Registry) Watch(name string, w *Watcher) (News, error) {
 			continue
 		}
 		news.Lines++
-		if troubleWord().MatchString(line) && !noTrouble().MatchString(line) && len(news.Trouble) < konst.TestErrorLines {
+		if FailureIn(line) != FailureNone && len(news.Trouble) < konst.TestErrorLines {
 			news.Trouble = append(news.Trouble, cmp.Or(w.from, "the command")+": "+line)
 		}
 	}

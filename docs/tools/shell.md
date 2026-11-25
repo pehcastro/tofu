@@ -42,7 +42,14 @@ is called out as waiting rather than working, and a repeat of the same answer
 says so and what to do instead. CPU is read from the Windows job object, and
 from `ps` on Linux and macOS, once every 30 s of a wait, so nothing polls
 while nobody waits. A failure line printed after a command moved comes back
-to the agent that ran it as one message, without a wait.
+to the agent that ran it as one message, without a wait. When that agent has
+already ended, the message goes to the nearest agent above it that still runs,
+or to the lead, and says whose command it was. When a sub-agent ends, the
+shells it started stop, and a failure line any of them printed reaches the
+lead in the sub-agent's report. A wait, and the lead's exit message, learn
+that a command ended from the command's own process rather than by reading
+its state file every 50 ms; only the failure-line watch reads the command's
+logs, once a second.
 The lead's own command moves after 10 s, or at once when you type, so you can
 always talk to it: its turn ends without waiting, and the exit comes back to
 the lead as one message with the exit code and last lines.

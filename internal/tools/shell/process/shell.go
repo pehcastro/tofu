@@ -85,6 +85,7 @@ type live struct {
 	log      io.WriteCloser
 	drained  <-chan struct{}
 	finished chan struct{}
+	changed  chan struct{}
 	killed   bool
 	told     bool
 }
@@ -346,6 +347,10 @@ func (r *Registry) writeLocked(entry Shell) error {
 		entry.Holder, entry.HeldSince = "", nil
 		state, other = other, state
 	}
+	if process := r.running[entry.Name]; process != nil && process.changed != nil {
+		defer close(process.changed)
+		process.changed = nil
+	}
 	root, err := os.OpenRoot(r.dir)
 	if err != nil {
 		return err
@@ -458,20 +463,34 @@ func (r *Registry) List() ([]Shell, error) {
 }
 
 func (r *Registry) AwaitEnd(ctx context.Context, name string, within time.Duration) (Shell, error) {
-	poll := time.NewTicker(konst.ReadyPollMillis * time.Millisecond)
-	defer poll.Stop()
 	gaveUp := time.After(within)
 	for {
+		finished, changed, polled := r.changes(name)
 		entry, err := r.Read(name)
 		if err != nil || entry.State != Running || entry.HeldByPerson() {
 			return entry, err
 		}
 		select {
-		case <-poll.C:
+		case <-finished:
+		case <-changed:
+		case <-polled:
 		case <-gaveUp:
 			return entry, nil
 		case <-ctx.Done():
 			return entry, nil
 		}
 	}
+}
+
+func (r *Registry) changes(name string) (finished, changed <-chan struct{}, polled <-chan time.Time) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	process := r.running[name]
+	if process == nil {
+		return nil, nil, time.After(konst.ReadyPollMillis * time.Millisecond)
+	}
+	if process.changed == nil {
+		process.changed = make(chan struct{})
+	}
+	return process.finished, process.changed, nil
 }

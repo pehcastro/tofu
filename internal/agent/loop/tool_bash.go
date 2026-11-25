@@ -468,9 +468,9 @@ func (t *BashTool) runOrMove(ctx context.Context, registry *process.Registry, co
 		}, registry.Kill(ran.Name)
 	}
 	readBack := fmt.Sprintf("read it back with the shell tool: wait %s returns as soon as it ends, prints a failure line, or sits %s with no output and no CPU, or after %d ms, with its exit code and last lines; logs %[1]s returns its last lines now. never wait on it with another bash call",
-		ran.Name, process.QuietBeforeIdle, konst.ShellWaitMillis)
+		ran.Name, konst.ShellQuietIdleMillis*time.Millisecond, konst.ShellWaitMillis)
+	site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 	if inbox != nil {
-		site, _ := ctx.Value(spawnSiteKey{}).(spawnSite)
 		inbox.watchShell(project.Crashes(string(t.root)), registry, ran.Name, site)
 		readBack = "its exit comes back to you as a message when it ends, so do not wait on it: answer the person, go on with other work, or end your turn. logs " + ran.Name + " returns its last lines now"
 		if got.Took < limit {
@@ -485,9 +485,13 @@ func (t *BashTool) runOrMove(ctx context.Context, registry *process.Registry, co
 	found := ""
 	if len(news.Trouble) > 0 && registry.Tell(ran.Name) {
 		found = "\nit already printed failure lines:\n" + strings.Join(news.Trouble, "\n")
-	} else if owner := ownerInbox(ctx); owner != nil {
+	} else if lead := leadInboxFrom(ctx); lead != nil {
 		readBack += ". a failure line it prints while it runs comes back to you as a message"
-		owner.watchTrouble(project.Crashes(string(t.root)), registry, ran.Name, &watched)
+		by := ""
+		if !ledByTheLead(ctx) {
+			by = contract.SubAgentAsking(ctx)
+		}
+		lead.watchTrouble(project.Crashes(string(t.root)), registry, ran.Name, by, &watched, site)
 	}
 	return contract.Result{
 		Content: fmt.Sprintf("%s is still running after %d ms, so it moved to a background shell as pid %d instead of holding this call. it was not killed and keeps running, listed on the shells screen. %s. its output so far:\n%s%s",
@@ -502,33 +506,37 @@ func ledByTheLead(ctx context.Context) bool {
 	return owner == "" || owner == session.AuthorOrchestrator
 }
 
-func ownerInbox(ctx context.Context) *Inbox {
-	lead := leadInboxFrom(ctx)
-	if lead == nil || ledByTheLead(ctx) {
-		return lead
-	}
-	return lead.heldInbox(contract.SubAgentAsking(ctx))
-}
-
-func (b *Inbox) heldInbox(id string) *Inbox {
+func (b *Inbox) runningToward(id string) (inbox *Inbox, agent string, under bool) {
 	b.mu.Lock()
 	held := slices.Collect(maps.Values(b.held))
+	running := map[string]bool{}
+	for _, one := range held {
+		running[one.agent.ID] = one.running
+	}
 	b.mu.Unlock()
 	for _, one := range held {
-		if one.agent.ID == id {
-			return one.inbox
+		if one.agent.ID != id {
+			if inbox, agent, under = one.inbox.runningToward(id); !under {
+				continue
+			}
 		}
-	}
-	for _, one := range held {
-		if found := one.inbox.heldInbox(id); found != nil {
-			return found
+		if inbox == nil && running[one.agent.ID] {
+			inbox, agent = one.inbox, one.agent.ID
 		}
+		return inbox, agent, true
 	}
-	return nil
+	return nil, "", false
 }
 
-func (b *Inbox) watchTrouble(report safe.Report, registry *process.Registry, name string, watched *process.Watcher) {
+func (b *Inbox) watchTrouble(report safe.Report, registry *process.Registry, name, by string, watched *process.Watcher, site spawnSite) {
+	b.mu.Lock()
+	_, kept := b.logs[site.log]
+	b.keepOpen(site.log)
+	b.mu.Unlock()
 	safe.Go(report, "shell trouble watch", func() {
+		if kept {
+			defer b.letGo(site.log)
+		}
 		tick := time.NewTicker(konst.ShellWaitMatchMillis * time.Millisecond)
 		defer tick.Stop()
 		for range tick.C {
@@ -544,13 +552,34 @@ func (b *Inbox) watchTrouble(report safe.Report, registry *process.Registry, nam
 				continue
 			}
 			if registry.Tell(name) {
-				now := time.Now()
-				b.post(inboxItem{text: fmt.Sprintf("%s, your command moved to the background, is still running, %s, and printed failure lines:\n%s\nit keeps running: stop it with shell stop %[1]s if that failure is the answer, or read the rest with shell logs %[1]s",
-					name, registry.Timing(entry, now).Words(now), strings.Join(news.Trouble, "\n")), origin: postedNow(core.SourceNotice, name)})
+				b.tellTrouble(registry, entry, by, news.Trouble, site)
 			}
 			return
 		}
 	})
+}
+
+func (b *Inbox) tellTrouble(registry *process.Registry, entry process.Shell, by string, trouble []string, site spawnSite) {
+	to, agent, _ := b.runningToward(by)
+	whose := "your command moved to the background"
+	if agent != by {
+		whose = "a command " + by + " moved to the background before it ended"
+	}
+	now := time.Now()
+	text := fmt.Sprintf("%s, %s, is still running, %s, and printed failure lines:\n%s\nit keeps running: stop it with shell stop %[1]s if that failure is the answer, or read the rest with shell logs %[1]s",
+		entry.Name, whose, registry.Timing(entry, now).Words(now), strings.Join(trouble, "\n"))
+	origin := postedNow(core.SourceNotice, entry.Name)
+	if to == nil {
+		b.mu.Lock()
+		to = b
+		idle := b.idle
+		b.mu.Unlock()
+		if idle && site.log != nil {
+			_, _ = site.log.Append(session.Event{Turn: site.turn, Agent: site.agent, Kind: session.EventNotice},
+				session.NoticeBody{Text: "for " + cmp.Or(by, "the lead") + ", told after it and the lead ended: " + text, From: RecordedOrigin(origin)})
+		}
+	}
+	to.post(inboxItem{text: text, origin: origin})
 }
 
 func OwnShellsCalled(ctx context.Context, request GateRequest) []string {

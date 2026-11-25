@@ -53,6 +53,7 @@ type Inbox struct {
 	waited   time.Duration
 	stopped  bool
 	led      bool
+	idle     bool
 	settling chan struct{}
 	queued   laterCompaction
 	said     *saidInClosedGenerations
@@ -1301,7 +1302,7 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 	}
 	for {
 		config.Inbox.mu.Lock()
-		config.Inbox.stopped, config.Inbox.led = false, true
+		config.Inbox.stopped, config.Inbox.led, config.Inbox.idle = false, true, false
 		config.Inbox.mu.Unlock()
 		config.Environment = Redated(config.Environment, config.Now)
 		framed := config
@@ -1324,7 +1325,11 @@ func Lead(ctx context.Context, config Config, typed <-chan string, heard func(st
 		}
 		if (len(next) == 0 && said == "") || ctx.Err() != nil {
 			config.Inbox.compacted()
-			return errors.Join(append(failed, config.Inbox.settle())...)
+			failed = append(failed, config.Inbox.settle())
+			config.Inbox.mu.Lock()
+			config.Inbox.idle = true
+			config.Inbox.mu.Unlock()
+			return errors.Join(failed...)
 		}
 		if row.Conversation != nil {
 			config.History = Sendable(row.Conversation)

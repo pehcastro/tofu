@@ -16,6 +16,7 @@ import (
 	"tofu/internal/tools/code/test"
 	"tofu/internal/tools/code/typecheck/checkers"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/shell/process"
 )
 
 func editedSince(project string, definition subagents.Definition, rounds []Row) ([]ToolCallRow, string) {
@@ -214,8 +215,6 @@ var (
 	cargoDeadCode     = platformfs.LazyRegexp(`\b(is|are) never (used|read|constructed)\b|^unused\b`)
 	cargoTestFailed   = platformfs.LazyRegexp(`(?m)^(test result: FAILED|error(\[\w+\])?: )`)
 	cargoTestPassed   = platformfs.LazyRegexp(`(?m)^test result: ok\.`)
-
-	errorPrinted = platformfs.LazyRegexp(`^(error(\[\w+\])?: |--- FAIL|FAIL(ED)?\b|\[FAIL\]|panic: |fatal: |\S+\.go:\d+:\d+: |test \S+ \.\.\. FAILED$|test result: FAILED|thread '.+' panicked at |.*\berror TS\d+|Traceback |E {3}|\w+Error: )`)
 )
 
 func checkPrinted(check, printed string, exit *int) printedVerdict {
@@ -233,7 +232,7 @@ func checkPrinted(check, printed string, exit *int) printedVerdict {
 
 func errorLine(printed string) string {
 	for _, line := range strings.Split(printed, "\n") {
-		if line = strings.TrimSpace(line); errorPrinted().MatchString(line) && !cargoSummary().MatchString(line) {
+		if line = strings.TrimSpace(line); process.FailureIn(line) == process.FailureNamed && !cargoSummary().MatchString(line) {
 			return line
 		}
 	}

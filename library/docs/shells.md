@@ -26,7 +26,14 @@ read. A command piped into `tail -40` that sits idle is called out as waiting
 on something rather than working, and a second wait that would say the same
 says so and to stop it and run the step on its own. A failure line printed
 after the command moved comes back to the agent that ran it as one message,
-within a second, without a wait. The lead's own command moves after 10 s instead, or at once when you type, and its exit comes back to the lead as one message, so the lead never waits on it and you can always talk to it. A sub-agent that can run bash can always use `shell`, and may
+within a second, without a wait. When that agent has already ended, the
+message goes to the nearest agent above it that still runs, or to the lead,
+and says whose command it was. When a sub-agent ends, the shells it started
+stop, and a failure line any of them printed reaches the lead in the
+sub-agent's report. A wait, and the lead's exit message, learn that a command
+ended from the command's own process rather than by reading its state file
+every 50 ms; only the failure-line watch reads the command's logs, once a
+second. The lead's own command moves after 10 s instead, or at once when you type, and its exit comes back to the lead as one message, so the lead never waits on it and you can always talk to it. A sub-agent that can run bash can always use `shell`, and may
 start a server, a watcher or a `sleep` with `background: true`; outside
 the background it sleeps 5 s at most.
 

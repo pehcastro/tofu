@@ -33,6 +33,7 @@ import (
 	"tofu/internal/store/session"
 	"tofu/internal/store/settings"
 	"tofu/internal/tools/contract"
+	"tofu/internal/tools/shell/process"
 )
 
 type DepthLimitError struct {
@@ -806,6 +807,11 @@ func (t *SpawnTool) settle(ctx context.Context, held *heldSubAgent, report strin
 	told := stopped.told()
 	if stopped.failed != nil {
 		told = append(told, "a shell of its was not killed: "+stopped.failed.Error())
+	}
+	for _, name := range stopped.killed {
+		if news, err := ShellRegistryFrom(ctx).Watch(name, &process.Watcher{}); err == nil && len(news.Trouble) > 0 {
+			told = append(told, name+" had printed failure lines:\n"+strings.Join(news.Trouble, "\n"))
+		}
 	}
 	if len(told) > 0 && report != "" {
 		report += "\n\nas it ended, " + strings.Join(told, ", ") + ". a server you need after a sub-agent reports, start yourself with bash and background: true."
