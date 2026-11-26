@@ -2,14 +2,13 @@ package guard
 
 import (
 	"context"
-	"io"
-	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
 	"unicode"
 
+	"tofu/internal/platform/credential"
 	"tofu/internal/platform/fs"
 )
 
@@ -162,7 +161,8 @@ func scriptArgument(dir string, words []string) (script, bool) {
 	}
 	for _, arg := range words[at+1:] {
 		if scriptName().MatchString(arg) {
-			return script{code: readScript(resolved(dir, arg)), powershell: isPowershell(words[at]), fromFile: true}, true
+			data, _ := credential.ReadCredential(resolved(dir, arg))
+			return script{code: string(data[:min(len(data), scriptBytes)]), powershell: isPowershell(words[at]), fromFile: true}, true
 		}
 	}
 	return script{}, false
@@ -225,16 +225,6 @@ func resolved(dir, path string) string {
 		return filepath.Clean(path)
 	}
 	return filepath.Join(dir, path)
-}
-
-func readScript(path string) string {
-	file, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	data, _ := io.ReadAll(io.LimitReader(file, scriptBytes))
-	_ = file.Close()
-	return string(data)
 }
 
 func scriptCode(text string) string {
