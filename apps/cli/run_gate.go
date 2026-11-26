@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -136,7 +137,7 @@ func (g *toolGate) Decide(ctx context.Context, request loop.GateRequest) (decisi
 		by, allowed = "the person's own message \""+cited+"\"", true
 	}
 	if allowed {
-		decision, err = g.allow(request, by)
+		decision, err = g.allow(request, by, wiring.RowInput{TurnID: request.TurnID}, loop.YesThisCall)
 		if g.watch != nil {
 			g.watch(host.JudgingCall(ctx, request.Call), request.Tool, decision, err)
 		}
@@ -165,16 +166,51 @@ func (g *toolGate) Decide(ctx context.Context, request loop.GateRequest) (decisi
 	return decision, err
 }
 
-func (g *toolGate) AllowedByPerson(request loop.GateRequest, question string) (loop.GateDecision, error) {
-	return g.allow(request, "the person, who answered yes to question "+question)
+func (g *toolGate) AllowedByPerson(request loop.GateRequest, yes loop.PersonYes) (loop.GateDecision, error) {
+	by := "the person, who answered \"" + yes.Scope.Label() + "\" to question " + yes.Question
+	if yes.Scope != loop.YesThisCall {
+		by += ", for every " + loop.CallKind(request) + " call"
+	}
+	return g.allow(request, by, wiring.RowInput{TurnID: request.TurnID, Session: yes.Session}, yes.Scope)
 }
 
-func (g *toolGate) allow(request loop.GateRequest, by string) (loop.GateDecision, error) {
+func (g *toolGate) allow(request loop.GateRequest, by string, in wiring.RowInput, scope loop.YesScope) (loop.GateDecision, error) {
 	g.allowing.Lock()
 	g.allowed[allowanceOf(request)] = by
 	g.allowing.Unlock()
-	row, err := g.rows.AppendPersonAllowed(request.Args, g.set, wiring.RowInput{TurnID: request.TurnID}, by)
+	row, err := g.rows.AppendPersonAllowed(request.Args, g.set, in, by, scope)
 	return loop.GateDecision{ID: row.ID, Verdict: row.Verdict, Reason: row.Reason}, err
+}
+
+func (g *toolGate) AllowedBefore(request loop.GateRequest, session string) (loop.GateDecision, bool, error) {
+	yeses, err := g.rows.PersonYeses(g.set.SetName, session)
+	if err != nil {
+		return loop.GateDecision{}, false, err
+	}
+	exact, kind := allowanceOf(request), loop.CallKind(request)
+	lasting := konst.GateKindYesHours * time.Hour
+	covering := slices.IndexFunc(yeses, func(yes wiring.GrantedYes) bool {
+		earlier := loop.GateRequest{Tool: request.Tool, Args: yes.State}
+		switch yes.Scope {
+		case loop.YesThisCall:
+			return allowanceOf(earlier) == exact
+		case loop.YesKindForHours:
+			return kind != "" && loop.CallKind(earlier) == kind && time.Since(yes.At) < lasting
+		case loop.YesKindForSession:
+			return kind != "" && loop.CallKind(earlier) == kind
+		}
+		panic("tofu: unknown yes scope")
+	})
+	if covering < 0 {
+		return loop.GateDecision{}, false, nil
+	}
+	yes := yeses[covering]
+	by := "an earlier yes: " + yes.By
+	if yes.Scope == loop.YesKindForHours {
+		by += ", until " + yes.At.Add(lasting).Local().Format("15:04")
+	}
+	row, err := g.rows.AppendCoveredByYes(request.Args, g.set, wiring.RowInput{TurnID: request.TurnID, Session: session}, by)
+	return loop.GateDecision{ID: row.ID, Verdict: row.Verdict, Reason: row.Reason}, err == nil, err
 }
 
 type citationRefused struct{ why string }

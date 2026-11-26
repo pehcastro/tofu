@@ -3,10 +3,14 @@ package wiring
 import (
 	"encoding/json"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
+	"tofu/internal/agent/loop"
 	"tofu/internal/judge/gate"
 	"tofu/internal/judge/ledger"
+	"tofu/internal/konst"
 	"tofu/internal/models/classifiers/core"
 	"tofu/internal/models/llm/catalog"
 	"tofu/internal/platform/project"
@@ -20,12 +24,14 @@ type RowInput struct {
 	RequestID    string
 	Answers      []ledger.Answer
 	TurnID       string
+	Session      string
 	StateBuilder string
 	Fingerprint  string
 }
 
 type RowLedger struct {
 	writer     *ledger.Writer
+	dir        string
 	classifier catalog.Model
 }
 
@@ -34,7 +40,7 @@ func OpenRowLedger(log string) (RowLedger, error) {
 	if core.IsUnbound(err) {
 		err = nil
 	}
-	return RowLedger{writer: ledger.NewWriter(log), classifier: classifier}, err
+	return RowLedger{writer: ledger.NewWriter(log), dir: log, classifier: classifier}, err
 }
 
 func openedRowLedger() (RowLedger, error) {
@@ -85,6 +91,7 @@ func (l RowLedger) skeleton(state any, set Battery, in RowInput) (ledger.Row, er
 		Answers:      in.Answers,
 		ReplayOf:     in.ReplayOf,
 		TurnID:       in.TurnID,
+		SessionID:    in.Session,
 	}, nil
 }
 
@@ -145,9 +152,52 @@ func (l RowLedger) AppendOwnShell(state json.RawMessage, set Battery, in RowInpu
 	return l.allowedWithoutJev(state, set, in, ledger.Reason{ModeReason: &sentence})
 }
 
-func (l RowLedger) AppendPersonAllowed(state json.RawMessage, set Battery, in RowInput, by string) (ledger.Row, error) {
-	sentence := "the person allowed this exact call for the rest of the session, so it runs without another safety check"
+func (l RowLedger) AppendPersonAllowed(state json.RawMessage, set Battery, in RowInput, by string, scope loop.YesScope) (ledger.Row, error) {
+	sentence := yesSentence(scope)
 	return l.allowedWithoutJev(state, set, in, ledger.Reason{AllowedBy: by, ModeReason: &sentence})
+}
+
+func (l RowLedger) AppendCoveredByYes(state json.RawMessage, set Battery, in RowInput, by string) (ledger.Row, error) {
+	sentence := "an earlier yes of the person's in this session covers this call, so it runs without asking again"
+	return l.allowedWithoutJev(state, set, in, ledger.Reason{AllowedBy: by, ModeReason: &sentence})
+}
+
+func yesSentence(scope loop.YesScope) string {
+	switch scope {
+	case loop.YesThisCall:
+		return "the person allowed this exact call for the rest of the session, so it runs without another safety check"
+	case loop.YesKindForHours:
+		return "the person allowed this kind of call for " + strconv.Itoa(konst.GateKindYesHours) + " hours of this session, so it runs without another safety check"
+	case loop.YesKindForSession:
+		return "the person allowed this kind of call for the rest of the session, so it runs without another safety check"
+	}
+	panic("wiring: unknown yes scope")
+}
+
+type GrantedYes struct {
+	Scope loop.YesScope
+	At    time.Time
+	By    string
+	State json.RawMessage
+}
+
+func (l RowLedger) PersonYeses(point, session string) ([]GrantedYes, error) {
+	reader := ledger.NewReader(l.dir)
+	var yeses []GrantedYes
+	_, err := reader.Each(ledger.Filter{Point: point, Verdict: ledger.VerdictAllow}, func(row ledger.Row) error {
+		if row.SessionID != session || row.Reason == nil || row.Reason.ModeReason == nil {
+			return nil
+		}
+		for _, scope := range []loop.YesScope{loop.YesThisCall, loop.YesKindForHours, loop.YesKindForSession} {
+			if yesSentence(scope) == *row.Reason.ModeReason {
+				state, err := reader.State(row)
+				yeses = append(yeses, GrantedYes{Scope: scope, At: row.At, By: row.Reason.AllowedBy, State: state})
+				return err
+			}
+		}
+		return nil
+	})
+	return yeses, err
 }
 
 func (l RowLedger) allowedWithoutJev(state json.RawMessage, set Battery, in RowInput, reason ledger.Reason) (ledger.Row, error) {

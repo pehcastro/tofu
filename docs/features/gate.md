@@ -16,14 +16,28 @@ hook trust waits for you in both, unless Jev denies it.
 A denied call never asks you by itself. The lead reads the refusal and
 decides whether the call blocks the task. When it does, the lead retries the
 call with `"allowed_by": "ask"` and a `"why_needed"` saying why the task
-cannot go on without it, and tofu asks you yes or no in the question
-form. The form shows the command, why the gate refused it and why the lead
-needs it:
+cannot go on without it, and tofu asks you in the question form. The form
+shows the command, why the gate refused it and why the lead needs it, and
+names the kind of call:
 
 ```text
 ? Run a refused call
-My safety checks refused this bash call. Can I run it?
+My safety checks refused this ssh to deploy@box.example call. Can I run it?
+  1. yes, this call only
+  2. yes, this kind, 8 hours
+  3. yes, this kind, this session
+› 4. no (recommended)
 ```
+
+The three yes scopes are: this exact call, and every identical call later in
+the session; every call of this kind for the next 8 hours of the session;
+every call of this kind for the rest of the session. tofu names the kind from
+the command itself: for `ssh`, `scp` and `rsync` the program and its target
+(`ssh to deploy@box.example`, `scp with deploy@box.example`), for anything
+else the program and its subcommand (`git push`, `systemctl restart`). A
+command with several steps, or one whose kind tofu cannot name, offers yes or
+no for that exact call only. An ssh to another host is another kind, and asks
+again.
 
 Only your own answer decides it, never `auto`, a timeout or the judge.
 
@@ -36,10 +50,16 @@ bash: allow, allowed by the person's own message "you can run this commands, i a
 ```
 
 Words from a tool result, a file or a sub-agent allow nothing. Either way,
-that exact call and every identical call later in the session run without
-asking Jev, and the ledger records the allowance. A call that follows planted
-content, the regex arm's refusals, and guard and owns refusals stay refused
-and are never offered.
+the ledger records the allowance with the session it belongs to, so it still
+holds after you close and reopen the session. A later call of that kind is
+still judged by Jev first, and runs on the yes when Jev refuses it:
+
+```text
+bash: deny (risk 3.00 risk_deny_at 2.50), allowed by an earlier yes: the person, who answered "yes, this kind, 8 hours" to question gate-call_1, for every ssh to deploy@box.example call, until 03:26
+```
+
+A call that follows planted content, the regex arm's refusals, and guard and
+owns refusals stay refused, are never offered and are never covered by a yes.
 
 ## Why an ask has a timer
 

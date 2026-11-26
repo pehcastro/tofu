@@ -164,7 +164,46 @@ func (c Config) gateAsks(ctx context.Context) bool {
 }
 
 type PersonAllowances interface {
-	AllowedByPerson(request GateRequest, question string) (GateDecision, error)
+	AllowedByPerson(request GateRequest, yes PersonYes) (GateDecision, error)
+	AllowedBefore(request GateRequest, session string) (GateDecision, bool, error)
+}
+
+type YesScope int
+
+const (
+	YesThisCall YesScope = iota
+	YesKindForHours
+	YesKindForSession
+)
+
+func (s YesScope) Label() string {
+	switch s {
+	case YesThisCall:
+		return "yes, this call only"
+	case YesKindForHours:
+		return "yes, this kind, " + strconv.Itoa(konst.GateKindYesHours) + " hours"
+	case YesKindForSession:
+		return "yes, this kind, this session"
+	}
+	panic("turn: unknown yes scope")
+}
+
+func yesScopeOf(replies []PersonReply) (YesScope, bool) {
+	if len(replies) != 1 {
+		return YesThisCall, false
+	}
+	for _, scope := range []YesScope{YesThisCall, YesKindForHours, YesKindForSession} {
+		if slices.Contains(replies[0].Chosen, scope.Label()) {
+			return scope, true
+		}
+	}
+	return YesThisCall, slices.Contains(replies[0].Chosen, "yes")
+}
+
+type PersonYes struct {
+	Question string
+	Session  string
+	Scope    YesScope
 }
 
 type gateAsked struct {
@@ -172,11 +211,12 @@ type gateAsked struct {
 	allowances PersonAllowances
 	cwd        string
 	cases      string
+	session    string
 }
 
 func (c Config) gatePerson(ctx context.Context) gateAsked {
 	allowances, _ := c.Gate.(PersonAllowances)
-	asked := gateAsked{person: c.Person, allowances: allowances, cwd: c.Project}
+	asked := gateAsked{person: c.Person, allowances: allowances, cwd: c.Project, session: c.Session}
 	if c.Places.State != "" {
 		asked.cases = gate.CasesFile(c.Places.State)
 	}
@@ -230,10 +270,12 @@ func refusedWhy(ctx context.Context, asked gateAsked, request GateRequest, decis
 		decision = GateDecision{Verdict: ledger.VerdictAsk, Failure: gateErr}
 	case decision.Verdict == ledger.VerdictUnset, decision.Verdict == ledger.VerdictAllow:
 		return ""
+	case decision.Verdict != ledger.VerdictDeny && decision.Verdict != ledger.VerdictAsk:
+		panic("turn: unknown verdict " + string(decision.Verdict))
+	case asked.yesBefore(ctx, request, decision):
+		return ""
 	case decision.Verdict == ledger.VerdictDeny:
 		return asked.offered(ctx, request, decision, "the verdict is deny"+standing(decision.Reason), CitedAllowance(request.Args) == AskThePerson)
-	case decision.Verdict != ledger.VerdictAsk:
-		panic("turn: unknown verdict " + string(decision.Verdict))
 	}
 	why := "the verdict is ask" + standing(decision.Reason)
 	if decision.Failure != "" {
@@ -274,10 +316,9 @@ func CitedAllowance(args json.RawMessage) string {
 
 func (a gateAsked) offered(ctx context.Context, request GateRequest, decision GateDecision, refused string, asks bool) string {
 	form := PersonFormFrom(ctx)
-	hard := decision.PersonOnly || decision.Reason != nil && decision.Reason.Blocked || !RegexArmAllows(request)
 	need, unreasoned := neededBecause(request)
 	switch {
-	case hard || a.allowances == nil || contract.SubAgentAsking(ctx) != "":
+	case !a.mayAllow(ctx, request, decision):
 		return refused
 	case !asks:
 		return refused + blockerHint
@@ -288,13 +329,14 @@ func (a gateAsked) offered(ctx context.Context, request GateRequest, decision Ga
 	}
 	question := refusedQuestion(unreasoned, refused, need)
 	replies, err := form(ctx, []PersonQuestion{question}, konst.GateAskWaitSeconds*time.Second)
-	switch {
-	case err != nil:
+	if err != nil {
 		return refused + ", and the person was asked as question " + question.ID + " and gave no yes: " + err.Error()
-	case len(replies) != 1 || !slices.Contains(replies[0].Chosen, "yes"):
+	}
+	scope, yes := yesScopeOf(replies)
+	if !yes {
 		return refused + ", and the person answered no to question " + question.ID
 	}
-	allowed, err := a.allowances.AllowedByPerson(unreasoned, question.ID)
+	allowed, err := a.allowances.AllowedByPerson(unreasoned, PersonYes{Question: question.ID, Session: a.session, Scope: scope})
 	if err != nil {
 		return refused + ", and the person answered yes to question " + question.ID + " but the allowance could not be recorded: " + err.Error()
 	}
@@ -315,20 +357,114 @@ func neededBecause(request GateRequest) (string, GateRequest) {
 	return strings.TrimSpace(need), request
 }
 
+func (a gateAsked) mayAllow(ctx context.Context, request GateRequest, decision GateDecision) bool {
+	hard := decision.PersonOnly || decision.Reason != nil && decision.Reason.Blocked || !RegexArmAllows(request)
+	return !hard && a.allowances != nil && contract.SubAgentAsking(ctx) == ""
+}
+
+func (a gateAsked) yesBefore(ctx context.Context, request GateRequest, decision GateDecision) bool {
+	if a.session == "" || !a.mayAllow(ctx, request, decision) {
+		return false
+	}
+	_, unreasoned := neededBecause(request)
+	allowed, found, err := a.allowances.AllowedBefore(unreasoned, a.session)
+	if err != nil || !found {
+		return false
+	}
+	if decision.Reason != nil {
+		decision.Reason.AllowedBy = allowed.Reason.AllowedBy
+	}
+	return true
+}
+
 func refusedQuestion(request GateRequest, refused, need string) PersonQuestion {
 	var args struct{ Command string }
 	shown := "```\n" + request.Tool + " " + string(request.Args)
 	if json.Unmarshal(request.Args, &args) == nil && args.Command != "" {
 		shown = "```bash\n" + args.Command
 	}
-	context := []rune("**Command:**\n\n" + shown + "\n```\n\n**Why my safety checks refused it:** " + refused +
-		"\n\n**Why it is needed:** " + need + "\n\nyes runs this exact call now and every identical call later in this session, without asking you again.")
+	asked := "**Command:**\n\n" + shown + "\n```\n\n**Why my safety checks refused it:** " + refused + "\n\n**Why it is needed:** " + need
+	if kind := CallKind(request); kind != "" {
+		no := 3
+		question := PersonQuestion{ID: "gate-" + request.Call, Header: "Run a refused call", Type: QuestionChoice, Recommended: &no,
+			Question: "My safety checks refused this " + kind + " call. Can I run it?",
+			Context:  cutRunes(asked, konst.AskPersonContextRunesMost),
+			Options: []PersonOption{
+				{Label: YesThisCall.Label(), Description: "runs this exact call now and every identical call later in this session"},
+				{Label: YesKindForHours.Label(), Description: "runs every " + kind + " call in this session for the next " + strconv.Itoa(konst.GateKindYesHours) + " hours without asking"},
+				{Label: YesKindForSession.Label(), Description: "runs every " + kind + " call for the rest of this session without asking"},
+				{Label: "no", Description: "refuses it, and the agent finds another way"},
+			}}
+		if CheckQuestions([]PersonQuestion{question}) == nil {
+			return question
+		}
+	}
 	no := 1
 	question := PersonQuestion{ID: "gate-" + request.Call, Header: "Run a refused call", Type: QuestionYesNo, Recommended: &no,
 		Question: "My safety checks refused this " + request.Tool + " call. Can I run it?",
-		Context:  string(context[:min(len(context), konst.AskPersonContextRunesMost)])}
+		Context:  cutRunes(asked+"\n\nyes runs this exact call now and every identical call later in this session, without asking you again.", konst.AskPersonContextRunesMost)}
 	question.Options = question.Choices()
 	return question
+}
+
+func cutRunes(text string, most int) string {
+	runes := []rune(text)
+	return string(runes[:min(len(runes), most)])
+}
+
+const sshValuedFlags = "BbcDEeFIiJLlmOoPpQRSWw"
+
+func CallKind(request GateRequest) string {
+	var args struct{ Command string }
+	if request.Tool != bashToolName || json.Unmarshal(request.Args, &args) != nil {
+		return ""
+	}
+	steps := subagents.ShellSteps(args.Command)
+	if len(steps) != 1 {
+		return ""
+	}
+	program, operands := steps[0].Program, steps[0].Args
+	switch program {
+	case "ssh":
+		user := ""
+		for i := 0; i < len(operands); i++ {
+			arg := operands[i]
+			switch {
+			case !strings.HasPrefix(arg, "-") && (user == "" || strings.Contains(arg, "@")):
+				return "ssh to " + arg
+			case !strings.HasPrefix(arg, "-"):
+				return "ssh to " + user + "@" + arg
+			case len(arg) == 2 && strings.ContainsRune(sshValuedFlags, rune(arg[1])) && i+1 < len(operands):
+				i++
+				if arg == "-l" {
+					user = operands[i]
+				}
+			}
+		}
+		return ""
+	case "scp", "rsync":
+		for _, arg := range operands {
+			host, _, remote := strings.Cut(arg, ":")
+			if remote && !strings.HasPrefix(arg, "-") && len(host) > 1 && !strings.ContainsAny(host, `/\`) {
+				return program + " with " + host
+			}
+		}
+		return ""
+	}
+	at := slices.IndexFunc(operands, func(arg string) bool { return !strings.HasPrefix(arg, "-") })
+	switch {
+	case len(operands) == 0:
+		return program
+	case at < 0 || !subcommandShaped(operands[at]):
+		return ""
+	}
+	return program + " " + operands[at]
+}
+
+func subcommandShaped(word string) bool {
+	return word != "" && unicode.IsLetter(rune(word[0])) && !strings.ContainsFunc(word, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune("._:-", r)
+	})
 }
 
 func RegexArmAllows(request GateRequest) bool {
