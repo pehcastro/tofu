@@ -223,7 +223,7 @@ func TestTheShippedIndexSaysWhatFiresForATaskAndWhy(t *testing.T) {
 	}
 	for id, want := range map[string]string{
 		"em_dash":        "always on, the rule declares no trigger",
-		"comments":       "the language go reached internal/librarian/rules/load_test.go",
+		"comments":       "always on, the rule declares no trigger",
 		"test_assertion": "the scope **/*_test.go reached internal/librarian/rules/load_test.go",
 	} {
 		if why[id] != want {
@@ -234,9 +234,6 @@ func TestTheShippedIndexSaysWhatFiresForATaskAndWhy(t *testing.T) {
 	for i, m := range Index(rules, Task{Text: "rewrite the changelog entry", Paths: []string{"CHANGELOG.md"}}) {
 		if m.Fires != rules[i].Trigger.AlwaysOn() {
 			t.Fatalf("rule %q fires = %v for a task naming one markdown file, and it is always on = %v: %s", m.RuleID, m.Fires, rules[i].Trigger.AlwaysOn(), m.Why)
-		}
-		if m.RuleID == "comments" && m.Why != "no path the task names is go" {
-			t.Fatalf("the index says comments was held back because %q, want no path the task names is go", m.Why)
 		}
 	}
 }
@@ -274,8 +271,8 @@ func TestTheShippedGoRulesReachGoFilesAndNothingElse(t *testing.T) {
 		}
 		goRules[id] = true
 	}
-	if !goRules["comments"] {
-		t.Fatal("the comments rule does not ship as a go rule")
+	if _, limited := scoped["comments"]; limited {
+		t.Fatal("the comments rule ships with a trigger, want it on for every language")
 	}
 	for _, id := range []string{"test_assertion", "test_mock_boundary", "test_boundary_cases", "skipped_test_budget", "flake_disagreement"} {
 		if fires(id, source) || !fires(id, test) || fires(id, prose) {

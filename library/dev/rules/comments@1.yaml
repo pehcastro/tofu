@@ -1,0 +1,8 @@
+id: comments
+domain: dev
+kind: structural
+concern: code_rules
+checker: comments
+mode: shadow
+text: NEVER write a comment in source code, in any language, including a doc comment on an exported identifier. a comment repairs a name, a type or a function that failed to carry its meaning: rename it, give it a type that says what it is, or split it. only a shebang on the first line and the directives a tool reads are allowed. go: //go:build, //go:generate, //go:embed and //nolint. typescript and javascript: // @ts-expect-error and the other // @ts- directives, /// <reference, eslint-, prettier-ignore and biome-ignore. python: # noqa, # type:, # pyright:, # mypy:, # pylint:, # fmt: and the coding line. shell: # shellcheck. powershell: #Requires. ruby: # frozen_string_literal:, # encoding: and # rubocop:. c, c++ and objective-c: NOLINT. css, scss and less: stylelint-. swift: swiftlint:. dockerfile: # syntax= and # escape=. rust and zig have none: an attribute such as #![allow] is code, not a comment.
+notes: finds comment nodes with the tree-sitter grammar of each language through internal/tools/project/lint, the same function tofu lint comments runs; markdown, yaml, json and toml are data or prose and are not read

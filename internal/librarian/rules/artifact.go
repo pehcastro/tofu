@@ -3,7 +3,7 @@ package rules
 type Subject string
 
 const (
-	SubjectGoFile       Subject = "go_file"
+	SubjectCodeFile     Subject = "code_file"
 	SubjectGoPackage    Subject = "go_package"
 	SubjectTextFile     Subject = "text_file"
 	SubjectOwnsWrite    Subject = "owns_write"
@@ -14,11 +14,11 @@ type Artifact interface {
 	artifact()
 }
 
-type GoFile struct {
+type CodeFile struct {
 	Path string
 }
 
-func (GoFile) artifact() {}
+func (CodeFile) artifact() {}
 
 type GoPackage struct {
 	Dir string

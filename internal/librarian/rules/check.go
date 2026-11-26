@@ -25,7 +25,7 @@ type Checker struct {
 
 func Builtins() map[string]Checker {
 	return map[string]Checker{
-		"comments":            {Subject: SubjectGoFile, Check: checkComments},
+		"comments":            {Subject: SubjectCodeFile, Check: checkComments},
 		"em_dash":             {Subject: SubjectTextFile, Check: checkEmDash},
 		"ownership":           {Subject: SubjectOwnsWrite, Check: checkOwnership},
 		"no_worktree":         {Subject: SubjectShellCommand, Check: checkNoWorktree},
@@ -85,11 +85,11 @@ func commandWords(command string) []string {
 }
 
 func checkComments(_ Rule, a Artifact) ([]Finding, error) {
-	gf, ok := a.(GoFile)
+	cf, ok := a.(CodeFile)
 	if !ok {
-		return nil, artifactMismatch(SubjectGoFile, a)
+		return nil, artifactMismatch(SubjectCodeFile, a)
 	}
-	comments, err := lint.FileCommentViolations(gf.Path)
+	comments, err := lint.FileCommentViolations(cf.Path)
 	if err != nil {
 		return nil, err
 	}

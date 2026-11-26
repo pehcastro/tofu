@@ -37,13 +37,10 @@ func CheckTree(rules []Rule, checkers map[string]Checker, root string, now func(
 			}
 			return run(SubjectGoPackage, GoPackage{Dir: path}, path)
 		}
-		ext := filepath.Ext(path)
-		if ext == ".go" {
-			if err := run(SubjectGoFile, GoFile{Path: path}, path); err != nil {
-				return err
-			}
+		if err := run(SubjectCodeFile, CodeFile{Path: path}, path); err != nil {
+			return err
 		}
-		if !proseExtensions[ext] {
+		if !proseExtensions[filepath.Ext(path)] {
 			return nil
 		}
 		return run(SubjectTextFile, TextFile{Path: path}, path)

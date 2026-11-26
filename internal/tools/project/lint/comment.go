@@ -1,13 +1,14 @@
 package lint
 
 import (
-	"go/parser"
-	"go/token"
 	iofs "io/fs"
-	"path/filepath"
+	"slices"
 	"strings"
 
+	"github.com/odvcencio/gotreesitter"
+
 	"tofu/internal/platform/fs"
+	"tofu/internal/tools/code/catgrep/lang"
 )
 
 type Comment struct {
@@ -17,42 +18,88 @@ type Comment struct {
 	Text   string
 }
 
-func CommentAllowed(text string) bool {
-	return strings.HasPrefix(text, "//go:") || text == "//nolint" || strings.HasPrefix(text, "//nolint:")
+func commentedLanguage(path string) (lang.Lang, bool) {
+	l, ok := lang.FromPath(path)
+	switch l {
+	case lang.Markdown, lang.Yaml, lang.Json, lang.Toml:
+		return 0, false
+	}
+	return l, ok
 }
 
-func parseComments(filename string, src any) ([]Comment, error) {
-	fset := token.NewFileSet()
-	file, err := parser.ParseFile(fset, filename, src, parser.ParseComments)
+func directives(l lang.Lang) []string {
+	switch l {
+	case lang.Go:
+		return []string{"//go:", "//nolint:"}
+	case lang.TypeScript, lang.Tsx, lang.JavaScript:
+		return []string{"// @ts-", "//@ts-", "/// <reference", "// eslint-", "/* eslint-", "// prettier-ignore", "// biome-ignore"}
+	case lang.Python:
+		return []string{"# noqa", "# type:", "# pyright:", "# mypy:", "# pylint:", "# fmt:", "# -*- coding", "# coding"}
+	case lang.Bash:
+		return []string{"# shellcheck "}
+	case lang.PowerShell:
+		return []string{"#Requires"}
+	case lang.Ruby:
+		return []string{"# frozen_string_literal:", "# encoding:", "# rubocop:"}
+	case lang.C, lang.Cpp, lang.ObjC:
+		return []string{"// NOLINT", "/* NOLINT"}
+	case lang.Css, lang.Scss, lang.Less:
+		return []string{"/* stylelint-"}
+	case lang.Swift:
+		return []string{"// swiftlint:"}
+	case lang.Dockerfile:
+		return []string{"# syntax=", "# escape="}
+	}
+	return nil
+}
+
+func allowed(l lang.Lang, c Comment) bool {
+	if c.Line == 1 && strings.HasPrefix(c.Text, "#!") || l == lang.Go && c.Text == "//nolint" {
+		return true
+	}
+	return slices.ContainsFunc(directives(l), func(d string) bool { return strings.HasPrefix(c.Text, d) })
+}
+
+func sourceCommentViolations(path string, src []byte) ([]Comment, error) {
+	l, ok := commentedLanguage(path)
+	if !ok {
+		return nil, nil
+	}
+	tree, err := lang.Parse(src, l)
 	if err != nil {
 		return nil, err
 	}
-	var found []Comment
-	for _, group := range file.Comments {
-		for _, c := range group.List {
-			pos := fset.Position(c.Pos())
-			found = append(found, Comment{File: pos.Filename, Line: pos.Line, Column: pos.Column, Text: c.Text})
-		}
-	}
-	return found, nil
-}
-
-func violationsOf(comments []Comment) []Comment {
+	defer tree.Release()
+	grammar := tree.Language()
 	var bad []Comment
-	for _, c := range comments {
-		if !CommentAllowed(c.Text) {
-			bad = append(bad, c)
+	pending := []*gotreesitter.Node{tree.RootNode()}
+	for len(pending) > 0 {
+		node := pending[len(pending)-1]
+		pending = pending[:len(pending)-1]
+		if kind := node.Type(grammar); kind == "comment" || strings.HasSuffix(kind, "_comment") {
+			at := node.StartPoint()
+			c := Comment{File: path, Line: int(at.Row) + 1, Column: int(at.Column) + 1, Text: strings.TrimRight(node.Text(src), "\r\n")}
+			if !allowed(l, c) {
+				bad = append(bad, c)
+			}
+			continue
+		}
+		for i := node.ChildCount() - 1; i >= 0; i-- {
+			pending = append(pending, node.Child(i))
 		}
 	}
-	return bad
+	return bad, nil
 }
 
 func FileCommentViolations(path string) ([]Comment, error) {
-	comments, err := parseComments(path, nil)
+	if _, ok := commentedLanguage(path); !ok {
+		return nil, nil
+	}
+	src, err := fs.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	return violationsOf(comments), nil
+	return sourceCommentViolations(path, src)
 }
 
 func TreeCommentViolations(root string) ([]Comment, int, error) {
@@ -62,7 +109,13 @@ func TreeCommentViolations(root string) ([]Comment, int, error) {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || filepath.Ext(path) != ".go" {
+		if d.IsDir() {
+			if path != root && (d.Name() == "vendor" || d.Name() == "node_modules" || d.Name() == ".git") {
+				return iofs.SkipDir
+			}
+			return nil
+		}
+		if _, ok := commentedLanguage(path); !ok {
 			return nil
 		}
 		violations, ferr := FileCommentViolations(path)
