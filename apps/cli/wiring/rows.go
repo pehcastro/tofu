@@ -141,12 +141,12 @@ func (l RowLedger) AppendFallback(state json.RawMessage, set Battery, in RowInpu
 }
 
 func (l RowLedger) AppendOwnShell(state json.RawMessage, set Battery, in RowInput, own []string) (ledger.Row, error) {
-	sentence := "the call acts on " + strings.Join(own, ", ") + ", which tofu started, so it is allowed without asking jev, and a kill runs as shell stop"
+	sentence := "the call acts on " + strings.Join(own, ", ") + ", which tofu started, so it is allowed without a safety check, and a kill runs as shell stop"
 	return l.allowedWithoutJev(state, set, in, ledger.Reason{ModeReason: &sentence})
 }
 
 func (l RowLedger) AppendPersonAllowed(state json.RawMessage, set Battery, in RowInput, by string) (ledger.Row, error) {
-	sentence := "the person allowed this exact call for the rest of the session, so it runs without asking jev"
+	sentence := "the person allowed this exact call for the rest of the session, so it runs without another safety check"
 	return l.allowedWithoutJev(state, set, in, ledger.Reason{AllowedBy: by, ModeReason: &sentence})
 }
 

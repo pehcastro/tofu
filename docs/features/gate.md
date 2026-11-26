@@ -15,7 +15,8 @@ hook trust waits for you in both, unless Jev denies it.
 
 A denied call never asks you by itself. The lead reads the refusal and
 decides whether the call blocks the task. When it does, the lead retries the
-call with `"allowed_by": "ask"`, and tofu asks you yes or no in the question
+call with `"allowed_by": "ask"` and a `"why_needed"` saying why the task
+cannot go on without it, and tofu asks you yes or no in the question
 form. The form shows the command, why the gate refused it and why the lead
 needs it:
 

@@ -1,7 +1,6 @@
 package loop
 
 import (
-	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -256,10 +255,14 @@ func refusedWhy(ctx context.Context, asked gateAsked, request GateRequest, decis
 const (
 	AllowedByField = "allowed_by"
 	AskThePerson   = "ask"
+	whyNeededField = "why_needed"
 )
 
-const blockerHint = ". if this call blocks the task, retry it once with \"" + AllowedByField + "\": \"" + AskThePerson + "\" added to its arguments and tofu asks the person yes or no, " +
-	"showing the command, this refusal and the reason your text gives for it; or, when the person's own newest message allows it, retry with \"" + AllowedByField + "\" set to that message's exact words"
+const (
+	blockerHint = ". find another way first. only when this call blocks the task and no other way exists, retry it once with \"" + AllowedByField + "\": \"" + AskThePerson + "\" and \"" + whyNeededField + "\" " +
+		"saying why the task cannot go on without it, and tofu asks the person yes or no, showing the command, this refusal and that reason; or, when the person's own newest message allows it, retry with \"" + AllowedByField + "\" set to that message's exact words"
+	needMissing = ", and the person was not asked because the retry says no reason: retry once more with \"" + whyNeededField + "\" saying why the task cannot go on without this call, or find another way"
+)
 
 func CitedAllowance(args json.RawMessage) string {
 	var cited struct {
@@ -272,15 +275,18 @@ func CitedAllowance(args json.RawMessage) string {
 func (a gateAsked) offered(ctx context.Context, request GateRequest, decision GateDecision, refused string, asks bool) string {
 	form := PersonFormFrom(ctx)
 	hard := decision.PersonOnly || decision.Reason != nil && decision.Reason.Blocked || !RegexArmAllows(request)
+	need, unreasoned := neededBecause(request)
 	switch {
 	case hard || a.allowances == nil || contract.SubAgentAsking(ctx) != "":
 		return refused
 	case !asks:
 		return refused + blockerHint
+	case need == "":
+		return refused + needMissing
 	case form == nil || PersonAway(ctx):
 		return refused + ", and no person can be asked here"
 	}
-	question := refusedQuestion(request, refused)
+	question := refusedQuestion(unreasoned, refused, need)
 	replies, err := form(ctx, []PersonQuestion{question}, konst.GateAskWaitSeconds*time.Second)
 	switch {
 	case err != nil:
@@ -288,7 +294,7 @@ func (a gateAsked) offered(ctx context.Context, request GateRequest, decision Ga
 	case len(replies) != 1 || !slices.Contains(replies[0].Chosen, "yes"):
 		return refused + ", and the person answered no to question " + question.ID
 	}
-	allowed, err := a.allowances.AllowedByPerson(request, question.ID)
+	allowed, err := a.allowances.AllowedByPerson(unreasoned, question.ID)
 	if err != nil {
 		return refused + ", and the person answered yes to question " + question.ID + " but the allowance could not be recorded: " + err.Error()
 	}
@@ -298,15 +304,25 @@ func (a gateAsked) offered(ctx context.Context, request GateRequest, decision Ga
 	return ""
 }
 
-func refusedQuestion(request GateRequest, refused string) PersonQuestion {
-	var args struct{ Command string }
-	shown := request.Tool + " " + string(request.Args)
-	if json.Unmarshal(request.Args, &args) == nil && args.Command != "" {
-		shown = args.Command
+func neededBecause(request GateRequest) (string, GateRequest) {
+	var args map[string]json.RawMessage
+	var need string
+	if json.Unmarshal(request.Args, &args) != nil || json.Unmarshal(args[whyNeededField], &need) != nil {
+		return "", request
 	}
-	need := cmp.Or(strings.TrimSpace(request.Reason), "the lead gave no reason with the call")
-	context := []rune("**Command:** `" + shown + "`\n\n**Why my safety checks refused it:** " + refused +
-		"\n\n**Why it is needed:** " + need + "\n\nyes runs this exact call now and every identical call later in this session, without asking jev.")
+	delete(args, whyNeededField)
+	request.Args, _ = json.Marshal(args)
+	return strings.TrimSpace(need), request
+}
+
+func refusedQuestion(request GateRequest, refused, need string) PersonQuestion {
+	var args struct{ Command string }
+	shown := "```\n" + request.Tool + " " + string(request.Args)
+	if json.Unmarshal(request.Args, &args) == nil && args.Command != "" {
+		shown = "```bash\n" + args.Command
+	}
+	context := []rune("**Command:**\n\n" + shown + "\n```\n\n**Why my safety checks refused it:** " + refused +
+		"\n\n**Why it is needed:** " + need + "\n\nyes runs this exact call now and every identical call later in this session, without asking you again.")
 	no := 1
 	question := PersonQuestion{ID: "gate-" + request.Call, Header: "Run a refused call", Type: QuestionYesNo, Recommended: &no,
 		Question: "My safety checks refused this " + request.Tool + " call. Can I run it?",

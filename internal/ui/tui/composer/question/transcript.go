@@ -7,6 +7,7 @@ import (
 
 	"tofu/internal/agent/loop"
 	"tofu/internal/cli/render"
+	"tofu/internal/ui/tui/chat/markdown"
 	"tofu/internal/ui/tui/look/look"
 )
 
@@ -14,6 +15,7 @@ const (
 	waitingLine     = "waiting for your answer in the form below"
 	contextLabel    = " Question context "
 	cardEdge        = "│ "
+	codeGutter      = "│ "
 	outcomeMark     = `{"outcome"`
 	answerElsewhere = `{"outcome":"answered"}`
 )
@@ -114,10 +116,23 @@ func Answered(line, said string) string {
 func contextCard(text string, width int) []string {
 	inner := max(width-2*render.Cells(cardEdge), 1)
 	lines := []string{look.Faint("╭─") + look.Style(look.Blue).Render(contextLabel) + look.Faint(strings.Repeat("─", max(inner-render.Cells(contextLabel), 0))+"─╮")}
-	for _, row := range render.Wrap(text, inner) {
-		lines = append(lines, look.Faint(cardEdge)+ink(render.Pad(row, inner))+look.Faint(" │"))
+	for _, row := range new(markdown.Renderer).Lines(fencedWrapped(text, max(inner-render.Cells(codeGutter), 1)), inner) {
+		lines = append(lines, look.Faint(cardEdge)+render.Pad(row, inner)+look.Faint(" │"))
 	}
 	return append(lines, look.Faint("╰"+strings.Repeat("─", inner+2)+"╯"))
+}
+
+func fencedWrapped(text string, width int) string {
+	lines, fenced := strings.Split(text, "\n"), false
+	for at, line := range lines {
+		switch {
+		case strings.HasPrefix(line, "```"):
+			fenced = !fenced
+		case fenced && render.Cells(line) > width:
+			lines[at] = strings.Join(render.Wrap(line, width), "\n")
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 func outcomeLine(outcome string, mine given) (string, func(string) string) {
