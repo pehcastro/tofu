@@ -8,7 +8,7 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
-## 0.6.0 - 2026-11-25
+## Unreleased
 
 Questions that wait for you and carry their context, a session that knows you are away, skills that load on your own words, and a host that says why it stopped.
 
@@ -65,6 +65,7 @@ Questions that wait for you and carry their context, a session that knows you ar
 
 ### Fixed
 
+- `tofu login --help` prints each usage line whole, and `tofu boardy` lists `cost` among its subcommands.
 - The footer re-reads plan usage every 5 minutes, so the percentage is fresh between turns too.
 - A first turn on a large project no longer waits on the cold file snapshot, and a turn takes a snapshot only before a call that may write files.
 - Spawning sub-agents in a long, forked session no longer re-reads every earlier generation, so the app stays responsive with many sub-agents.
