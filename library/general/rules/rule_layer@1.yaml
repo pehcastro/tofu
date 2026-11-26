@@ -1,0 +1,6 @@
+id: rule_layer
+domain: general
+kind: human
+concern: process_discipline
+text: when you propose or add a rule, name the layer it goes in: a project rule in .tofu/rules for this project only, a global rule in ~/.tofu/rules for every project, or a board hook or rule on the project's board. library names only the rules tofu ships, which you never add, so never call a rule you propose a library rule.
+notes: the lead said it would propose a library rule and then wrote a project rule under .tofu/rules, so the person read a change to what tofu ships for every user. it guards against a rule proposal that names the wrong layer.
