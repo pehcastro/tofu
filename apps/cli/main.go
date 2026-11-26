@@ -520,7 +520,7 @@ func verbHelp(name string, args []string) string {
 	}
 	prefix, sub := "tofu "+name+" ", subcommandOf(args)
 	var all, picked []string
-	for _, part := range strings.Split(strings.TrimPrefix(text, "usage: "), prefix)[1:] {
+	for _, part := range usageForms(strings.TrimPrefix(text, "usage: "), prefix) {
 		part = strings.TrimRight(strings.TrimSuffix(strings.TrimSpace(part), " or"), ", |")
 		form := "usage: " + prefix + part
 		all = append(all, form)
@@ -535,6 +535,30 @@ func verbHelp(name string, args []string) string {
 		picked = all
 	}
 	return strings.Join(picked, "\n") + "\n"
+}
+
+func usageForms(text, prefix string) []string {
+	var starts []int
+	depth := 0
+	for at := range len(text) {
+		switch {
+		case depth == 0 && strings.HasPrefix(text[at:], prefix):
+			starts = append(starts, at)
+		case text[at] == '[' || text[at] == '<' && !strings.HasPrefix(text[at:], "< "):
+			depth++
+		case depth > 0 && (text[at] == '>' || text[at] == ']'):
+			depth--
+		}
+	}
+	forms := make([]string, len(starts))
+	for i, start := range starts {
+		end := len(text)
+		if i+1 < len(starts) {
+			end = starts[i+1]
+		}
+		forms[i] = text[start+len(prefix) : end]
+	}
+	return forms
 }
 
 func usageVerbs() []string {

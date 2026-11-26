@@ -24,7 +24,7 @@ import (
 	settingspkg "tofu/internal/store/settings"
 )
 
-const Usage = "tofu boardy init|new|list|show|move|log|set|lint|boards|held|manager|triage|assign|hand|widen|check|tick|fire|rule|bypass|request|view|audit|report|attention|epic|sprint|ask|catchup [--json]"
+const Usage = "tofu boardy init|new|list|show|move|log|set|lint|boards|held|manager|triage|assign|hand|widen|check|tick|fire|rule|bypass|request|view|audit|report|attention|epic|sprint|ask|catchup|cost [--json]"
 
 func UsageOf(subcommand string) string {
 	switch subcommand {
