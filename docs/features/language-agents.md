@@ -2,11 +2,11 @@
 title: Language agents and the gate
 description: tofu brings a sub-agent per language, and a gate that sends it back until its project's own checks ran after its last edit and passed.
 order: 3
-updated: 2026-10-28
+updated: 2026-11-25
 ---
 
 A language agent is a built-in sub-agent for one language: `go-dev`,
-`py-dev`, `rust-dev` and `ts-dev`. Each carries the rules and references for
+`py-dev`, `rust-dev`, `ts-dev` and `zig-dev`. Each carries the rules and references for
 its language and declares a **gate**, the checks that must run, and pass,
 after its last edit of a file in that language.
 
@@ -18,6 +18,12 @@ after its last edit of a file in that language.
 | `py-dev` | `ruff check`, `pytest` |
 | `rust-dev` | `cargo clippy`, `cargo test` |
 | `ts-dev` | the `typecheck` and `test` tools |
+| `zig-dev` | `zig fmt --check --ast-check`, `zig build`, `zig build test` |
+
+`zig-dev` reads the Zig version the project names before it edits and
+writes for that version only. A spawn that names no agent runs as the
+language agent that claims every source path it owns, by language or by a
+file such as `go.mod` or `Cargo.toml`; see [Agents](../library/agents).
 
 When a language agent reports done, tofu walks its recorded calls. For each
 gate check it looks for a run after the last edit in that language. A check

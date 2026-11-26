@@ -17,7 +17,7 @@ The settings come in groups:
 - Context: chatShowsTools, agentFeeds, showThinking, thinkingSummary, images, projectInstructionsCap, contextCeiling, fork, autoCompaction, instructionSources, skills, memory, autoMemory, episodes, memoryFromAllUsers, memoryModel, learn
 - Files: diffContext, hyperlinks, groupByAgent
 - Shell: persistentRegistry, logTail, killConfirm, shell
-- Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep, sideChatAccess, subAgentsPerTurn, subAgentDepth, leadCache, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, doneReview, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
+- Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep, planAdvisor, sideChatAccess, subAgentsPerTurn, subAgentDepth, leadCache, subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, doneReview, agentSources, modelTier.genius, modelTier.smart, modelTier.worker, modelTier.dumb
 - Projects: projectManagement (boardy, the ticket board), boardFlow (the words boardy uses), scratchCleanupDays, scratchMaxGB and scratchRoots (the scratchpad, scratchRoots global only)
 - Browser: browser, browserDriver, browserSteps, browserModel, browserEffort, browserCursor, browserProfile, browserHeadless, browserSleepMinutes
 
@@ -55,6 +55,7 @@ Each setting's own line is two sentences at most. The rest is here.
 - `persistentRegistry`: off stops every shell on exit, even when tofu is killed. Read on the next start.
 - `shell`: one of the offered values or a path to a shell. Empty resolves the person's own shell.
 - `planEveryStep`: each sub-agent keeps a plan of its own and sees that one. The next turn reads the new value.
+- `planAdvisor`: `shadow`, the default, has the advisor sub-agent read each plan the lead sets against your words and write what is missing or extra to the trace, unseen by the lead; `off` runs none. See `tofu docs agents`.
 - `sideChatAccess`: `read` writes nothing, `notes` writes .md and .html files, `files` writes anywhere, and any other value is a comma list of globs. A side chat never spawns, schedules, remembers or changes a setting, whatever this says.
 - `subAgentsPerTurn`, `subAgentDepth`, `subAgentCache` and `subAgentCheckSeconds`: the next spawn reads the new value.
 - `subAgentCheckSeconds`: the check is built from what tofu records: the sub-agent's steps, the files it changed, its gate and its last tool.
@@ -62,7 +63,7 @@ Each setting's own line is two sentences at most. The rest is here.
 - `verifySubAgents`: the lead reads what the sub-agent changed, runs the build or the tests again and opens what it made. Off takes the report as the result unless you ask for a check. `tofu rules off verify_sub_agents` turns it off too, whatever this says.
 - `doneReview`: `screen` sends a sub-agent back while an acceptance line on its ticket has no evidence entry naming it, up to the round cap, and the lead's report names each line. `typed` asks Jev after the screen and falls back to `screen`, saying so in the chat, when no classifier is bound. `cheap` sends back a sub-agent that ran no tool without failing; `off` reviews nothing. A sub-agent with no ticket passes the screen. `--done-review` and `TOFU_SERVE_DONE_REVIEW` win over it. The next turn reads the new value.
 - `agentSources`: a comma list, inside the project. The home directory gives only `~/.tofu/agents`, and the library is always read.
-- `projectManagement`: a spawn names a ticket, its owns become the sub-agent's paths and the sub-agent moves it to review.
+- `projectManagement`: `boardy`, the default: a spawn names a ticket, its owns become the sub-agent's paths and the sub-agent moves it to review. A project with no board gets one from the lead's `board_create`, or from tofu at the first spawn of a sub-agent that edits; `off` keeps no board.
 - `boardFlow`: jira says ticket, board, epic, sprint and points. linear says issue, team, project, cycle and estimate.
 - `scratchCleanupDays`: only a folder with no tofu running it is deleted, its processes stopped first.
 - `sessionStaleDays`: no activity means no new event, request or open. The deletion runs when the project's host starts or on `tofu session clean`. A session a kept one continues or branches from, the head and one open now are kept.

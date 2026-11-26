@@ -26,20 +26,13 @@ the chat, recorded as by agent.
 
 ## While you are away
 
-Away is a state of the session, not of a job. The orchestrator turns it on
-with its `cron` tool, action `away` and a reason, when you say you are
-leaving, going to sleep or away from the computer, and turns it off with
-action `back` when you say you are back; there is no command for it. Each
-change is a `cron` row in `tofu session trace`, with the reason, and a line
-in the chat: `the person is away, set by agent: <reason>`. It is kept in the
-session's `cron.json` under `away`, so a resumed session stays away. A job
-that fires while the session is away says so in its prompt, and its fire
-line shows `away: decides what can be undone`. To keep work going while you
-are gone, the orchestrator also makes a job that brings it back.
+Away is a state of the session, not of a job. The orchestrator turns it on with its `cron` tool, action `away` and a reason, when you say you are leaving, going to sleep or away from the computer, and turns it off with action `back` when you say you are back; there is no command for it. Each change is a `cron` row in `tofu session trace`, with the reason, and a line in the chat: `the person is away, set by agent: <reason>`. It is kept in the session's `cron.json` under `away`, so a resumed session stays away. A job that fires while the session is away says so in its prompt, and its fire line shows `away: decides what can be undone`. To keep work going while you are gone, the orchestrator also makes a job that brings it back.
 
 While the session is away, every turn acts away, whatever started it: a cron
 fire, a sub-agent's report, a shell notice or a check-in. `ask_person` opens
-no form: the call answers `person_away` and the recommended option stands.
+no form: the call answers `person_away` and the recommended option stands,
+except on a question marked `needs_yes`, where nothing is chosen and it
+waits on your answer.
 A sub-agent that reports its ticket not possible does not stop the work:
 tofu takes the recommended option, moves
 the ticket back, and writes `decided while the person was away`, the option

@@ -6,14 +6,7 @@ summary: how the lead puts a decision to you with options and a recommended one,
 
 ## What it is
 
-When only you can settle a short choice, such as which of two libraries to
-use, a name, a matter of taste, spending money or something that cannot be
-undone, the lead asks with the `ask_person` tool. The form is for choices
-whose options fit in a few words and that the chat already explained. A big
-or explanatory decision, a trade-off that needs paragraphs, or a plan to
-review is never a form: the lead writes it in its reply as prose with
-numbered options, and you answer in words. A decision is asked once, and the
-lead does not repeat a form's question or options in the chat.
+When only you can settle a short choice, such as which of two libraries to use, a name, a matter of taste, spending money or something that cannot be undone, the lead asks with the `ask_person` tool. The form is for choices whose options fit in a few words and that the chat already explained. A big or explanatory decision, a trade-off that needs paragraphs, or a plan to review is never a form: the lead writes it in its reply as prose with numbered options, and you answer in words. A decision is asked once, and the lead does not repeat a form's question or options in the chat.
 
 A call carries 1 to 4 questions. Each has:
 
@@ -26,28 +19,24 @@ A call carries 1 to 4 questions. Each has:
 - the option the lead recommends, for every type but `text`
 - `reversible`, set only when the recommended option can be undone later
   at little cost
+- `needs_yes`, set when nothing it asks may happen without your own answer:
+  it is never taken in auto, by the ask judge, by a timeout, by return or
+  while you are away, and its answer says nothing was chosen and it waits on
+  yours
 
-A question over these limits is refused back to the lead with the limit
-named, never cut. It is never a request to run a tool: approval belongs to
-the gate, and the two are kept apart. When a sub-agent reports its ticket
-not possible, tofu puts the decision to you once, as the same form: the
-ticket's reason and the recommended way with why as its context, and each
-way to go as a short label with what it means beside it. The lead is told
-the question is already with you and does not ask it again.
+A question over these limits is refused back to the lead with the limit named, never cut. It is never a request to run a tool: approval belongs to the gate, and the two are kept apart. When a sub-agent reports its ticket not possible, tofu puts the decision to you once, as the same form: the ticket's reason and the recommended way with why as its context, and each way to go as a short label with what it means beside it. The lead is told the question is already with you and does not ask it again.
 
 ## Where it lives
 
-In the chat the question is a form above the composer: each option with its
-description, the recommended one marked, and a row, other, for an answer in
-your own words. Up and down move, a digit or enter chooses, space toggles an
-option of a `multi`, and tab goes to the next question. Esc does nothing on
-the form; the last row, return, closes it with nothing chosen. On other,
-type the answer in the chat and press enter. When the options carry a
-preview, they are shown side by side, each option over its preview, so you
-compare what each one looks like. On a screen too narrow for columns of 24
-cells they stack, and the focused option's preview shows under it. On such a
-question, type a line in the chat and press enter: the focused option is
-chosen and the line goes with it as a note.
+In the chat the question is a form above the composer: each option with its description, the recommended one marked, and a row, other, for an answer in your own words. Up and down move, a digit or enter chooses, space toggles an option of a `multi`, and tab goes to the next question. Esc does nothing on the form; the last row, return, closes it with nothing chosen. On other, type the answer in the chat and press enter. When the options carry a preview, they are shown side by side, each option over its preview, so you compare what each one looks like. On a screen too narrow for columns of 24 cells they stack, and the focused option's preview shows under it. On such a question, type a line in the chat and press enter: the focused option is chosen and the line goes with it as a note.
+
+The form's header counts the questions, `1 of 2`, and the asks still waiting behind it, `· 2 more asks wait`. A form taller than its share of the screen scrolls with the focused option and says which rows it shows, `rows 4-12 of 20`.
+
+The chat row of an open question shows its header, the question, its
+context in a `Question context` card and `waiting for your answer in the
+form below`; the options are drawn only in the form. Once answered, the row
+folds to one line, such as `? Discount fix: you chose Round at the end`, or
+`you closed it: nothing chosen, and the question stays open` after return.
 
 The answer goes back to the lead as the tool's result under `ask`, and as a
 message under `auto`:
@@ -67,10 +56,9 @@ message under `auto`:
   `tofu docs serve`
 
 On `undelivered`, `person_away`, or a turn that stopped, the lead takes
-each recommended option, says which, and carries on. On return or `timed_out` it picks
+each recommended option but a `needs_yes` one, says which, and carries on. On return or `timed_out` it picks
 nothing for you, does nothing that depends on the answer, and does not ask
-again. Once answered, the chat keeps the question, its context, every option
-with its description, the recommended one and the one you chose. The tool
+again. The tool
 is not offered where nobody can answer: in `tofu run`, in a turn a cron job
 started, and in a sub-agent. A sub-agent asks the lead instead, and the lead
 may put the question to you naming it.
@@ -81,8 +69,10 @@ to 4 `options` of at most 120 bytes each and up to 5 `refs` of at most 200,
 such as `src/server.ts:12`, naming what it read rather than pasting it. An
 ask over any of these is refused whole, naming the field, its size and its
 cap, and nothing is sent. The lead reads the fields as written and what runs
-now, which lists only the running sub-agents and shells; its answer reaches
-the sub-agent cut to 1,000 bytes.
+now, which lists only the running sub-agents and shells, each line cut to 200
+characters and the whole list to 2,000, then counts the rest. The lead
+answers on its own prompt cache, and its answer reaches the sub-agent cut to
+1,000 bytes.
 
 Each message you type, between turns or while the lead works, is put to
 Jev's `request_open` question, beside the end of the lead's last reply and the

@@ -2,7 +2,7 @@
 title: Models and providers
 description: The classifier models tofu can use, the providers that serve them, how each is paid for, and how a build is pinned.
 order: 3
-updated: 2026-10-22
+updated: 2026-11-25
 ---
 
 The classifier is a role, `classifier`, bound to one model the way the lead
@@ -19,11 +19,13 @@ Bind the one you pay for, `tofu models bind classifier typesafe/jev-latest`,
 and every classifier call goes through that provider and no other. With
 nothing bound the gate is off, and tofu says so: `the gate is off because no
 classifier is bound`, naming any classifier key already stored. The key
-counts whether it is stored, in the environment or in `.env`. When the bound
-provider cannot answer, a tool call Jev would have judged is never run on a
-guess: under `gatePrompt auto` it is refused with the reason, and under `ask`
-it is put to you. `tofu login --status` names Jev's route and the build it
-is pinned to.
+counts whether it is stored, in the environment or in `.env`. A provider
+that holds a key but is not bound is never asked. When the bound provider
+cannot answer, the cheapest model of your plan judges the call, and when it
+cannot either, the policy's regex arm decides: a call it allows runs, and a
+call it refuses is refused with the reason under `gatePrompt auto` and put to
+you under `ask`. See [The gate](/docs/features/gate). `tofu login --status`
+names Jev's route and the build it is pinned to.
 
 A classifier tofu does not ship is one `.json` file in
 `~/.tofu/models/classifiers/` or a project's `.tofu/models/classifiers/`,

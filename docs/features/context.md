@@ -2,7 +2,7 @@
 title: Context
 description: How tofu keeps a conversation small and cheap to resend, from the cached prompt prefix to forks that carry the conversation and point back at every call.
 order: 5
-updated: 2026-10-24
+updated: 2026-11-25
 ---
 
 Everything the model sees on a step is resent on the next one. tofu manages
@@ -19,7 +19,7 @@ judgment:
 | **Browser pages** | Past 4 whole page snapshots in a conversation, older ones shrink to a 600 byte summary and a handle, keeping 2 whole |
 | **Cache-aware trim** | When the conversation crosses the target, results the model has already read are shrunk to a handle only where the cache allows it, and only when that brings the conversation down to 80% of the target; otherwise the fork takes it |
 | **Forks and their carry** | Past the target, the session ends whole and a new one starts with the task once, the episode view of the conversation, every message you typed, word for word, and a list of what was read, each naming the call that holds it |
-| **Recall** | `lookup` returns any call the carry names, with its result, from any session of the line; `artifact_fetch` reads any range of any handle |
+| **Recall** | `history` in mode `lookup` returns any call the carry names, with its result, from any session of the line; `artifact_fetch` reads any range of any handle |
 | **Pictures** | A picture a tool read counts as 1,600 tokens, only the newest 20 are sent, and a shrink drops pictures, oldest first, before any text |
 
 **A full window** is recovered in the turn. When the model says a request is
@@ -74,12 +74,12 @@ call clears the memo, so a cached answer is never stale.
 **Forks carry the conversation, and point back for the rest.** A fork
 carries the [episode view](/docs/features/memory): the whole conversation
 of the project as summary lines, recent ones whole, that the lead opens
-with `zoom` down to the original message. It is already built, so a fork
+with `history` in mode `zoom` down to the original message. It is already built, so a fork
 makes no model call. With `episodes` off, the model writes at the fork, on
 your own subscription, where the work stands instead: the goal, what was
 decided, what is done and half done, and what comes next. The carry holds
 that, and a list of what was read, each line
-naming the call that holds it; `lookup` brings back exactly that call and its
+naming the call that holds it; `history` in mode `lookup` brings back exactly that call and its
 result, from this session or any earlier one of the line, so a file or a
 script is pointed at rather than copied. The task is sent once, and the
 carried steps go without their thinking, so the next turn reads its cache.
@@ -115,7 +115,8 @@ its first request, so the whole history is never sent first.
 sentence you wrote with `standing_order@1`, and the carry keeps as a
 standing order each one that gives a lasting instruction about how to
 work; with no classifier bound a fixed word list decides, and each answer
-is a ledger row. The carry also holds whole the files the lead read and
+is a ledger row. Each sentence is asked once, and at most 24 are asked in a
+session, so a long session does not repeat the same questions. The carry also holds whole the files the lead read and
 left unchanged, and `tofu session trace <name> --kind fork` names them.
 
 ## Watching and changing it
@@ -143,7 +144,8 @@ left unchanged, and `tofu session trace <name> --kind fork` names them.
   it, and `tofu context` with no session yet prints the cap the next turn
   takes.
 - **Read back a stored result**: the model calls `artifact_fetch` with the
-  handle, an offset and a length, or `lookup` with a call id from a fork's
+  handle, an offset and a length, or `history` in mode `lookup` with a call
+  id from a fork's
   carry. You don't need to.
 - **Free room before the next turn**: type `/compact` in the app. The system
   prompt, the tools and every message before the newest 8,000 tokens stay

@@ -2,7 +2,7 @@
 title: What a classifier is
 description: A small model that answers typed questions at a decision point, how its answers become allow, ask or deny, and why most points stay in shadow.
 order: 1
-updated: 2026-10-09
+updated: 2026-11-25
 ---
 
 A classifier is a small model that answers a fixed set of typed questions
@@ -73,7 +73,7 @@ tool_gate · 2026-09-26-61ea7fbe65152513c4e7c5298c7ec713 · 8d 6h ago      ✓ A
     0             ▓▓▓▓▓▓▓▓▓▓▓▓ 100%
   user_requested  ▓░░░░░░░░░░░   7%
 
-  threshold    risk 0.00 vs risk_ask_at 1.50 · tool_gate@3
+  threshold    risk 0.00 vs risk_ask_at 1.50 · tool_gate@6
   mode         shadow
   build        typesafe/jev-1.13-20260917
 ```

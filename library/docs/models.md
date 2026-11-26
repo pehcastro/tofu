@@ -27,7 +27,7 @@ three. `thinkingSummary` picks the thinking a request asks for: `summarized`,
 the default, or `omitted`, the body Claude Code and codex send. A spawn asking
 for an effort the model lacks runs at the nearest one it has.
 
-While text streams, the footer shows the output rate, such as `128.4 tok/s`, weighted to the last 20 seconds and blank during a tool call or under 200 tokens or 4 seconds; after a request, its output tokens over send to last byte.
+While text streams, the footer shows the output rate, such as `128.4 tok/s`, weighted to the last 20 seconds, the way [oh-my-pi](https://github.com/can1357/oh-my-pi) counts it, and nothing under 200 tokens or 4 seconds; after a request it keeps that request's rate, its output tokens over send to last byte, in grey through its tool calls and the next request. While sub-agents stream, `sub-agents 412.0 tok/s` beside it sums their rates, and drops when the footer has no room.
 
 ## Where it lives
 

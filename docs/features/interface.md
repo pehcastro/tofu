@@ -2,7 +2,7 @@
 title: The interface
 description: "The tofu app in the terminal: four tabs, a command palette, and a composer that keeps working while the model does."
 order: 10
-updated: 2026-10-24
+updated: 2026-11-25
 ---
 
 Run `tofu` in a project to open the app. Four tabs hold the work, and `/` with a tab's name opens it:
@@ -26,10 +26,20 @@ every call is one tab away. While the lead works, the row says what it does
 now and counts the steps, such as `running bash · (56) steps · 3 agents`;
 once it settles, it reads `finished · (70) steps · 3 agents · 32m 12s`. A
 commit, a push and a ticket created or moved each get one line of their own,
-such as `▣ DASH-350 · moved todo > doing`; every other call is only counted.
-Click the row or press `Ctrl+O` and it lists those calls under it, with
-`collapse` to fold it again.
-Sub-agents share one row per status, such as `working · [&ada], [&bo]`. An
+such as `◆ 3f2a91c · fix the parser` or `▣ DASH-350 · moved todo > doing`;
+every other call is only counted, and a move that changed nothing draws no
+line. Click the row or press `Ctrl+O` and it lists those calls under it,
+with `collapse` to fold it again.
+Running sub-agents share one row per status, `working`, `waiting for answer`
+or `reopened`, such as `working · [&ada], [&bo]`, and one that finished
+leaves the row.
+
+The line under the chat says what the lead is doing, for how long, and the
+request it is on: `requesting`, `thinking`, `working`, `spawning`, `waiting`
+on you or `stopping`, such as `thinking  |  12s  [request#c1a2b3]`. While
+the lead is idle and sub-agents run, it reads `waiting  |  3 sub-agents · 2 in
+bash`, and once none runs, `reading the reports`. After a turn it says how long the turn took and how long it waited
+on the model's first replies, such as `cooked for 3s  |  waited 1s`. An
 answer streams without stutter and is never cut in two: a code block draws
 plain while it is typed and gets its colours when its closing fence arrives.
 
@@ -107,10 +117,12 @@ when something changed, and the welcome animations share one clock.
   quota](/docs/llms/quota).
 - **See how fast the model writes**: while text streams, the footer shows
   the output rate, such as `128.4 tok/s`. It counts the last 20 seconds
-  most, the way oh-my-pi does, and reads blank during a tool call and
-  under 200 tokens or 4 seconds of output. After the request it shows the
-  request's own rate: output tokens over the time from send to the last
-  byte.
+  most, the way [oh-my-pi](https://github.com/can1357/oh-my-pi) does, and
+  shows nothing under 200 tokens or 4 seconds of output. After the request
+  it keeps the request's own rate in grey, output tokens over the time from
+  send to the last byte, through its tool calls and the next request.
+  While sub-agents stream, `sub-agents 412.0 tok/s` beside it sums their
+  rates, and drops when the footer has no room.
 - **Leave it in another tab**: tofu reports working, waiting on you, done or
   failed to the terminal over OSC 7501, so a terminal that shows it tells
   you when a turn needs you. See [Program status](/docs/features/status).
@@ -122,7 +134,8 @@ when something changed, and the welcome animations share one clock.
   that long, and the call says so on the sub-agents tab too.
 - **Point at a message**: each message shows the id it was recorded under,
   such as `[message#9c2d40]`. Type it in a prompt and the lead quotes that
-  message.
+  message: its words arrive with your prompt in a `quote` notice, so the
+  lead answers from them without looking them up.
 - **Open on the last session**: `tofu --continue`.
 - **Go back to any session without leaving**: `/resume` lists this
   project's sessions, newest first, with the one in use marked. Type a word

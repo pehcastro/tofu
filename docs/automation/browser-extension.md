@@ -2,12 +2,13 @@
 title: Browser extension
 description: A Chrome extension and a native host that let tofu read and drive your own browser, with your logins.
 order: 1
-updated: 2026-10-29
+updated: 2026-11-25
 ---
 
 A small Chrome extension, shipped inside the tofu binary, and a relay. When
 Chrome starts the extension, it starts `tofu-browser`, a copy of tofu, as a
-native messaging host, `com.ephem.tofu`, which listens on
+[native messaging](https://developer.chrome.com/docs/extensions/develop/concepts/native-messaging)
+host, `com.ephem.tofu`, which listens on
 `~/.tofu/browser/relay.sock`. A tofu
 session reaches your browser through that socket, and the browser tools are
 its only users. Nothing goes through a server.

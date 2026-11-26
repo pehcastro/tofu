@@ -2,7 +2,7 @@
 title: Memory
 description: Tell tofu once. Memory keeps what you asked it to remember in four scopes, and the episode log keeps the whole conversation of a project, summarized as a tree the lead can open line by line.
 order: 14
-updated: 2026-10-24
+updated: 2026-11-25
 ---
 
 Memory keeps two things for you across sessions. **Entries** are the short
@@ -85,8 +85,8 @@ the two lines it was made from, down to the original message.
 
 tofu implements that tree as it is written: an append-only log, nodes of at
 most 512 bytes named `id+n` (the first item and how many it covers), a view
-saved to disk and never rebuilt on restart, and the model tools `zoom` and
-`recall`, with OptChat's rule that the lead zooms until it has a line whole
+saved to disk and never rebuilt on restart, and the `history` tool's modes
+`zoom` and `recall`, with OptChat's rule that the lead zooms until it has a line whole
 before it acts on it. Where tofu departs:
 
 - **Sessions still exist.** tofu keeps sessions and forks, and the episode
@@ -97,7 +97,12 @@ before it acts on it. Where tofu departs:
   resume keeps the view it had, so its cached prompt holds.
 - **No tool output in the log.** Episodes hold your words, the lead's
   replies and sub-agent reports. A tool result keeps its handle, which
-  `lookup` and `artifact_fetch` read back exactly.
+  `history` in mode `lookup` and `artifact_fetch` read back exactly.
+- **The memory model fits its window.** A pass sends the memory model only
+  what its context window holds: older lines of the chat are left out, and
+  an item too big for the window is cut in its middle, saying how many
+  bytes. An item over 8 KiB is cut the same way before it reaches the
+  model.
 - **One call per pass, and names kept.** Every summary a pass of the tree
   needs, from `tofu memory tree` or the episode log after a reply, goes out
   in one batched call to the memory model. A summary that drops a name its
@@ -110,7 +115,7 @@ before it acts on it. Where tofu departs:
   answer, so a summary never delays a reply, and never on the classifier
   key. Its calls read their own shared part from cache.
 - **Entries get the same tree.** Each of the four scopes is its own log,
-  tree and view, so `zoom` and `recall` work on entries as well as
+  tree and view, so the `zoom` and `recall` modes work on entries as well as
   episodes, and `recall [tool#9da86e]` returns that call's record, from
   this session or any it was forked from. Every tool result opens with its
   `[tool#9f046f]` reference, 15 bytes written once, so the lead names an

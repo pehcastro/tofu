@@ -2,7 +2,7 @@
 title: Cron, loops and goals
 description: One scheduler posts a prompt into your session on a timer or after each turn, and every change to a job is kept as a version with its reason.
 order: 11
-updated: 2026-10-24
+updated: 2026-11-25
 ---
 
 A cron job is a prompt tofu posts into your session by itself: on a timer,
@@ -58,7 +58,8 @@ report, a shell notice or a check-in.
 
 - **No form opens.** A call to `ask_person` answers `person_away`, the
   chat shows `answered as person_away`, and the lead takes the option it
-  recommended.
+  recommended. A question marked `needs_yes` is the exception: nothing is
+  chosen, and it waits on your answer when you are back.
 - **A sub-agent's question is decided.** When a sub-agent reports its ticket
   not possible, tofu takes the option it recommended and the ticket goes back
   to work. The ticket's Log and its question say it was `decided while the

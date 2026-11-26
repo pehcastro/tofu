@@ -2,7 +2,7 @@
 title: Sub-agents
 description: You talk to one lead. It plans, splits the work, and checks it. Sub-agents write the code in the background, each in its own paths and with the rules for its language.
 order: 2
-updated: 2026-11-02
+updated: 2026-11-25
 ---
 
 You talk to one model, the **lead**. The lead does not write the code. It
@@ -74,7 +74,7 @@ saying why, and the lead goes on. The advisor runs on the model its row in
 assign it another. Each plan set costs that model one request, which the
 trace shows under `--kind request` as the advisor's, and the session's cost
 counts it like any sub-agent's. The idea
-comes from the advisors in oh-my-pi, which watch a primary agent and write
+comes from the advisors in [oh-my-pi](https://github.com/can1357/oh-my-pi), which watch a primary agent and write
 notes beside it; tofu's reads only the plan, against your words.
 
 To turn it off: `tofu settings set planAdvisor off`.
@@ -173,7 +173,8 @@ When idle, each kind wakes it differently:
   once rather than at every call. A lead turn that only answers asks ends
   without a chat message. The sub-agent waits up to 5 minutes, and with no
   answer the call is refused. The call's arguments are cut
-  to 4 KB, and `lookup` with the call id shown returns it whole. A call that
+  to 4 KB, and `history` in mode `lookup` with the call id shown returns it
+  whole. A call that
   stays inside the sub-agent's scratch folder runs without asking the lead. A PreToolUse hook's ask goes
   to the lead the same way. A sub-agent's own sub-agent
   asks the sub-agent that started it.
@@ -218,10 +219,11 @@ its logs, captures and probes. It writes and deletes there with no paths held
 and no ask, and nothing it writes there reaches the repository. See
 [Scratchpad](/docs/features/scratchpad).
 
-With `projectManagement` set to `boardy` and a board in the project, the lead
-spawns a sub-agent with `ticket: DEMO-2` rather than owns. A project with no
-board gets neither the board rules nor the ticket tools until `tofu boardy
-init` makes one. The ticket's owns become the sub-agent's paths, the
+With `projectManagement` on `boardy`, the default, and a board in the
+project, the lead spawns a sub-agent with `ticket: DEMO-2` rather than owns.
+A project with no board gets `board_create` and the rule `board_start`
+instead, and tofu makes the board at the lead's first spawn of a sub-agent
+that edits, if the lead has not. The ticket's owns become the sub-agent's paths, the
 ticket is assigned to `<session>/DEMO-2` and moves to doing, and the
 sub-agent logs its evidence and moves the ticket to review itself. Every shell
 tofu starts carries `TOFU_SESSION`, so `tofu boardy` run there acts as that

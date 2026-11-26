@@ -20,7 +20,7 @@ A move to done is refused while an acceptance line in force has no evidence entr
 
 Status is a field: triage, backlog, todo, doing, review, done, dropped, needs-decision with a question, or blocked with a reason. Numbers come from the board's counter under a file lock, and every ticket write takes that ticket's lock, so two processes never get one number or write one file at the same time.
 
-The setting `boardFlow` picks the words: `jira` (the default) says ticket, board, epic, sprint and points; `linear` says issue, team, project, cycle and estimate. Only the words change. The setting `projectManagement` is `off` by default; `boardy` turns the board on for the rest of tofu.
+The setting `boardFlow` picks the words: `jira` (the default) says ticket, board, epic, sprint and points; `linear` says issue, team, project, cycle and estimate. Only the words change. The setting `projectManagement` is `boardy` by default, so the lead and its sub-agents work from board tickets; `off` keeps owns a grant per spawn, with no board. In a project with no board, the lead gets `board_create` and the rule `board_start`: before its first edit or spawn on work that spans folders, splits into pieces or goes to a sub-agent, it makes the board, with a key from the last word of the project's name such as `LANG` for `project-lang` and the shipped board hooks, manages it, and tells you in one line. When it has not, tofu makes the board at the lead's first spawn of a sub-agent that edits, and the chat says `made the board LANG for this project's work, since it had none: tofu boardy list --board LANG`. A question, a read or a change to a few files in one folder needs no board. `tofu settings` says `no board yet, so the lead makes one when it first spawns a sub-agent that edits` until then.
 
 ## Where it lives
 
@@ -53,37 +53,20 @@ The board folder counts as the project's own tickets when a tool writes there, n
 
 ## Agents on the board
 
-With `projectManagement` set to `boardy`, every agent gets `ticket_read`,
+With `projectManagement` on `boardy`, every agent gets `ticket_read`,
 `ticket_log`, `ticket_ask`, `ticket_request` and `ticket_move`; a session
 that manages a board also gets `ticket_create`, `ticket_assign` and `ticket_list`, and an
 agent that manages nothing gets `ticket_not_possible`. An agent's `ticket_move` offers only review, and only for its own ticket.
 
 `ticket_not_possible` is how an agent says its own ticket cannot be done as asked. It takes a `reason`, what cannot be done and how the agent knows, and two to four `options` with the one it `recommend`s and `why`. A report with no reason is refused back to the agent, naming the reason. The ticket gets a question, `not possible as asked: <title>`, with the reason as its eli5, and moves from doing to needs-decision. Until the person answers that question in catch up, a move of the ticket by anyone but the person is refused, the lead's included, and so is an answer the lead writes for them. The hold covers the lead's shell too: `tofu boardy move` run under the harness is refused the same way. The reported entry's verdict is `not possible`, and tofu puts the question to the person in the chat in the same turn as the report, whether or not the lead calls `ask_person`; the choice made there is written to the ticket as the person's answer.
 
-A spawn names a ticket by id. Its owns become the sub-agent's paths, the
-ticket is assigned to the sub-agent and moves to doing, and the ticket id
-rides on the sub-agent's row, so `--continue` keeps it. The skills a ticket
-names, `tofu boardy new --skills minify,debug` or `tofu boardy set <id> --skills
-minify`, load into the sub-agent's prompt beside the skills its definition
-names, through the same loader and once each, and the session trace says
-`skill minify loaded · the ticket DEMO-1 names it`. A name no project, home or
-library skill carries is refused when the ticket is written, listing the skills
-that exist, and `set --skills ""` clears the list. A sub-agent restored after
-its host restarts reads the ticket again and keeps them. The contract reads
-the ticket by that id and its last acceptance revision, never the first
-ticket-shaped word in the brief. The spawn and the report, with the files
-the sub-agent wrote, land on the ticket's thread, and so does a
-`ticket_ask`. `ticket_create` takes `parent` to make a sub-ticket and `skills` with the same check as `--skills`, and asks for `before`, `driven`, `still_works`, `error_case` and, for a visual or platform effect, `feasibility`.
+A spawn names a ticket by id. Its owns become the sub-agent's paths, the ticket is assigned to the sub-agent and moves to doing, and the ticket id rides on the sub-agent's row, so `--continue` keeps it. The skills a ticket names, `tofu boardy new --skills minify,debug` or `tofu boardy set <id> --skills minify`, load into the sub-agent's prompt beside the skills its definition names, through the same loader and once each, and the session trace says `skill minify loaded · the ticket DEMO-1 names it`. A name no project, home or library skill carries is refused when the ticket is written, listing the skills that exist, and `set --skills ""` clears the list. A sub-agent restored after its host restarts reads the ticket again and keeps them. The contract reads the ticket by that id and its last acceptance revision, never the first ticket-shaped word in the brief. The spawn and the report, with the files the sub-agent wrote, land on the ticket's thread, and so does a `ticket_ask`. `ticket_create` takes `parent` to make a sub-ticket and `skills` with the same check as `--skills`, and asks for `before`, `driven`, `still_works`, `error_case` and, for a visual or platform effect, `feasibility`.
 Evidence names the line it proves with `line`, a move to review names lines left for the lead with `leave`, and `evidence_at_review` refuses review while a line is unmet. The report is one entry: the engineer's last words in two sentences at most, a `verdict` (done, done with concerns, blocked, needs you or not possible), and each line as met, unmet or not mine to prove.
 
 With no managers the lead manages the board as the lead, never as you, with
 `board_rule`, `epic`, `sprint`, `milestone`, `triage`, and `epic` and `sprint` on `ticket_create`.
 
-The rules `board_lead` and `board_sub_agent` ship off and switch on with
-the setting in a project that has a board, and `tofu rules list` says
-`off until the project has a board: tofu boardy init` until then. With
-them on the lead closes every review oldest first from its Log, code and
-commit, drops or merges a dead ticket with a pointer, and batches drives.
+The rules `board_lead` and `board_sub_agent` ship off and switch on with the setting in a project that has a board, and `tofu rules list` says `off until the project has a board: tofu boardy init` until then, while `board_start` runs instead. With them on the lead closes every review oldest first from its Log, code and commit, drops or merges a dead ticket with a pointer, and batches drives.
 
 ## Check it
 

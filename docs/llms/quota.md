@@ -2,7 +2,7 @@
 title: Subscription quota
 description: How full each subscription's windows are and when they reset, read from replies tofu already gets, shared by every tofu process, and never blank after a refusal.
 order: 5
-updated: 2026-10-24
+updated: 2026-11-25
 ---
 
 `tofu usage` shows each signed-in subscription account, its quota windows,
@@ -15,7 +15,9 @@ tofu moves to an account with room when one runs out.
 
 **Most readings are free.** The vendor puts the window figures on every
 model reply, so each turn refreshes the reading with no extra request. tofu
-asks the vendor's usage endpoint only when it holds no fresh reading.
+asks the vendor's usage endpoint only when it holds no fresh reading. The
+app's footer reads the shared reading again every 5 minutes, between turns
+too, so its percentage stays current while you are not working.
 
 **One reading for every process.** Every tofu on the machine, the app, `tofu
 serve` and the desk, shares one cache in `~/.tofu/quota/latest/`, with a

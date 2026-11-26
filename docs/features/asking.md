@@ -2,7 +2,7 @@
 title: Asking you
 description: When only you can settle something, the lead asks with options and a recommended one, and the work keeps going while you decide. Approvals for a tool call are a separate card with five answers.
 order: 16
-updated: 2026-11-16
+updated: 2026-11-25
 ---
 
 When a short choice is yours, such as which of two libraries to use, a name,
@@ -52,6 +52,11 @@ recommended options are taken without showing the form. Those rows are
 written with mode `enforced`, since their verdict decides, and the outcome
 reads `taken_in_auto`.
 
+**A question that needs your yes waits for it.** The lead marks such a
+question `needs_yes` when nothing it asks may happen without your own answer.
+It is never taken in auto, by the ask judge, by a timeout, by **return** or
+while you are away: its answer says nothing was chosen and it waits on yours.
+
 **A recommendation is always there.** Every question but a free-text one
 carries the option the lead would pick. When the turn stops, or when nobody
 can be asked, the lead takes that option, says which, and carries on.
@@ -66,7 +71,9 @@ as a short label with what it means beside it. The lead is told it is already wi
 **It is offered only where someone can answer.** `ask_person` doesn't exist
 in `tofu run`, in a turn a cron job started, or in a sub-agent. A
 sub-agent asks the lead instead, and the lead may put the question to you
-with the sub-agent named.
+with the sub-agent named. While you are away, no form opens: the call
+answers `person_away` and the recommended option stands, except on a
+`needs_yes` question. See [Scheduled work](/docs/features/cron).
 
 **Every question is a ledger row** at the decision point `ask`, so `tofu
 why` shows each question the lead put to you.
@@ -85,8 +92,23 @@ limit named, never cut. In the form:
 - `Esc` does nothing, so a stray key never answers for you.
 - **return** closes the form with nothing chosen.
 
-Once answered, the chat keeps the question, its context, every option with
-its description, the recommended one and the one you chose.
+The form's header counts the questions, `1 of 2`, and the asks still waiting
+behind it, such as `· 2 more asks wait`. A form taller than its share of the
+screen scrolls with the focused option and says which rows it shows, such
+as `rows 4-12 of 20`.
+
+While a question is open, its chat row shows the header, the question, its
+context in a **Question context** card and `waiting for your answer in the
+form below`; the options are drawn only in the form. Once answered, the row
+folds to one line:
+
+```text
+? Discount fix: you chose Round at the end
+```
+
+A question closed with **return** reads `you closed it: nothing chosen, and
+the question stays open`, and one with no answer in time reads `no answer
+yet: nothing chosen, and the question stays open`.
 
 Options that carry a preview show side by side with the focused option's preview, and stack one under another when the screen is too narrow. A note typed in the chat goes with the option chosen.
 
@@ -122,8 +144,10 @@ folder below the root runs without asking. The card takes five answers:
 A standing answer from `3` or `4` decides each later call on that target
 unasked and writes a `standing` row to the ledger. It is kept beside the
 session and read back after a restart or `tofu --continue`, and it never
-applies in another session. When Jev can't answer at all, the
-call fails closed: refused with the reason in auto, put to you in ask.
+applies in another session. When Jev can't answer at all, the policy's
+regex arm decides: a call it allows runs, and one it refuses, such as an
+`rm -rf` or a force push you did not ask for, is refused with the reason in
+auto and put to you in ask. See [The gate](/docs/features/gate).
 
 **A sub-agent's ask goes to the lead, not to you,** with the call, Jev's
 verdict and its risk. Under `auto`, a call whose every target sits inside

@@ -26,7 +26,7 @@ conversation under them, both in the loop rather than in the model:
   the task, a carry of what was done and read, and the newest steps word
   for word. It comes when the conversation crosses the target and the trim
   would not bring it under, and it always works on the history the last
-  step sent, untrimmed. Jev's `standing_order@1` picks which of your sentences the carry keeps as standing orders, a word list with no classifier bound, and the carry holds whole the files the lead read and left unchanged.
+  step sent, untrimmed. Jev's `standing_order@1` picks which of your sentences the carry keeps as standing orders, a word list with no classifier bound, asking each sentence once and at most 24 a session, and the carry holds whole the files the lead read and left unchanged.
 
 A sub-agent's fork asks the model for its working state first. That
 request is the last step's history plus one question, so the provider

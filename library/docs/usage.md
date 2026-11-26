@@ -6,13 +6,7 @@ summary: how tofu reads each subscription's 5 hour and 7 day windows, shares one
 
 ## What it is
 
-`tofu usage` prints each signed-in subscription account, its quota
-windows, how full each one is and when it resets. A Claude subscription
-has a 5 hour and a 7 day window, and sometimes a 7 day window for one
-model; a ChatGPT subscription has the windows its plan carries. The app
-shows the fullest window in its footer, and `tofu serve` answers the same
-reading in `query.usage` and pushes it as `quota.updated`. `tofu usage`
-checks every account at once, not one after another.
+`tofu usage` prints each signed-in subscription account, its quota windows, how full each one is and when it resets. A Claude subscription has a 5 hour and a 7 day window, and sometimes a 7 day window for one model; a ChatGPT subscription has the windows its plan carries. The app shows the fullest window in its footer and reads it again every 5 minutes, between turns too, and `tofu serve` answers the same reading in `query.usage` and pushes it as `quota.updated`. `tofu usage` checks every account at once, not one after another.
 
 A new turn keeps the account that served the last one while the lead's prompt cache there lives
 (`leadCache`, 1h by default), so the cache is read rather than written again. Past that it takes the

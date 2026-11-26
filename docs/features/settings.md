@@ -2,13 +2,13 @@
 title: Settings and reload
 description: Two settings files, the project over yours, read again at every task, searchable in the app.
 order: 8
-updated: 2026-11-01
+updated: 2026-11-25
 ---
 
 A setting is a named switch with a default, like `gatePrompt` or
 `subAgentsPerTurn`. You write only the ones you change, in
 `~/.tofu/settings.json` for every project or `.tofu/settings.json` for one.
-The project wins over yours, and yours over the default. 72 settings sit in
+The project wins over yours, and yours over the default. 73 settings sit in
 nine groups: Appearance, Models & roles, Interaction, Context, Files, Shell,
 Turn, Projects and Browser. Models & roles holds where work continues when a
 subscription runs out, and Projects holds boardy, the ticket board, and the
@@ -39,8 +39,10 @@ every gate, and only a call it denies is refused. A call it would ask about
 runs and shows in the chat with its verdict, and every decision is a row
 `tofu why` reads, so nothing happens out of sight. The model changing a
 setting always waits for you, so it can never turn its own gate off. When
-Jev can't answer, the call is refused with the reason rather than run on a
-guess. A question the lead asks you with options doesn't stop the work
+Jev can't answer, the cheapest model of your plan judges the call, and past
+it the policy's regex arm: a call it allows runs, and one it refuses, such
+as an `rm -rf`, is refused with the reason. See
+[The gate](/docs/features/gate). A question the lead asks you with options doesn't stop the work
 either: with no answer in `askPersonWaitSeconds`, 300 by default, the lead
 is told none came, nothing is chosen for you, and the question stays open. See
 [Asking you](/docs/features/asking).
@@ -68,27 +70,42 @@ tofu settings
 
 ```text
 Turn
-    decisionCap             0                                default
-    turnMaySpawn            true                             default
-    oneWorkingSessionPerProject true                         default
-    planEveryStep           true                             default
-    sideChatAccess          read                             default
-    subAgentsPerTurn        10                               default
-    subAgentDepth           2                                default
-    leadCache               1h                               default
-    subAgentCache           1h                               default
-    subAgentCheckSeconds    1800                             default
-    subAgentWatchSeconds    600                              default
-    verifySubAgents         true                             default
-    doneReview              screen                           default
-    agentSources            tofu,agents,claude               default
+    decisionCap                  0                   default
+    turnMaySpawn                 true                default
+    oneWorkingSessionPerProject  true                default
+    planEveryStep                true                default
+    planAdvisor                  shadow              default
+    sideChatAccess               read                default
+    subAgentsPerTurn             10                  default
+    subAgentDepth                2                   default
+    leadCache                    1h                  default
+    subAgentCache                1h                  default
+    subAgentCheckSeconds         1800                default
+    subAgentWatchSeconds         600                 default
+    verifySubAgents              true                default
+    doneReview                   screen              default
+    agentSources                 tofu,agents,claude  default
+
 Projects
-    projectManagement       off                              default, off until the project has a board: tofu boardy init
-    boardFlow               jira                             default
-    scratchCleanupDays      7                                default
-    scratchMaxGB            50                               default
-    scratchRoots            empty                            default
+    projectManagement            boardy              default, no board yet, so
+      the lead makes one when it first spawns a sub-agent that edits
+    boardFlow                    jira                default
+    scratchCleanupDays           7                   default
+    scratchMaxGB                 50                  default
+    scratchRoots                 empty               default
 ```
+
+`projectManagement` is `boardy` by default: the lead and its sub-agents work
+from board tickets. A project with no board yet gets one when the lead
+calls its `board_create` tool, or at the latest when it first spawns a
+sub-agent that edits, and `tofu boardy init` makes one by hand. `off` keeps owns a grant per spawn,
+with no board. See [Boardy](/docs/features/boardy).
+
+`planAdvisor` on `shadow`, the default, has the advisor sub-agent read each
+plan the lead sets against your words and write what is missing or extra to
+the trace, where the lead never sees it; `tofu session trace --kind advisor`
+reads it. `off` runs none. The advisor follows the advisors of
+[oh-my-pi](https://github.com/can1357/oh-my-pi).
 
 `oneWorkingSessionPerProject` keeps one working session per project:
 while one session in the project is working, another session that

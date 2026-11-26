@@ -1,8 +1,8 @@
 ---
 title: Agents
-description: "An agent is a Markdown file that defines a sub-agent: its model, tools, references and gate. tofu brings seven."
+description: "An agent is a Markdown file that defines a sub-agent: its model, tools, references and gate. tofu brings thirteen."
 order: 3
-updated: 2026-10-04
+updated: 2026-11-25
 ---
 
 An agent file defines a sub-agent the lead can spawn. Its front matter says
@@ -17,13 +17,30 @@ what the agent is for and how it runs; its body is the agent's instructions.
 | `tools` | The tools it may use; left out, all of the lead's |
 | `references` | Library references placed whole in its prompt, up to 16,384 bytes |
 | `language`, `gate` | For a language agent: its language and the checks it must pass |
+| `matches` | File names or globs the agent claims beside its language, such as `go.mod, go.sum` |
 
 ![go-dev-1 at work, its tool calls in the sub-agents feed](./media/tui-subagents.png)
 
-tofu brings seven: `go-dev`, `py-dev`, `rust-dev` and `ts-dev` write code
-under a gate; `qa` verifies a change and files what is wrong; `research`
-answers numbered questions on the `@worker` tier; `browser` does one
-browsing task in a tab of tofu's own.
+tofu brings thirteen:
+
+- `go-dev`, `py-dev`, `rust-dev`, `ts-dev` and `zig-dev` write code under a
+  gate
+- `qa` verifies a change and files what is wrong
+- `review` reads a turn's changes in a fresh context and reports what is
+  wrong with them, before you see the work
+- `research` answers numbered questions on the `@worker` tier
+- `browser` does one browsing task in a tab of tofu's own
+- `advisor` reads each plan the lead sets against your words, in shadow,
+  while `planAdvisor` is `shadow`
+- `hunter`, `skeptic` and `referee` are the three roles of `/hunt`: one
+  finds defects, one challenges them, one rules on both
+
+**A spawn that names no agent is routed by its paths.** It runs as the one
+agent that claims every source path in its owns, its ticket's owns or, with
+neither, the paths its task names, by language or by `matches`, and the
+trace says `it runs as go-dev because go-dev claims every source path it
+owns`. When no agent claims them, it runs on the lead's model with the tools
+of the shipped `unnamed` list.
 
 ## Why tofu brings its own agents
 

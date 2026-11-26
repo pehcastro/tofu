@@ -68,5 +68,9 @@ A `manual` skill loads only through the skill tool or a sub-agent's `skills`
 list. Any other `trigger` value keeps the skill out of the list, and tofu
 names the file and the allowed values once per session.
 
-The host's `skills` query answers with `active`: each skill active in the
-lead's conversation, what loaded it, and when.
+`/skill off` works in the lead's chat, and on a skill that is not active it
+changes nothing and says so.
+
+The host's `query.skills` answers with `skills`, every skill offered,
+`active`, each skill active in the lead's conversation with what loaded it and
+when, and `warnings`, each skill left out and why.

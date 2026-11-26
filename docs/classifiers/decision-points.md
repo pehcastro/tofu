@@ -2,7 +2,7 @@
 title: Decision points
 description: Each place tofu can ask a classifier, what it decides, whether it is live or in shadow, and why.
 order: 2
-updated: 2026-11-01
+updated: 2026-11-25
 ---
 
 A decision point is one choice in the loop that a classifier can make. One
@@ -79,7 +79,7 @@ in:
 rules
   ✓ library       project · 9 of 9 points
   ○ 8 points      shadow · thresholds from the rule
-    gate tool_gate@3
+    gate tool_gate@6
   ⚠ shell_sift@1  shadow · no lock file for shell_sift@1 at build
     typesafe/jev-1.13-20260917
 ```

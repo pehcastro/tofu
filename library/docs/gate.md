@@ -14,9 +14,8 @@ A call on a shell tofu itself started is allowed without asking jev. The `gatePr
 - `auto`, the default: an allow or an ask runs and is recorded, a deny is
   refused. `tofu session trace` marks such an ask `allowed by gatePrompt auto`.
 - `ask`: an ask waits for you: 1 allow once, 2 deny, 3 always here, 4
-  never here, 5 cancel, which also stops the turn. When jev cannot answer
-  you are asked; in auto the call is refused. The trace marks it `allowed
-  by the person`. Always here and never here decide each later call on that
+  never here, 5 cancel, which also stops the turn. The trace marks it
+  `allowed by the person`. Always here and never here decide each later call on that
   target unasked, as a `standing` ledger row. They are kept beside the
   session and read back after a restart or `--continue`, never in another.
   `/permissions` lists each one standing, numbered: what it allows or
@@ -34,11 +33,11 @@ call of that kind until the run ends. A call that would wait for you is refused.
 
 ## Where it lives
 
-jev runs through the provider bound to the `classifier` role, `typesafe/jev-latest` at `api.typesafe.ai` or `openrouter/jev-latest`, and through no other. A provider that holds a key but is not bound to `classifier` is never asked. A gate state over the classifier's request cap is shortened to fit before it is sent. A classifier that answers 402 or refuses its key is skipped for the rest of the session; a timeout or an unreachable one is tried again next call. Only when the bound classifier failed does the cheapest model of the plan you run on judge the call, `claude-sub/claude-haiku-4-5-20251001` or `codex-sub/gpt-5.6-luna`, never one on an API key. When it cannot judge either, the regex arm decides and every verdict is recorded as ask. The chat says once, muted, each time the judge changes:
+jev runs through the provider bound to the `classifier` role, `typesafe/jev-latest` at `api.typesafe.ai` or `openrouter/jev-latest`, and through no other. A provider that holds a key but is not bound to `classifier` is never asked. jev reads your own recent messages, up to 24,000 bytes across the session's generations, to judge whether you asked for the call. A gate state over the classifier's request cap is shortened to fit before it is sent. A classifier that answers 402 or refuses its key is skipped for the rest of the session; a timeout or an unreachable one is tried again next call. Only when the bound classifier failed does the cheapest model of the plan you run on judge the call, `claude-sub/claude-haiku-4-5-20251001` or `codex-sub/gpt-5.6-luna`, never one on an API key. When it cannot judge either, the policy's regex arm decides: it refuses a `curl` that posts a file or pipes into a shell, an `rm -rf`, and a force push unless your own message says force, and every other call runs, marked `allowed by the policy's regex arm, because jev could not answer` in the trace. A call the arm refuses is refused in auto and put to you in ask. Its ledger row records ask, never allow, since no threshold made the decision. The chat says once, muted, each time the judge changes:
 
     · judge is running on claude-sub/claude-haiku-4-5-20251001 because typesafe is out of credits
 
-and the footer keeps `jev out of credits · judge <model>` while it lasts. A working classifier prints nothing. `tofu serve` carries the same status as `judge` on each `decision` event and on `query.usage`: each classifier tried with its state, `ok`, `out of credits`, `refusing` or `unreachable`, the judge running now, and the line the chat said.
+and the footer keeps `jev out of credits · judge <model>` while it lasts. A working classifier prints nothing. `tofu serve` carries the same status as `judge` on each `decision` event and on `query.usage`: the classifier tried with its state, `ok`, `out of credits`, `refusing` or `unreachable`, the judge running now, and the line the chat said.
 
 With nothing bound the gate is off. tofu reads the key from, in order:
 
@@ -99,7 +98,7 @@ lists each done move's stored `open` reading with its verdict at the threshold i
 
 ## Undo it
 
-    tofu settings set gatePrompt run
+    tofu settings set gatePrompt auto
 
 goes back to recording without waiting. To take back an always here or a
 never here answer, so the next call on its target asks you again:

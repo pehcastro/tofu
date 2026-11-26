@@ -36,6 +36,16 @@ are in, without a search.
 `shift+enter`, `alt+enter` and `ctrl+j` add a line. The composer grows to
 8 rows and then scrolls, keeping every line you typed.
 
+`@` at the start of a word is typed like any other character and lists the
+files matching what follows it under the input, with no dialog; `enter`
+writes `@path`.
+
+Dragging over the chat selects text rather than screen cells: while the
+button is held the wheel scrolls, and the pointer held on the top or bottom
+edge scrolls by itself. Letting go copies every line from where you pressed
+to where you let go, the scrolled ones too, and `ctrl+c` copies the same
+while you still hold it.
+
 A pasted image, a long pasted text and a paste still loading each sit in
 the composer as one chip, such as `[Image #1]`. `backspace` or `delete`
 on any part of a chip removes the whole chip, and the arrow keys step over
@@ -47,13 +57,9 @@ refused with a note to convert it to png or jpeg. A sent message says
 `Attached 1 Image` or `Attached 3 Images` under its text, and each pasted
 text keeps its own line, such as `text, 2400 characters`.
 
-The lead's work between two messages is one row in the chat: `running bash
-· (56) steps · 3 agents` while it works, `finished · (70) steps · 3 agents
-· 32m 12s` once settled. A commit, a push and a ticket created or moved each
-get one line, such as `▣ DASH-350 · moved todo > doing`, and every other call
-is counted; `ctrl+o` or a click lists those calls under the row, with
-`collapse` to fold it. Sub-agents share one row per status, such as `working · [&ada],
-[&bo]`.
+The lead's work between two messages is one row in the chat: `running bash · (56) steps · 3 agents` while it works, `finished · (70) steps · 3 agents · 32m 12s` once settled. A commit, a push and a ticket created or moved each get one line, such as `◆ 3f2a91c · fix the parser` or `▣ DASH-350 · moved todo > doing`, a move that changed nothing draws none, and every other call is counted; `ctrl+o` or a click lists those calls under the row, with `collapse` to fold it. Running sub-agents share one row per status, `working`, `waiting for answer` or `reopened`, such as `working · [&ada], [&bo]`, and one that finished leaves the row.
+
+The line under the chat names what the lead is doing, `requesting`, `thinking`, `working`, `spawning`, `waiting` on you or `stopping`, with the time in it and the request id, such as `thinking  |  12s  [request#c1a2b3]`. With the lead idle while sub-agents run it reads `waiting  |  3 sub-agents · 2 in bash`, and `reading the reports` once none runs. After a turn it says how long the turn took and how long it waited on the model's first replies: `cooked for 3s  |  waited 1s`.
 
 `ctrl+c` while the lead works stops the lead at once, and its sub-agents
 keep running. With the lead idle and sub-agents working, the first press

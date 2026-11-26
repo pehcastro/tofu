@@ -2,7 +2,7 @@
 title: Boardy
 description: Your own Jira or Linear, kept as markdown files on your disk, with numbered tickets and sub-tickets, statuses, a thread of what happened on each, and a lint that catches two tickets claiming one file.
 order: 18
-updated: 2026-10-31
+updated: 2026-11-25
 ---
 
 Boardy is a ticket board that lives in files. Each project can hold several
@@ -359,11 +359,20 @@ create, move and log line. A sub-ticket's file sits in its parent's folder,
 
 ## Agents work from the board
 
-Set `projectManagement` to `boardy` and tofu's own lead and sub-agents work
-from tickets, the way a team works from a board:
+With `projectManagement` on `boardy`, the default, tofu's own lead and
+sub-agents work from tickets, the way a team works from a board. A project
+with no board yet gets one with the shipped board hooks, keyed from the last
+word of the project's name, such as `LANG` for `project-lang`. The lead
+makes it with `board_create` before its first edit or spawn on work that
+spans folders, splits into pieces or goes to a sub-agent, and tells you in
+one line. When it has not, tofu makes it at the lead's first spawn of a
+sub-agent that edits, and the chat says `made the board LANG for this
+project's work, since it had none: tofu boardy list --board LANG`. A
+question, a read or a change to a few files in one folder needs no board.
+To make one by hand or add a manager:
 
 ```
-tofu settings set projectManagement boardy
+tofu boardy init --key DEMO
 tofu boardy manager add <lead session id>
 ```
 
@@ -408,10 +417,11 @@ tofu boardy manager add <lead session id>
 | `ticket_create` | managers | creates a numbered ticket, or a sub-ticket with `parent`; asks for `before`, `driven`, `still_works`, `error_case` and, for a visual or platform effect, `feasibility` |
 | `ticket_assign` | managers | assigns a ticket |
 | `ticket_list` | managers | lists a board's tickets by status, oldest first with the time since each last changed, up to ten and how many more |
+| `board_create` | the lead, while the project has no board | makes the project's board with the shipped board hooks, and the lead manages it |
 
-With the setting `off`, the default, nothing changes: no board file is
-written, no board rule reaches a prompt, and a spawn's owns are the paths
-the lead gives it.
+With the setting `off`, no board file is written, no board rule reaches a
+prompt, and a spawn's owns are the paths the lead gives it:
+`tofu settings set projectManagement off`.
 
 ## API
 
@@ -431,5 +441,5 @@ the lead gives it.
 | `tofu boardy boards` | lists the project's boards |
 | `tofu boardy cost <ticket> --claude`, `tofu boardy cost --session <id> [--fork N] --claude` | reads the Claude Code transcripts that worked on a ticket or a session and prints, per agent, wall, busy, model and thinking time, requests and tokens, builds and tests with their time, reads, spawns and resumes |
 
-Every subcommand takes `--json`. Settings: `projectManagement` (`off` or
-`boardy`) and `boardFlow` (`jira` or `linear`).
+Every subcommand takes `--json`. Settings: `projectManagement` (`boardy`,
+the default, or `off`) and `boardFlow` (`jira` or `linear`).

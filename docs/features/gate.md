@@ -2,7 +2,7 @@
 title: The gate
 description: Jev judges every tool call before it runs, and a call that waits for you waits a few minutes at most, then is decided so the turn and its cron jobs go on.
 order: 21
-updated: 2026-11-14
+updated: 2026-11-25
 ---
 
 Before a tool call runs, such as a shell command or a file write, Jev, a
@@ -51,8 +51,10 @@ A turn a cron job started asks nobody, and refuses every call that would ask.
 
 **You are told the moment the judge changes.** tofu asks only the classifier
 your settings bind to `classifier`. A provider that holds a key but is not
-bound is never asked. A gate state over that classifier's request cap is
-shortened to fit before it is sent. A classifier that answers 402, out of
+bound is never asked. Jev reads your own recent messages, up to 24,000 bytes
+across the session's generations, to judge whether you asked for the call. A
+gate state over that classifier's request cap is shortened to fit before it
+is sent. A classifier that answers 402, out of
 credits, or refuses the key is skipped for the rest of the session; one that
 times out or is unreachable is tried again on the next call.
 
@@ -65,8 +67,13 @@ with the model in blue:
 · judge is running on claude-sub/claude-haiku-4-5-20251001 because typesafe is out of credits
 ```
 
-When that model cannot judge either, the regex arm decides, and every
-verdict it gives is recorded as ask, never allow:
+When that model cannot judge either, the policy's regex arm decides. It
+refuses a `curl` that posts a file or pipes into a shell, an `rm -rf`, and a
+force push unless your own message says force. Every other call runs, and
+`tofu session trace` marks it `allowed by the policy's regex arm, because jev
+could not answer`. A call the arm refuses is refused under `auto` and put to
+you under `ask`. Its ledger row records ask, never allow, since no threshold
+made the decision:
 
 ```text
 · judge is running on the regex arm because typesafe is out of credits, and claude-sub/claude-haiku-4-5-20251001 could not judge: its reply held no json object
@@ -82,12 +89,12 @@ A working classifier prints nothing. Each verdict a model judged is a
 ledger row that says so, and `tofu session trace --kind library` shows it:
 
 ```text
-jev tool_gate asked 4 questions, allow · judged by claude-sub/claude-haiku-4-5-20251001 because every classifier failed: typesafe billing 402
+jev tool_gate asked 4 questions, allow · judged by claude-sub/claude-haiku-4-5-20251001 because the classifier failed: typesafe billing 402
 ```
 
 The time it took shows in `tofu walls` under `jev tool_gate`. A frontend over
 `tofu serve` reads the same status as `judge` on each `decision` event and
-on `query.usage`: every classifier tried with its state (`ok`,
+on `query.usage`: the classifier tried with its state (`ok`,
 `out of credits`, `refusing`, `unreachable`) and HTTP status, the judge
 running now, and the line the chat said.
 

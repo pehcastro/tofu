@@ -2,7 +2,7 @@
 title: Overview
 description: How models work in tofu, providers and sources, what each model can do, which job each one does, and how the catalog, slugs, tiers, roles and the picker fit together.
 order: 1
-updated: 2026-10-22
+updated: 2026-11-25
 ---
 
 A **provider** builds and serves a model: Anthropic, OpenAI, Meta, and for
@@ -114,26 +114,30 @@ tofu run --dir . --model <source/model> --effort <level> "<task>"
 `tofu models`, trimmed:
 
 ```
+Models · 21 known                                                    ✓ 21 usable
+
 claude-sub
-  ✓ claude-sub/claude-haiku-4-5-20251001   allowed   200k
-  ○ claude-sub/claude-opus-4-6             excluded  1M
-  ● claude-sub/claude-opus-5               default   1M
-  ✓ claude-sub/claude-sonnet-5             allowed   1M
+  ✓ claude-sub/claude-haiku-4-5-20251001   allowed  200k
+  ● claude-sub/claude-opus-5               default  1M
+  ✓ claude-sub/claude-sonnet-5             allowed  1M
 
 codex-sub
-  ● codex-sub/gpt-5.6-sol    default   1.05M
+  ✓ codex-sub/gpt-5.6-luna   allowed  1.05M
+  ● codex-sub/gpt-5.6-sol    default  1.05M
 
 api key
-  ✓ meta/muse-spark-1.3              allowed  1.05M
+  ● meta/muse-spark-1.3              default  1.05M
   ⚠ meta/muse-spark-1.3-contributor  allowed  1.05M
-  ✓ typesafe/jev-latest              allowed         classifier
+  ✓ openrouter/jev-latest            allowed
+  ✓ typesafe/jev-latest              allowed
   ⚠ Meta may train on what you send to this model
 
 roles
-  ● orchestrator                           claude-sub/claude-opus-5-5
-  ● classifier                             typesafe/jev-latest
+  ○ orchestrator                           unbound
+  ○ classifier                             unbound
   ○ sub-agents with no model of their own  unbound
 ```
 
 `●` default or bound, `✓` allowed, `○` excluded or unbound, `⚠` a notice.
-`--json` carries each excluded model's reason.
+tofu excludes no model it ships: every one is allowed until a file of yours
+says `use: excluded`. `--json` carries each excluded model's reason.

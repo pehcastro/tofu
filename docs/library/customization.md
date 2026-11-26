@@ -2,7 +2,7 @@
 title: Customization
 description: Where tofu reads your own rules, sub-agents, skills and instruction files, including .claude, .agents, CLAUDE.md and AGENTS.md, which one wins, and how to override a rule tofu ships.
 order: 4
-updated: 2026-10-07
+updated: 2026-11-25
 ---
 
 You add to the library with plain files, for every project or for one. tofu
@@ -20,7 +20,7 @@ and the `AGENTS.md` and `CLAUDE.md` files other coding agents use.
 From your home, tofu reads only `~/.tofu`, never `~/.claude` or `~/.agents`.
 
 A rule file laid out like tofu's own library, such as
-`.tofu/library/general/rules/tool_gate@3.yaml`, replaces the shipped one for
+`.tofu/library/general/rules/tool_gate@6.yaml`, replaces the shipped one for
 this project. A `library/` folder at the root of your repository is never
 read, so a project with a folder of that name keeps it to itself.
 

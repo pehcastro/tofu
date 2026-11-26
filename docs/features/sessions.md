@@ -2,7 +2,7 @@
 title: Sessions
 description: Every session is recorded as it runs, outside your project, and one command reopens it where you left off.
 order: 6
-updated: 2026-11-02
+updated: 2026-11-25
 ---
 
 A session is one conversation with tofu: every message, tool call and
@@ -210,8 +210,9 @@ tofu session clean
 ```
 
 `--dry-run` lists what would go and why the rest stays. tofu always keeps
-the head, a session that a kept one continues or branches from, a session
-open or busy now, and one with a cron job that still schedules.
+the head, a session that a kept one continues or branches from, and a
+session open or busy now. A cron job ends with its session's last window, so
+it keeps nothing.
 `tofu session list` counts the sessions idle past the lifetime.
 
 ## Commands
@@ -268,7 +269,12 @@ one line each, and filters combine: `--since`, `--from` and `--to` (`1h`,
 `--grep`, `--last N`, and `--kind` with any of `turn`, `stop`, `error`,
 `spawn`, `report`, `message`, `insert`, `cron`, `request`, `memory`, `call`,
 `shell`, `gate`, `hook`, `cache`, `compaction`, `list`, `fork`, `read`,
-`startup`, `notice`, `attachment`, `library` and `estimate`. `--kind fork` lists every
+`startup`, `notice`, `attachment`, `library`, `advisor` and `estimate`.
+A turn's row names the subscription and account it ran on, such as
+`claude-sub #2`, and a `test` or `typecheck` call row carries its counts,
+such as `src/parse: 41 passed, 1 failed`. `--kind advisor` lists what the advisor
+sub-agent read in each plan the lead set, when `planAdvisor` is `shadow`.
+`--kind fork` lists every
 fork across the session's generations, each with its agent, the step it
 forked after, its messages before and after, and the files it carried
 whole, such as `after step 3 · 16 to 5 messages · carried no file whole`;
@@ -317,9 +323,8 @@ on the same model in this project, and widens to other models, other
 projects, then every agent when that agent has none, naming the sample it
 used. See [estimate_time](/docs/tools/own-context). The promise is the estimate
 times 1.5, or the estimate plus one minute when it is under two minutes.
-On a first run here, tofu reads the same model's runs in other projects
-and pads more: times 1.75, or plus 70 seconds. With no run of that model
-anywhere it promises nothing. Time spent waiting for your answer on a
+When the sample comes from other projects, the promise pads more: times
+1.75, or plus 70 seconds. With no earlier run anywhere it promises nothing. Time spent waiting for your answer on a
 gate is left out of the verdict. `tofu session info` counts them:
 `estimates  3 estimates, 2 done by the promised time, 1 late by up to 40s`.
 
@@ -336,7 +341,7 @@ under that agent's name, each with the file it came from:
   offered and why
 - every Jev question set asked in the session's turns, with its verdict, the
   questions, and the set's file, such as `jev tool_gate asked 4 questions,
-  allow · ... · library/questions/tool_gate@7.yaml`
+  allow · ... · library/questions/tool_gate@6.yaml`
 - every Jev question asked about a message you sent, before its turn began
   or while the lead worked, such as `request_open` and `steer_answered`, at
   the moment it was asked, matched by the session id its ledger row carries.

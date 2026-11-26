@@ -2,7 +2,7 @@
 title: How a rule fires
 description: A rule is one instruction with triggers, and it reaches a prompt only when the task matches them.
 order: 2
-updated: 2026-11-12
+updated: 2026-11-25
 ---
 
 A rule is one YAML file, `<id>@1.yaml`, holding one instruction the model
@@ -47,13 +47,17 @@ The lead also carries tofu's working rules, the same for every project:
 |---|---|
 | `orchestrate` | Does work in one directory and within its source budget itself, and spawns for a second directory or more lines |
 | `verify_sub_agents` | Answers from a report tofu reads as clean; checks any other sub-agent work itself before calling it done: reads what changed, runs the build or tests, opens or drives what it made, and says what it saw. The `verifySubAgents` setting switches it |
-| `board_lead` | Works from the board's tickets. On with `projectManagement` set to `boardy` in a project that has a board |
+| `board_lead` | Works from the board's tickets. On with `projectManagement` on `boardy`, the default, in a project that has a board |
+| `board_start` | In a project with no board, makes one with `board_create` before its first edit or spawn on work that spans folders, splits into pieces or goes to a sub-agent. Off once the project has a board |
 | `brief_from_references` | Opens the file, image, page or message you pointed at before briefing, and quotes it word for word in the brief |
 | `check_as_seen` | Checks visual work in the real window at the size and state your bug needs, and hands you the build it just made, with its path and time |
 | `stay_in_scope` | Changes only what you asked or corrected, and offers anything more instead of doing it |
 
 A sub-agent carries `sub_agent_boundaries`: it opens every reference in its
-brief and reports anything more it would change rather than changing it.
+brief and reports anything more it would change rather than changing it. It
+carries `sub_agent_closing` too: its report ends with four plain lines,
+`result`, `evidence`, `open` and `next`, and pastes no command output, since
+tofu already lists its failed checks, findings and files.
 Every agent, the lead and each sub-agent, carries `act_on_stated`: a next
 action it states, it does in the same turn, and it keeps working until the
 work is done or it is blocked on something only you can settle.
