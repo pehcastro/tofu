@@ -20,7 +20,7 @@
   esc chat                                                                            refuse  ▾ 
                   Host editors may still intercept a chosen key.                    down and te…
                                                                                     
-                  ↑↓ choose · enter edit · bksp clear · esc                              120  ▾ 
+                  ↑↓ choose · enter edit · bksp clear · esc                              300  ▾ 
                                                                                     asked you h…
                       
                           Read before edit                                                  ● on
