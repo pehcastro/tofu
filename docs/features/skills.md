@@ -55,7 +55,9 @@ Turn it off:
 
 See every load, skip and off, with who said what:
 
-    tofu session trace <session> --kind notice --grep skill
+```
+tofu session trace <session> --kind notice --grep skill
+```
 
 ## Reference
 

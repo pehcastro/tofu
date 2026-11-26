@@ -156,8 +156,8 @@ tools.
 
 - **Continue the last session**: `tofu --continue`, or `/resume` in the app.
 - **Continue another**: `tofu session resume <name|id|head>`.
-- **Send one more turn with no window**: `tofu run --dir . --session
-  <name|id|head> "<task>"` works the task as that session's next turn. It
+- **Send one more turn with no window**:
+  `tofu run --dir . --session <name|id|head> "<task>"` works the task as that session's next turn. It
   sends the conversation and the system prompt and tools the session first
   sent, so the model's cache reads, and prints the same totals as a fresh run.
   It runs on the model `--model` names, else the one `tofu session set
