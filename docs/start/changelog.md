@@ -2,7 +2,7 @@
 title: Changelog
 description: What changed for you in each minor version of tofu, from 0.1 to 0.6, grouped by area.
 order: 7
-updated: 2026-11-25
+updated: 2026-11-26
 ---
 
 What changed for you in each minor version, grouped by area. Every change is
@@ -81,15 +81,20 @@ and questions that wait for you with their context.
 - **Time you can read**: `estimate_time` says how long work takes before it
   starts, split into agent time, tests, builds and verify; the footer shows
   the output rate; `tofu walls` prints how long each kind of operation took
-  in milliseconds; and `tofu boardy cost` reads what a ticket took. See
-  [tofu walls](/docs/cli/walls).
+  in milliseconds; and `tofu boardy cost` reads what a ticket took. The
+  per-project history file is `settled-runs.jsonl`, in place of
+  `estimates.jsonl`. See [tofu walls](/docs/cli/walls).
+- **Forks that stop**: a turn its forks stopped ends as `fork_stop`, and its
+  report says the work is unfinished.
+- **Flaky tests**: the `flake-triage` skill reruns a test one process at a
+  time.
 - **A host that explains itself**: a host that crashed or was killed says
   why on the next open, and a subscription limit counts down to its reset
   and retries on its own. See [Subscription quota](/docs/llms/quota).
 - **Driving**: `tofu drive --live` drives the app on your own subscription,
   and `tofu drive desk` drives the desk app. See [Drive](/docs/features/drive).
 - **Changed names**: `tofu models reload` is `tofu models update`, and
-  `tofu serve` answers `models.update`. See [tofu serve](/docs/cli/serve).
+  `tofu serve` answers `models.update` in place of `models.reload`. See [tofu serve](/docs/cli/serve).
 
 ## 0.5
 
