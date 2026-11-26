@@ -62,15 +62,11 @@ item does, and an `Extra` line for each plan item nothing you said asks for.
 The lead never sees the answer. Its next request is the same, byte for byte,
 whether the advisor runs or not. The answer goes to the session's trace:
 
-```
-tofu session trace <session> --kind advisor
-```
+    tofu session trace <session> --kind advisor
 
-```
-○ 19:54:06  advisor  advisor  the advisor read the plan against 1 of the person's messages: 1 missing, 1 extra
-○ 19:54:06  advisor  advisor  Missing: a test for the toggle, which the person asked for
-○ 19:54:06  advisor  advisor  Extra: rewrite the settings file format
-```
+    ○ 19:54:06  advisor  advisor  the advisor read the plan against 1 of the person's messages: 1 missing, 1 extra
+    ○ 19:54:06  advisor  advisor  Missing: a test for the toggle, which the person asked for
+    ○ 19:54:06  advisor  advisor  Extra: rewrite the settings file format
 
 An advisor that fails, such as a model that is overloaded, writes one row
 saying why, and the lead goes on. The advisor runs on the model its row in
