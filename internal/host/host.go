@@ -259,6 +259,8 @@ func (h *Host) followBinding() {
 
 func (h *Host) Cron() *cron.Book { return h.cron }
 
+func (h *Host) CronMoves() <-chan struct{} { return h.cronMove }
+
 func (h *Host) ID() string {
 	h.mu.Lock()
 	defer h.mu.Unlock()

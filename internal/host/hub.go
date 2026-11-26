@@ -810,6 +810,8 @@ func (h *hub) opened(s *hosted) error {
 				if event.Kind == EventNote || event.Kind == EventFailure {
 					h.say("session " + s.id + ": " + event.Text)
 				}
+			case <-live.cronMove:
+				live.cronMoved()
 			case <-live.done:
 				return
 			}
