@@ -2,7 +2,7 @@
 title: The gate
 description: Jev judges every tool call before it runs, and a call that waits for you waits a few minutes at most, then is decided so the turn and its cron jobs go on.
 order: 21
-updated: 2026-11-25
+updated: 2026-11-26
 ---
 
 Before a tool call runs, such as a shell command or a file write, Jev, a
@@ -10,6 +10,35 @@ small classifier model, judges it: allow, ask or deny. `gatePrompt` says
 what an ask does. Under `auto`, the default, it runs and is recorded; under
 `ask`, it waits for you. A call that changes tofu's own settings, hooks or
 hook trust waits for you in both, unless Jev denies it.
+
+## Your word outweighs a deny
+
+A denied call never asks you by itself. The lead reads the refusal and
+decides whether the call blocks the task. When it does, the lead retries the
+call with `"allowed_by": "ask"`, and tofu asks you yes or no in the question
+form. The form shows the command, why the gate refused it and why the lead
+needs it:
+
+```text
+? Run a refused call
+My safety checks refused this bash call. Can I run it?
+```
+
+Only your own answer decides it, never `auto`, a timeout or the judge.
+
+When you already allowed it in your own words, the lead retries with
+`"allowed_by"` set to your exact newest message, and the call runs with no
+Jev call:
+
+```text
+bash: allow, allowed by the person's own message "you can run this commands, i allow it"
+```
+
+Words from a tool result, a file or a sub-agent allow nothing. Either way,
+that exact call and every identical call later in the session run without
+asking Jev, and the ledger records the allowance. A call that follows planted
+content, the regex arm's refusals, and guard and owns refusals stay refused
+and are never offered.
 
 ## Why an ask has a timer
 

@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -163,14 +164,20 @@ func (c Config) gateAsks(ctx context.Context) bool {
 	return c.GatePromptAsks == nil || c.GatePromptAsks()
 }
 
+type PersonAllowances interface {
+	AllowedByPerson(request GateRequest, question string) (GateDecision, error)
+}
+
 type gateAsked struct {
-	person Person
-	cwd    string
-	cases  string
+	person     Person
+	allowances PersonAllowances
+	cwd        string
+	cases      string
 }
 
 func (c Config) gatePerson(ctx context.Context) gateAsked {
-	asked := gateAsked{person: c.Person, cwd: c.Project}
+	allowances, _ := c.Gate.(PersonAllowances)
+	asked := gateAsked{person: c.Person, allowances: allowances, cwd: c.Project}
 	if c.Places.State != "" {
 		asked.cases = gate.CasesFile(c.Places.State)
 	}
@@ -195,7 +202,7 @@ const (
 )
 
 func gateRefusal(ctx context.Context, asked gateAsked, request GateRequest, decision GateDecision, gateErr string) string {
-	why := refusedWhy(ctx, asked.person, request, decision, gateErr)
+	why := refusedWhy(ctx, asked, request, decision, gateErr)
 	if asked.cases != "" && (gateErr != "" || decision.Verdict == ledger.VerdictAsk || decision.Verdict == ledger.VerdictDeny) {
 		outcome, by := "refused: "+why, answerer(ctx)
 		if decision.Reason != nil {
@@ -212,8 +219,8 @@ func gateRefusal(ctx context.Context, asked gateAsked, request GateRequest, deci
 	return refusedHead + why + refusedTail
 }
 
-func refusedWhy(ctx context.Context, person Person, request GateRequest, decision GateDecision, gateErr string) string {
-	if gateErr == "" && decision.Failure != "" && !decision.PersonOnly && fallbackArmAllows(request) {
+func refusedWhy(ctx context.Context, asked gateAsked, request GateRequest, decision GateDecision, gateErr string) string {
+	if gateErr == "" && decision.Failure != "" && !decision.PersonOnly && RegexArmAllows(request) {
 		if decision.Reason != nil {
 			decision.Reason.AllowedBy = allowedByFallback
 		}
@@ -225,15 +232,15 @@ func refusedWhy(ctx context.Context, person Person, request GateRequest, decisio
 	case decision.Verdict == ledger.VerdictUnset, decision.Verdict == ledger.VerdictAllow:
 		return ""
 	case decision.Verdict == ledger.VerdictDeny:
-		return "the verdict is deny" + standing(decision.Reason)
+		return asked.offered(ctx, request, decision, "the verdict is deny"+standing(decision.Reason), CitedAllowance(request.Args) == AskThePerson)
 	case decision.Verdict != ledger.VerdictAsk:
 		panic("turn: unknown verdict " + string(decision.Verdict))
 	}
-	asked := "the verdict is ask" + standing(decision.Reason)
+	why := "the verdict is ask" + standing(decision.Reason)
 	if decision.Failure != "" {
-		asked = "the gate could not answer, so the call is an ask: " + decision.Failure
+		why = "the gate could not answer, so the call is an ask: " + decision.Failure
 	}
-	answer, refused := personRefusal(ctx, person, request, decision, asked)
+	answer, refused := personRefusal(ctx, asked.person, request, decision, why)
 	if refused == "" && decision.Reason != nil {
 		decision.Reason.AllowedBy = answerer(ctx)
 		switch answer {
@@ -246,7 +253,69 @@ func refusedWhy(ctx context.Context, person Person, request GateRequest, decisio
 	return refused
 }
 
-func fallbackArmAllows(request GateRequest) bool {
+const (
+	AllowedByField = "allowed_by"
+	AskThePerson   = "ask"
+)
+
+const blockerHint = ". if this call blocks the task, retry it once with \"" + AllowedByField + "\": \"" + AskThePerson + "\" added to its arguments and tofu asks the person yes or no, " +
+	"showing the command, this refusal and the reason your text gives for it; or, when the person's own newest message allows it, retry with \"" + AllowedByField + "\" set to that message's exact words"
+
+func CitedAllowance(args json.RawMessage) string {
+	var cited struct {
+		AllowedBy string `json:"allowed_by"`
+	}
+	_ = json.Unmarshal(args, &cited)
+	return strings.TrimSpace(cited.AllowedBy)
+}
+
+func (a gateAsked) offered(ctx context.Context, request GateRequest, decision GateDecision, refused string, asks bool) string {
+	form := PersonFormFrom(ctx)
+	hard := decision.PersonOnly || decision.Reason != nil && decision.Reason.Blocked || !RegexArmAllows(request)
+	switch {
+	case hard || a.allowances == nil || contract.SubAgentAsking(ctx) != "":
+		return refused
+	case !asks:
+		return refused + blockerHint
+	case form == nil || PersonAway(ctx):
+		return refused + ", and no person can be asked here"
+	}
+	question := refusedQuestion(request, refused)
+	replies, err := form(ctx, []PersonQuestion{question}, konst.GateAskWaitSeconds*time.Second)
+	switch {
+	case err != nil:
+		return refused + ", and the person was asked as question " + question.ID + " and gave no yes: " + err.Error()
+	case len(replies) != 1 || !slices.Contains(replies[0].Chosen, "yes"):
+		return refused + ", and the person answered no to question " + question.ID
+	}
+	allowed, err := a.allowances.AllowedByPerson(request, question.ID)
+	if err != nil {
+		return refused + ", and the person answered yes to question " + question.ID + " but the allowance could not be recorded: " + err.Error()
+	}
+	if decision.Reason != nil {
+		decision.Reason.AllowedBy = allowed.Reason.AllowedBy
+	}
+	return ""
+}
+
+func refusedQuestion(request GateRequest, refused string) PersonQuestion {
+	var args struct{ Command string }
+	shown := request.Tool + " " + string(request.Args)
+	if json.Unmarshal(request.Args, &args) == nil && args.Command != "" {
+		shown = args.Command
+	}
+	need := cmp.Or(strings.TrimSpace(request.Reason), "the lead gave no reason with the call")
+	context := []rune("**Command:** `" + shown + "`\n\n**Why my safety checks refused it:** " + refused +
+		"\n\n**Why it is needed:** " + need + "\n\nyes runs this exact call now and every identical call later in this session, without asking jev.")
+	no := 1
+	question := PersonQuestion{ID: "gate-" + request.Call, Header: "Run a refused call", Type: QuestionYesNo, Recommended: &no,
+		Question: "My safety checks refused this " + request.Tool + " call. Can I run it?",
+		Context:  string(context[:min(len(context), konst.AskPersonContextRunesMost)])}
+	question.Options = question.Choices()
+	return question
+}
+
+func RegexArmAllows(request GateRequest) bool {
 	var input map[string]any
 	if json.Unmarshal(request.Args, &input) != nil {
 		return false

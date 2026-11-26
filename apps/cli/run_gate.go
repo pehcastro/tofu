@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"tofu/apps/cli/wiring"
@@ -22,6 +23,7 @@ import (
 	"tofu/internal/models/transport"
 	platformproject "tofu/internal/platform/project"
 	"tofu/internal/platform/scratch"
+	"tofu/internal/tools/contract"
 	"tofu/library/questions"
 )
 
@@ -38,6 +40,8 @@ type toolGate struct {
 	watch      func(ctx context.Context, tool string, decision loop.GateDecision, err error)
 	decisions  int
 	costUSD    float64
+	allowing   sync.Mutex
+	allowed    map[string]string
 }
 
 type jevUnavailable struct{ cause error }
@@ -63,7 +67,7 @@ func toolGateOn(dir, log string, keys core.Keyring) (*toolGate, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &toolGate{classifier: classifier, set: set, cwd: dir, rows: rows}, nil
+	return &toolGate{classifier: classifier, set: set, cwd: dir, rows: rows, allowed: map[string]string{}}, nil
 }
 
 func resolvePoint(point, dir string) (wiring.Battery, error) {
@@ -121,6 +125,23 @@ func thresholdsInRange(r gate.Rule, set wiring.Battery) error {
 }
 
 func (g *toolGate) Decide(ctx context.Context, request loop.GateRequest) (decision loop.GateDecision, err error) {
+	g.allowing.Lock()
+	by, allowed := g.allowed[allowanceOf(request)]
+	g.allowing.Unlock()
+	cited := loop.CitedAllowance(request.Args)
+	if !allowed && cited != "" && cited != loop.AskThePerson {
+		if err := citedByThePerson(ctx, request, cited); err != nil {
+			return loop.GateDecision{}, err
+		}
+		by, allowed = "the person's own message \""+cited+"\"", true
+	}
+	if allowed {
+		decision, err = g.allow(request, by)
+		if g.watch != nil {
+			g.watch(host.JudgingCall(ctx, request.Call), request.Tool, decision, err)
+		}
+		return decision, err
+	}
 	write := g.ask(ctx, request)
 	loop.InCallOrder(ctx, func() {
 		var row ledger.Row
@@ -142,6 +163,46 @@ func (g *toolGate) Decide(ctx context.Context, request loop.GateRequest) (decisi
 		}
 	})
 	return decision, err
+}
+
+func (g *toolGate) AllowedByPerson(request loop.GateRequest, question string) (loop.GateDecision, error) {
+	return g.allow(request, "the person, who answered yes to question "+question)
+}
+
+func (g *toolGate) allow(request loop.GateRequest, by string) (loop.GateDecision, error) {
+	g.allowing.Lock()
+	g.allowed[allowanceOf(request)] = by
+	g.allowing.Unlock()
+	row, err := g.rows.AppendPersonAllowed(request.Args, g.set, wiring.RowInput{TurnID: request.TurnID}, by)
+	return loop.GateDecision{ID: row.ID, Verdict: row.Verdict, Reason: row.Reason}, err
+}
+
+type citationRefused struct{ why string }
+
+func (c citationRefused) Error() string {
+	return "the call cites " + loop.AllowedByField + " and " + c.why + ", so nothing allows it: ask the person instead"
+}
+
+func citedByThePerson(ctx context.Context, request loop.GateRequest, cited string) error {
+	switch {
+	case contract.SubAgentAsking(ctx) != "":
+		return citationRefused{"a sub-agent's call never runs on the person's word"}
+	case len(request.Said) == 0 || request.Said[len(request.Said)-1] != cited:
+		return citationRefused{"those words are not the person's own newest typed message in this session"}
+	case !loop.RegexArmAllows(request):
+		return citationRefused{"the call is one the gate always refuses"}
+	}
+	return nil
+}
+
+func allowanceOf(request loop.GateRequest) string {
+	var args map[string]any
+	if json.Unmarshal(request.Args, &args) != nil {
+		return request.Tool + " " + string(request.Args)
+	}
+	delete(args, loop.AllowedByField)
+	same, _ := json.Marshal(args)
+	return request.Tool + " " + string(same)
 }
 
 func (g *toolGate) ask(ctx context.Context, request loop.GateRequest) func() (ledger.Row, error) {
