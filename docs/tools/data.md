@@ -2,7 +2,7 @@
 title: Data
 description: shape prints the type of a JSON sample in the project's language, and db reads the project's SQLite or Postgres database and never writes to it.
 order: 10
-updated: 2026-11-06
+updated: 2026-11-25
 ---
 
 Two tools answer questions about data. `shape` turns a JSON sample into a type
@@ -97,8 +97,28 @@ shape: no go.mod, Cargo.toml, python project file, tsconfig.json or package.json
 `query` it runs that one statement and prints the first 20 rows and the full
 count. The connection is the value of a key in the project's `.env` or the
 environment, `DATABASE_URL` unless `env` names another: a `postgres://` url,
-or a SQLite file path, with `sqlite:` or `file:` in front allowed.
-Parameters: `query`, `table`, `env`.
+or a SQLite file path, with `sqlite:` or `file:` in front allowed. The value
+is never printed. `file` opens a SQLite file in the project by its path, and
+a path outside the project is refused. Parameters: `query`, `table`, `env`,
+`file`.
+
+With no key set and no `env` or `file` given, `db` opens the project's one
+SQLite file by itself, whatever variable the code reads its path from, so
+there is nothing to export first:
+
+```bash
+tofu tool db '{}' --dir .
+```
+
+```text
+opened orders.db, the one SQLite file in the project, as DATABASE_URL is not set
+orders.id INTEGER primary key
+orders.customer TEXT not null
+1 table
+```
+
+A project holding two or more SQLite files is answered with their names, to
+pick one with `file`.
 
 With a `.env` holding `ORDER_DB_PATH=orders.db`:
 
@@ -138,7 +158,7 @@ A missing key names the parameter that fixes it, and a failing query says
 what the database said:
 
 ```text
-db: no connection: DATABASE_URL is not set in .env or the environment; name the key holding it with env
+db: no connection: DATABASE_URL is not set in .env or the environment and the project holds no SQLite file; name the key holding it with env, or the file with file
 ```
 
 ```text

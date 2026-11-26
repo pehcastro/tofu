@@ -1,7 +1,7 @@
 ---
 topic: tools-checks
 title: Checks, files and shell tools
-summary: what test, typecheck, read, write, edit, bash and shell give the model, and how to see it for yourself
+summary: what test, typecheck, mutate, read, write, edit, bash and shell give the model, and how to see it for yourself
 verbs: tool
 ---
 
@@ -22,6 +22,12 @@ run its commands. Each result is the answer rather than a log: counts and
   `changed` runs the tests of every file the turn changed, and every test
   that reaches a changed declaration through `symbols impact`, in another
   file or package.
+- `mutate` plants small bugs in the file at `path` one at a time, a
+  flipped comparison, a swapped operator, a constant plus one, and runs
+  the one test named in `test` against each in an overlay. It returns
+  `mutants`, `killed` and every survivor as `path:line` with the change
+  the test missed, and never changes the project's files. For Go,
+  `test_path` names the test's package when it is not the file's own.
 - `typecheck` runs `go build` then `go vet` for Go, `cargo check` for Rust,
   `pyright` or `mypy` for Python, and `tsc`, `vue-tsc` or `svelte-check`
   for TypeScript, and returns the error count and each error as
@@ -35,8 +41,9 @@ run its commands. Each result is the answer rather than a log: counts and
   and nothing is written.
 - `edit` with `symbol` replaces one whole declaration in a `.go`, `.rs`,
   `.ts`, `.tsx` or `.py` file, or with `insert` `before` or `after` adds
-  code beside it. `read` with `at`, a line number or a declared name such
-  as `Order.Total`, reads about 100 lines around it and states the range.
+  code beside it. `read` with `at`, a line number or a name a `.go`, `.rs`,
+  `.ts`, `.tsx`, `.py` or `.zig` file declares, such as `Order.Total`,
+  reads about 100 lines around it and states the range.
   A name the file doesn't declare is refused with the closest names it
   does.
 - A second `read` of the same lines of an unchanged file answers with one
@@ -82,6 +89,7 @@ session hasn't read:
     tofu tool test '{"path":"."}' --dir .
     tofu tool typecheck '{"path":"broken"}' --dir .
     tofu tool read '{"path":"order.go","at":"Total"}' --dir .
+    tofu tool mutate '{"path":"order.go","test":"TestTotal"}' --dir .
 
 ## Undo it
 

@@ -2,12 +2,14 @@
 title: Debug
 description: debug runs a Go or Python program or test under a real debugger and answers what the values are at a line, so the model never adds print lines it then has to take out.
 order: 15
-updated: 2026-11-07
+updated: 2026-11-25
 ---
 
 `debug` runs a program or a test under a real debugger and prints the values
 at the line where it stops. It wraps `dlv` for Go and `debugpy` for Python,
-speaking the Debug Adapter Protocol to each. The model sends a list of steps,
+speaking the
+[Debug Adapter Protocol](https://microsoft.github.io/debug-adapter-protocol/)
+to each. The model sends a list of steps,
 tofu runs them in order and returns one answer, and the session stays open
 between calls until `stop`.
 

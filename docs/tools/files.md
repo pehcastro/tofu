@@ -2,7 +2,7 @@
 title: Files
 description: read, write, edit, glob, search, symbols and project_report, tofu's own Go tools for finding, reading and changing files.
 order: 2
-updated: 2026-11-06
+updated: 2026-11-25
 ---
 
 Seven tools, all tofu's own Go code, none of them a wrapper around `cat`,
@@ -31,7 +31,7 @@ a number, so no bytes go to numbering. A path that doesn't exist is repaired
 when exactly one file has that name, and the repair is named first.
 
 `at` is a line number or a name the file declares, such as `Total` or
-`Order.Total`, in a `.go`, `.rs`, `.ts`, `.tsx` or `.py` file. The header states
+`Order.Total`, in a `.go`, `.rs`, `.ts`, `.tsx`, `.py` or `.zig` file. The header states
 the range read and where the declaration sits:
 
 ```bash
@@ -219,7 +219,7 @@ broke.
 declaration around each match within a 4,000-token budget. There is no `grep`
 tool.
 
-A match in a `.go`, `.ts`, `.tsx`, `.js`, `.jsx`, `.py` or `.rs` file comes
+A match in a `.go`, `.ts`, `.tsx`, `.js`, `.jsx`, `.py`, `.rs` or `.zig` file comes
 back as the entire function, method, class or type, marked as code, comment
 or string, so the model rarely needs a `read` after it. Over 30 searches per
 corpus, that cut what the model read from 87k tokens to about 40k in Python,

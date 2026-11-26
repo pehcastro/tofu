@@ -12,9 +12,10 @@ the text looks.
 
 - `codemod` rewrites one code shape everywhere, matched on the syntax
   tree, so a string or comment that looks the same is never touched. It
-  runs on cat-grep, 47 languages inside the binary with nothing to
-  install, the script code of Svelte, Vue and PHP pages included.
-  `pattern` and `rewrite` are code in `lang`: `$NAME` matches one node,
+  runs on cat-grep, a Go port of ast-grep that parses with tree-sitter
+  grammars built into the binary: 47 languages with nothing to install,
+  the script code of Svelte, Vue and PHP pages included. `pattern` and
+  `rewrite` are code in `lang`, in ast-grep's pattern language: `$NAME` matches one node,
   `$$$NAME` a run of nodes. The first call previews every site and the
   diff; `apply` true writes them, refuses when `expect` differs from the
   count, and ends with the checker's errors. A Rust rename also renames

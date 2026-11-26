@@ -1,19 +1,20 @@
 ---
 topic: tools-code
 title: Code intelligence tools
-summary: what symbols, map and api give the model: where a name is declared and who calls it, what a change reaches, what matters for a task, and a dependency at its pinned version
+summary: what symbols, map, api and eval give the model: where a name is declared and who calls it, what a change reaches, what matters for a task, a dependency at its pinned version, and what an expression returns
 verbs: tool
 ---
 
 ## What it is
 
 These tools answer questions about code rather than text, in Go, Rust,
-TypeScript and Python.
+TypeScript and Python; `symbols` and `map` read Zig too.
 
 - `symbols` says where a name is declared and every place that calls it.
-  Go is resolved through `go/types`; the rest through `rust-analyzer`,
-  `typescript-language-server` and `pyright-langserver`, which follow an
-  import alias.
+  Go is resolved through `go/types`; Rust, TypeScript and Python through
+  `rust-analyzer`, `typescript-language-server` and `pyright-langserver`
+  over the Language Server Protocol, which follow an import alias. Zig is
+  matched on the name alone, and the answer says so.
 - `symbols` with mode `impact` lists every caller of one declaration by
   kind, `call`, `impl`, `embed`, `test` or `ref`, the tests that reach it
   and the packages.
@@ -21,7 +22,8 @@ TypeScript and Python.
   errors the rename would add, and writes only with `apply` true. A clash
   with a name already declared in that scope is refused and nothing is
   written.
-- `map` ranks the files that matter for a `task`, each with its top
+- `map` ranks the Go, Rust, TypeScript, Python and Zig files that matter
+  for a `task`, each with its top
   declarations and their line numbers, in a token `budget`, 1,000 when
   left out, and says what did not fit. `search` orders its files by the
   same rank and says how many matching lines the page cut.
@@ -29,6 +31,10 @@ TypeScript and Python.
   the module cache, `node_modules`, the cargo registry or `site-packages`,
   never the network. A package the project does not hold is named with the
   command that adds it.
+- `eval` returns what one expression evaluates to in the project, its
+  value, type, what it printed and how long it took, with `lang` `go`,
+  `ts`, `python` or `rust`. Go builds a temporary `main` beside the
+  package through `go`'s `-overlay`; the working tree never changes.
 
 ```text
 rename total to amount, resolved by rust-analyzer: 2 sites in 2 files
@@ -73,6 +79,7 @@ naming the install command, such as `rustup component add rust-analyzer`.
     tofu tool symbols '{"name":"total","path":"src/pricing.rs","mode":"rename","to":"amount"}' --dir .
     tofu tool map '{"task":"Discounted returns 650, want 675"}' --dir .
     tofu tool api '{"package":"github.com/pelletier/go-toml/v2","name":"NewDecoder"}' --dir .
+    tofu tool eval '{"lang":"go","path":"orders","expr":"orders.Order{Quantity: 3, Cents: 250}.Total()"}' --dir .
 
 A rename without `apply` writes nothing.
 

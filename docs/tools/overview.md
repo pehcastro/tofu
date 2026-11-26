@@ -2,7 +2,7 @@
 title: Tools overview
 description: What a tool is in tofu, which ones are tofu's own Go code and which wrap a program, and what tofu does to every result.
 order: 1
-updated: 2026-11-07
+updated: 2026-11-25
 ---
 
 A tool is a function the model can call during a turn. The model only asks:
@@ -11,12 +11,14 @@ session. The command line and the app build the same tool set.
 
 Most tools are tofu's own Go code: `read`, `write`, `edit`, `glob`,
 `search`, `symbols`, `map`, `api`, `project_report`, `fetch`, `web_search`, `plan`, `env`,
-`http`, `record`, `shape`, `db`, `context`, `budget`, `forget`, `note`,
+`http`, `record`, `shape`, `db`, `context`, `budget`, `estimate_time`, `forget`, `note`,
 `digest`, `done`, `claims`, `changes`, `trail`, `bisect`, `checkpoint`,
 `whatif`, `codemod`, `scaffold`, the browser tools and the sub-agent tools.
 `profile` runs the project's own profiler. A few wrap a program: `bash` wraps your
 shell, `typecheck` and `test` wrap the project's own checkers and test
-runners for Go, Rust, Python and TypeScript, `debug` wraps `dlv` and
+runners for Go, Rust, Python and TypeScript, `mutate` runs one of those
+tests against bugs it plants, `eval` runs one expression through the
+project's own Go, TypeScript, Python or Rust toolchain, `debug` wraps `dlv` and
 `debugpy`, `format` wraps rustfmt, prettier and ruff, `deps` wraps the
 package manager, `github_pr_diff` wraps `gh`, and
 the `tofu_*` verbs run the tofu binary.
@@ -27,9 +29,9 @@ model would receive. See [One tool call by hand](/docs/cli/tool).
 | Group | Tools |
 |---|---|
 | [Files](/docs/tools/files) | read, write, edit, glob, search, symbols, project_report |
-| [Code intelligence](/docs/tools/code) | symbols, map, api |
+| [Code intelligence](/docs/tools/code) | symbols, map, api, eval |
 | [Shell](/docs/tools/shell) | bash, shell |
-| [Checks](/docs/tools/checks) | typecheck, test |
+| [Checks](/docs/tools/checks) | typecheck, test, mutate |
 | [Debug](/docs/tools/debug) | debug |
 | [Changing code](/docs/tools/change) | codemod, scaffold, format, deps |
 | [Web](/docs/tools/web) | web_search, fetch, github_pr_diff |
@@ -38,7 +40,7 @@ model would receive. See [One tool call by hand](/docs/cli/tool).
 | [Environment](/docs/tools/environment) | env, shell ports |
 | [Observe](/docs/tools/observe) | http, record, profile |
 | [Data](/docs/tools/data) | shape, db |
-| [The agent's own context](/docs/tools/own-context) | context, budget, forget, note, digest |
+| [The agent's own context](/docs/tools/own-context) | context, budget, estimate_time, forget, note, digest |
 | [Checking its own work](/docs/tools/check-work) | done, claims, the review agent |
 | [History and undo](/docs/tools/history) | changes, trail, bisect, checkpoint, whatif |
 | [Browser](/docs/automation/browser-tools) | browser_tabs, browser_observe, browser_act, browser_read, browser_do, browser_motion |

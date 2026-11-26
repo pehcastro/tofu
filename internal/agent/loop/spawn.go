@@ -416,7 +416,7 @@ func (t *SpawnTool) Definition() core.Tool {
 	}
 	properties := map[string]any{
 		"task":     map[string]any{"type": "string"},
-		"estimate": map[string]any{"type": "boolean", "description": "true returns the median cost, calls and minutes of this agent type's finished runs in this project and starts nothing"},
+		"estimate": map[string]any{"type": "boolean", "description": "true returns how long this work takes in all, agent time plus test, build and verify time, from the newest finished runs of this agent, and starts nothing"},
 		"mission":  map[string]any{"type": "string", "description": "the work in a handful of words, as a board entry reads: work on BOJI-395. the task is the brief and is kept whole"},
 		"owns":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 	}
@@ -433,7 +433,7 @@ func (t *SpawnTool) Definition() core.Tool {
 	return core.Tool{
 		Name: SpawnToolName,
 		Description: "hands one piece of work to a sub-agent with its own context and its own conversation, and returns at once with its name while it works in the background. task is the whole brief the sub-agent starts from. " +
-			"its report, rather than its transcript, comes to you later as a message naming it. every start names the median cost, calls and minutes of that agent type's past runs here; set estimate to read them alone with nothing started. a reply whose calls are all spawns ends your turn once they start. " +
+			"its report, rather than its transcript, comes to you later as a message naming it. every start names how long the whole work takes, agent time plus tests, builds and verify, from the newest finished runs of that agent; set estimate to read it alone with nothing started. a reply whose calls are all spawns ends your turn once they start. " +
 			"owns lists the paths the sub-agent may write, every other path is refused at the write, and no two sub-agents may hold overlapping paths; leave owns out for a sub-agent that only reads, runs commands or researches, and every write it tries is refused. " + t.ticketNeed() + cite +
 			fmt.Sprintf("At most %d sub-agents running at once, nested at most %d deep. These are the person's settings %s and %s: %s",
 				limits.Running, limits.Depth, settings.SubAgentsPerTurn, settings.SubAgentDepth, raise),
@@ -497,7 +497,7 @@ func (a spawnArgs) mission() string {
 	return strings.TrimRight(cut, " ,;:") + "..."
 }
 
-const unnamedAgent = "a sub-agent on the lead's model"
+const unnamedAgent = "an unnamed sub-agent"
 
 func (t *SpawnTool) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
 	began := clockFrom(ctx)

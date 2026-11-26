@@ -16,7 +16,8 @@ sub-agents and the person.
   earlier call has.
 - `history` is one tool with a `mode`: `quote` for a `[quote#...]`
   reference you wrote, `zoom` and `recall` over the memory views, and
-  `lookup` for a call a fork's carry names.
+  `lookup` for a call a fork's carry names, in this session, the one
+  `session` names, or any earlier session of its line.
 - `fetch` puts `date: published YYYY-MM-DD`, `modified ...`, or `date:
   none stated` under its header. `web_search` puts each result's date
   beside its title when the provider gives one.
@@ -33,16 +34,29 @@ sub-agents and the person.
   profiler and returns the ten costliest functions and the hottest path.
 - `shape` prints the type of a JSON sample in the project's language.
   `db` reads SQLite or Postgres read only, with the connection from a key
-  in `.env`, `DATABASE_URL` by default, never printed.
-- `spawn` with `estimate` set to `true` returns the median USD, model
-  calls and wall time of the last 20 finished runs of that agent type in
-  this project, and starts nothing.
-- `race` takes 2 to 3 `briefs`, one whole approach each, and a `check`.
-  Each runs on its own sub-agent in its own copy of the project; the first
-  whose check passes is applied and the rest are stopped. When none passes
-  the tree is byte for byte as it was.
+  in `.env`, `DATABASE_URL` by default, never printed. With no key set it
+  opens the project's one SQLite file by itself, and `file` opens one by
+  its path; a path outside the project is refused.
+- `spawn` with `estimate` set to `true` says how long the whole work
+  takes, the agent's time plus its tests, builds and verify, from the 10
+  newest finished runs of that agent on that model in this project,
+  widened one named step at a time when there are none, and starts
+  nothing. Every spawn names the same estimate.
+- `race` takes 2 to 3 `briefs`, one whole approach each, and a `check`,
+  for when you ask for whole approaches built and compared; one small edit
+  goes to `whatif` or `edit` instead. Each runs on its own sub-agent in its
+  own copy of the project. With `keep: first`, the default, the first
+  whose check passes is applied and the rest are stopped. With `keep:
+  all`, every run goes to its check, nothing is applied, and the result
+  gives a race id with each run's check, size and diff; a second call with
+  `race` set to that id and `pick` set to a run number applies that run.
+  When none passes the tree is byte for byte as it was.
 - `ask_person` options may carry a `preview`, as code, a diff or a text
-  screen, shown side by side. `heads_up` shows one line on the person's
+  screen, shown side by side. A question may carry a `context` of up to
+  1,500 characters, drawn as a Question context card in its chat row, and
+  once answered the row folds to one line, such as `? Discount fix: you
+  chose Round at the end`. A question marked `needs_yes` is never taken
+  for you. `heads_up` shows one line on the person's
   screen at `info` or `warn`, and the turn goes on.
 
 ```text
@@ -67,7 +81,7 @@ scratchpad`. `db` reads its connection from the project's `.env`.
 ## Check it
 
     tofu tool env '{}' --dir .
-    tofu tool db '{"env":"ORDER_DB_PATH"}' --dir .
+    tofu tool db '{}' --dir .
     tofu tool shape '{"path":"orders.json"}' --dir .
     tofu tool spawn '{"estimate":true,"agent":"go-dev"}' --dir .
     tofu tool heads_up '{"level":"info","line":"the full test run takes about two minutes"}' --dir .

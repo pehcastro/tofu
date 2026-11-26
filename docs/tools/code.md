@@ -1,16 +1,18 @@
 ---
 title: Code intelligence
-description: symbols, map and api, the tools that answer where a name is declared and who calls it, what a change reaches, what matters for a task, and what a dependency looks like at the pinned version.
+description: symbols, map, api and eval, the tools that answer where a name is declared and who calls it, what a change reaches, what matters for a task, what a dependency looks like at the pinned version, and what an expression returns.
 order: 12
-updated: 2026-11-06
+updated: 2026-11-25
 ---
 
-Three tools answer questions about code rather than text. `symbols` says
+Four tools answer questions about code rather than text. `symbols` says
 where a name is declared and every place that calls it, what else a change
 reaches, and renames one declaration everywhere it is used. `map` ranks the
 files that matter for a task and fits them in a token budget. `api` reads a
-dependency's signature and doc at the version the project pinned. All three
-are tofu's own Go code and read Go, Rust, TypeScript and Python.
+dependency's signature and doc at the version the project pinned. `eval`
+returns what one expression evaluates to in the project. All four are
+tofu's own Go code and read Go, Rust, TypeScript and Python; `symbols` and
+`map` read Zig too.
 
 ## Why they exist
 
@@ -29,8 +31,10 @@ languages.
 ## How names are resolved
 
 Go is resolved through `go/types`. Rust, TypeScript and Python are resolved
-by the project's own language server: `rust-analyzer`,
-`typescript-language-server` and `pyright-langserver`. tofu starts the
+by the project's own language server, spoken to over the
+[Language Server Protocol](https://microsoft.github.io/language-server-protocol/):
+`rust-analyzer`, `typescript-language-server` and `pyright-langserver`.
+Zig is matched on the name alone, and the answer says so. tofu starts the
 server on the first call that needs it, keeps it running for the next
 call, and stops it after 5 minutes idle or when tofu exits. tofu never installs a server.
 When one is not on `PATH`, the answer is matched on the name alone, says
@@ -197,8 +201,9 @@ order.go rank 0.702
 more: 3 of 4 files and 6 of 8 declarations did not fit the budget
 ```
 
-The same call on the same files prints the same answer. `map` ranks Go, Rust
-and TypeScript files. `search` orders its results by the same rank. See
+The same call on the same files prints the same answer. `map` ranks Go,
+Rust, TypeScript, Python and Zig files. `search` orders its results by the
+same rank. See
 [search](/docs/tools/files#search).
 
 ## api
@@ -258,6 +263,32 @@ A package the project does not hold says so, with the command that adds it:
 api: github.com/google/uuid is not required by C:\work\shop\go\go.mod. install it with: go get github.com/google/uuid
 ```
 
+## eval
+
+`eval` answers what an expression returns in this project, without a file
+or a `main` written by hand. It returns the value, its type, what it printed
+and how long it took, and the working tree never changes. For Go it builds a
+temporary `main` beside the package at `path` through `go`'s `-overlay`, so
+the expression names the package; for TypeScript it imports the file at
+`path` and awaits a promise; for Python it imports the file at `path` with
+the project's Python; for Rust it builds a temporary binary in a copy of the
+crate, and the value needs `Debug`.
+
+```bash
+tofu tool eval '{"lang":"go","path":"orders","expr":"orders.Order{Quantity: 3, Cents: 250}.Total()"}' --dir .
+```
+
+```text
+value: 750
+type: int
+ms: 0.000
+stdout: none
+ran go run -overlay=...\overlay.json ./tofueval in C:\work\shop, 512 ms; the working tree was not changed
+```
+
+`setup` holds statements run before the expression, and a compile or syntax
+error comes back as `expression:line:column` or `setup:line:column`.
+
 ## Parameters
 
 The model calls these tools. `tofu tool` runs one by hand and prints what
@@ -279,3 +310,8 @@ the model would read. See [One tool call by hand](/docs/cli/tool).
 | `api` | `name` | one name, or `Container.member`; left out lists the names |
 | `api` | `lang` | `go`, `ts`, `rust` or `python`, when the directory holds more than one kind of project |
 | `api` | `path` | the project directory |
+| `eval` | `lang` | `go`, `ts`, `python` or `rust`; required |
+| `eval` | `expr` | the expression whose value you want; required |
+| `eval` | `path` | the Go package, TypeScript or Python file, or Rust crate it runs in |
+| `eval` | `setup` | statements run before the expression |
+| `eval` | `imports` | more Go imports; the standard packages it names are imported |

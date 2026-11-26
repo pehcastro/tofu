@@ -15,13 +15,14 @@ by hand and prints the exact text the model would read.
 
 Each group has a page of its own:
 
-- `tofu docs tools-checks`: `test`, `typecheck`, `read`, `write`, `edit`,
-  `bash` and `shell`, which run the project's checks, read and change its
-  files, and run its commands.
-- `tofu docs tools-code`: `symbols`, `map` and `api`, which say where a
-  name is declared and who calls it, what a change reaches, which files
-  matter for a task, and what a dependency looks like at its pinned
-  version.
+- `tofu docs tools-checks`: `test`, `typecheck`, `mutate`, `read`,
+  `write`, `edit`, `bash` and `shell`, which run the project's checks, say
+  whether a test catches a planted bug, read and change its files, and run
+  its commands.
+- `tofu docs tools-code`: `symbols`, `map`, `api` and `eval`, which say
+  where a name is declared and who calls it, what a change reaches, which
+  files matter for a task, what a dependency looks like at its pinned
+  version, and what one expression returns.
 - `tofu docs tools-change`: `codemod`, `scaffold`, `format` and `deps`,
   which rewrite one code shape everywhere, make a file shaped like a
   sibling, format the files named, and add a dependency after reading its
@@ -33,9 +34,10 @@ Each group has a page of its own:
   `http`, `record`, `profile`, `shape`, `db`, `spawn`, `race`,
   `ask_person` and `heads_up`, which organize the work, read the web and
   the machine, and reach sub-agents and the person.
-- `tofu docs tools-context`: `context`, `budget`, `forget`, `note`,
-  `digest`, `done`, `claims` and the review agent, which let the model
-  look after its own window and check its own work.
+- `tofu docs tools-context`: `context`, `budget`, `estimate_time`,
+  `forget`, `note`, `digest`, `done`, `claims` and the review agent, which
+  let the model look after its own window, say how long work takes, and
+  check its own work.
 - `tofu docs turn-history`: `changes`, `trail`, `bisect`, `checkpoint` and
   `whatif`, which say what each turn changed, find the turn that broke a
   check, and put back one turn's edits while keeping the rest.

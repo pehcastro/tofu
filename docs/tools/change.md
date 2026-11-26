@@ -2,7 +2,7 @@
 title: Changing code
 description: codemod, scaffold, format and deps, the tools that rewrite one code shape everywhere, make a new file shaped like a sibling, run the project's own formatter on the files named, and add a dependency after reading its license, size and advisories.
 order: 16
-updated: 2026-11-07
+updated: 2026-11-25
 ---
 
 Four tools change code the way a person means it rather than the way the
@@ -27,12 +27,14 @@ the failure message.
 ## codemod
 
 `codemod` takes a `pattern` and a `rewrite`, both code in `lang`, and
-rewrites every match. It runs on cat-grep, which parses 47 languages inside
-the tofu binary with nothing to install, the script code of Svelte, Vue and
-PHP pages included. A string or a comment that looks like the pattern is
-never touched.
+rewrites every match. It runs on cat-grep, a Go port of
+[ast-grep](https://ast-grep.github.io/) that parses with
+[tree-sitter](https://tree-sitter.github.io/tree-sitter/) grammars built
+into the tofu binary: 47 languages with nothing to install, the script code
+of Svelte, Vue and PHP pages included. A string or a comment that looks
+like the pattern is never touched.
 
-In a pattern, `$NAME` matches one node, `$$$NAME` any run of nodes such as
+The pattern language is ast-grep's. In a pattern, `$NAME` matches one node, `$$$NAME` any run of nodes such as
 call arguments or statements, and `$_` and `$$$` match without capturing. A
 name used twice must match the same code, and every name in `rewrite` must
 be captured in `pattern`.
@@ -269,7 +271,8 @@ not formatted, prettier is not installed: it is not under node_modules in this d
 
 `deps` adds, upgrades, explains or lists the project's dependencies for Go,
 npm, cargo and Python through uv. `add` and `upgrade` read the registry,
-the license from deps.dev and the known advisories from osv.dev first, then
+the license from [deps.dev](https://deps.dev/) and the known advisories
+from [osv.dev](https://osv.dev/) first, then
 run the package manager and report what changed.
 
 ```bash

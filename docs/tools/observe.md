@@ -2,7 +2,7 @@
 title: Observe
 description: http calls the project's own server, record saves a command's http and replays it without the network, and profile says where the time or memory goes.
 order: 9
-updated: 2026-11-06
+updated: 2026-11-25
 ---
 
 Three tools look at the project while it runs. `http` calls the project's own
@@ -144,7 +144,9 @@ project's shared scratchpad under `~/.tofu`, never in the project.
 functions where the cpu time or the memory goes, each with `flat` (spent in
 the function itself), `cum` (with what it calls) and the `path:line` it is
 defined at, then the hottest call path. Parameters: `command` as words,
-`kind` as `cpu` or `mem`.
+`kind` as `cpu` or `mem`. A Go profile is read from Go's
+[pprof](https://github.com/google/pprof) format inside tofu, so no `go tool
+pprof` runs.
 
 | Command | Profiler |
 |---|---|

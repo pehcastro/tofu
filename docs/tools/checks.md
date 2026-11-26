@@ -1,8 +1,8 @@
 ---
 title: Checks
-description: typecheck and test check Go, Rust, Python and TypeScript with the project's own tools, and write and edit return the checker's errors.
+description: typecheck and test check Go, Rust, Python and TypeScript with the project's own tools, mutate says whether a test catches a planted bug, and write and edit return the checker's errors.
 order: 4
-updated: 2026-11-06
+updated: 2026-11-25
 ---
 
 `typecheck` and `test` check a project in Go, Rust, Python or TypeScript with
@@ -147,19 +147,33 @@ FAIL TestDiscounted order_test.go:17: got 650, want 675
 ## mutate
 
 `mutate` answers whether a test would catch a bug in a file. It plants
-small bugs in `path` one at a time, runs the test named in `test` against
-each in an overlay, and returns every survivor as `path:line` with the
-change the test missed. The project's files are never changed.
-`test_path` names the package of the test when it lives in another one.
+small bugs in `path` one at a time, a flipped comparison, a swapped
+operator, a constant plus one, a flipped boolean, a return of the zero
+value, runs the test named in `test` against each in an overlay, and
+returns every survivor as `path:line` with the change the test missed. The
+project's files are never changed. It reads Go, Rust, Python, TypeScript and
+JavaScript files. A test that does not pass before mutation is refused.
 
 ```bash
-tofu tool mutate '{"path":"order.go","test":"TestDiscounted"}' --dir .
+tofu tool mutate '{"path":"orders/orders.go","test":"TestTotal"}' --dir .
 ```
+
+```text
+mutants: 10, killed: 3, survived: 7
+survived:
+orders/orders.go:9: "if o.Quantity > 10 {" became "if o.Quantity > 11 {"
+orders/orders.go:10: "return o.Quantity * o.Cents * 9 / 10" became "return 0"
+...
+test: check test ^TestTotal$ in orders passed before mutation in 577 ms; each mutant ran alone, limited to 2887 ms; the working tree was not changed
+```
+
+Here `TestTotal` never orders more than ten items, so no bug in the bulk
+discount line is caught.
 
 ## Parameters
 
-The model calls both tools on its own. Neither has a command of its own;
-`tofu tool` runs either one by hand.
+The model calls these tools on its own. None has a command of its own;
+`tofu tool` runs any one by hand.
 
 | Tool | Parameter | What it does |
 |---|---|---|
@@ -169,6 +183,10 @@ The model calls both tools on its own. Neither has a command of its own;
 | `test` | `name` | one Go, Rust or Python test by name |
 | `test` | `repeat` | run it this many times and give a verdict |
 | `test` | `changed` | run the tests of every file this turn changed, and every test that reaches what it changed |
+| `mutate` | `path`, `test` | the file to plant bugs in and the one test to run against each; required |
+| `mutate` | `test_path` | for Go, the package of the test when it is not the file's own |
+| `mutate` | `command` | a program and its arguments that run that one test, in place of the runner tofu picks |
+| `mutate` | `lines` | `[from, to]`, to keep the bugs on those lines |
 
 ## After write and edit
 
@@ -180,16 +198,15 @@ file unable to parse is refused, and nothing is written. See
 
 ## In a sub-agent's report
 
-When any check a sub-agent ran failed, its report lists every check it ran,
-in order, each with its exit code and the first error line it printed:
+When a check a sub-agent ran did not pass, its report lists only those
+checks, in order, each with its exit code and the first error line it
+printed. The checks that passed are a count on the card's `counts` line:
 
 ```text
-checks it ran, each with its exit code and first error line:
-  go vet ./... exited 0
+counts: 2 checks failed, 2 checks passed
+checks it ran that did not pass, each with its exit code and first error line:
   go test ./... exited 1: --- FAIL: TestAdd (0.00s)
   cargo test 2>&1 | tail -5 exited 0 at the last stage of its pipe, and printed a failure: test result: FAILED. 0 passed; 1 failed
-  go test ./... exited 0
-noted: sent back once: go test exited 1: --- FAIL: TestAdd (0.00s)
 ```
 
 A check is a shell command, `test` or `typecheck`. A report where every check

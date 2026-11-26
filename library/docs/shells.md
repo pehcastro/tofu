@@ -12,44 +12,17 @@ it returned. There are two kinds: a server or watcher the model started
 with `background: true`, and a command that was still running 30 s after
 its bash call started, such as a long build or test run.
 
-The second kind is not killed. The call returns the shell's name, such as
-`bash-3`, and what it printed so far, and the command keeps running. The
-model, or a sub-agent, reads it back with `shell wait`, which returns as
-soon as the command ends, or after another 5 minutes, with its exit code and its
-last lines. A wait also returns early when the command, or a file it
-redirects into, prints a failure line such as `error: FileNotFound`, and when
-it has printed nothing for 30 s while its process tree used no CPU. A wait
-on a running command says how many lines it printed since the last wait, how
-much CPU its process tree used, and each file it writes to with its size and
-when it was last written, or that the file does not exist yet or cannot be
-read. A command piped into `tail -40` that sits idle is called out as waiting
-on something rather than working, and a second wait that would say the same
-says so and to stop it and run the step on its own. A failure line printed
-after the command moved comes back to the agent that ran it as one message,
-within a second, without a wait. When that agent has already ended, the
-message goes to the nearest agent above it that still runs, or to the lead,
-and says whose command it was. When a sub-agent ends, the shells it started
-stop, and a failure line any of them printed reaches the lead in the
-sub-agent's report. A wait, and the lead's exit message, learn that a command
-ended from the command's own process rather than by reading its state file
-every 50 ms; only the failure-line watch reads the command's logs, once a
-second. The lead's own command moves after 10 s instead, or at once when you type, and its exit comes back to the lead as one message, so the lead never waits on it and you can always talk to it. A sub-agent that can run bash can always use `shell`, and may
-start a server, a watcher or a `sleep` with `background: true`; outside
-the background it sleeps 5 s at most.
+The second kind is not killed. The call returns the shell's name, such as `bash-3`, and what it printed so far, and the command keeps running. The model, or a sub-agent, reads it back with `shell wait`, which returns as soon as the command ends, or after another 5 minutes, with its exit code and its last lines.
 
-A bash call with `timeout_ms` of 30,000 or less is the exception: the
-command is killed there, its result and trace say `bash: hit the deadline
-after 3 s`, and nothing of it stays on the shells screen or on disk. A bash
-call may carry a `title`, a few words saying what the command is for.
+A wait also returns early when the command, or a file it redirects into, prints a failure line such as `error: FileNotFound`, and when it has printed nothing for 30 s while its process tree used no CPU. A wait on a running command says how many lines it printed since the last wait, how much CPU its process tree used, and each file it writes to with its size and when it was last written, or that the file does not exist yet or cannot be read. A command piped into `tail -40` that sits idle is called out as waiting on something rather than working, and a second wait that would say the same says so and to stop it and run the step on its own.
 
-A one-shot command, such as a test or a version check that ends inside
-its wait, is never a shell: neither the shells screen nor `tofu shells`
-lists it, and a background start that ends inside its 10 s says it has
-no shell name to wait on. A name is never given to a second command, so
-a name in a sub-agent's report is the one the orchestrator waits on,
-reads and stops, and the screen and `tofu shells` show that same name.
-While a turn runs, the chat shows the last line of each running command
-under the working line:
+A failure line printed after the command moved comes back to the agent that ran it as one message, within a second, without a wait. When that agent has already ended, the message goes to the nearest agent above it that still runs, or to the lead, and says whose command it was. When a sub-agent ends, the shells it started stop, and a failure line any of them printed reaches the lead in the sub-agent's report. A wait, and the lead's exit message, learn that a command ended from the command's own process rather than by reading its state file every 50 ms; only the failure-line watch reads the command's logs, once a second.
+
+The lead's own command moves after 10 s instead, or at once when you type, and its exit comes back to the lead as one message, so the lead never waits on it and you can always talk to it. A sub-agent that can run bash can always use `shell`, and may start a server, a watcher or a `sleep` with `background: true`; outside the background it sleeps 5 s at most.
+
+A bash call with `timeout_ms` of 30,000 or less is the exception: the command is killed there, its result and trace say `bash: hit the deadline after 3 s`, and nothing of it stays on the shells screen or on disk. A bash call may carry a `title`, a few words saying what the command is for.
+
+A one-shot command, such as a test or a version check that ends inside its wait, is never a shell: neither the shells screen nor `tofu shells` lists it, and a background start that ends inside its 10 s says it has no shell name to wait on. A name is never given to a second command, so a name in a sub-agent's report is the one the orchestrator waits on, reads and stops, and the screen and `tofu shells` show that same name. While a turn runs, the chat shows the last line of each running command under the working line:
 
     [&orchestrator] running bash, 3s  |  fg 3
 
@@ -58,25 +31,11 @@ status line above the composer rather than on a line of their own:
 
     waiting  |  5 sub-agents · 1 in bash  |  6m 1s
 
-Each row is a running shell: the command, who started it and its latest output. A shell that ends leaves the screen at once and tofu stops reading it;
-its record and log stay on disk for 72 hours, read by name with `tofu shells log`. The screen reads the running shells four times a second while any runs. A line reaches the log as the command writes
-it; a running shell that printed nothing says `nothing printed yet`. Python is told not to buffer its output. A kept shell's log stays under 1 MiB: it keeps the first and last 256 KiB, with a line saying how many bytes were dropped between. At most 64 kept shells run at once; one more is refused, naming the shells screen and `tofu shells stop <name>`.
+Each row is a running shell: the command, who started it and its latest output. A shell that ends leaves the screen at once and tofu stops reading it; its record and log stay on disk for 72 hours, read by name with `tofu shells log`. The screen reads the running shells four times a second while any runs. A line reaches the log as the command writes it; a running shell that printed nothing says `nothing printed yet`. Python is told not to buffer its output. A kept shell's log stays under 1 MiB: it keeps the first and last 256 KiB, with a line saying how many bytes were dropped between. At most 64 kept shells run at once; one more is refused, naming the shells screen and `tofu shells stop <name>`.
 
-When the command names its own log file, such as `-Log target/build.log`,
-`> build.log` or `tee build.log`, the row also shows the end of that file,
-so a build silent on the console is still visible. The file stays where
-the command wrote it, and its path is read from where the command is when it writes it, so
-`cd apps/desk && ... -Log target/build.log` reads
-`apps/desk/target/build.log`. Only a path written in the command counts,
-and a file older than the shell, left by an earlier run, is not shown.
+When the command names its own log file, such as `-Log target/build.log`, `> build.log` or `tee build.log`, the row also shows the end of that file, so a build silent on the console is still visible. The file stays where the command wrote it, and its path is read from where the command is when it writes it, so `cd apps/desk && ... -Log target/build.log` reads `apps/desk/target/build.log`. Only a path written in the command counts, and a file older than the shell, left by an earlier run, is not shown.
 
-A pipeline ending in `| grep`, `| sed`, `| awk`, `| cut`, `| tr` or
-`| uniq` runs in a pseudo terminal (ConPTY on Windows), since those print
-in blocks to a pipe: a loop printing once a second into `| grep` shows
-its lines at 0.2, 1.2, 2.2, 3.3 and 4.4 s, against all five at 5.6 s on a
-pipe. Every other command stays on a pipe, because a terminal costs about
-a quarter of a millisecond a line and makes some tools draw progress
-bars. Exit code and log are the same either way.
+A pipeline ending in `| grep`, `| sed`, `| awk`, `| cut`, `| tr` or `| uniq` runs in a pseudo terminal (ConPTY on Windows), since those print in blocks to a pipe: a loop printing once a second into `| grep` shows its lines at 0.2, 1.2, 2.2, 3.3 and 4.4 s, against all five at 5.6 s on a pipe. Every other command stays on a pipe, because a terminal costs about a quarter of a millisecond a line and makes some tools draw progress bars. Exit code and log are the same either way.
 
 A person can take a kept shell over from a client that declares `takeover` to `tofu serve`, such as the desk: from then on every bash command runs in a terminal, foreground or background, and Take over on a running shell hands its keys to the person, with what it printed so far, colours included. Taking over and releasing never kill it, and a held shell that ends goes back to the agent and leaves the list.
 While the person holds it the agent backs off: its `shell` logs, wait, stop and restart answer `bash-3 is held by the person, who took it over at 21:03:11 ...`, a bash kill of it and a sub-agent kill leave it running, and the agent is told at take-over and again at release, with the person's note.
@@ -91,12 +50,7 @@ when it has its lines, and a mid-pipeline filter, such as the `grep` in
 
 ## Where it lives
 
-Shells belong to the running app and the session that started them. When
-`persistentRegistry` is on, the list is kept in the project's state folder
-and survives a restart of the app; when it is off, closing the app stops
-every shell it started, with the processes each one started. A shell's
-output is a file there too, and the screen shows its last `logTail`
-lines, read from the last 256 KiB.
+Shells belong to the running app and the session that started them. When `persistentRegistry` is on, the list is kept in the project's state folder and survives a restart of the app; when it is off, closing the app stops every shell it started, with the processes each one started. A shell's output is a file there too, and the screen shows its last `logTail` lines, read from the last 256 KiB.
 
 ## Change it
 
@@ -124,13 +78,8 @@ which also says `ran 1m 1s, last output 2s ago`. It reads an ended shell by name
 
     tofu shells log bash-3
 
-A build or test that can move to a background shell runs without rtk,
-which prints nothing until exit; the call's proxy note says so. In the
-app, alt+4 opens the shells screen. `tofu session trace` shows the bash
-call that moved a command to a shell, with the shell's name in its result.
+A build or test that can move to a background shell runs without rtk, which prints nothing until exit; the call's proxy note says so. In the app, alt+4 opens the shells screen. `tofu session trace` shows the bash call that moved a command to a shell, with the shell's name in its result.
 
 ## Undo it
 
-Stop a shell with `tofu shells stop`, and turn `persistentRegistry` off
-with `tofu settings set persistentRegistry false`. A model that gave up
-waiting on a shell leaves it running and listed until it ends or is stopped.
+Stop a shell with `tofu shells stop`, and turn `persistentRegistry` off with `tofu settings set persistentRegistry false`. A model that gave up waiting on a shell leaves it running and listed until it ends or is stopped.

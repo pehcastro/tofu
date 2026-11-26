@@ -2,7 +2,7 @@
 title: Work
 description: plan, settings, artifact_fetch, history, ask_person, heads_up, skill and the tofu verbs, tools that organize the work rather than change files.
 order: 6
-updated: 2026-11-06
+updated: 2026-11-25
 ---
 
 Tools that change no project file. All are tofu's own Go code, except the
@@ -74,8 +74,8 @@ between tools. Each mode takes one `anchor`:
 |---|---|---|
 | `quote` | a reference you wrote, such as `[quote#3f2a]`, or the short id inside it | that recorded turn or tool call, word for word |
 | `zoom` | a memory view line's `id+n`, with `store` | the two lines it sums up, down to the original item |
-| `recall` | a regular expression, with an optional `store` | every raw item that matches, word for word |
-| `lookup` | a call id a fork's carry names | that call and its result whole, from any earlier session of the line |
+| `recall` | a regular expression, with an optional `store`, or a reference such as `[tool#abc12]` | every raw item that matches, word for word, or that one call |
+| `lookup` | a call id a fork's carry names, with an optional `session` | that call and its result whole, from that session, this one, or any earlier session of the line |
 
 `quote` and `lookup` look through every session of the chain, so an item
 from before a fork or a `--continue` is found. An id that matches no item,
@@ -85,7 +85,7 @@ is a new claim. A quote is a citation.
 A summary line is a pointer, not the thing, so the lead zooms until it has
 the part it needs whole before it acts on it. `zoom` and `recall` are
 offered while `episodes` is on. See [Memory](/docs/features/memory).
-Parameters: `mode`, `anchor`, `store`.
+Parameters: `mode`, `anchor`, `store`, `session`.
 
 A call by an old name, `quote`, `recall`, `zoom` or `lookup`, is refused
 with the call to make instead:
@@ -134,31 +134,40 @@ diff:
 ```
 
 The form is the short selector: its header, the numbered labels, other,
-return and any previews. The question, its context and each option's
-description are in the chat row above it, so nothing is shown twice. A long
-line wraps, it is never cut, and a form taller than its share of the screen
-scrolls with the focused option and says which rows it shows.
+return and any previews. Its header counts the questions, and the asks
+still waiting behind it, such as `1 of 2 · 1 more ask waits`. The question
+and its context are in the chat row above it, so nothing is shown twice;
+an option's description is not drawn. A long line wraps, it is never cut,
+and a form taller than its share of the screen scrolls with the focused
+option and says which rows it shows, such as `rows 2-15 of 24`.
 **esc** does nothing on the form, so a stray key never answers for you. To
 close the question without choosing, pick **return**: nothing is chosen,
 the lead is told so, and the question stays open.
 
-The chat keeps the question as a row you can scroll back to: the header,
-the question, its context, every option with its description and the
-recommended one marked. Once you answer, the row marks what you chose with
-✓ and says so under the options, or says nothing was chosen when you
-picked return. A reopened session shows the same row.
+While the question is open, its chat row holds the header, the question, a
+**Question context** card when the lead gave a `context`, and `waiting for
+your answer in the form below`:
+
+```text
+? Stale lock
+Which way should Resolve treat a stale lock?
+waiting for your answer in the form below
+```
+
+Once you answer, the row folds to one line, such as `? Discount fix: you
+chose Round at the end`, or `? Discount fix: you closed it: nothing chosen,
+and the question stays open` when you picked return. A reopened session
+shows the same row.
 
 ### A note with your choice
 
 On a question whose options carry a preview, type a line in the chat and
 press **enter**: the focused option is chosen and your line goes with it as
 a note. You pick a design and say what to change about it in one answer.
-The chat row shows both, under the options:
+The chat row shows both on its one line:
 
 ```text
-    ✓ 1. Round at the end (recommended)  keep cents until the total
-      2. Round each line  round every line first
-    you chose Round at the end, and wrote: keep it in cents
+? Discount fix: you chose Round at the end, and wrote: keep it in cents
 ```
 
 and the lead reads the note beside the choice:
@@ -175,14 +184,21 @@ the answer to your ask_person question: {"outcome":"submitted","answers":[{"id":
 |---|---|
 | `id` | names the question in the answer |
 | `header` | 1 to 4 words, the form's title |
-| `question` | one sentence |
+| `question` | one sentence, at most 200 characters |
+| `context` | up to 1,500 characters, drawn as the Question context card in the chat |
 | `type` | `choice`, `multi`, `text` or `yesno` |
-| `options` | 2 to 4, for `choice` and `multi`; each has a `label` of 1 to 5 words, a one-line `description` and an optional `preview` |
+| `options` | 2 to 4, for `choice` and `multi`; each has a `label` of 1 to 5 words, a one-line `description` of at most 200 characters and an optional `preview` |
 | `recommended` | the index of the option the lead would take, for every type but `text` |
 | `reversible` | `true` only when the recommended option can be undone later at little cost |
+| `needs_yes` | `true` when nothing it asks may happen without your own answer: it is never taken in auto, by the ask judge, by a timeout or by a dismissal |
 
-tofu adds the **other** row to every choice, so an option never says
-"other". Run by hand, `tofu tool ask_person` is refused, because nobody is
+While you are away, no form opens: the call answers `person_away` and the
+recommended option stands. A `needs_yes` question takes nothing: the lead is
+told to do nothing it asks and to say it waits on you.
+
+A question, a description or a context over its cap is refused back to the
+lead, naming the question and the cap. tofu adds the **other** row to every
+choice, so an option never says "other". Run by hand, `tofu tool ask_person` is refused, because nobody is
 there to answer:
 
 ```text

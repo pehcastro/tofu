@@ -9,7 +9,8 @@ verbs: tool
 
 `debug` runs a program or a test under a real debugger and prints the
 values at the line where it stops, so the model never adds print lines it
-then has to take out. It wraps `dlv` for Go and `debugpy` for Python. The
+then has to take out. It wraps `dlv` for Go and `debugpy` for Python,
+speaking the Debug Adapter Protocol to each. The
 model sends a list of steps, run in order, and the session stays open
 between calls until `stop`.
 
