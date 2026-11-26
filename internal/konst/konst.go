@@ -574,7 +574,7 @@ const (
 	HostEventBuffer      = 256
 	HostSteeringQueue    = 64
 	HostCloseWaitMillis  = 3000
-	HostLingerMillis     = 5000
+	HostLingerMillis     = 1000
 	HostReadyMillis      = 10000
 	HostAnswerMillis     = 1000
 	HostJoinMillis       = 120000

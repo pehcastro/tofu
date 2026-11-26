@@ -510,7 +510,7 @@ func (h *Host) follow(f *following, id string) {
 		f.ask(settled)
 		if f.hub.Version != konst.Version {
 			f.caughtUp()
-			h.note("the tofu host, process " + strconv.Itoa(f.hub.PID) + ", runs tofu " + f.hub.Version + " and this is tofu " + konst.Version + ", so this session runs on " + f.hub.Version + " until its last member leaves")
+			h.note("the tofu host, process " + strconv.Itoa(f.hub.PID) + ", runs tofu " + f.hub.Version + " and this is tofu " + konst.Version + ", and another member is on that host, so it keeps running and this session runs on " + f.hub.Version + " until its last member leaves")
 		}
 	})
 }

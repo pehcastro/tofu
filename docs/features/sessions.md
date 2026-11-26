@@ -79,9 +79,14 @@ the first answer to a question wins. A member that joins late gets the
 transcript and then every event live, token by token.
 
 You never start the host yourself. The first window starts it, and it
-exits 5 s after its last member leaves. When the last member leaves, the
+exits 1 s after its last member leaves. When the last member leaves, the
 host stops the session's turn, naming that member, and ends its shells. A
 member that stops answering for 10 s is let go.
+
+A tofu of another version that finds the host with no member stops it and
+starts its own, so a window opened right after an install runs the new
+build. When another member is on the host, it keeps that host, says so,
+and runs on the host's build until the last member leaves.
 
 A host that ends without closing its sessions still says why. While it
 holds a session it writes, every 5 s, a liveness record beside it: its
@@ -109,9 +114,7 @@ under 1 MiB with one older copy beside it.
 
 The members and the host talk over a local socket under your home, or, on
 Windows, under a temp folder only your user can open, so nothing is
-reachable from another machine or another user. A newer tofu that joins a
-host started by an older one says so, and the session runs on the older
-build until its last member leaves.
+reachable from another machine or another user.
 
 ## Side chats
 

@@ -342,6 +342,11 @@ func joinHub(project, id string, member Member) (_ net.Conn, _ *json.Decoder, _ 
 		projectWall(project, walls.Wall{Op: walls.OpHostJoin, Name: string(member.Kind), MS: time.Since(joining).Milliseconds(), At: joining.UnixMilli(), Session: id, OK: err == nil, OutsideMS: new(int64)})
 	}()
 	status, err := EnsureHub(project)
+	if err == nil && status.Version != konst.Version && status.Members == 0 {
+		if _, stopped := StopHub(project); stopped == nil {
+			status, err = EnsureHub(project)
+		}
+	}
 	if err != nil {
 		return nil, nil, hubJoined{HubStatus: status}, err
 	}
