@@ -10,7 +10,7 @@ verbs: serve
 `tofu serve --stdio` runs one project for another program, the desk app or a script of your own. It reads
 JSON-RPC 2.0 requests on standard input and writes responses and events on standard output, one JSON object
 a line, in the protocol `tofu.host/1`. Standard error carries logs and nothing else. There is no port and no
-daemon: the program that starts tofu owns it. Idle, it uses about 0.35% of a core. `session.list` answers about 4x and `session.trace` about 2x faster than in 0.5.14, and the `boardy.*` calls 1.7 to 2x faster on a board of 1,500 tickets, with the same output.
+daemon: the program that starts tofu owns it. Idle, it uses about 0.35% of a core.
 
 Every event names its `session`, `turn`, `item`, `seq`, `agent` for a sub-agent's, and `ref`, the token ctrl+r
 types for its item. `turn` is the turn that began the lead's run: a follow-up message the lead reads in that run keeps it, and each call still carries its own recorded id in `item`. Events carry data: a turn ends with `status` `finished`, `stopped` or `failed`, a tool
@@ -39,9 +39,9 @@ context. `tofu docs serve-methods` lists every request; this page is what serve 
 - `agent.updated`: a sub-agent's changed fields, `moves` among them, each `{agent, move, round, reason}` with `move` `spawned`, `reviewed`, `reopened` or `accepted`, drawn on the terminal sub-agent card's `review` line; `context.updated` with `agent` set is that sub-agent's own context, apart from the lead's
 - `tool.started`, `tool.completed` and `file.edit` (an append as an added hunk) by a sub-agent carry its
   `agent` and `instance`, live and replayed; `tool.started` the bash `title` the model gave, and
-  `tool.completed` a `summary`: `exit`, `durationMs`, `hits` for a search, `added` and `removed` lines. Both carry `card`, the call drawn as a row (`family`, `doing`, `verb`, `object`, `meta`, `tone`, and on a ticket move `from` and `to`), its `group`, and `groupSummary`, the turn's group row: `calls`, `failed`, its `head` and its `open` lines
+  `tool.completed` an `outcome`, `ran`, `failed`, `aborted` or `skipped` (a test or typecheck whose checker could not run, `failed` too), and a `summary`: `exit`, `durationMs`, `hits` for a search, `added` and `removed` lines. Both carry `card`, the call drawn as a row (`family`, `doing`, `verb`, `object`, `meta`, `tone`, and on a ticket move `from` and `to`), its `group`, and `groupSummary`, the turn's group row: `calls`, `failed`, its `head` and its `open` lines
 - `agent.ended`: `endedAt`, `durationMs`, the `turn` that spawned it;
-  `turn.steered`: the lead read a message sent mid-turn, until then queued; `usage.updated`, per turn and agent after each call, the running `tokensIn`, `tokensOut`, `cacheRead`, `cacheWrite5m`, `cacheWrite1h`, `costUsd`, `decisions`, and `tokensPerSecond`, the output rate, at most once a second while text streams and `0` during a tool call (also on `session.state`, for the lead and each agent)
+  `turn.steered`: the lead read a message sent mid-turn, until then queued; `usage.updated`, per turn and agent after each call, the running `tokensIn`, `tokensOut`, `cacheRead`, `cacheWrite5m`, `cacheWrite1h`, `costUsd`, `decisions`, and `tokensPerSecond`, the output rate, at most once a second while text streams and kept at its last value through a tool call (also on `session.state`, for the lead and each agent)
 - `quota.updated`: on open, after each turn, on an account move, every five minutes, and once a `retry_at`
   passes; each window's `percent`, `source`, `account_id` (as `query.accounts`), `read_at` and `stale`, true
   for a last good reading kept through a failed poll; `windows: []`, none answered
@@ -54,7 +54,7 @@ context. `tofu docs serve-methods` lists every request; this page is what serve 
   model file, from any process or by hand: `what` is `role`, `agent` or `model`, and `model` is empty once
   unbound; every client and the session's holder read it before the next turn and the next spawn
 - `item.persisted`: every line of `events.jsonl` with its `logSeq`; a tool call's names its `tool.started`
-- `decision`: every gate, with `at` and `call`, the `tool.started` it judged, and the classifier that judged it: `provider`, `model`, the build the answer reported, and `durationMs`; its ledger row holds the same
+- `decision`: every gate, with `at` and `call`, the `tool.started` it judged, and the classifier that judged it: `provider`, `model`, the build the answer reported, and `durationMs`; its ledger row holds the same. Once the gate has judged in the session, `judge` `{judge, classifiers, line}` names what judges, the classifier, a model or `the regex arm`, each classifier tried with `state` `ok`, `out of credits`, `refusing` or `unreachable` and its HTTP `status`, and the chat's note of the change; `query.usage` carries the same `judge`
 - `memory.scoped`: a `remember` kept: `statement`, `offered`, `picked` (`none` for no), `by` (`person`, `auto`); `memory.changed` `{scope, file}`: a memory entry file added, changed or removed, by tofu, another process or by hand, within a second
 - `tofu/askPerson`, a request, when the lead asks a question with options, only to a client whose `initialize`
   declared `questions`; any other is `undelivered` at once. Answer `{"outcome":"submitted","answers":[{"id":

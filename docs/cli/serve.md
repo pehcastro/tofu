@@ -2,7 +2,7 @@
 title: Serving tofu to another program
 description: tofu serve --stdio runs one project for the desk app or a script of your own, over JSON-RPC on standard input and output, with every board, approval, question and status record the app has.
 order: 2
-updated: 2026-10-28
+updated: 2026-11-25
 ---
 
 `tofu serve --stdio` runs one project for another program: the desk app, an editor, or a script of
@@ -53,9 +53,7 @@ and the trace row says which process fired them. When the lead forks,
 replays its chat across every earlier generation, and `session.history` pages back to the first
 message.
 
-**It answers fast and idles light.** `session.list` answers about 4x and `session.trace` about 2x
-faster than before, and the `boardy.*` calls 1.7 to 2x faster on a board of 1,500 tickets, with the
-same output. An idle `tofu serve` uses about 0.35% of a core.
+**It idles light.** An idle `tofu serve` uses about 0.35% of a core.
 
 ## What a frontend can ask
 
@@ -64,8 +62,12 @@ tofu from a newer one. Beside the session, turn, settings and login methods, the
 
 | Family | Requests | What they answer |
 |---|---|---|
-| `boards` | `query.session`, `query.usage.history`, `query.limits`, `query.skills`, `query.ledger.summary`, `session.turns` | the fork tree; usage by hour or day with who spent it; each account's burn rate and when a window fills; the skills; a week of decisions per point; one digest per turn with its origin, outcome, held calls, sub-agents, files with line counts, tokens and cost |
-| `commands` | `query.commands` | every slash command with its arguments, what it does, whether it runs in tofu or only in the interface, and what a client needs to offer it; `needs` is `turn` or `diff-turn` for `/debug`, `/hunt` and `/simplify`, which start a model turn |
+| `boards` | `query.session`, `query.usage.history`, `query.limits`, `query.skills`, `query.ledger.summary`, `session.turns` | the fork tree; usage by hour or day with who spent it; each account's burn rate and when a window fills; the skills, and in `active` each skill loaded in the session with `said`, the words that loaded it, or the model's own skill call, and `at`; a week of decisions per point; one digest per turn with its origin, outcome, held calls, sub-agents, files with line counts, tokens and cost |
+| `commands` | `query.commands` | every slash command with its arguments, what it does, whether it runs in tofu or only in the interface, and what a client needs to offer it: `needs` is `turn` for `/debug`, `/hunt`, `/code-review`, `/generate-map` and `/restructure` and `diff-turn` for `/simplify`, which start a model turn; `said` for `/skill off`, `standing` for `/permissions`, and `compact`, `fork`, `branch`, `undo`, `cron`, `resume`, `new`, `reload` or `always` for the rest |
+| `compact` | `session.compact` | shrinks the old tool results the next turn carries, keeping whole any that name `focus`, and answers `kind`, `results`, `focused`, `tokensBefore`, `tokensAfter` and `into`, the new session every member moves to |
+| `fork` | `session.fork` | a fresh line now, carrying what `session.compact` carries, even with nothing to shrink |
+| `branch` | `session.branch` with `kind: "main"` | a new line from your Nth `message`, the old line kept open; it answers the new `session`, `carried`, the messages before it, and `words`, that message's text; with no `message` it errs listing your messages by number |
+| `standing` | `approval.list`, `approval.revoke` | every allow or reject answer standing in the session, and one taken back by its `target` |
 | `memory` | `memory.add`, `memory.edit`, `memory.remove`, `memory.view`, `memory.zoom`, `memory.recall` | entries in the four scopes, and the episode and scope views opened line by line |
 | `sessions` | `session.open`, `session.close` | a second session opened beside a running turn, and one let go |
 | `side` | `session.branch`, `session.access` | a side chat beside the lead, from its latest point or one you name, with its own model and effort, and what it may write |
@@ -74,7 +76,7 @@ tofu from a newer one. Beside the session, turn, settings and login methods, the
 | `takeover` | `shell.takeover`, `shell.input`, `shell.resize`, `shell.release` | a person borrows a kept shell: every bash command runs in a terminal once the client declares `takeover`, the take-over answers the raw output so far with its colours, keystrokes and sizes go in as base64 bytes, and the release hands it back to the agent with an optional note. Neither kills the process. A refusal is `-32000` with `data.reason`, one of `not_declared`, `unknown_shell`, `not_running`, `not_kept`, `not_in_terminal`, `other_process` and `not_held` |
 | `boardy` | `boardy.boards`, `boardy.list`, `boardy.rows` (the list's fields only, 349 KB instead of 11 MB on 1,500 tickets, each row with its `type`, `points`, `reason`, and the `model`, `tools` and `reads` of the sub-agent that worked it), `boardy.get`, `boardy.events`, `boardy.report`, `boardy.create`, `boardy.move`, `boardy.assign`, `boardy.log`, `boardy.hand`, `boardy.triage` | the project's ticket boards, a view of one, a ticket with its events and actuals, a report, and every ticket change the person may make; see [Boardy views](/docs/features/boardy-views) |
 | `scratch` | `scratch.list`, `scratch.clean` | the project's scratchpad folders with their size and when each was last touched, and a cleanup with `session`, `cache` and `dryRun` |
-| `queries` | `query.context`, `query.drain`, `query.rules`, `query.usage`, `query.settings`, `query.accounts`, `query.ledger` and the other `query.*` | the context items, named down to the rules, memory, skills and tool schemas; where a session's tokens went, as `tofu session drain --json` prints it; rule text and how often each rule fired, quota with each reading's age, each setting with its label, kind, choices and range, the `reason` its value in force differs from the one set and `custom` on a choice that also takes your own value, every credential with what each API key has spent, its limits and balance; the decisions of one session, a page of the newest 200 unless `last` asks for more, with `next` to pass back as `before` for the older page |
+| `queries` | `query.context`, `query.drain`, `query.rules`, `query.usage`, `query.settings`, `query.accounts`, `query.ledger` and the other `query.*` | the context items, named down to the rules, memory, skills and tool schemas; where a session's tokens went, as `tofu session drain --json` prints it; rule text and how often each rule fired, quota with each reading's age, each account's `window_spend`, the classifier's spend and, once the gate has judged, `judge`, as on `decision`, each setting with its label, kind, choices and range, the `reason` its value in force differs from the one set and `custom` on a choice that also takes your own value, every credential with what each API key has spent, its limits and balance; the decisions of one session, a page of the newest 200 unless `last` asks for more, with `next` to pass back as `before` for the older page |
 
 `session.state` lists the approvals waiting, the standing answers, the open questions, the
 sub-agents, the kept shells and the cron jobs, which is what a client reads after it falls behind.
@@ -118,8 +120,8 @@ started it.
 - `usage.updated` after each model call, one per turn and agent, with the running `model`,
   `tokensIn`, `tokensOut`, `cacheRead`, `cacheWrite5m`, `cacheWrite1h`, `costUsd` and `decisions`, so
   a client shows what a turn costs as it runs. It also carries `tokensPerSecond`, the output rate,
-  sent at most once a second while text streams and `0` during a tool call; `session.state` carries
-  it for the lead and for each agent.
+  sent at most once a second while text streams and kept at its last value through a tool call;
+  `session.state` carries it for the lead and for each agent.
 - `quota.updated` when a session opens, after each turn, when a turn moves to another account, every
   five minutes, and as soon as a rate-limited account may be asked again. Each window says when it
   was read, whether it is a last good reading kept through a failed poll (`stale`), and the `source`
@@ -141,15 +143,21 @@ started it.
 - `cron.updated` when a cron job fires and again when its result is in. Each job carries
   `lastFired`, `fires`, `lastResult`, `expires` and `until` beside its schedule and next fire.
 - `decision` for every gate verdict, naming the classifier that gave it: `provider`, `model`, the
-  build its answer reported, and `durationMs`. The ledger row holds the same three.
+  build its answer reported, and `durationMs`. The ledger row holds the same three. Once the gate
+  has judged in the session, `judge` says what judges it: `judge`, the classifier, the model or
+  `the regex arm`; `classifiers`, each `{provider, state, status}` with `state` `ok`,
+  `out of credits`, `refusing` or `unreachable`; and `line`, the note the chat showed when the judge
+  changed, such as `judge is running on <model> because <provider> is out of credits`.
 - `approval.resolved` and `question.resolved`, naming the answer and who sent it; an `allow_always`
   or `reject_always` says `standing`. A standing answer is kept beside its session and read back
   after a restart or `tofu --continue`, never in another session.
 - `tool.started` carries the `title` the model gave a bash command, a few words a person reads,
-  such as `rebuilt the desk binary`. `tool.completed` carries a typed `summary`: `exit`,
-  `durationMs`, `hits` for a search or glob, and lines `added` and `removed` for an edit, so a
-  frontend draws a result row without parsing the output. Both carry a `card`, the call as a row,
-  its `group` and the `groupSummary` of the turn's tool calls, the row the terminal draws.
+  such as `rebuilt the desk binary`. `tool.completed` carries an `outcome`, `ran`, `failed`,
+  `aborted` or `skipped`, a test or typecheck whose checker could not run, which also sets `failed`;
+  and a typed `summary`: `exit`, `durationMs`, `hits` for a search or glob, and lines `added` and
+  `removed` for an edit, so a frontend draws a result row without parsing the output. Both carry a
+  `card`, the call as a row, with `from` and `to` on a ticket move, its `group` and the
+  `groupSummary` of the turn's tool calls, the row the terminal draws.
 - A message carries `sentAt`, when you sent it, and a note or reply its `at`. `turn.send` answers
   the id of the turn it started, and a steer carries its pasted images.
 - `turn.started`, `message.user`, `turn.steered` and `turn.steerQueued` carry a typed `origin`:
@@ -190,23 +198,27 @@ and `account.state` with no vendor, point `TOFU_CLAUDE_USAGE_URL` or `TOFU_CODEX
 usage endpoint of your own, and tofu polls that one instead.
 
 Requests answer typed results, named under `x-requests` in `tofu serve --schema`: `undo` the files
-it put back, `label` the row it labelled, `login.start` the account signed in, and `settings.set`
-the value with where it now comes from.
+it put back, `label` the row it labelled, `login.start` the account signed in, `models.update`
+the model `sources` it read again and the `versions` it checked, as `tofu models update` does, and
+`settings.set` the value with where it now comes from.
 
 ## Commands
 
 ```
-tofu serve --stdio [--dir PATH] [--cassette PATH]
+tofu serve --stdio [--dir PATH] [--cassette PATH] [--done-review off|cheap|screen|typed]
 tofu serve --schema
 tofu docs serve
 tofu docs serve-methods
 ```
 
 `tofu docs serve` and `tofu docs serve-methods` print the full reference of events and requests.
+`--done-review` picks how a sub-agent's hand-back is reviewed before the lead reads it, as
+`tofu drive` does; `TOFU_SERVE_DONE_REVIEW` names it when the flag does not and carries it to the
+host the session runs in, and with neither the `doneReview` setting decides.
 
 ## Memory
 
-`tofu serve` and `tofu app` run for hours, so they collect garbage about half
+`tofu serve` and the app run for hours, so they collect garbage about half
 as often as a short command: Go's `GOGC` at 200 with a 512 MiB soft memory
 limit. Set `GOGC` or `GOMEMLIMIT` in the environment and tofu leaves the
 runtime as you set it.

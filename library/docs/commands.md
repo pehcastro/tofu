@@ -1,14 +1,14 @@
 ---
 topic: commands
 title: Commands in the app
-summary: every slash command the app's composer takes, how /compact shrinks the history the next turn carries, how /fork and /branch start a new line by hand, how /undo puts files back, and how /permissions lists and revokes a standing answer
+summary: every slash command the app's composer takes, how /skill off drops a skill your words loaded, how /compact shrinks the history the next turn carries, how /fork and /branch start a new line by hand, how /undo puts files back, and how /permissions lists and revokes a standing answer
 verbs: context, session, undo
 ---
 
 ## What it is
 
 Typing `/` at the start of the composer opens the command list. Typing more filters it, the arrow keys pick a row, tab completes, and enter runs it.
-`/simplify`, `/debug`, `/hunt`, `/code-review`, `/generate-map` and `/restructure` start a model turn: the model gets the command's skill, and the chat shows what you typed. Every other command runs in tofu and never reaches the model. `tofu serve` answers the list as `query.commands`; a command that starts a turn says `turn` or `diff-turn`.
+`/simplify`, `/debug`, `/hunt`, `/code-review`, `/generate-map` and `/restructure` start a model turn: the model gets the command's skill, and the chat shows what you typed. Every other command runs in tofu and never reaches the model. `tofu serve` answers the list as `query.commands`; a command that starts a turn says `turn` or `diff-turn`, and `/skill off` says `said`.
 
 - `/help`: every command and what it does, one line each
 - `/simplify`: the first message carries the simplify skill and the last diff, or the last commit on a clean tree; cuts wait for your approval
@@ -26,6 +26,7 @@ Typing `/` at the start of the composer opens the command list. Typing more filt
 - `/quote`: cite a past turn by id, as `[message#id]` typed does
 - `/copy`, `/copy-call`: put the last answer, or the last tool call and its result, on the clipboard
 - `/permissions`, `/permissions revoke <n>`: every always here and never here answer standing in this session, numbered, or take answer `n` back so its next call asks you again; see `tofu docs gate`
+- `/skill off <name>`: stop following a skill your words loaded, until you say one of its keywords again; picking `/skill` from the list fills the composer with `/skill off`. The chat says `skill <name> off: you typed /skill off <name>`, or that the skill is not active and nothing changed. `query.skills` lists the skills active in the session
 - `/reload`: read settings, rules, skills, sub-agents, models, instructions and keys again
 - `/resume`: pick a session of this project, newest first, and carry it into the next task; `/resume <name or id>` takes that session straight away
 - `/side`: a side chat on this session's cache, as `sideChatAccess` allows

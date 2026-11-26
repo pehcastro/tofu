@@ -64,11 +64,10 @@ Reads, reloads, the `session.*` and `memory.*` reads, `mention.resolve`, `shell.
 - reads, `query.` and: `models` (with `wires` signed in and `stale`), `settings` (each row's
   `label`, `description`, `kind` of `bool`, `int`, `text`, `choice` or `list`, `choices`, `min`, `max`
   with none for no ceiling, `unit`, `restart`, `reason` when the value in force differs from the one set, and `custom` on a choice that also takes your own value), `commands` (each slash command's `name`, `args`,
-  `summary`, `scope` `tofu` or `interface`, and `needs`, what a client must offer to show it),
+  `summary`, `scope` `tofu` or `interface`, and `needs`, what a client must offer to show it: `turn` or `diff-turn` for one that starts a model turn, `said` for `/skill off`, `standing` for `/permissions`, and `always`, `reload`, `resume`, `new`, `compact`, `fork`, `branch`, `undo` or `cron` for the rest),
   `request` (takes `session` and `request`; answers what went into that request, as `tofu session request` prints it, and `request.sent` tells every client when one goes out), `rules` (each with `text`, `trigger`, `fires` and `fires_week`, seven days, today last), `agents`, `library`,
-  `memory`, `hooks`, `changelog` (with `seen`), `update` (it never installs), `usage` (each provider row's
-  `account`, `name`, `read_at`, `source`, `stale` and `retry_at`; the answer's `read_at` and `age_ms` are its
-  oldest reading's), `doctor`, `accounts`, `cron`, `docs` (takes `topic`), `context` (takes `session`, else the
+  `memory`, `hooks`, `changelog` (with `seen`), `update` (it never installs), `usage` (each provider row's `account`, `name`, `read_at`, `source`, `stale` and `retry_at`; the answer's `read_at` and `age_ms` are its oldest reading's;
+  `window_spend`, each account window's `requests` and weighted tokens since it began; `classifier`, the classifier's `calls`, `charged_usd` and `list_usd` over a `window`; and `judge`, as on `decision`, once the gate has judged), `doctor`, `accounts`, `cron`, `docs` (takes `topic`), `context` (takes `session`, else the
   open one, which before its first turn answers `unmeasured`; `items`, each `{band, kind, name, tokens,
   fate, step}`), `drain` (takes `session`; answers what `tofu session drain --json` prints) and `ledger` (takes `id`, or `last`, `point`, `session` and `before`; `session` keeps that session's rows before
   `last` counts; without `last` an answer is one page of the newest 200 rows; `rows`, oldest first, with
@@ -80,9 +79,8 @@ Reads, reloads, the `session.*` and `memory.*` reads, `mention.resolve`, `shell.
   and `spenders` by session, role, agent, wire, spend, account and model. `query.limits` answers `burns` per
   account and window since its last reset (`per_hour` null on one reading, `full_at` null when the window
   resets first), `order`, each role's accounts in turn, and `spend`, today's by account and agent.
-  `query.skills` answers the library's `skills` and the folders'. `query.ledger.summary` takes `since`, a week
-  back by default, and `session` to count one session's decisions; answers `points`, each `count`, `week`, `would_ask`, `labeled`, `agreed`, `mean_ms`,
-  `cost_usd` and `thresholds`
+  `query.skills` answers the library's `skills` and the folders', and `active`, each skill loaded in the session with `name`, `said` (the words that loaded it, or the model's own skill call) and `at`; `/skill off` takes one out.
+  `query.ledger.summary` takes `since`, a week back by default, and `session` to count one session's decisions; answers `points`, each `count`, `week`, `would_ask`, `labeled`, `agreed`, `mean_ms`, `cost_usd` and `thresholds`
 - memory: `memory.add` takes `text`, `scope` (`user-local`, `project-local`, `project-global`, `user-global`),
   `kind`; `memory.edit` `scope`, `id`, `text`; `memory.remove` `scope`, `id`; each answers the entry, which the lead hears.
   `memory.view` takes `scope` or `episodes`, `memory.zoom` `store`, `id`, `n`, `memory.recall` `store`, `regex`; each answers `store`, `lines` `{id, n, text}`
@@ -91,7 +89,7 @@ Reads, reloads, the `session.*` and `memory.*` reads, `mention.resolve`, `shell.
   `tools`, `global`; `agents.set` `name`, `model`, `global`; `agents.remove` `name`, `global`. Each, and
   `learn.apply`, answers `changes` `{change, what, file}` (`added`, `changed`, `removed`) and `undo`
 - `learn.scan` answers the run; `learn.show` takes `id`, `learn.reject` `id`, `reason`, each the finding; `learn.apply` takes `id`, `project`
-- `reload` answers `project`, `first`, `parts` (`added`, `removed`, `changed`); `models.update` `sources`, `versions`; `hooks.trust` `trusted`
+- `reload` answers `project`, `first`, `parts` (`added`, `removed`, `changed`); `models.update` `sources`, `versions`, `context_windows` and `table`, as `tofu models update` prints; `hooks.trust` `trusted`
 - `setup.check` answers `steps`, each `{step, what, fix, done, choices}`; one with no `done` blocks a turn. `login.key` takes `provider`, `key` (checked),
   `login.logout` `role`, `provider`, `number`; both answer `note`. `login.start` takes `role` (`llm`,
   `classifier`, `search`), `provider`; answers the account signed in, `id`, `source`, `account`, `change`. `settings.set` takes `key`,

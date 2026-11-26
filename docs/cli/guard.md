@@ -2,7 +2,7 @@
 title: Guard rules
 description: tofu guard runs a repository's Claude Code and git hook rules inside the binary, so the same hooks answer the same way on Windows, Linux and macOS.
 order: 3
-updated: 2026-10-24
+updated: 2026-11-25
 ---
 
 `tofu guard <rule>` answers a [Claude Code hook](https://docs.claude.com/en/docs/claude-code/hooks)
@@ -28,7 +28,7 @@ same first line.
 | `emdash` | PreToolUse Write, Edit | a write carrying an em dash |
 | `comments` | PreToolUse Write, Edit | a comment in a Go file; compiler directives pass |
 | `library-wording` | PreToolUse Write, Edit | a ticket id, a dated report or a person's decision under `library/` |
-| `shell` | PreToolUse Bash, PowerShell | a shell write of source, a discard of uncommitted work, git from a sub-agent, a worktree, `go test` over a pattern without `-p`, a tree-wide check while a doing ticket owns Go |
+| `shell` | PreToolUse Bash, PowerShell | a shell write of source, a script run through an interpreter (`python`, `node`, `bash`, `perl`, `ruby`, `php`, `powershell` and the like), inline, from a heredoc or from a file, that writes a repository file, a discard of uncommitted work, git from a sub-agent, a worktree, `tofu run --wire openrouter` without `--dry-run`, a command setting `TOFU_LIVE_COST`, `go test` over a pattern without `-p`, a tree-wide check while a doing ticket owns Go; a script's own commands are checked as if typed |
 | `loc-track` | PostToolUse Write, Edit | nothing; records each Go file written |
 | `snapshot` | PostToolUse Write, Edit | nothing; copies each tracked file to the user cache folder |
 | `minify-gate` | Stop, SubagentStop | the first stop before a minify pass over the files written |
@@ -63,6 +63,9 @@ exec tofu guard git commit-msg "$1"
 echo '{"tool_input":{"command":"git worktree add ../x"}}' | tofu guard shell
 ```
 
-prints a deny whose reason opens `git worktree is refused in this repository.` A commit message with
+prints a deny whose reason opens `git worktree is refused in this repository.` A hook JSON whose
+command is `python -c "open('docs/x.md','w').write('a')"` prints a deny whose reason opens
+`A repository file may not be written by a script run through an interpreter, inline or from a file.`
+and quotes the line that writes. A commit message with
 a 73-character subject prints `commit refused: the subject is 73 characters, the limit is 72.` and
 exits 1. An unknown rule exits 2 and lists the rules.

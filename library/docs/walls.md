@@ -10,8 +10,9 @@ verbs: walls
 A wall is how long one operation took, from start to end, in whole
 milliseconds. Every wall is the same record:
 
-- `op`: what kind of operation, such as `verb`, `turn`, `request`,
-  `tool`, `hook` or `jev`.
+- `op`: what kind of operation, such as `verb`, `turn`, `turn_step`,
+  `request`, `tool`, `hook`, `jev` or `frame`; `tofu walls --op x`
+  lists every op.
 - `name`: which one, such as the verb `doctor`, the tool `bash`, the hook
   event `PreToolUse` or the decision point `tool_gate`.
 - `ms`: how long it took.
@@ -20,11 +21,20 @@ milliseconds. Every wall is the same record:
 - `ok`: whether it ended without an error.
 - `outside_ms`: the part of `ms` spent waiting on something tofu does
   not run: a model, Jev, the network, a person or another process. Waits
-  that overlap count once, so it is never more than `ms`. Today tool
-  calls and hooks carry it, a hook counting the process it ran; a Jev wall
-  carries it when its decision ledger row records `outside_ms`; and the
-  verb walls of `tofu judge` and `tofu sift` carry it, counting their Jev
-  waits. Any other wall has no `outside_ms` yet.
+  that overlap count once, so it is never more than `ms`. Tool calls,
+  hooks (counting the process a hook ran), turns and turn steps, spawns,
+  compactions, undo snapshots, startup, session, host, wire, shell, sift
+  and cron walls, the app's own timings, and the verbs that can wait on
+  a model, Jev, the network or another process, such as `run`, `tool`,
+  `judge`, `sift`, `doctor` and `boardy`, carry it; a Jev wall carries it
+  when its decision ledger row records it. A model request, its first
+  token and last byte, the HTTP timings and a time read from an older
+  session field carry none.
+- `n` and `max_ms`: on a record that sums many operations, how many it
+  counts and the longest; its `ms` is their median. The app writes one
+  such record of `frame`, `key`, `absorb` and `send`, named `tui`, when
+  a turn ends: drawing a frame, a key press to the frame that shows it,
+  taking in one streamed event, and sending a message.
 
 tofu records the time and prints it. It does not call a time fast or
 slow; you judge that.
@@ -35,10 +45,11 @@ slow; you judge that.
   line to the project's `walls/<day>.jsonl` in its state folder under
   `~/.tofu/projects`, timed from the moment the process started. `tofu run
   --dir <dir>` writes to the project of `<dir>`.
-- A directory tofu has never opened has no state folder, and a verb run
-  there writes nothing and creates nothing.
+- The first verb run in a directory tofu has never opened makes its state
+  folder and writes its wall there. A wall that cannot be written says so
+  on standard error.
 - The app, `tofu --continue`, `tofu serve` and `tofu host run` live for
-  hours and write no verb wall.
+  hours and write no verb wall; the app writes its `tui` timings instead.
 - Day files older than 30 days are deleted when a new day's file starts.
 - Turns, model requests, tool calls, hooks and Jev decisions already keep
   their own times in the session and the decision ledger. `tofu walls`

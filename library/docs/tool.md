@@ -16,8 +16,8 @@ person reruns.
 Each call is one call in a fresh turn. A second `read` of the same file
 is whole again, a `plan` holds only what that call set, and `bash` with
 `background: true` and `shell` are refused with `no shell registry is
-attached to this turn`. An old tool name that is now a mode of `history`,
-such as `quote`, is refused with the call to make instead.
+attached to this turn`. A tool name that is a mode of `history`, such as
+`quote` or `lookup`, is refused with the call to make instead.
 
 ## Where it lives
 
@@ -46,7 +46,7 @@ projects are not looked at.
 
 ## Check it
 
-- `tofu tool list [--dir <dir>]` prints the names a run offers the lead,
+- `tofu tool list [--dir <dir>] [--session <name|id|head>]` prints the names a run offers the lead,
   one per line, in the order the request sends them. It names the same
   tools, in the same order, as `tofu run --show-prompt`.
 - `tofu tool list --agent <name>` prints the names a spawn of that

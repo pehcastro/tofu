@@ -2,7 +2,7 @@
 title: One tool call by hand
 description: tofu tool lists the tools a run offers and runs one call through the loop's own call path, printing the exact text the model would receive.
 order: 4
-updated: 2026-11-06
+updated: 2026-11-25
 ---
 
 `tofu tool <name> '<json>'` runs one tool call outside a turn and prints the result text the model
@@ -72,8 +72,8 @@ mode, `quote`, `zoom`, `recall` and `lookup`:
 tofu tool history '{"mode":"quote","anchor":"[quote#3f2a]"}' --dir . --session head
 ```
 
-An old tool name that is now a mode of `history` is refused with the call to
-make instead:
+A tool name that is a mode of `history`, such as `quote` or `lookup`, is
+refused with the call to make instead:
 
 ```text
 tofu tool: quote is a mode of history now: call history with mode quote and what you asked for as its anchor
@@ -83,7 +83,7 @@ tofu tool: quote is a mode of history now: call history with mode quote and what
 
 | Form | What it does |
 |---|---|
-| `tofu tool list [--dir D] [--agent NAME]` | prints the offered tool names, one per line |
+| `tofu tool list [--dir D] [--agent NAME] [--session S]` | prints the offered tool names, one per line |
 | `tofu tool NAME JSON [--dir D] [--agent NAME] [--session S] [--sift free\|judged]` | runs one call and prints the result text; `--sift` picks the bash result cut as `tofu run --sift` does |
 
 Standard error ends with a line naming each file the call created, changed or removed in the
@@ -98,4 +98,4 @@ Each call is one call in a fresh turn. A `read` therefore never answers with the
 |---|---|
 | 0 | the tool ran and returned a result |
 | 1 | the tool failed, and standard output holds the error text the model gets, starting `error: `; or a check found a failure, such as a failing test or a type error, and standard output holds its result |
-| 2 | usage: a name the run does not offer (the offered names follow), malformed JSON (the byte where it broke), an old name that is now a mode of `history`, or `spawn`, `message`, `subagents` and `ask`, which answer only inside a live turn |
+| 2 | usage: a name the run does not offer (the offered names follow), malformed JSON (the byte where it broke), a name that is a mode of `history`, or `spawn`, `message`, `subagents` and `ask`, which answer only inside a live turn |

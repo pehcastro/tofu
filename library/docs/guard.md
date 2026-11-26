@@ -20,9 +20,14 @@ The rules, by name:
 - `library-wording`: refuses a write under `library/` that names a ticket,
   a dated report or a decision attributed to a person.
 - `shell`: refuses a shell command that writes source around the Write and
-  Edit tools, discards uncommitted work, changes git from a sub-agent, adds
-  a worktree, runs `go test` over a pattern without `-p`, or runs a
-  tree-wide check while a ticket in doing owns a Go path. It notes a commit.
+  Edit tools, runs a script through an interpreter (`python`, `node`,
+  `bash`, `perl`, `ruby`, `php`, `powershell` and the like), inline, from
+  a heredoc or from a file, that writes a repository file, discards
+  uncommitted work, changes git from a sub-agent, adds a worktree, runs
+  `tofu run --wire openrouter` without `--dry-run`, sets `TOFU_LIVE_COST`,
+  runs `go test` over a pattern without `-p`, or runs a tree-wide check
+  while a ticket in doing owns a Go path. A script's own commands are
+  checked as if typed. It notes a commit.
 - `loc-track` and `minify-gate`: record each Go file written, and refuse
   the first stop until a minify pass names them.
 - `snapshot`: copies each tracked file written to the user cache folder,
