@@ -1,8 +1,8 @@
 ---
 title: Changelog
-description: What changed for you in each minor version of tofu, from 0.1 to 0.5, grouped by area.
+description: What changed for you in each minor version of tofu, from 0.1 to 0.6, grouped by area.
 order: 7
-updated: 2026-10-09
+updated: 2026-11-25
 ---
 
 What changed for you in each minor version, grouped by area. Every change is
@@ -20,6 +20,76 @@ tofu changelog [--all] [--json]
 
 `tofu changelog` prints what changed since the version you last read and
 records the version; `--all` prints every version and records nothing.
+
+## 0.6
+
+Everything since 0.5.18: tools that hand the model the answer, sessions you
+fork and read back by hand, a board that closes work against your own words,
+and questions that wait for you with their context.
+
+- **Tools that hand over the answer**: `env`, `changes`, `checkpoint`,
+  `trail`, `bisect`, `whatif`, `race`, `codemod`, `mutate`, `debug`,
+  `profile`, `http`, `db` and more answer with what the model needs, not a
+  log, and `tofu tool <name> '<json>'` runs any of them by hand. See
+  [Tools](/docs/tools/overview) and [tofu tool](/docs/cli/tool).
+- **A smaller sub-agent**: a spawn with no agent carries 34 tools and 40,395
+  bytes of tool schemas, against 65 and 82,615 with every tool the lead
+  holds. A spawn on one language's files runs as the agent whose language or
+  `matches:` file names claim them. See [Sub-agents](/docs/tools/sub-agents).
+- **Zig**: the `zig-dev` sub-agent, and `map`, `read` and `search` know Zig.
+  See [Language agents](/docs/features/language-agents).
+- **A clean chat**: one live row for the lead's work, one row per sub-agent
+  status, one line per commit or ticket move, and a reply never cut in two.
+  See [The interface](/docs/features/interface).
+- **One live session for every window**: review moves, memory changes,
+  renames and cron fires reach every window, and scrolling up reaches the
+  first message across every fork.
+- **Fork and branch by hand**: `/fork` starts a fresh line, `/branch N`
+  restarts from your Nth message, `/compact <focus>` keeps what names the
+  focus, `/side` opens a side chat, and `/permissions revoke <n>` takes back
+  a standing answer. See [Sessions](/docs/features/sessions).
+- **Sessions read back**: `tofu session transcript` prints a session as
+  people read it, `tofu session work <name> --ticket <id>` follows one
+  ticket, and `tofu run --session <name>` works a task as that session's
+  next turn.
+- **A library you can audit**: `tofu library reach` names what reached an
+  agent and what never did, `tofu rules why <session>` says why each rule
+  fired or dropped, `tofu calibrate` fits a decision point's cut on labelled
+  cases, and the plan `advisor` reads each plan against your messages. See
+  [Reach](/docs/library/reach) and [Calibration](/docs/features/calibration).
+- **A board that closes against your words**: `tofu boardy request` keeps
+  what you asked word for word, `tofu boardy bypass` answers a held rule,
+  `done` needs a before capture and evidence for every acceptance line, and
+  an epic takes research and a first design before its tickets. Boardy is on
+  by default: the lead makes a board when it first spawns a sub-agent that
+  edits, and `tofu boardy new --skills` names the skills a ticket's
+  sub-agent loads. See [Boardy](/docs/features/boardy).
+- **Questions that wait for you**: a question carries its context in a card
+  above the form, waits 300 s by default, is no longer dismissed by Esc,
+  closes with **return** and folds to one line once answered. Say
+  you are leaving and the session goes away: every turn takes reversible
+  recommended options until you are back. See [Asking](/docs/features/asking).
+- **Skills on your words**: a skill marked `trigger: auto` loads when your
+  message holds one of its phrases, and `/skill off <name>` turns it off.
+  See [Skills](/docs/features/skills).
+- **Commands that start a turn**: `/generate-map` drafts `MAP.md`,
+  `/restructure` proposes a target tree, `/code-review` reviews one change,
+  and `tofu run --command <names>` runs any of them headless. See
+  [Generate map](/docs/features/generate-map),
+  [Restructure](/docs/features/restructure) and
+  [Code review](/docs/features/code-review).
+- **Time you can read**: `estimate_time` says how long work takes before it
+  starts, split into agent time, tests, builds and verify; the footer shows
+  the output rate; `tofu walls` prints how long each kind of operation took
+  in milliseconds; and `tofu boardy cost` reads what a ticket took. See
+  [tofu walls](/docs/cli/walls).
+- **A host that explains itself**: a host that crashed or was killed says
+  why on the next open, and a subscription limit counts down to its reset
+  and retries on its own. See [Subscription quota](/docs/llms/quota).
+- **Driving**: `tofu drive --live` drives the app on your own subscription,
+  and `tofu drive desk` drives the desk app. See [Drive](/docs/features/drive).
+- **Changed names**: `tofu models reload` is `tofu models update`, and
+  `tofu serve` answers `models.update`. See [tofu serve](/docs/cli/serve).
 
 ## 0.5
 
@@ -43,7 +113,7 @@ per language.
   classifier loop went from 48 decisions per action to 7, and tabs tofu
   opened close when the run ends.
 - **Setup**: keys live in the credential store, new models arrive with
-  `tofu models reload`, `tofu docs` answers how-to questions, and tofu reads
+  `tofu models update`, `tofu docs` answers how-to questions, and tofu reads
   its own `.tofu` setup, not another harness's.
 - **Memory and learning**: `/remember` or the lead keeps a short rule for
   every later session, in four scopes from you everywhere to the team in

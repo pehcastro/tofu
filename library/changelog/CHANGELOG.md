@@ -8,6 +8,79 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## 0.6.0 - 2026-11-25
+
+Questions that wait for you and carry their context, a session that knows you are away, skills that load on your own words, and a host that says why it stopped.
+
+### Added
+
+- `/restructure` reads what the project is, has a tree designed from that alone, checks it against the real repository and proposes one target tree with release and deployment, in text. It moves nothing, and on your yes plans the migration as an epic with tickets or one markdown plan. `tofu run --command restructure` runs it headless.
+- `/code-review [target]` reviews one change, a range, a branch or the working tree, for what it breaks now and later, each finding with path:line, severity and the mechanism. It spawns nothing and fixes nothing.
+- A skill whose `SKILL.md` says `trigger: auto` with `keywords: a, b` loads by itself when a message you write holds one of the phrases, once while it is active. The chat shows `skill <name> loaded: you said "<phrase>"`. `/skill off <name>` turns it off, and the host's `skills` query lists `active` skills.
+- `tofu boardy new --skills a,b` and `tofu boardy set <id> --skills a,b` name skills a ticket's sub-agent loads, and `ticket_create` takes `skills`. A name no skill carries is refused, `set --skills ""` clears the list, and `tofu boardy show` prints `skills`.
+- `ask_person` questions carry a `context` of up to 1500 characters, shown in the chat as a "Question context" card above the form.
+- The form has a last row, **return**, that closes a question with nothing chosen. Its header counts the asks still waiting, and a form taller than its share of the screen scrolls and says which rows it shows.
+- Away is a session state. Say you are leaving and the orchestrator calls `cron` with action `away`; the chat says `the person is away, set by agent: <reason>` and the footer shows `away`. Every turn in the session, not one job, takes reversible recommended options. `ask_person` answers `person_away`, a call that would ask you is refused, and action `back` ends it. The state is kept in the session's `cron.json` under `away`.
+- A host that ends without closing its session, by a crash, a kill or a freeze, says why on the next open: a `host end` row under `stops` in `tofu session trace`, with the old process, when it was last alive and the cause. Its error output is kept in `~/.tofu/h/<key>.<process>.crash`.
+- When the work stops at a subscription limit, one status line above the composer counts down to the reset, tries 3 minutes past it, says so and retries every 5 minutes while the vendor still refuses, and gives up an hour past the reset. `tofu session trace --grep limit` shows each wait and try.
+- A spawn with no `agent` gets the tools in the shipped `unnamed` list, 34 where it got 65. An `unnamed.md` in `.tofu/agents/` or `~/.tofu/agents/` replaces the list, and a tool tofu does not have refuses every such spawn, named in `tofu agents`.
+- `estimate_time` with the id of a running sub-agent says the time elapsed and what remains.
+- The shipped rule `sub_agent_closing` has a sub-agent end its report with four lines: result, evidence, open, next.
+- `tofu walls [--since 14d] [--op <op>] [--own] [--tier <S..E>] [--all]` prints how long each kind of operation took, one row per op and name, with n, p50, p90 and max in whole milliseconds. A verb, a turn, a model request, a tool call, a hook and a Jev decision each record a wall, and the first verb in a fresh project writes its own.
+- The `zig-dev` sub-agent writes and fixes Zig for the version the project names, and is done only when `zig fmt --check --ast-check`, the build and `zig build test` pass; `map`, `read` with `at` and `search` know Zig declarations, and in a sub-agent's shell zig checks, a binary the agent built and a read-only pipeline run without asking.
+- `rust-dev` reads the gpui references its owns reach.
+- Library rules `hot_path`, `data_oriented`, `db_access`, `go_regex_once`, `ts_regex_once`, `pattern_to_rule` and `formal_first`; `tofu rules list` shows them.
+- `tofu context` names the session a fork went into and how to open it, or says it is no longer here.
+
+### Changed
+
+- **Breaking:** `tofu models reload` is `tofu models update`, and `tofu serve` answers `models.update` in place of `models.reload`.
+- `projectManagement` is `boardy` by default. With no board yet, the lead makes one with `board_create` when it first spawns a sub-agent that edits.
+- A spawn with no `agent` runs as the one agent that claims every source path it owns, its ticket owns or its task names, by language or by the `matches:` file names in the agent's definition, and says why. When two agents claim a path, or no agent claims a source file, it names them and picks none.
+- The library excludes no model by name: what your account serves decides what you can pick.
+- `tofu run`, `tofu check` and `tofu doctor` gate on the `tool_gate@6` question set; `tool_gate@4`, `@5`, `@7` and `ask@2` are no longer shipped.
+- The gate asks only the classifier bound to `classifier`; a provider that merely holds a key is never asked. It reads your own recent messages, up to 24,000 bytes across the session's generations, in place of the task, and shortens a call too big for the classifier. When the classifier fails, a cheap model on the session's source judges the call, and the line reads `judged by <model> because the classifier failed: <provider> <reason>`; when that fails too, the policy's regular expression arm decides, and a call it allows runs. The `decision` event over `tofu serve` names who judged under `judge`.
+- `askPersonWaitSeconds` defaults to 300, up from 120. Esc no longer dismisses a question. Closing one with **return** chooses nothing and leaves it open, where dismissing took the recommended option. A question over 200 characters, a description over 200 or a context over 1500 is refused back to the lead.
+- Once answered, a question's chat row folds to one line, such as `? Discount fix: you chose Round at the end`.
+- Closing the last window on a session, or stopping the project's host, ends every cron job in it, and `tofu --continue` reopens the session with none firing. `tofu session clean` no longer keeps a session for a live cron job.
+- `cron.json` drops the per-job `away` field for the session-level `away` record, and the cron tool's `away` argument is gone.
+- `estimate_time` estimates the whole work: agent time plus tests, builds and verify, each with its basis. It reads the 10 newest runs of the same agent on the same model, widening to other models, other projects, then every agent. `tofu session trace --kind estimate` prints the same split. The per-project history file is now `settled-runs.jsonl`, not `estimates.jsonl`, rebuilt once from the sessions.
+- A sub-agent's report reaches the lead as a card of at most 7,500 bytes, each part capped. Checks that passed become a count, and the whole report is kept as an artifact named on the card.
+- A sub-agent's `ask` takes a question of at most 300 bytes, a why of 1,200, a default of 300, 2 to 4 `options` of 120 and up to 5 `refs` of 200. An ask over a cap is refused whole, naming the field, and the answer is cut to 1,000 bytes.
+- `shell wait` also returns when the command, or a file it writes to, prints a failure line, or after 30 s with no output and no CPU. It says the lines printed since the last wait, the CPU used and the files written. A failure line from a command that moved to the background reaches the agent that ran it as a message.
+- When a sub-agent ends, the shells it started stop, and its report names each one with the failure lines it printed.
+- `@` in the composer lists files inline as you type, in place of a picker.
+- A tool row shows how long the call took, in whole milliseconds.
+- A quoted message reaches the model with its words, in a quote notice, not only as its `[quote#]` id.
+- `tofu guard shell` refuses an interpreter script that writes repository files or runs a build the guard refuses.
+- A task that plans work gives the lead the qa rules scoped to paths, a lead working alone gets the coding rules its folders name, and a framework rule fires on a path the task names; `tofu run --show-prompt` and `tofu rules index` say why each rule was dropped.
+- The `research` agent searches the web with `web_search` when a search provider is set, and the `flake-triage` skill reruns a test one process at a time.
+- The environment block the model reads names a worktree's branch.
+- A turn its forks stopped ends as `fork_stop`, and its report says the work is unfinished.
+- A tool event over `tofu serve` carries its `outcome`, `skipped` included, and an `ask_person` answer that was dismissed, late or never delivered reaches the model under its own origin.
+
+### Removed
+
+- `/orders` and the orders tab.
+
+### Fixed
+
+- The footer re-reads plan usage every 5 minutes, so the percentage is fresh between turns too.
+- A first turn on a large project no longer waits on the cold file snapshot, and a turn takes a snapshot only before a call that may write files.
+- Spawning sub-agents in a long, forked session no longer re-reads every earlier generation, so the app stays responsive with many sub-agents.
+- A failure line from a shell whose sub-agent already ended goes to the nearest agent above it that still runs, or to the lead, naming whose command it was.
+- The memory model no longer sends more than its window holds: it leaves out older chat lines and cuts an oversized item in its middle, at most 8 KiB, saying so.
+- `standing_order@1` is asked once per sentence and at most 24 times a session, so a long session no longer repeats the same questions.
+- The lead's answer to a sub-agent's `ask` reuses the lead's prompt cache.
+- A skill whose `trigger` is not `auto` or `manual` is named once a session, not at every message. `Auto` and `AUTO` count as `auto`, and a keyword matches across any run of spaces.
+- A ticket reported not possible is put to you once, as a form; the lead is told it is already with you and does not ask it again in the chat.
+- Opening the app reads only the newest ledger row and sweeps the scratchpad at most once a day.
+- `query.usage` over `tofu serve` carries `window_spend` instead of refusing it.
+- A `tofu` started from a shell the host runs joins the host as a member.
+- A cancel that arrives after its turn ended is refused.
+- A `find` with no action flag counts as a read.
+- A ticket move that changed nothing draws no row in the chat, and a reply followed by a lead call stays in the chat.
+
 ## 0.5.24 - 2026-11-15
 
 ### Added
