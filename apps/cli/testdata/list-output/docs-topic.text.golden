@@ -22,10 +22,10 @@ What it is
   - Files: diffContext, hyperlinks, groupByAgent
   - Shell: persistentRegistry, logTail, killConfirm, shell
   - Turn: decisionCap, turnMaySpawn, oneWorkingSessionPerProject, planEveryStep,
-    sideChatAccess, subAgentsPerTurn, subAgentDepth, leadCache, subAgentCache,
-    subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents, doneReview,
-    agentSources, modelTier.genius, modelTier.smart, modelTier.worker,
-    modelTier.dumb
+    planAdvisor, sideChatAccess, subAgentsPerTurn, subAgentDepth, leadCache,
+    subAgentCache, subAgentCheckSeconds, subAgentWatchSeconds, verifySubAgents,
+    doneReview, agentSources, modelTier.genius, modelTier.smart,
+    modelTier.worker, modelTier.dumb
   - Projects: projectManagement (boardy, the ticket board), boardFlow (the words
     boardy uses), scratchCleanupDays, scratchMaxGB and scratchRoots (the
     scratchpad, scratchRoots global only)
@@ -119,6 +119,9 @@ The detail
     person's own shell.
   - `planEveryStep`: each sub-agent keeps a plan of its own and sees that one.
     The next turn reads the new value.
+  - `planAdvisor`: `shadow`, the default, has the advisor sub-agent read each
+    plan the lead sets against your words and write what is missing or extra to
+    the trace, unseen by the lead; `off` runs none. See `tofu docs agents`.
   - `sideChatAccess`: `read` writes nothing, `notes` writes .md and .html files,
     `files` writes anywhere, and any other value is a comma list of globs. A
     side chat never spawns, schedules, remembers or changes a setting, whatever
@@ -144,8 +147,10 @@ The detail
     reads the new value.
   - `agentSources`: a comma list, inside the project. The home directory gives
     only `~/.tofu/agents`, and the library is always read.
-  - `projectManagement`: a spawn names a ticket, its owns become the sub-agent's
-    paths and the sub-agent moves it to review.
+  - `projectManagement`: `boardy`, the default: a spawn names a ticket, its owns
+    become the sub-agent's paths and the sub-agent moves it to review. A project
+    with no board gets one from the lead's `board_create`, or from tofu at the
+    first spawn of a sub-agent that edits; `off` keeps no board.
   - `boardFlow`: jira says ticket, board, epic, sprint and points. linear says
     issue, team, project, cycle and estimate.
   - `scratchCleanupDays`: only a folder with no tofu running it is deleted, its

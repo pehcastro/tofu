@@ -33,6 +33,10 @@ exit 0
         "do": "tofu tool format '{\"paths\":[\"label.go\"]}' --dir ."
       },
       {
+        "text": "change the tool list of a sub-agent with no agent named",
+        "do": "write .tofu/agents/unnamed.md with a tools line"
+      },
+      {
         "text": "Sub-agents",
         "do": "tofu docs agents"
       },
@@ -419,6 +423,94 @@ exit 0
       {
         "text": "let the model ask a cheap model about one long result",
         "do": "tofu settings set modelTier.dumb <source/model>"
+      },
+      {
+        "text": "fork the conversation now and start a fresh line",
+        "do": "/fork in the app"
+      },
+      {
+        "text": "branch from one of my earlier messages and keep the old line",
+        "do": "/branch in the app to list your messages, then /branch N"
+      },
+      {
+        "text": "open a side chat beside the session",
+        "do": "/side in the app"
+      },
+      {
+        "text": "take back an always or never answer I gave",
+        "do": "/permissions in the app, then /permissions revoke <n>"
+      },
+      {
+        "text": "read a session as a transcript, the way people read it",
+        "do": "tofu session transcript <name|id|head>"
+      },
+      {
+        "text": "continue a session from the command line as its next turn",
+        "do": "tofu run --dir . --session <name|id|head> \"<task>\""
+      },
+      {
+        "text": "why did the host stop, crash or freeze",
+        "do": "tofu session trace <name|id|head> --kind stop"
+      },
+      {
+        "text": "check each plan the lead sets against what I asked",
+        "do": "tofu settings set planAdvisor shadow"
+      },
+      {
+        "text": "stop the plan advisor",
+        "do": "tofu settings set planAdvisor off"
+      },
+      {
+        "text": "keep what I asked word for word, with the tickets cut from it",
+        "do": "tofu boardy request new \"<your words>\" --tickets <A,B>"
+      },
+      {
+        "text": "record a before capture of how things work before a change",
+        "do": "tofu boardy log <id> --before \"<what you ran and what it printed>\""
+      },
+      {
+        "text": "name the skills a ticket's sub-agent loads",
+        "do": "tofu boardy set <id> --skills <a,b>"
+      },
+      {
+        "text": "load a skill when my message says certain words",
+        "do": "write trigger: auto and keywords: <a>, <b> in the skill's SKILL.md"
+      },
+      {
+        "text": "turn off a skill that loaded on my words",
+        "do": "/skill off <name> in the app"
+      },
+      {
+        "text": "drive the desk app and keep its screenshots",
+        "do": "tofu drive desk --out <dir>"
+      },
+      {
+        "text": "drive the app with no terminal and no model call",
+        "do": "tofu drive <script> --plain"
+      },
+      {
+        "text": "I am away, keep working without asking me",
+        "do": "tell the lead you are leaving; it calls cron with action away"
+      },
+      {
+        "text": "I am back, ask me again",
+        "do": "tell the lead you are back; it calls cron with action back"
+      },
+      {
+        "text": "how long will this work take",
+        "do": "ask the lead; it answers with estimate_time"
+      },
+      {
+        "text": "how long until a running sub-agent finishes",
+        "do": "ask the lead; it calls estimate_time with the sub-agent's id"
+      },
+      {
+        "text": "close a question without choosing and answer it later",
+        "do": "pick return, the last row of the form"
+      },
+      {
+        "text": "why did my session fork, and how full is the context",
+        "do": "tofu context"
       },
       {
         "text": "Files tofu reads and writes",

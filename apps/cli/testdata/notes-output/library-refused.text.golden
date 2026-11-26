@@ -5,7 +5,7 @@ Library · 4 layers                                                   ✗ 1 refu
   models         21
   subscriptions  2
   questions      27
-  docs           49 pages · 144 index entries
+  docs           49 pages · 177 index entries
   proxy          rtk · library
 
 layers
@@ -16,7 +16,7 @@ layers
 
 domains · the binary
   ✓ dev      148 rules · 6 skills · 10 agents · 42 references
-  ✓ general  38 rules · 5 thresholds · 2 agents · 4 references
+  ✓ general  39 rules · 5 thresholds · 3 agents · 4 references
   ✓ qa       10 rules · 2 skills · 1 agent · 5 references
   ✓ shell    1 threshold
 

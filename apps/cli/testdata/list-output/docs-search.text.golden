@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · "change the colours"                                          110 matches
+Docs · "change the colours"                                          133 matches
 
   change the colours
     → tofu settings set theme Nord
@@ -14,6 +14,8 @@ Docs · "change the colours"                                          110 matche
     → tofu tool changes '{"turns":4}' --dir .
   format only the files i changed
     → tofu tool format '{"paths":["label.go"]}' --dir .
+  change the tool list of a sub-agent with no agent named
+    → write .tofu/agents/unnamed.md with a tools line
   Sub-agents
     → tofu docs agents
   What an API key has spent
@@ -208,6 +210,50 @@ Docs · "change the colours"                                          110 matche
     → tofu tool context '{}' --dir . --session head
   let the model ask a cheap model about one long result
     → tofu settings set modelTier.dumb <source/model>
+  fork the conversation now and start a fresh line
+    → /fork in the app
+  branch from one of my earlier messages and keep the old line
+    → /branch in the app to list your messages, then /branch N
+  open a side chat beside the session
+    → /side in the app
+  take back an always or never answer I gave
+    → /permissions in the app, then /permissions revoke <n>
+  read a session as a transcript, the way people read it
+    → tofu session transcript <name|id|head>
+  continue a session from the command line as its next turn
+    → tofu run --dir . --session <name|id|head> "<task>"
+  why did the host stop, crash or freeze
+    → tofu session trace <name|id|head> --kind stop
+  check each plan the lead sets against what I asked
+    → tofu settings set planAdvisor shadow
+  stop the plan advisor
+    → tofu settings set planAdvisor off
+  keep what I asked word for word, with the tickets cut from it
+    → tofu boardy request new "<your words>" --tickets <A,B>
+  record a before capture of how things work before a change
+    → tofu boardy log <id> --before "<what you ran and what it printed>"
+  name the skills a ticket's sub-agent loads
+    → tofu boardy set <id> --skills <a,b>
+  load a skill when my message says certain words
+    → write trigger: auto and keywords: <a>, <b> in the skill's SKILL.md
+  turn off a skill that loaded on my words
+    → /skill off <name> in the app
+  drive the desk app and keep its screenshots
+    → tofu drive desk --out <dir>
+  drive the app with no terminal and no model call
+    → tofu drive <script> --plain
+  I am away, keep working without asking me
+    → tell the lead you are leaving; it calls cron with action away
+  I am back, ask me again
+    → tell the lead you are back; it calls cron with action back
+  how long will this work take
+    → ask the lead; it answers with estimate_time
+  how long until a running sub-agent finishes
+    → ask the lead; it calls estimate_time with the sub-agent's id
+  close a question without choosing and answer it later
+    → pick return, the last row of the form
+  why did my session fork, and how full is the context
+    → tofu context
   Files tofu reads and writes
     → tofu docs files
   Instruction files

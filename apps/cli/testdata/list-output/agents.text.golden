@@ -1,6 +1,6 @@
 exit 1
 --- stdout
-Sub-agents · 16 defined                                               ✗ 1 broken
+Sub-agents · 17 defined                                               ✗ 1 broken
 
   ○ idle      inherit                   project  runs on the orchestrator's
     model
@@ -120,6 +120,13 @@ Sub-agents · 16 defined                                               ✗ 1 bro
     reference  research-report  1.6 KB
     notice     the tier @worker is not set, so research runs on the
       orchestrator's model: tofu settings set modelTier.worker <slug>
+  ○ unnamed   inherit                   library  The tools a sub-agent spawned
+    with no agent is offered. It is not a sub-agent of its own and the lead is
+    never offered it by name. A file named unnamed in a project's .tofu/agents
+    or in ~/.tofu/agents replaces this list.
+    tools      read, write, edit, bash, glob, search, test, typecheck, format,
+      eval, plan, fetch, whatif, note, digest, checkpoint, forget,
+      project_report, changes, trail, budget, skill, spawn
   ○ qa        inherit                   library  Verifies that a change does
     what it claims and reports what it found. Runs tests, triages what failed,
     measures what disagreed with itself, and files what is wrong instead of

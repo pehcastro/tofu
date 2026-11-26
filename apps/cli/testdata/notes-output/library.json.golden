@@ -29,7 +29,7 @@ exit 0
     "roles": 0,
     "questions": 27,
     "doc_pages": 49,
-    "doc_entries": 144,
+    "doc_entries": 177,
     "proxy": "rtk",
     "proxy_from": "library",
     "domains_from": "the binary",
@@ -46,10 +46,10 @@ exit 0
       },
       {
         "name": "general",
-        "rules": 38,
+        "rules": 39,
         "thresholds": 5,
         "skills": 0,
-        "agents": 2,
+        "agents": 3,
         "references": 4,
         "refused": 0
       },

@@ -1,6 +1,6 @@
 exit 0
 --- stdout
-Docs · 144 asks                                                        49 topics
+Docs · 177 asks                                                        49 topics
 
 agents  add a sub-agent for every project or for one, choose the model it
   runs, and remove it
@@ -16,6 +16,14 @@ agents  add a sub-agent for every project or for one, choose the model it
     → tofu agents remove <name>
   set up three sub-agents at once, each on its own model
     → tofu agents add <name> --description "<what it does>" --model <source/model>, once per sub-agent
+  check each plan the lead sets against what I asked
+    → tofu settings set planAdvisor shadow
+  stop the plan advisor
+    → tofu settings set planAdvisor off
+  which tools a sub-agent with no agent named gets
+    → tofu tool list --agent unnamed
+  change the tool list of a sub-agent with no agent named
+    → write .tofu/agents/unnamed.md with a tools line
 
 api-keys  tofu login --status shows each API key's calls, tokens and cost with
   where the cost came from, the limits and balance the provider reports, and
@@ -25,6 +33,10 @@ api-keys  tofu login --status shows each API key's calls, tokens and cost with
 
 asking  how the lead puts a decision to you with options and a recommended
   one, what auto and ask do with it, and when it cannot ask
+  let a question wait longer for my answer
+    → tofu settings set askPersonWaitSeconds 600
+  close a question without choosing and answer it later
+    → pick return, the last row of the form
 
 boardy-rules  who may change a ticket on a boardy board, how other sessions
   ask through triage, how a ticket moves boards, and hooks that check, nudge or
@@ -33,6 +45,8 @@ boardy-rules  who may change a ticket on a boardy board, how other sessions
     → tofu boardy manager add <session>
   see what other sessions asked the board for
     → tofu boardy triage list
+  answer a held bypass of a board rule
+    → tofu boardy bypass answer <B> yes --why "<reason>"
 
 boardy-views  saved views over a board's ticket files, a report built from
   tickets and events, epics, milestones and sprints as files, and the boardy
@@ -48,6 +62,16 @@ boardy  boards of tickets kept as markdown files under the tofu home, numbered
     → tofu boardy init --key DEMO
   run my agents from board tickets
     → tofu settings set projectManagement boardy
+  keep what I asked word for word, with the tickets cut from it
+    → tofu boardy request new "<your words>" --tickets <A,B>
+  review a board request against my own words
+    → tofu boardy request review <R> pass --note "<what you checked>"
+  record a before capture of how things work before a change
+    → tofu boardy log <id> --before "<what you ran and what it printed>"
+  research an epic before it takes tickets
+    → tofu boardy epic research <ID> "<note>", then tofu boardy epic design <ID> "<design>" --first "<smallest first version>"
+  name the skills a ticket's sub-agent loads
+    → tofu boardy set <id> --skills <a,b>
 
 browser  how tofu reads and drives your Chrome tabs, the tofu tab group, the
   badge, and what tofu never does there
@@ -67,6 +91,8 @@ browser  how tofu reads and drives your Chrome tabs, the tofu tab group, the
 calibration  how tofu calibrate fits a decision point's cut on labelled cases,
   checks it on a held-out half and a rerun, and writes the lock that lets the
   point leave shadow
+  calibrate a decision point on labelled cases
+    → tofu calibrate <rule@version> --cases <cases.jsonl> --split <split.json> --dry-run
 
 code-review  how /code-review asks the lead to review one change for what it
   breaks now and later, inside and outside the diff, and report each finding
@@ -74,17 +100,27 @@ code-review  how /code-review asks the lead to review one change for what it
   review my change for what it breaks
     → /code-review in the app, or /code-review HEAD~1..HEAD for one range
 
-commands  every slash command the app's composer takes, how /compact shrinks
-  the history the next turn carries, how /fork and /branch start a new line by
-  hand, how /undo puts files back, and how /permissions lists and revokes a
-  standing answer
+commands  every slash command the app's composer takes, how /skill off drops a
+  skill your words loaded, how /compact shrinks the history the next turn
+  carries, how /fork and /branch start a new line by hand, how /undo puts files
+  back, and how /permissions lists and revokes a standing answer
   free room in the context before the next turn
     → /compact in the app, between turns
   undo what the last turn changed
     → tofu undo, or /undo in the app
+  fork the conversation now and start a fresh line
+    → /fork in the app
+  branch from one of my earlier messages and keep the old line
+    → /branch in the app to list your messages, then /branch N
+  open a side chat beside the session
+    → /side in the app
+  take back an always or never answer I gave
+    → /permissions in the app, then /permissions revoke <n>
 
 context  how a long conversation stays under its target, when old results are
   trimmed, when a session forks, and why neither breaks the prompt cache
+  why did my session fork, and how full is the context
+    → tofu context
 
 cron  jobs that post a prompt into the session on a timer or after each turn,
   how to change one, and the history of every change
@@ -96,6 +132,10 @@ cron  jobs that post a prompt into the session on a timer or after each turn,
     → /cron edit c1 --schedule "every 30m" --reason "the build is stable"
   stop a scheduled job
     → /cron delete c1
+  I am away, keep working without asking me
+    → tell the lead you are leaving; it calls cron with action away
+  I am back, ask me again
+    → tell the lead you are back; it calls cron with action back
 
 doctor  what tofu doctor checks, what each line it prints means, and what to
   do about it
@@ -116,6 +156,10 @@ drain  tofu session drain weighs every call of a session, says what woke the
 
 drive  what tofu drive and tofu drive desk do, the steps they take, and what
   the requests step prints
+  drive the desk app and keep its screenshots
+    → tofu drive desk --out <dir>
+  drive the app with no terminal and no model call
+    → tofu drive <script> --plain
 
 files  every path tofu uses in your home and in a project, and which one wins
   where does tofu keep its files
@@ -189,6 +233,10 @@ learn  read your own sessions for what keeps going wrong, sorted into tofu's
 
 library  tofu library reach counts which rules, references, skills, agents and
   tools reached an agent across this project's sessions, and lists the rest
+  which rules, skills and agents reached my agents, and which never did
+    → tofu library reach
+  which file a library name resolves to
+    → tofu library resolve <name>
 
 memory  what tofu remembers for you across sessions, in four scopes from you
   everywhere to the team in one repository, and how to add, list and forget it
@@ -240,6 +288,8 @@ rules  add your own rules for every project or for one, switch a rule off, and
     → tofu rules remove <id>
   see which rules run and where each one comes from
     → tofu rules list
+  why a rule fired, was held or was dropped in a session
+    → tofu rules why <name|id|head>
 
 scratchpad  where agents put temporary files, probes and build caches, outside
   the repository, and how it is cleaned
@@ -270,6 +320,14 @@ sessions  continue where you left off, find an old session, and where sessions
     → tofu session rename <name|id|head> "<new name>"
   see how full the context window got
     → tofu context
+  read a session as a transcript, the way people read it
+    → tofu session transcript <name|id|head>
+  follow one ticket's work across a session
+    → tofu session work <name|id|head> --ticket <id>
+  continue a session from the command line as its next turn
+    → tofu run --dir . --session <name|id|head> "<task>"
+  why did the host stop, crash or freeze
+    → tofu session trace <name|id|head> --kind stop
 
 settings  every setting, its default, what it takes, and how to change it
   run commands without asking me first
@@ -321,13 +379,17 @@ shells  why a long build moves to a background shell, how the model reads it
     → tofu docs shells
 
 skills  where tofu finds skills, how to add one for every project or for one,
-  and how to turn skills off
+  how a skill loads on your own words, and how to turn skills off
   add a skill for every project
     → write ~/.tofu/skills/<name>/SKILL.md with a name and a description
   add a skill to this project only
     → write .tofu/skills/<name>/SKILL.md with a name and a description
   see which skills the model is offered
     → tofu run --dir . --show-prompt "anything"
+  load a skill when my message says certain words
+    → write trigger: auto and keywords: <a>, <b> in the skill's SKILL.md
+  turn off a skill that loaded on my words
+    → /skill off <name> in the app
 
 start  what tofu is, the first commands to type, and where to read more
   see what changed in this version
@@ -357,15 +419,19 @@ tools-change  what codemod, scaffold, format and deps give the model: one code
   which dependencies have a newer release
     → tofu tool deps '{"mode":"outdated"}' --dir .
 
-tools-checks  what test, typecheck, read, write, edit, bash and shell give the
-  model, and how to see it for yourself
+tools-checks  what test, typecheck, mutate, read, write, edit, bash and shell
+  give the model, and how to see it for yourself
 
-tools-code  what symbols, map and api give the model: where a name is declared
-  and who calls it, what a change reaches, what matters for a task, and a
-  dependency at its pinned version
+tools-code  what symbols, map, api and eval give the model: where a name is
+  declared and who calls it, what a change reaches, what matters for a task, a
+  dependency at its pinned version, and what an expression returns
 
 tools-context  what context, budget, forget, note, digest, done, claims and
   the review agent give the model
+  how long will this work take
+    → ask the lead; it answers with estimate_time
+  how long until a running sub-agent finishes
+    → ask the lead; it calls estimate_time with the sub-agent's id
 
 tools-debug  what debug gives the model: a Go or Python program or test run
   under dlv or debugpy, stopped at a line, with the values there, and every call
