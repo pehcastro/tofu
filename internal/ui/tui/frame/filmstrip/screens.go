@@ -45,8 +45,14 @@ func agentWork(at time.Time) []app.Event {
 	for index, subAgent := range subAgents {
 		id := "5e0" + strconv.Itoa(index+1) + "aa"
 		events = append(events, app.Event{Kind: app.EventToolCall, ID: id, Tool: "spawn", Text: subAgent.Doing, Promote: true},
-			app.Event{Kind: app.EventSubAgent, SubAgents: subAgents[:index+1]},
-			result(id, "spawned [&"+subAgent.Name+"]"))
+			app.Event{Kind: app.EventSubAgent, SubAgents: subAgents[:index+1]})
+		for _, made := range subAgent.Calls {
+			events = append(events, app.Event{Kind: app.EventToolCall, ID: made.ID, Agent: subAgent.Name, Tool: made.Tool, Text: made.Text, At: made.At})
+			if made.Result != "" {
+				events = append(events, app.Event{Kind: app.EventToolResult, ID: made.ID, Agent: subAgent.Name, Text: made.Result, At: made.At})
+			}
+		}
+		events = append(events, result(id, "spawned [&"+subAgent.Name+"]"))
 	}
 	events = append(events,
 		call("9d4f10", "read", "internal/agent/loop/loop.go"),

@@ -1950,6 +1950,7 @@ func TestOnlyTheSubAgentWithNoStepForTheWatchTimeIsStalledAndAnOldCallSeenFreshI
 	rows := twoWorking(2)
 	rows[0].Calls = []subagent.Call{{ID: "k1", At: at.Add(-15 * time.Minute), Tool: "bash", Text: "go test ./internal/tools/shell/process/..."}}
 	rows[1].Calls = []subagent.Call{{ID: "k2", At: at, Tool: "read", Result: "1 KB", Text: "floor.go"}}
+	app.Update(Event{Kind: EventToolCall, ID: "k1", Agent: rows[0].Name, Tool: "bash", Text: rows[0].Calls[0].Text})
 	app.Update(Event{Kind: EventSubAgent, SubAgents: rows})
 	if chat := ansi.Strip(app.View().Content); strings.Contains(chat, "stalled") {
 		t.Fatalf("a call first seen now is stalled for the minutes before tofu saw it\n%s", chat)

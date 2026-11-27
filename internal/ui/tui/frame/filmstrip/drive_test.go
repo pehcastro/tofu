@@ -215,6 +215,7 @@ func (c *cassette) play(ctx context.Context, body string) {
 				callID, call, _ := strings.Cut(tail, " ")
 				tool, what, _ := strings.Cut(call, " ")
 				row.Calls = append(row.Calls, subagent.Call{ID: callID, At: c.at.Add(-ago), Tool: tool, Text: what})
+				c.emit(app.Event{Kind: app.EventToolCall, ID: callID, Agent: id, Tool: tool, Text: what, At: c.at.Add(-ago)})
 			}
 			c.emit(app.Event{Kind: app.EventSubAgent, SubAgents: c.snapshot()})
 		case "shell":

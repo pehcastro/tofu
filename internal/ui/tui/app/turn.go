@@ -1259,10 +1259,6 @@ func (a *App) judged(decision session.Decision, actor string) {
 }
 
 func (a *App) showSubAgents(subAgents []subagent.Row) {
-	callsBefore := map[string][]subagent.Call{}
-	for _, held := range a.allSubAgents {
-		callsBefore[held.Name] = held.Calls
-	}
 	a.allSubAgents = subAgents
 	a.refold()
 	a.status.Agents = 0
@@ -1274,9 +1270,6 @@ func (a *App) showSubAgents(subAgents []subagent.Row) {
 			a.rated(subAgent.Name, 0)
 		}
 		a.stepped(subAgent)
-		for _, call := range subAgent.Calls[settledPrefix(callsBefore[subAgent.Name], subAgent.Calls):] {
-			a.rosterCall(subAgent.Name, call)
-		}
 	}
 	if a.busy && !a.leading {
 		a.view.WaitOn(a.status.Agents)
@@ -1370,29 +1363,6 @@ func settledAt(row subagent.Row) (time.Time, bool) {
 		return at, !row.Started.IsZero()
 	}
 	panic("tui: unknown sub-agent state " + row.State.String())
-}
-
-func (a *App) rosterCall(actor string, call subagent.Call) {
-	id := a.shortOf(call.ID)
-	if id == "" {
-		return
-	}
-	if at := a.happenedAt(id); at >= 0 && (a.happened[at].State != feed.StateRunning || call.Result == "" || a.view.Stopping) {
-		return
-	}
-	state := feed.StateRunning
-	if call.Result != "" {
-		state = feed.StateComplete
-	}
-	a.record(feed.Event{ID: id, FullID: call.ID, Actor: actor, Kind: feed.KindTool, State: state, Title: call.Tool, Body: call.Text, Detail: lines(call.Result), At: cmp.Or(call.At, a.options.Now())})
-}
-
-func settledPrefix(before, now []subagent.Call) int {
-	settled := 0
-	for settled < min(len(before), len(now)) && before[settled].ID == now[settled].ID && before[settled].Result != "" {
-		settled++
-	}
-	return settled
 }
 
 func (a *App) spawnedAs(spawn *feed.Event, subAgent subagent.Row) {
