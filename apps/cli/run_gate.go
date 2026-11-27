@@ -171,10 +171,15 @@ func (g *toolGate) Decide(ctx context.Context, request loop.GateRequest) (decisi
 
 func (g *toolGate) AllowedByPerson(request loop.GateRequest, yes loop.PersonYes) (loop.GateDecision, error) {
 	by := "the person, who answered \"" + yes.Scope.Label() + "\" to question " + yes.Question
-	if yes.Scope != loop.YesThisCall {
+	in := wiring.RowInput{TurnID: request.TurnID, Session: yes.Session}
+	switch yes.Scope {
+	case loop.YesOnce:
+		row, err := g.rows.AppendCoveredByYes(request.Args, g.set, in, by+", for this one run: an identical call later asks again")
+		return loop.GateDecision{ID: row.ID, Verdict: row.Verdict, Reason: row.Reason}, err
+	case loop.YesKindForHours, loop.YesKindForSession:
 		by += ", for every " + loop.CallKind(request) + " call"
 	}
-	return g.allow(request, by, wiring.RowInput{TurnID: request.TurnID, Session: yes.Session}, yes.Scope)
+	return g.allow(request, by, in, yes.Scope)
 }
 
 func (g *toolGate) allow(request loop.GateRequest, by string, in wiring.RowInput, scope loop.YesScope) (loop.GateDecision, error) {

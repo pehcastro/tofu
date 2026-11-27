@@ -176,11 +176,12 @@ const (
 	YesThisCall YesScope = iota
 	YesKindForHours
 	YesKindForSession
+	YesOnce
 )
 
 func (s YesScope) Label() string {
 	switch s {
-	case YesThisCall:
+	case YesThisCall, YesOnce:
 		return "yes, this call only"
 	case YesKindForHours:
 		return "yes, this kind, " + strconv.Itoa(konst.GateKindYesHours) + " hours"
@@ -303,9 +304,9 @@ const (
 )
 
 const (
-	citeHint    = "when one of the person's own two newest typed messages allows it, retry with \"" + AllowedByField + "\" set to that message's exact words"
-	blockerHint = ". find another way first. only when this call blocks the task and no other way exists, retry it once with \"" + AllowedByField + "\": \"" + AskThePerson + "\" and \"" + whyNeededField + "\" " +
-		"saying why the task cannot go on without it, and tofu asks the person yes or no, showing the command, this refusal and that reason; or, " + citeHint
+	citeHint = "when one of the person's own two newest typed messages allows it, retry with \"" + AllowedByField + "\" set to that message's exact words"
+	askHint  = ". find another way first. only when this call blocks the task and no other way exists, retry it once with \"" + AllowedByField + "\": \"" + AskThePerson + "\" and \"" + whyNeededField + "\" " +
+		"saying why the task cannot go on without it, and tofu asks the person yes or no, showing the command, this refusal and that reason"
 	needMissing = ", and the person was not asked because the retry says no reason: retry once more with \"" + whyNeededField + "\" saying why the task cannot go on without this call, or find another way"
 )
 
@@ -320,17 +321,21 @@ func CitedAllowance(args json.RawMessage) string {
 func (a gateAsked) offered(ctx context.Context, request GateRequest, decision GateDecision, refused string, asks bool) string {
 	form := PersonFormFrom(ctx)
 	need, unreasoned := neededBecause(request)
+	once, cite := !RegexArmAllows(request), "; or, "+citeHint
+	if once {
+		cite = ""
+	}
 	switch {
-	case !a.mayAllow(ctx, request, decision):
+	case !a.mayAsk(ctx, decision):
 		return refused
 	case form == nil || PersonAway(ctx):
-		return refused + ", and no person can be asked here; " + citeHint
+		return refused + ", and no person can be asked here" + cite
 	case !asks:
-		return refused + blockerHint
+		return refused + askHint + cite
 	case need == "":
 		return refused + needMissing
 	}
-	question := refusedQuestion(unreasoned, refused, need)
+	question := refusedQuestion(unreasoned, refused, need, once)
 	replies, err := form(ctx, []PersonQuestion{question}, konst.GateAskWaitSeconds*time.Second)
 	if err != nil {
 		return refused + ", and the person was asked as question " + question.ID + " and gave no yes: " + err.Error()
@@ -338,6 +343,9 @@ func (a gateAsked) offered(ctx context.Context, request GateRequest, decision Ga
 	scope, yes := yesScopeOf(replies)
 	if !yes {
 		return refused + ", and the person answered no to question " + question.ID
+	}
+	if once {
+		scope = YesOnce
 	}
 	allowed, err := a.allowances.AllowedByPerson(unreasoned, PersonYes{Question: question.ID, Session: a.session, Scope: scope})
 	if err != nil {
@@ -360,13 +368,13 @@ func neededBecause(request GateRequest) (string, GateRequest) {
 	return strings.TrimSpace(need), request
 }
 
-func (a gateAsked) mayAllow(ctx context.Context, request GateRequest, decision GateDecision) bool {
-	hard := decision.PersonOnly || decision.Reason != nil && decision.Reason.Blocked || !RegexArmAllows(request)
-	return !hard && a.allowances != nil && contract.SubAgentAsking(ctx) == ""
+func (a gateAsked) mayAsk(ctx context.Context, decision GateDecision) bool {
+	planted := decision.Reason != nil && decision.Reason.Blocked
+	return !decision.PersonOnly && !planted && a.allowances != nil && contract.SubAgentAsking(ctx) == ""
 }
 
 func (a gateAsked) yesBefore(ctx context.Context, request GateRequest, decision GateDecision) bool {
-	if a.session == "" || !a.mayAllow(ctx, request, decision) {
+	if a.session == "" || !a.mayAsk(ctx, decision) || !RegexArmAllows(request) {
 		return false
 	}
 	_, unreasoned := neededBecause(request)
@@ -380,13 +388,23 @@ func (a gateAsked) yesBefore(ctx context.Context, request GateRequest, decision 
 	return true
 }
 
-func refusedQuestion(request GateRequest, refused, need string) PersonQuestion {
+func refusedQuestion(request GateRequest, refused, need string, once bool) PersonQuestion {
 	var args struct{ Command string }
 	shown := "```\n" + request.Tool + " " + string(request.Args)
 	if json.Unmarshal(request.Args, &args) == nil && args.Command != "" {
 		shown = "```bash\n" + args.Command
 	}
 	asked := "**Command:**\n\n" + shown + "\n```\n\n**Why my safety checks refused it:** " + refused + "\n\n**Why it is needed:** " + need
+	if once {
+		no := 1
+		return PersonQuestion{ID: "gate-" + request.Call, Header: "Run a refused call", Type: QuestionChoice, Recommended: &no,
+			Question: "My safety checks always refuse this " + request.Tool + " call. Can I run it once?",
+			Context:  cutRunes(asked, konst.AskPersonContextRunesMost),
+			Options: []PersonOption{
+				{Label: YesOnce.Label(), Description: "runs this exact call once, and an identical call later asks you again"},
+				{Label: "no", Description: "refuses it, and the agent finds another way"},
+			}}
+	}
 	if kind := CallKind(request); kind != "" {
 		no := 3
 		question := PersonQuestion{ID: "gate-" + request.Call, Header: "Run a refused call", Type: QuestionChoice, Recommended: &no,

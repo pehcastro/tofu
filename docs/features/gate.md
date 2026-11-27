@@ -61,8 +61,18 @@ still judged by Jev first, and runs on the yes when Jev refuses it:
 bash: deny (risk 3.00 risk_deny_at 2.50), allowed by an earlier yes: the person, who answered "yes, this kind, 8 hours" to question gate-call_1, for every ssh to deploy@box.example call, until 03:26
 ```
 
-A call that follows planted content, the regex arm's refusals, and guard and
-owns refusals stay refused, are never offered and are never covered by a yes.
+A call the regex arm refuses, such as an `rm -rf`, stays refused: your words
+never allow it and no earlier yes covers it, not even a yes for its kind. The
+lead may still retry it with `"allowed_by": "ask"`, and the form asks
+`Can I run it once?` with only two options, yes, this call only, and no. Your
+yes runs that one call once, so an identical call later asks again:
+
+```text
+bash: deny (risk 3.00 risk_deny_at 2.50), allowed by the person, who answered "yes, this call only" to question gate-call_1, for this one run: an identical call later asks again
+```
+
+A call that follows planted content, and guard and owns refusals, stay
+refused, are never offered and are never covered by a yes.
 
 ## Why an ask has a timer
 
