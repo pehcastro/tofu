@@ -1,6 +1,7 @@
 package loop
 
 import (
+	"cmp"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -62,6 +63,7 @@ type GateDecision struct {
 	PersonOnly bool
 	HookAsk    string
 	Failure    string
+	Uncited    string
 }
 
 type Gate interface {
@@ -275,7 +277,7 @@ func refusedWhy(ctx context.Context, asked gateAsked, request GateRequest, decis
 	case asked.yesBefore(ctx, request, decision):
 		return ""
 	case decision.Verdict == ledger.VerdictDeny:
-		return asked.offered(ctx, request, decision, "the verdict is deny"+standing(decision.Reason), CitedAllowance(request.Args) == AskThePerson)
+		return asked.offered(ctx, request, decision, cmp.Or(decision.Uncited, "the verdict is deny"+standing(decision.Reason)), CitedAllowance(request.Args) == AskThePerson)
 	}
 	why := "the verdict is ask" + standing(decision.Reason)
 	if decision.Failure != "" {
@@ -301,8 +303,9 @@ const (
 )
 
 const (
+	citeHint    = "when one of the person's own two newest typed messages allows it, retry with \"" + AllowedByField + "\" set to that message's exact words"
 	blockerHint = ". find another way first. only when this call blocks the task and no other way exists, retry it once with \"" + AllowedByField + "\": \"" + AskThePerson + "\" and \"" + whyNeededField + "\" " +
-		"saying why the task cannot go on without it, and tofu asks the person yes or no, showing the command, this refusal and that reason; or, when the person's own newest message allows it, retry with \"" + AllowedByField + "\" set to that message's exact words"
+		"saying why the task cannot go on without it, and tofu asks the person yes or no, showing the command, this refusal and that reason; or, " + citeHint
 	needMissing = ", and the person was not asked because the retry says no reason: retry once more with \"" + whyNeededField + "\" saying why the task cannot go on without this call, or find another way"
 )
 
@@ -320,12 +323,12 @@ func (a gateAsked) offered(ctx context.Context, request GateRequest, decision Ga
 	switch {
 	case !a.mayAllow(ctx, request, decision):
 		return refused
+	case form == nil || PersonAway(ctx):
+		return refused + ", and no person can be asked here; " + citeHint
 	case !asks:
 		return refused + blockerHint
 	case need == "":
 		return refused + needMissing
-	case form == nil || PersonAway(ctx):
-		return refused + ", and no person can be asked here"
 	}
 	question := refusedQuestion(unreasoned, refused, need)
 	replies, err := form(ctx, []PersonQuestion{question}, konst.GateAskWaitSeconds*time.Second)

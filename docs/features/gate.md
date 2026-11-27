@@ -41,9 +41,12 @@ again.
 
 Only your own answer decides it, never `auto`, a timeout or the judge.
 
-When you already allowed it in your own words, the lead retries with
-`"allowed_by"` set to your exact newest message, and the call runs with no
-Jev call:
+When you already allowed it in your own words, in your newest message or the
+one before it, such as an allow followed by `go`, the lead retries with
+`"allowed_by"` set to those exact words, and the call runs with no Jev call. A
+`[quote#...]` reference in your message is not part of the words. A citation
+that matches neither message is refused like a deny, and the refusal offers
+`"allowed_by": "ask"`, so the lead can still ask you:
 
 ```text
 bash: allow, allowed by the person's own message "you can run this commands, i allow it"

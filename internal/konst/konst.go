@@ -222,6 +222,7 @@ const (
 	BackgroundReadyMillis = 2000
 	GateAskWaitSeconds    = 180
 	GateKindYesHours      = 8
+	GateCitableMessages   = 2
 	BashSoftLimitMillis   = 30000
 	ShellWaitMillis       = 300000
 	ShellWaitMatchMillis  = 1000

@@ -131,13 +131,16 @@ func (g *toolGate) Decide(ctx context.Context, request loop.GateRequest) (decisi
 	g.allowing.Unlock()
 	cited := loop.CitedAllowance(request.Args)
 	if !allowed && cited != "" && cited != loop.AskThePerson {
-		if err := citedByThePerson(ctx, request, cited); err != nil {
-			return loop.GateDecision{}, err
-		}
 		by, allowed = "the person's own message \""+cited+"\"", true
+		if uncited := uncitedBecause(ctx, request, cited); uncited != "" {
+			uncited = "the call cites " + loop.AllowedByField + " and " + uncited + ", so those words allow nothing"
+			decision, allowed = loop.GateDecision{Verdict: ledger.VerdictDeny, Uncited: uncited}, false
+		}
 	}
 	if allowed {
 		decision, err = g.allow(request, by, wiring.RowInput{TurnID: request.TurnID}, loop.YesThisCall)
+	}
+	if allowed || decision.Uncited != "" {
 		if g.watch != nil {
 			g.watch(host.JudgingCall(ctx, request.Call), request.Tool, decision, err)
 		}
@@ -213,22 +216,23 @@ func (g *toolGate) AllowedBefore(request loop.GateRequest, session string) (loop
 	return loop.GateDecision{ID: row.ID, Verdict: row.Verdict, Reason: row.Reason}, err == nil, err
 }
 
-type citationRefused struct{ why string }
-
-func (c citationRefused) Error() string {
-	return "the call cites " + loop.AllowedByField + " and " + c.why + ", so nothing allows it: ask the person instead"
-}
-
-func citedByThePerson(ctx context.Context, request loop.GateRequest, cited string) error {
+func uncitedBecause(ctx context.Context, request loop.GateRequest, cited string) string {
+	newest := request.Said[max(len(request.Said)-konst.GateCitableMessages, 0):]
 	switch {
 	case contract.SubAgentAsking(ctx) != "":
-		return citationRefused{"a sub-agent's call never runs on the person's word"}
-	case len(request.Said) == 0 || request.Said[len(request.Said)-1] != cited:
-		return citationRefused{"those words are not the person's own newest typed message in this session"}
+		return "a sub-agent's call never runs on the person's word"
+	case !slices.ContainsFunc(newest, func(said string) bool { return typedWords(said) == typedWords(cited) }):
+		return "those words are not one of the person's own two newest typed messages in this session"
 	case !loop.RegexArmAllows(request):
-		return citationRefused{"the call is one the gate always refuses"}
+		return "the call is one the gate always refuses"
 	}
-	return nil
+	return ""
+}
+
+func typedWords(said string) string {
+	return strings.Join(slices.DeleteFunc(strings.Fields(said), func(word string) bool {
+		return strings.HasPrefix(word, "[quote#") && strings.HasSuffix(word, "]")
+	}), " ")
 }
 
 func allowanceOf(request loop.GateRequest) string {
