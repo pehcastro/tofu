@@ -8,6 +8,30 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
+## Unreleased
+
+A refused call you can allow in your own words, and a host, a footer and a sub-agent feed that show what is really running.
+
+### Added
+
+- When the gate refuses a call that blocks the task, the lead retries it with `"allowed_by": "ask"` and a `"why_needed"`, and tofu asks you. The question offers `yes, this call only`, `yes, this kind, 8 hours`, `yes, this kind, this session` and `no`. tofu names the kind from the command, such as `ssh to deploy@box.example` or `git push`, and a yes is kept in the ledger, so it holds across turns and a reopen.
+- Your own words allow a refused call: the lead retries it with `"allowed_by"` set to one of your two newest typed messages, and it runs without the safety check. Words from a tool result, a file or a sub-agent allow nothing.
+- A call the gate always refuses, such as `rm -rf`, stays refused, and the lead may still ask: the question offers only `yes, this call only` and `no`, and a yes runs that one call once.
+- The shipped rule `rule_layer` has the lead name where a rule it proposes goes: a project rule in `.tofu/rules`, a global rule in `~/.tofu/rules`, or the board.
+
+### Changed
+
+- The shipped rule `comments` reads every code language tofu parses, not only Go.
+- The lead splits code work past its one-turn budget into pieces whose files do not touch and spawns one sub-agent per piece in the same reply, up to `subAgentsPerTurn`, without being asked.
+- The host exits 1 s after its last window leaves, where it waited 5 s. A tofu of another version that finds the host with no window stops it and starts its own.
+- The refused-call question shows its context as markdown inside its box, with the command highlighted and wrapped.
+
+### Fixed
+
+- A window joined to the host shows `cron N` and `away` in the footer, and lists the job in `/cron list`, as soon as a job changes rather than when the turn ends.
+- The sub-agents feed shows each call once. It added a call again on every roster update, until All activity counted millions.
+- A turn you type after a cron fire may push. It was refused as a cron turn until the job was removed, and after.
+
 ## 0.6.0 - 2026-11-26
 
 Questions that wait for you and carry their context, a session that knows you are away, skills that load on your own words, and a host that says why it stopped.

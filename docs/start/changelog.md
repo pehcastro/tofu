@@ -93,6 +93,19 @@ and questions that wait for you with their context.
   and retries on its own. See [Subscription quota](/docs/llms/quota).
 - **Driving**: `tofu drive --live` drives the app on your own subscription,
   and `tofu drive desk` drives the desk app. See [Drive](/docs/features/drive).
+- **A gate you can answer** (0.6.1): a refused call that blocks the task
+  asks you, and `yes, this kind, 8 hours` or `yes, this kind, this session`
+  covers every call of that kind, such as `ssh to deploy@box.example`. Your
+  own message, cited as `allowed_by`, allows a refused call, and a call the
+  gate always refuses runs once on your `yes, this call only`. See
+  [Gate](/docs/features/gate).
+- **Rules that read further** (0.6.1): `comments` reads every code language,
+  `rule_layer` has the lead say where a rule it proposes goes, and the lead
+  splits code work across sub-agents up to `subAgentsPerTurn` unasked.
+- **What is running, shown right** (0.6.1): the host exits 1 s after its last
+  window, a new build replaces an idle old host, the footer shows `cron N`
+  and `/cron list` lists a job as soon as it changes, the sub-agents feed
+  shows each call once, and a turn you type after a cron fire may push.
 - **Changed names**: `tofu models reload` is `tofu models update`, and
   `tofu serve` answers `models.update` in place of `models.reload`. See [tofu serve](/docs/cli/serve).
 
