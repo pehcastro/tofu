@@ -8,7 +8,7 @@ Tofu is personal and not released, so the public interface that a version promis
 
 The minor number carries breaking changes, which is what 0.x means, and **there is never a 1.0.0**. The owner decided that on 2026-09-19: this stays 0.x forever, so the promise the version makes is the one 0.x already makes, that anything can break on a minor bump.
 
-## Unreleased
+## 0.6.1 - 2026-11-28
 
 A refused call you can allow in your own words, and a host, a footer and a sub-agent feed that show what is really running.
 
