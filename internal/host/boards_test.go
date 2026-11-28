@@ -140,7 +140,7 @@ func TestBoardQueriesAnswerTypedReportsFromTheProjectsOwnRecords(t *testing.T) {
 	c.ask("7", "query.rules", `{}`)
 	var rules RuleListReport
 	c.answer("7", &rules)
-	if len(rules.Rules) != 2 || !strings.Contains(rules.Rules[0].Text, "comment") || rules.Rules[0].Trigger != "language go" || rules.Rules[0].Fires != 1 || rules.Rules[0].FiresWeek[firedOn] != 1 || rules.Rules[1].Text != "say less" {
+	if len(rules.Rules) != 2 || !strings.Contains(rules.Rules[0].Text, "comment") || !strings.Contains(rules.Rules[0].Trigger, "language c, cpp, csharp, go,") || rules.Rules[0].Fires != 1 || rules.Rules[0].FiresWeek[firedOn] != 1 || rules.Rules[1].Text != "say less" {
 		t.Errorf("query.rules answered %+v, want the shipped rule's text, trigger and fire, and the override's text", rules.Rules)
 	}
 

@@ -223,7 +223,7 @@ func TestTheShippedIndexSaysWhatFiresForATaskAndWhy(t *testing.T) {
 	}
 	for id, want := range map[string]string{
 		"em_dash":        "always on, the rule declares no trigger",
-		"comments":       "always on, the rule declares no trigger",
+		"comments":       "the language go reached internal/librarian/rules/load_test.go",
 		"test_assertion": "the scope **/*_test.go reached internal/librarian/rules/load_test.go",
 	} {
 		if why[id] != want {
@@ -271,9 +271,10 @@ func TestTheShippedGoRulesReachGoFilesAndNothingElse(t *testing.T) {
 		}
 		goRules[id] = true
 	}
-	if _, limited := scoped["comments"]; limited {
-		t.Fatal("the comments rule ships with a trigger, want it on for every language")
+	if !fires("comments", source) || !fires("comments", test) || fires("comments", prose) {
+		t.Fatal("the comments rule does not reach the code files and only them")
 	}
+	goRules["comments"] = true
 	for _, id := range []string{"test_assertion", "test_mock_boundary", "test_boundary_cases", "skipped_test_budget", "flake_disagreement"} {
 		if fires(id, source) || !fires(id, test) || fires(id, prose) {
 			t.Fatalf("rule %q does not reach exactly the go test files", id)
