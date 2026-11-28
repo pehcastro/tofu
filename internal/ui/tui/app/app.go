@@ -535,7 +535,7 @@ func Run(options Options) error {
 }
 
 func (a *App) Init() tea.Cmd {
-	return caught(tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.updateStaleModels(), a.listen(), a.watchUpdates(0), a.loadEarlier(), a.watchCrons()))
+	return caught(tea.Batch(a.view.Focus(), a.intro.start(), a.pollQuota(), a.readPaths(), a.watchSetup(), a.pollShells(), a.startPulse(), a.updateStaleModels(), a.listen(), a.watchUpdates(0), a.loadEarlier()))
 }
 
 func (a *App) watchUpdates(after time.Duration) tea.Cmd {
@@ -798,7 +798,7 @@ func (a *App) update(msg tea.Msg) tea.Cmd {
 		return a.watchUpdates(konst.UpdateWatchSeconds * time.Second)
 	case cronMovedMsg:
 		a.countCrons()
-		return a.watchCrons()
+		return a.listen()
 	}
 	if cmd, open := a.toFiles(msg); open {
 		return cmd

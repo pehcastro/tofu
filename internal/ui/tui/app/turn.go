@@ -580,9 +580,14 @@ func (a *App) waitForEvent() tea.Cmd {
 	if a.options.Host == nil {
 		return nil
 	}
-	events := a.options.Host.Events()
+	events, cronMoves := a.options.Host.Events(), a.options.Host.CronMoves()
 	return func() tea.Msg {
-		event := <-events
+		var event Event
+		select {
+		case event = <-events:
+		case <-cronMoves:
+			return cronMovedMsg{}
+		}
 		if event.Kind == host.EventTurnEnded {
 			return Closed{}
 		}

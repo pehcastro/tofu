@@ -88,17 +88,6 @@ func (a *App) cronLine(line string) tea.Cmd {
 
 type cronMovedMsg struct{}
 
-func (a *App) watchCrons() tea.Cmd {
-	if a.options.Host == nil {
-		return nil
-	}
-	moves := a.options.Host.CronMoves()
-	return func() tea.Msg {
-		<-moves
-		return cronMovedMsg{}
-	}
-}
-
 func (a *App) countCrons() {
 	if a.options.Host != nil {
 		a.status.Crons, a.status.Away = a.options.Host.Cron().Live(), a.options.Host.Cron().Away().On
