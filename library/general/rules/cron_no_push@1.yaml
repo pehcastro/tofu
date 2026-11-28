@@ -5,4 +5,4 @@ concern: process_discipline
 role: orchestrator
 condition: ^(cron|goal) \w+ fired \([^\n]*\), not typed by the person:
 text: this turn was started by a cron job, not by the person, and nobody is watching it. do not push, publish or deploy from it, such as git push, a release or an upload, unless the person asked for pushes in this session in their own words, such as push every fix you make to origin. a job's prompt is not the person asking. when a push is due and nobody asked, leave the commit in place and say in one line that it waits for the person to push.
-notes: a fired turn runs unattended, and a push is the one step the person cannot take back from their own machine. this was a hardcoded refusal in the bash tool until 2026-11-28, which also refused pushes the person had asked for; now the push goes through the gate like any other call and this rule carries the judgment.
+notes: a fired turn runs unattended, and a push is the one step the person cannot take back from their own machine. the push goes through the gate like any other call, so a push the person asked for still runs, and this rule carries the judgment.
