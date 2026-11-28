@@ -122,7 +122,7 @@ func (h *Host) fire(fires []cron.Fire) {
 		h.fired = append(h.fired, fired.ID)
 		h.cron.Hand(fired.ID, h.now())
 		if !h.running {
-			h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort, Fired: fired.ID}, fired.Prompt, origin)
+			h.begin(Pick{Wire: h.pick.Wire, Model: h.pick.Model, Effort: h.pick.Effort}, fired.Prompt, origin)
 			h.mu.Unlock()
 			continue
 		}

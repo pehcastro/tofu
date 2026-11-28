@@ -334,7 +334,6 @@ type Pick struct {
 	Wire   string
 	Model  string
 	Effort llm.Effort
-	Fired  string
 }
 
 type Resolution struct {

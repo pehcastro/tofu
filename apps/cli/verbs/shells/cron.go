@@ -8,12 +8,8 @@ import (
 	"tofu/internal/agent/cron"
 	"tofu/internal/agent/loop"
 	"tofu/internal/konst"
-	"tofu/internal/platform/fs"
 	settingspkg "tofu/internal/store/settings"
-	"tofu/internal/tools/contract"
 )
-
-var gitPush = fs.LazyRegexp(`\bgit\b[^;&|\n]*\bpush\b`)
 
 func CronChecker(dir string) cron.Checker {
 	return func(ctx context.Context, command string) (int, string, error) {
@@ -35,27 +31,4 @@ func CronChecker(dir string) cron.Checker {
 		}
 		return *result.ExitCode, result.Content, nil
 	}
-}
-
-type firedBash struct{ contract.Tool }
-
-func (f firedBash) Run(ctx context.Context, raw json.RawMessage) (contract.Result, error) {
-	var args struct {
-		Command string `json:"command"`
-	}
-	if json.Unmarshal(raw, &args) == nil && gitPush().MatchString(args.Command) {
-		return contract.Result{}, errors.New("bash: a turn a cron job started never pushes, whatever the gate says: leave the push to the person")
-	}
-	return f.Tool.Run(ctx, raw)
-}
-
-func WithoutPush(built []contract.Tool) []contract.Tool {
-	guarded := make([]contract.Tool, len(built))
-	for index, tool := range built {
-		guarded[index] = tool
-		if tool.Name() == "bash" {
-			guarded[index] = firedBash{tool}
-		}
-	}
-	return guarded
 }

@@ -628,9 +628,6 @@ func (e *appEngine) startTurn(opts wiring.RunOpts, start host.Turn, hooks host.H
 	}
 	sessions.Redacts(e.warm.keys.redactor)
 	built, plan = planAsOffered(opened.Selected, built, plan)
-	if start.Pick.Fired != "" {
-		built = shellsverb.WithoutPush(built)
-	}
 	clock.step("shell, tools and session store", 0)
 	places := e.places
 	if places == (platformproject.Places{}) {

@@ -105,7 +105,8 @@ and questions that wait for you with their context.
 - **What is running, shown right** (0.6.1): the host exits 1 s after its last
   window, a new build replaces an idle old host, the footer shows `cron N`
   and `/cron list` lists a job as soon as it changes, the sub-agents feed
-  shows each call once, and a turn you type after a cron fire may push.
+  shows each call once, and a push from a cron turn is a rule,
+  `cron_no_push`, the gate weighs rather than a refusal in code.
 - **Changed names**: `tofu models reload` is `tofu models update`, and
   `tofu serve` answers `models.update` in place of `models.reload`. See [tofu serve](/docs/cli/serve).
 

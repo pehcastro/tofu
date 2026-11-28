@@ -30,7 +30,7 @@ A refused call you can allow in your own words, and a host, a footer and a sub-a
 
 - A window joined to the host shows `cron N` and `away` in the footer, and lists the job in `/cron list`, as soon as a job changes rather than when the turn ends.
 - The sub-agents feed shows each call once. It added a call again on every roster update, until All activity counted millions.
-- A turn you type after a cron fire may push. It was refused as a cron turn until the job was removed, and after.
+- A push is no longer refused in code on a turn a cron job fired: the shipped rule `cron_no_push` tells that turn not to push unless you asked for pushes in the session, and the gate judges the call like any other. A turn you typed was refused as a cron turn, even after the job was removed.
 
 ## 0.6.0 - 2026-11-26
 

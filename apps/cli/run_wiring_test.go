@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"tofu/apps/cli/output"
-	shellsverb "tofu/apps/cli/verbs/shells"
 	"tofu/apps/cli/wiring"
 	"tofu/internal/agent/context/recall"
 	"tofu/internal/agent/cron"
@@ -1065,14 +1064,6 @@ func TestTheLeadAloneHoldsTheCronToolAndAFiredTurnNeverPushes(t *testing.T) {
 		}
 		if slices.ContainsFunc(built, func(tool contract.Tool) bool { return tool.Name() == crontool.CronToolName }) {
 			t.Errorf("arms %v: the cron tool is in the set a sub-agent is given", arms)
-		}
-		bash := shellsverb.WithoutPush(built)[slices.IndexFunc(built, func(tool contract.Tool) bool { return tool.Name() == "bash" })]
-		for command, refused := range map[string]bool{"git push origin main": true, "git -C . push --force": true, "git status": false} {
-			raw, _ := json.Marshal(map[string]string{"command": command})
-			_, err := bash.Run(t.Context(), raw)
-			if pushed := err != nil && strings.Contains(err.Error(), "never pushes"); pushed != refused {
-				t.Errorf("arms %v: %q on a fired turn: refused %v, want %v (%v)", arms, command, pushed, refused, err)
-			}
 		}
 	}
 }

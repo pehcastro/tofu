@@ -34,7 +34,7 @@ func TestATurnSaysWhetherThePersonOrACronJobStartedIt(t *testing.T) {
 			time.Sleep(time.Millisecond)
 		}
 	}
-	if !h.Send(Pick{Fired: "c9"}, "fix the build") {
+	if !h.Send(Pick{}, "fix the build") {
 		t.Fatal("the typed turn did not start")
 	}
 	typed := <-origins

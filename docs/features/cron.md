@@ -75,8 +75,8 @@ report, a shell notice or a check-in.
   question with the reason it was held. `--json` carries the same under
   `away`, and the catch-up file has a `Decided while you were away` section.
 - **The gate does not relax.** A tool call that would ask you is refused,
-  saying the person is away until they say they are back, and `git push`
-  stays blocked. A memory that would ask you where to keep it is not kept.
+  saying the person is away until they say they are back, a `git push`
+  among them. A memory that would ask you where to keep it is not kept.
 - **The footer says so.** The status line shows `away` beside the cron count
   while the session is away.
 
@@ -103,7 +103,11 @@ trace has the `cron` row, and the next `ask_person` opens a form again.
   end the job.
 - **Caps.** At most 10 open jobs a session and 50 fires a job, and nothing
   more often than once a minute.
-- **No push.** A turn a job started cannot run `git push`.
+- **No push unless you asked.** A turn a job started carries the
+  `cron_no_push` rule: it does not push, publish or deploy unless you asked
+  for pushes in that session. The push itself goes through the gate like
+  any other call, so a push you asked for runs, from a fired turn or a typed
+  one. `tofu rules show cron_no_push` prints the rule.
 - **The check is yours.** A check command runs without the gate, so only you
   set one. The tool refuses it from the model, and refuses an expiry pushed
   more than one step past yours.
